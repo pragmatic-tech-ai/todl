@@ -4,3 +4,6 @@ dist/
 
 # Verdaccio auth (contains local registry token) — never commit
 .npmrc
+
+# SDD scratch workspace
+.superpowers/
