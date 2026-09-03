@@ -1,0 +1,31 @@
+namespace tech_architecture
+{
+    concept subnet
+    {
+        description = """
+            A subdivision of a parent `network`, addressable by CIDR. Carries any
+            platform_specific delegation that binds the subnet to a managed
+            service — e.g., `Microsoft.PowerPlatform/enterprisePolicies` for a
+            Power Platform delegated subnet, `Microsoft.Network/virtualNetworkGateways`
+            for an Azure ExpressRoute gateway subnet, `Microsoft.Web/serverFarms`
+            for an App Service Environment subnet.
+            """;
+
+        id         : identifier;
+        label      : label;
+        cidr       : string?;
+        delegation : string?;
+
+        // @containment so a subnet nests inside its network on the diagram
+        // (location ⊃ network ⊃ subnet). `parent` isn't named `in`, so it needs
+        // the annotation to be recognised as containment.
+        relationship parent -> network { annotate containment {} }
+
+        invariant "Subnet ids are globally unique within the model.";
+        invariant "`parent` resolves to a known network.";
+
+        references = [
+            "docs/superpowers/specs/2026-05-28-deployment-viewpoint-design.md",
+        ];
+    }
+}

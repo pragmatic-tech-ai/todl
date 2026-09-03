@@ -1,0 +1,33 @@
+namespace tech_architecture
+{
+    concept application_kind
+    {
+        description = """
+            Library_defined visual binding for an `application_kind_styles` enum
+            value. The meta_instance's name resolves to an `application_kind_styles`
+            term; the body sets the icon used in app_portfolio views to tell
+            business_products, vendor_installations, internal_services and
+            portfolios apart at a glance.
+            """;
+
+        id   : identifier;
+
+        invariant
+        {
+            description = """
+                Multiple `application_kind_style` declarations for the same
+                enum value across libraries are a compile error — ambiguous
+                authority.
+                """;
+        }
+
+        authoring library_entry
+        {
+            description = "Inside a `<lib>.technology-library.model` body.";
+            example = """
+                application_kind_style business_product    { annotate icon { path = "resources/kind-business-product.svg"; } }
+                application_kind_style vendor_installation { annotate icon { path = "resources/kind-vendor.svg"; } }
+                """;
+        }
+    }
+}

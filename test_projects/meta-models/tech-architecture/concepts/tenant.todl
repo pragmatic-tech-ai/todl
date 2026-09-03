@@ -1,0 +1,30 @@
+namespace tech_architecture
+{
+    concept tenant
+    {
+        description = """
+            An identity boundary. Examples: an AAD/Entra tenant, an on_prem AD
+            forest, an AWS Organizations identity, a GCP Cloud Identity org.
+            Tenant carries identity scope (who can authenticate, what RBAC
+            applies) — not billing, not deployment context, not network.
+
+            Tenant is distinct from `subscription` (billing/resource) and
+            `environment` (deployment context). One tenant can host many
+            subscriptions and many environments; environments reference a
+            tenant for identity scope.
+            """;
+
+        id          : identifier;
+        label       : label;
+        region      : string?;
+
+        relationship in -> location;
+
+        invariant "Tenant ids are globally unique within the model.";
+        invariant "`in` resolves to a known location.";
+
+        references = [
+            "docs/superpowers/specs/2026-05-28-deployment-placement-model-design.md",
+        ];
+    }
+}

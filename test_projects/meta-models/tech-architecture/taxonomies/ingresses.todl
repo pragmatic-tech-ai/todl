@@ -1,0 +1,34 @@
+namespace tech_architecture
+{
+    taxonomy ingresses : represents ingress
+    {
+        description = """
+            How a `deployment_slot` is reachable from outside its placement
+            chain. Authored on `slot.public_ingress`. Strictly external_facing
+            — internal_to_internal connectivity is captured by network peering
+            via the `connectivity_kind_styles` taxonomy.
+            """;
+
+        term public_internet
+        {
+            label = "Public Internet";
+            description = """
+                Slot accepts traffic from anywhere on the public internet.
+                Typically fronted by an API gateway, WAF, or load balancer
+                in a real deployment; the model captures the exposure
+                intent without committing to the specific edge device.
+                """;
+        }
+
+        term private_endpoint
+        {
+            label = "Private Endpoint";
+            description = """
+                Slot is reachable via private endpoint(s) from external
+                customer or partner networks. The endpoint pinning lives
+                on the network/subnet side; this value marks the slot as
+                accepting cross_organisation private traffic.
+                """;
+        }
+    }
+}

@@ -1,0 +1,48 @@
+namespace tech_architecture
+{
+    taxonomy application_lifecycle_stages : represents application_lifecycle_stage
+    {
+        description = """
+            Lifecycle stage of an application instance. Optional on
+            `application` records — applications without a declared
+            lifecycle are treated as in a steady operational state without
+            prejudice.
+            """;
+
+        term planned
+        {
+            label = "Planned";
+            description = """
+                Approved or proposed; not yet built or operational.
+                """;
+        }
+
+        term live
+        {
+            label = "Live";
+            description = """
+                Operational and supported in production.
+                """;
+        }
+
+        term sunset
+        {
+            label = "Sunset";
+            description = """
+                Operational but being phased out; new dependencies should
+                be discouraged. Replacement (if any) is declared via the
+                app_to_app replacement relationship in a follow_up.
+                """;
+        }
+
+        term retired
+        {
+            label = "Retired";
+            description = """
+                No longer operational. Kept in the model for historical
+                accuracy and to anchor `replaces` relationships from
+                successor applications.
+                """;
+        }
+    }
+}

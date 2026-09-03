@@ -1,0 +1,50 @@
+namespace tech_architecture
+{
+    taxonomy lifecycle_stages : represents lifecycle_stage
+    {
+        description = """
+            Lifecycle stage of an environment in the delivery pipeline. An
+            environment plays one lifecycle role. Multiple environments per
+            lifecycle (e.g., paired_region failover) are allowed.
+
+            Renamed from the prior `environment` taxonomy to free the name for
+            the new `environment` concept.
+            """;
+
+        term dev
+        {
+            label = "Development";
+            description = "Engineering team's working environment; not for end users.";
+        }
+
+        term test
+        {
+            label = "Test";
+            description = "Integration / system test environment.";
+        }
+
+        term staging
+        {
+            label = "Staging";
+            description = """
+                Production_mirror environment for final validation before
+                release. Sometimes called pre_prod or UAT.
+                """;
+        }
+
+        term prod
+        {
+            label = "Production";
+            description = "Live production environment serving end users.";
+        }
+
+        term sandbox
+        {
+            label = "Sandbox";
+            description = """
+                Isolated environment for experimentation, demos, or training.
+                Not part of the standard delivery pipeline.
+                """;
+        }
+    }
+}

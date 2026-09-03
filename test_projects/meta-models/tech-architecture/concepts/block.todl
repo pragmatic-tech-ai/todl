@@ -1,0 +1,33 @@
+namespace tech_architecture
+{
+    concept block
+    {
+        annotate has_children {}
+
+        description = """
+            A named grouping of `component`s that share a hosting
+            location. Used to organise the landscape visually and to
+            factor out the common `in = <location>` binding from the
+            contained components. A block is a first_class referenceable
+            entity: scenario steps and connectors can point at
+            `&<block_id>` to denote "any component in the block".
+            """;
+
+        id         : identifier;
+        label      : label;
+        components : component[];
+
+        relationship in -> location;
+
+        invariant "Block ids are globally unique within the model.";
+        invariant
+        {
+            description = """
+                A component nested inside a block inherits the block's
+                `in` when it does not declare its own. If a nested
+                component does declare `in`, that value must equal the
+                block's `in`.
+                """;
+        }
+    }
+}

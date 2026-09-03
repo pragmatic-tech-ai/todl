@@ -1,0 +1,47 @@
+namespace tech_architecture
+{
+    // Catch-all viewpoint: frames every instantiable concept so an architecture
+    // model conforming to it can hold instances of any of them, and any toolbox
+    // term drop is admitted by the diagram read-filter. `meta` (the model-header
+    // record) is intentionally excluded — it is a descriptor, not a diagram entity.
+    viewpoint Model : frames
+        actor,
+        app_component,
+        application,
+        application_kind,
+        application_lifecycle_stage,
+        billing,
+        billing_model,
+        block,
+        category,
+        component,
+        connectivity_kind,
+        connector,
+        container,
+        container_role,
+        environment,
+        ingress,
+        lifecycle_stage,
+        location,
+        network,
+        network_peer,
+        resource_group,
+        scenario,
+        sequence,
+        slot,
+        step,
+        subnet,
+        subscription,
+        technology,
+        tenant
+
+    viewpoint Scenarios : frames
+        actor,
+        location,
+        block,
+        scenario,
+        sequence,
+        step,
+        component,
+        connector
+}

@@ -1,0 +1,23 @@
+namespace tech_architecture
+{
+    concept network_peer
+    {
+        description = """
+            A peering edge from a `network` to another network, with the kind of
+            link between them. Authored as nested `network_peer` records on a
+            `network` (`peers : network_peer[]`). Peering is declared once, on
+            whichever side is the more active participant.
+            """;
+
+        id      : identifier;
+        network : network;
+
+        invariant
+        {
+            description = """
+                `network` resolves to a different known network (no
+                self_peering).
+                """;
+        }
+    }
+}

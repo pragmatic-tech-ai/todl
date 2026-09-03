@@ -1,0 +1,44 @@
+namespace tech_architecture
+{
+    concept subscription
+    {
+        description = """
+            A billing and resource container. Examples: an Azure subscription,
+            an AWS account, a GCP project, an on_premises datacenter or
+            billing unit. Resources (networks, VMs, services) are owned by a
+            subscription. Identity is provided by the binding to a `tenant`
+            when applicable (`in_tenant` is optional to accommodate
+            standalone_account scenarios).
+
+            Subscription is distinct from `tenant` (identity_only) and from
+            `environment` (deployment_context with lifecycle role). One
+            tenant can host many subscriptions; one subscription can host
+            many environments.
+            """;
+
+        annotate wiki { path = "wiki/subscription.md"; }
+
+        id     : identifier;
+        label  : label;
+        region : string?;
+
+        relationship in        -> location;
+        relationship in_tenant -> tenant?;
+
+        invariant "Subscription ids are globally unique within the model.";
+        invariant "`in` resolves to a known location.";
+        invariant
+        {
+            description = """
+                If `in_tenant` is set, the tenant's `in` location must equal
+                this subscription's `in`. Catches "Azure subscription claimed
+                to belong to an on-prem AD tenant" mismatches.
+                """;
+            formal = "∀ s where s.in-tenant ≠ ∅: s.in-tenant.in = s.in";
+        }
+
+        references = [
+            "docs/superpowers/specs/2026-05-28-deployment-placement-model-design.md",
+        ];
+    }
+}

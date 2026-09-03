@@ -1,0 +1,26 @@
+namespace tech_architecture
+{
+    taxonomy locations : represents location
+    {
+        description = """
+            Orthogonal flags describing how a location is hosted. A location's
+            `type` field is a `|`-composed combination — e.g. `cloud | paas`
+            for an Azure_style PaaS location, `physical | logical_grouping`
+            for an on_premises container that also acts as an organisational
+            rollup. Per spec §6.5, every taxonomy carries an implicit `has()`
+            operation: `type.has(cloud)` returns true if the cloud flag is set.
+
+            Flags are independent — any non_empty combination is valid. The
+            visual library uses presence/absence of individual flags to drive
+            tinting and treatment.
+            """;
+
+        term cloud            { label = "Cloud";       description = "Hosted in a public or private cloud (Azure, AWS, GCP)."; }
+        term paas             { label = "PaaS";        description = "Platform-as-a-Service tier (App Service, ECS, Cloud Run)."; }
+        term saas             { label = "SaaS";        description = "Software-as-a-Service tier (M365, Salesforce, Power Platform)."; }
+        term iaas             { label = "IaaS";        description = "Infrastructure-as-a-Service tier (raw VMs, networking)."; }
+        term physical         { label = "Physical";    description = "Physical datacenter or hardware under enterprise control."; }
+        term on_premises      { label = "On-Premises"; description = "Customer-managed datacenter; typically `physical | on-premises`."; }
+        term logical_grouping { label = "Logical";     description = "Organisational rollup with no hosting implication. Valid alone (e.g. \"3rd-Party SaaS\") or combined with a hosting flag."; }
+    }
+}

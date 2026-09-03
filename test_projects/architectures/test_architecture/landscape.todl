@@ -1,0 +1,554 @@
+namespace pilot_project.models
+{
+  import libraries.aws;
+  import libraries.microsoft;
+  import tech_architecture;
+  
+  model pilot_projectModelsModel : libraries.aws uses aws_tech, categories, ingresses, microsoft_tech conforms Model {
+    actor external_ai_agent {
+      label = "External AI Agent";
+    }
+    actor business_user {
+      label = "Business User";
+    }
+    block chat_surface {
+      label = "Chat Surface";
+      in = microsoft_tech.m365;
+    }
+    component m365_copilot_chat {
+      label = "M365 Copilot";
+      implemented_by = microsoft_tech.m365_copilot;
+      in_block = chat_surface;
+    }
+    component m365_copilot_orchestrator {
+      label = "M365 Copilot Orchestrator";
+      in = microsoft_tech.m365;
+      implemented_by = microsoft_tech.m365_copilot;
+    }
+    component business_agent {
+      label = "AI Agent";
+      in = microsoft_tech.power_platform;
+      implemented_by = microsoft_tech.copilot_agent;
+      slots = business_agent_prod;
+    }
+    component agent_orchestrator {
+      label = "Agent Orchestrator";
+      in = microsoft_tech.power_platform;
+      implemented_by = microsoft_tech.copilot_studio;
+    }
+    component knowledge_index {
+      label = "Knowledge Index";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_ai_search;
+    }
+    block ai_data_sources {
+      label = "AI Data Sources";
+      in = microsoft_tech.azure;
+    }
+    component legacy_tool_bridge {
+      label = "Legacy Tool Bridge";
+      in = microsoft_tech.azure;
+      implemented_by = legacy_mcp_server;
+      slots = legacy_tool_bridge_prod;
+    }
+    component enterprise_legacy_app {
+      label = "Legacy Application";
+      implemented_by = legacy_app;
+      slots = enterprise_legacy_app_prod;
+      in = on_premises;
+    }
+    location saas_3p {
+      label = "3rd-Party SaaS";
+    }
+    location on_premises {
+      label = "On-Premises";
+    }
+    tenant identity_tenant {
+      label = "<Identity Tenant>";
+      region = "northeurope";
+      in = microsoft_tech.m365;
+    }
+    subscription azure_prod_sub {
+      label = "Azure Production Subscription";
+      region = "eastus";
+      in = microsoft_tech.azure;
+      in_tenant = identity_tenant;
+    }
+    subscription on_prem_primary_dc {
+      label = "Primary Datacenter";
+      in = on_premises;
+      in_tenant = identity_tenant;
+    }
+    subscription aws_prod_account {
+      label = "AWS Production Account";
+      region = "us-east-1";
+      in = aws_tech.aws;
+      in_tenant = identity_tenant;
+    }
+    resource_group ai_foundry_rg {
+      label = "RG - AI Foundry";
+      region = "eastus";
+      in_subscription = azure_prod_sub;
+    }
+    resource_group bridge_rg {
+      label = "RG - MCP Bridges";
+      region = "eastus";
+      in_subscription = azure_prod_sub;
+    }
+    resource_group edge_rg {
+      label = "RG - Edge Services";
+      region = "eastus";
+      in_subscription = azure_prod_sub;
+    }
+    resource_group enterprise_networking_rg {
+      label = "RG - Enterprise Networking";
+      region = "eastus";
+      in_subscription = azure_prod_sub;
+    }
+    resource_group ai_bedrock_rg {
+      label = "RG - AI Bedrock";
+      region = "us-east-1";
+      in_subscription = aws_prod_account;
+    }
+    network_peer to_on_prem {
+      network = on_prem_network;
+    }
+    network enterprise_vnet {
+      label = "Enterprise Virtual Network";
+      region = "eastus";
+      kind = "networks.shared_network";
+      cidr = "10.0.0.0/16";
+      in = microsoft_tech.azure;
+      in_subscription = azure_prod_sub;
+      peers = to_on_prem;
+    }
+    network on_prem_network {
+      label = "On-Premises Network";
+      region = "datacenter-eastus";
+      kind = "networks.on_prem_segment";
+      cidr = "192.168.0.0/16";
+      in_subscription = on_prem_primary_dc;
+      in = on_premises;
+    }
+    network aws_prod_vpc {
+      label = "AWS Production VPC";
+      region = "us-east-1";
+      kind = "networks.shared_network";
+      cidr = "172.16.0.0/16";
+      in = aws_tech.aws;
+      in_subscription = aws_prod_account;
+    }
+    subnet pp_delegated_subnet {
+      label = "PP Delegated Subnet";
+      cidr = "10.0.10.0/24";
+      delegation = "Microsoft.PowerPlatform/enterprisePolicies";
+      parent = enterprise_vnet;
+    }
+    subnet pe_subnet {
+      label = "Private Endpoints Subnet";
+      cidr = "10.0.20.0/24";
+      parent = enterprise_vnet;
+    }
+    subnet agent_services_subnet {
+      label = "Agent Services Subnet";
+      cidr = "10.0.30.0/24";
+      parent = enterprise_vnet;
+    }
+    subnet edge_subnet {
+      label = "Edge Ingress Subnet";
+      cidr = "10.0.40.0/24";
+      parent = enterprise_vnet;
+    }
+    subnet ai_services_subnet {
+      label = "AI Services Subnet";
+      cidr = "172.16.10.0/24";
+      parent = aws_prod_vpc;
+    }
+    environment pp_prod {
+      label = "PP Production";
+      kind = "environments.pp_managed";
+      lifecycle = "lifecycle_stages.prod";
+      region = "unitedstates";
+      in_tenant = identity_tenant;
+      in_subnet = pp_delegated_subnet;
+    }
+    environment azure_prod {
+      label = "Azure Production";
+      kind = "environments.azure_subscription_env";
+      lifecycle = "lifecycle_stages.prod";
+      region = "eastus";
+      in_tenant = identity_tenant;
+      in_subscription = azure_prod_sub;
+      resource_groups = [ai_foundry_rg, bridge_rg, edge_rg, enterprise_networking_rg];
+    }
+    environment on_prem_prod {
+      label = "On-Premises Production";
+      kind = "environments.on_prem_deployment_group";
+      lifecycle = "lifecycle_stages.prod";
+      in_tenant = identity_tenant;
+      in_subscription = on_prem_primary_dc;
+    }
+    environment aws_prod {
+      label = "AWS Production";
+      kind = "environments.aws_account_env";
+      lifecycle = "lifecycle_stages.prod";
+      region = "us-east-1";
+      in_tenant = identity_tenant;
+      in_subscription = aws_prod_account;
+      resource_groups = ai_bedrock_rg;
+    }
+    technology custom_validator_svc {
+      label = "Request Validator";
+      icon = "technology_library/default/resources/validator.svg";
+      hosting = "billing_models.azure_consumption";
+      per_call = "billing_models.azure_consumption";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.api_service;
+    }
+    technology published_mcp_server {
+      label = "Published MCP Server";
+      icon = "technology_library/default/resources/mcp.svg";
+      hosting = "billing_models.azure_consumption";
+      per_call = "billing_models.azure_consumption";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.internal_mcp_server;
+    }
+    technology legacy_mcp_server {
+      label = "Legacy-app MCP Server";
+      icon = "technology_library/default/resources/mcp.svg";
+      hosting = "billing_models.azure_consumption";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.internal_mcp_server;
+    }
+    technology legacy_app {
+      label = "Legacy Application";
+      icon = "technology_library/default/resources/legacy_application.svg";
+      available_in = on_premises;
+      applicable_to = categories.legacy_application;
+    }
+    technology bedrock_agent {
+      label = "Amazon Bedrock Agent";
+      icon = "technology_library/aws/resources/amazon-bedrock.svg";
+      applicable_to = categories.ai_agent;
+    }
+    component teams_chat {
+      label = "Microsoft Teams";
+      implemented_by = microsoft_tech.microsoft_teams;
+    }
+    component sharepoint_chat {
+      label = "SharePoint Embedded";
+      implemented_by = microsoft_tech.sharepoint_embedded;
+      in_block = chat_surface;
+    }
+    component dynamics_chat {
+      label = "Dynamics 365";
+      implemented_by = microsoft_tech.dynamics_365;
+    }
+    block command_bus {
+      label = "Command Bus";
+      in = microsoft_tech.azure;
+      components = [event_stream, message_queue];
+    }
+    component event_stream {
+      label = "Event Stream";
+      in_block = command_bus;
+      implemented_by = microsoft_tech.azure_event_hub;
+    }
+    component message_queue {
+      label = "Message Queue";
+      in_block = command_bus;
+      implemented_by = microsoft_tech.azure_service_bus;
+    }
+    block microsoft_agent_framework {
+      label = "Microsoft Agent Framework";
+      in = microsoft_tech.azure;
+      components = [agent_runtime, agent_context];
+    }
+    component agent_runtime {
+      label = "Agent Runtime";
+      in_block = microsoft_agent_framework;
+      implemented_by = microsoft_tech.ai_foundry_agent_svc;
+    }
+    component agent_context {
+      label = "Agent Context";
+      in_block = microsoft_agent_framework;
+      implemented_by = microsoft_tech.ai_foundry_iq;
+    }
+    component document_store {
+      label = "Document Store";
+      implemented_by = microsoft_tech.sharepoint_online;
+      in_block = ai_data_sources;
+    }
+    component object_store {
+      label = "Object Store";
+      implemented_by = microsoft_tech.azure_blob_storage;
+      in_block = ai_data_sources;
+    }
+    component transactional_database {
+      label = "Database";
+      implemented_by = microsoft_tech.azure_sql;
+      in_block = ai_data_sources;
+    }
+    component analytics_platform {
+      label = "Analytics Platform";
+      implemented_by = microsoft_tech.microsoft_fabric;
+      in_block = ai_data_sources;
+    }
+    component data_lake {
+      label = "Data Lake";
+      implemented_by = microsoft_tech.onelake;
+      in_block = ai_data_sources;
+    }
+    component platform_api {
+      label = "Platform API";
+      in = microsoft_tech.m365;
+      implemented_by = microsoft_tech.microsoft_graph;
+    }
+    slot business_agent_prod {
+      label = "Production";
+      environment = pp_prod;
+    }
+    component workflow_engine {
+      label = "Workflow Engine";
+      in = microsoft_tech.power_platform;
+      implemented_by = microsoft_tech.power_automate;
+      slots = workflow_engine_prod;
+    }
+    slot workflow_engine_prod {
+      label = "Production";
+      environment = pp_prod;
+    }
+    component app_database {
+      label = "Database";
+      in = microsoft_tech.power_platform;
+      implemented_by = microsoft_tech.dataverse;
+      slots = app_database_prod;
+    }
+    slot app_database_prod {
+      label = "Production";
+      environment = pp_prod;
+    }
+    component work_iq {
+      label = "Work IQ";
+      in = microsoft_tech.power_platform;
+      implemented_by = microsoft_tech.microsoft_work_iq;
+    }
+    component autonomous_agent {
+      label = "Autonomous Agent";
+      in = microsoft_tech.power_platform;
+      implemented_by = microsoft_tech.microsoft_autonomous_agent;
+      slots = autonomous_agent_prod;
+    }
+    slot autonomous_agent_prod {
+      label = "Production";
+      environment = pp_prod;
+    }
+    component analytics_surface {
+      label = "Analytics Surface";
+      in = microsoft_tech.power_platform;
+      implemented_by = microsoft_tech.power_bi;
+    }
+    component service_agent {
+      label = "AI Agent";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.ai_foundry_agent_svc;
+      slots = service_agent_prod;
+    }
+    slot service_agent_prod {
+      label = "Production";
+      environment = azure_prod;
+      in_resource_group = ai_foundry_rg;
+      in_subnet = agent_services_subnet;
+    }
+    component multi_agent_workflow {
+      label = "Multi-Agent Workflow";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.ai_foundry_multi_agent;
+      slots = multi_agent_workflow_prod;
+    }
+    slot multi_agent_workflow_prod {
+      label = "Production";
+      environment = azure_prod;
+      in_resource_group = ai_foundry_rg;
+      in_subnet = agent_services_subnet;
+    }
+    component language_model {
+      label = "Language Model";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_openai_gpt4o;
+    }
+    component validator {
+      label = "Validator";
+      in = microsoft_tech.azure;
+      implemented_by = custom_validator_svc;
+      slots = validator_prod;
+    }
+    slot validator_prod {
+      label = "Production";
+      environment = azure_prod;
+      in_resource_group = bridge_rg;
+      in_subnet = agent_services_subnet;
+    }
+    component external_tool_surface {
+      label = "External Tool Surface";
+      in = microsoft_tech.azure;
+      implemented_by = published_mcp_server;
+      slots = external_tool_surface_prod;
+    }
+    slot external_tool_surface_prod {
+      label = "Production";
+      environment = azure_prod;
+      in_resource_group = edge_rg;
+      in_subnet = edge_subnet;
+      public_ingress = ingresses.public_internet;
+    }
+    slot legacy_tool_bridge_prod {
+      label = "Production";
+      environment = azure_prod;
+      in_resource_group = bridge_rg;
+      in_subnet = agent_services_subnet;
+    }
+    slot enterprise_legacy_app_prod {
+      label = "Production";
+      environment = on_prem_prod;
+    }
+    component customer_care_agent {
+      label = "Customer Care Agent";
+      implemented_by = bedrock_agent;
+      slots = customer_care_agent_prod;
+    }
+    slot customer_care_agent_prod {
+      label = "Production";
+      environment = aws_prod;
+      in_resource_group = ai_bedrock_rg;
+      in_subnet = ai_services_subnet;
+    }
+    application conversational_copilot {
+      label = "Conversational Copilot";
+      kind = "application_kinds.business_product";
+      containers = conversational_agent_pack;
+      consumes = platform_api;
+    }
+    application autonomous_ops {
+      label = "Autonomous Operations";
+      kind = "application_kinds.business_product";
+      containers = ops_data_store;
+      consumes = work_iq;
+    }
+    application agent_service {
+      label = "Pro-Code Agent Service";
+      kind = "application_kinds.internal_service";
+      containers = multi_agent_orchestrator;
+      consumes = language_model;
+      provides = multi_agent_workflow;
+    }
+    application external_agent_bridge {
+      label = "External Agent Bridge";
+      kind = "application_kinds.internal_service";
+      containers = legacy_mcp_bridge_code;
+    }
+    application customer_care_copilot {
+      label = "Customer Care Copilot";
+      kind = "application_kinds.business_product";
+      containers = customer_care_prompts;
+    }
+    container conversational_agent_pack {
+      label = "Conversational Agent Pack";
+      role = "container_roles.service_tier";
+      deployed_into = "business_agent_prod";
+    }
+    container low_code_flow_pack {
+      label = "Low-Code Flow Pack";
+      role = "container_roles.batch_tier";
+      deployed_into = "workflow_engine_prod";
+    }
+    container autonomous_agent_pack {
+      label = "Autonomous Agent Pack";
+      role = "container_roles.service_tier";
+      deployed_into = "autonomous_agent_prod";
+    }
+    container ops_data_store {
+      label = "Ops Data Store";
+      role = "container_roles.data_tier";
+      deployed_into = "app_database_prod";
+    }
+    container agent_service_code {
+      label = "Agent Service";
+      role = "container_roles.service_tier";
+      deployed_into = "service_agent_prod";
+    }
+    container multi_agent_orchestrator {
+      label = "Multi-Agent Orchestrator";
+      role = "container_roles.service_tier";
+      deployed_into = "multi_agent_workflow_prod";
+    }
+    container validator_code {
+      label = "Request Validator";
+      role = "container_roles.service_tier";
+      deployed_into = "validator_prod";
+    }
+    container mcp_surface_code {
+      label = "External MCP Surface";
+      role = "container_roles.gateway_tier";
+      deployed_into = "external_tool_surface_prod";
+    }
+    container legacy_mcp_bridge_code {
+      label = "Legacy MCP Bridge";
+      role = "container_roles.integration_tier";
+      deployed_into = "legacy_tool_bridge_prod";
+    }
+    container customer_care_prompts {
+      label = "Customer Care Prompts";
+      role = "container_roles.service_tier";
+      deployed_into = "customer_care_agent_prod";
+    }
+    scenario conversational {
+      label = "Conversational";
+      outcome = "Grounded, permission-scoped response; no system state modified";
+      sequences = [sequence {
+        id = "conv_via_m365_copilot";
+        entry_point = business_user;
+        steps = [business_user ==> chat_surface, m365_copilot_chat ==> m365_copilot_orchestrator, m365_copilot_orchestrator ==> business_agent, business_agent ==> agent_orchestrator, agent_orchestrator ==> knowledge_index, knowledge_index ==> ai_data_sources, legacy_tool_bridge ==> agent_orchestrator, enterprise_legacy_app ==> legacy_tool_bridge];
+      }, sequence {
+        id = "conv_via_custom_surface";
+        entry_point = business_user;
+        steps = [business_user ==> chat_surface, chat_surface ==> business_agent, business_agent ==> agent_orchestrator, agent_orchestrator ==> knowledge_index, knowledge_index ==> ai_data_sources, legacy_tool_bridge ==> agent_orchestrator, enterprise_legacy_app ==> legacy_tool_bridge];
+      }];
+    }
+    scenario autonomous_agent_execution {
+      label = "Autonomous Agent Execution";
+      outcome = "Validated enterprise operation executed with explicit human approval";
+      sequences = [sequence {
+        id = "low_code_workflow";
+        entry_point = work_iq;
+        steps = [work_iq ==> workflow_engine, workflow_engine ==> agent_orchestrator, agent_orchestrator ==> knowledge_index, knowledge_index ==> ai_data_sources, agent_orchestrator ==> autonomous_agent];
+      }, sequence {
+        id = "pro_code_agent_integration";
+        entry_point = platform_api;
+        steps = [platform_api ==> command_bus, validator ==> command_bus, command_bus ==> microsoft_agent_framework, microsoft_agent_framework ==> knowledge_index, microsoft_agent_framework ==> language_model, microsoft_agent_framework ==> service_agent];
+      }];
+    }
+    scenario agentic_external_integration {
+      label = "Agentic Integration";
+      outcome = "Validated enterprise operation executed with explicit human approval";
+      sequences = sequence {
+        id = "external_ai_agent_integration";
+        entry_point = external_ai_agent;
+        steps = [external_ai_agent ==> external_tool_surface, external_tool_surface ==> validator, validator ==> command_bus, platform_api ==> command_bus, command_bus ==> microsoft_agent_framework, microsoft_agent_framework ==> knowledge_index, microsoft_agent_framework ==> language_model, microsoft_agent_framework ==> service_agent];
+      };
+    }
+    scenario support_ticket_resolution {
+      label = "Support Ticket Resolution";
+      outcome = "Support ticket auto-resolved via validated Graph action, or escalated to a human agent in Dynamics 365";
+      sequences = [sequence {
+        id = "autonomous_resolution";
+        entry_point = business_user;
+        steps = [business_user ==> chat_surface, teams_chat ==> business_agent, business_agent ==> agent_orchestrator, agent_orchestrator ==> knowledge_index, knowledge_index ==> ai_data_sources, agent_orchestrator ==> app_database, business_agent ==> validator, validator ==> platform_api, agent_orchestrator ==> app_database];
+      }, sequence {
+        id = "escalation_to_human";
+        entry_point = business_user;
+        steps = [business_user ==> chat_surface, teams_chat ==> business_agent, business_agent ==> agent_orchestrator, agent_orchestrator ==> knowledge_index, knowledge_index ==> ai_data_sources, agent_orchestrator ==> app_database, agent_orchestrator ==> workflow_engine, workflow_engine ==> dynamics_chat];
+      }];
+    }
+  }
+}

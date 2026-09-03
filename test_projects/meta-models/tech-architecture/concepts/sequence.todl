@@ -1,0 +1,34 @@
+namespace tech_architecture
+{
+    concept sequence
+    {
+        description = """
+            A linear chain of `step`s within a `scenario`, starting from
+            an `entry_point`. Sequences are authored as nested records
+            on a `scenario` (`sequences : sequence[]`); their id may be
+            a bare identifier or a quoted string label.
+            """;
+
+        annotate toolbox { visible = false; }
+
+        id          : identifier;
+        steps       : step[];
+
+        relationship entry_point -> actor | block | component;
+
+        invariant
+        {
+            description = """
+                The compiler checks that `entry_point` references a known
+                actor, block, or component.
+                """;
+        }
+        invariant
+        {
+            description = """
+                A sequence carries at least one `step`; an empty
+                sequence is meaningless.
+                """;
+        }
+    }
+}

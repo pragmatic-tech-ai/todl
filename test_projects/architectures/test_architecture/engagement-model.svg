@@ -1,0 +1,170 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif">
+  <!-- Background -->
+  <rect width="1920" height="1080" fill="#FAFAFA"/>
+
+  <!-- Header band -->
+  <rect x="0" y="0" width="1920" height="140" fill="#1F2937"/>
+  <text x="80" y="72" fill="#FFFFFF" font-size="42" font-weight="700">Client Engagement Model</text>
+  <text x="80" y="110" fill="#9CA3AF" font-size="20" font-weight="400">Executable architecture, delivered in phases — from qualification to sustained ownership</text>
+  <rect x="0" y="140" width="1920" height="6" fill="#EA580C"/>
+
+  <!-- Phases section header -->
+  <text x="80" y="200" fill="#6B7280" font-size="18" font-weight="700" letter-spacing="3">PHASES</text>
+  <line x1="180" y1="194" x2="1840" y2="194" stroke="#E5E7EB" stroke-width="1"/>
+
+  <!-- ============ Phase cards row (6 cards) ============ -->
+  <!-- Card 1: Qualify -->
+  <g transform="translate(80,230)">
+    <rect width="280" height="340" fill="#FFFFFF" stroke="#E5E7EB" stroke-width="1" rx="4"/>
+    <rect width="280" height="6" fill="#EA580C" rx="1"/>
+    <text x="22" y="46" fill="#6B7280" font-size="13" font-weight="700" letter-spacing="2">PHASE 0</text>
+    <text x="22" y="86" fill="#111827" font-size="30" font-weight="700">Qualify</text>
+    <text x="22" y="116" fill="#6B7280" font-size="16">1–2 weeks</text>
+    <line x1="22" y1="140" x2="258" y2="140" stroke="#F3F4F6" stroke-width="1"/>
+    <text x="22" y="172" fill="#374151" font-size="16" font-weight="600">Outcome</text>
+    <text x="22" y="198" fill="#374151" font-size="16"><tspan x="22" dy="0">Go / no-go decision</tspan><tspan x="22" dy="22">and signed Statement</tspan><tspan x="22" dy="22">of Work.</tspan></text>
+    <text x="22" y="286" fill="#EA580C" font-size="13" font-weight="700" letter-spacing="1">FIXED PRICE</text>
+    <text x="22" y="312" fill="#6B7280" font-size="14">1-page fit assessment</text>
+  </g>
+
+  <!-- Card 2: Discover -->
+  <g transform="translate(376,230)">
+    <rect width="280" height="340" fill="#FFFFFF" stroke="#E5E7EB" stroke-width="1" rx="4"/>
+    <rect width="280" height="6" fill="#EA580C" rx="1"/>
+    <text x="22" y="46" fill="#6B7280" font-size="13" font-weight="700" letter-spacing="2">PHASE 1</text>
+    <text x="22" y="86" fill="#111827" font-size="30" font-weight="700">Discover</text>
+    <text x="22" y="116" fill="#6B7280" font-size="16">2–4 weeks</text>
+    <line x1="22" y1="140" x2="258" y2="140" stroke="#F3F4F6" stroke-width="1"/>
+    <text x="22" y="172" fill="#374151" font-size="16" font-weight="600">Outcome</text>
+    <text x="22" y="198" fill="#374151" font-size="16"><tspan x="22" dy="0">Current-state landscape</tspan><tspan x="22" dy="22">captured in TODL, signed</tspan><tspan x="22" dy="22">off by client architects.</tspan></text>
+    <text x="22" y="286" fill="#EA580C" font-size="13" font-weight="700" letter-spacing="1">FIXED PRICE</text>
+    <text x="22" y="312" fill="#6B7280" font-size="14">landscape.todl + diagrams</text>
+  </g>
+
+  <!-- Card 3: Target -->
+  <g transform="translate(672,230)">
+    <rect width="280" height="340" fill="#FFFFFF" stroke="#E5E7EB" stroke-width="1" rx="4"/>
+    <rect width="280" height="6" fill="#EA580C" rx="1"/>
+    <text x="22" y="46" fill="#6B7280" font-size="13" font-weight="700" letter-spacing="2">PHASE 2</text>
+    <text x="22" y="86" fill="#111827" font-size="30" font-weight="700">Target</text>
+    <text x="22" y="116" fill="#6B7280" font-size="16">3–6 weeks</text>
+    <line x1="22" y1="140" x2="258" y2="140" stroke="#F3F4F6" stroke-width="1"/>
+    <text x="22" y="172" fill="#374151" font-size="16" font-weight="600">Outcome</text>
+    <text x="22" y="198" fill="#374151" font-size="16"><tspan x="22" dy="0">Target-state landscape +</tspan><tspan x="22" dy="22">scenario suite proving</tspan><tspan x="22" dy="22">key business flows.</tspan></text>
+    <text x="22" y="286" fill="#EA580C" font-size="13" font-weight="700" letter-spacing="1">FIXED / MILESTONE T&amp;M</text>
+    <text x="22" y="312" fill="#6B7280" font-size="14">target.todl + ADRs</text>
+  </g>
+
+  <!-- Card 4: Roadmap -->
+  <g transform="translate(968,230)">
+    <rect width="280" height="340" fill="#FFFFFF" stroke="#E5E7EB" stroke-width="1" rx="4"/>
+    <rect width="280" height="6" fill="#EA580C" rx="1"/>
+    <text x="22" y="46" fill="#6B7280" font-size="13" font-weight="700" letter-spacing="2">PHASE 3</text>
+    <text x="22" y="86" fill="#111827" font-size="30" font-weight="700">Roadmap</text>
+    <text x="22" y="116" fill="#6B7280" font-size="16">~2 weeks</text>
+    <line x1="22" y1="140" x2="258" y2="140" stroke="#F3F4F6" stroke-width="1"/>
+    <text x="22" y="172" fill="#374151" font-size="16" font-weight="600">Outcome</text>
+    <text x="22" y="198" fill="#374151" font-size="16"><tspan x="22" dy="0">Sequenced initiatives with</tspan><tspan x="22" dy="22">owners, dependencies,</tspan><tspan x="22" dy="22">and 90-day plan.</tspan></text>
+    <text x="22" y="286" fill="#EA580C" font-size="13" font-weight="700" letter-spacing="1">FIXED PRICE</text>
+    <text x="22" y="312" fill="#6B7280" font-size="14">Exec readout deck</text>
+  </g>
+
+  <!-- Card 5: Enable -->
+  <g transform="translate(1264,230)">
+    <rect width="280" height="340" fill="#FFFFFF" stroke="#E5E7EB" stroke-width="1" rx="4"/>
+    <rect width="280" height="6" fill="#EA580C" rx="1"/>
+    <text x="22" y="46" fill="#6B7280" font-size="13" font-weight="700" letter-spacing="2">PHASE 4</text>
+    <text x="22" y="86" fill="#111827" font-size="30" font-weight="700">Enable</text>
+    <text x="22" y="116" fill="#6B7280" font-size="16">2–4 weeks</text>
+    <line x1="22" y1="140" x2="258" y2="140" stroke="#F3F4F6" stroke-width="1"/>
+    <text x="22" y="172" fill="#374151" font-size="16" font-weight="600">Outcome</text>
+    <text x="22" y="198" fill="#374151" font-size="16"><tspan x="22" dy="0">Client owns the model:</tspan><tspan x="22" dy="22">CI validation, authoring</tspan><tspan x="22" dy="22">guide, review playbooks.</tspan></text>
+    <text x="22" y="286" fill="#EA580C" font-size="13" font-weight="700" letter-spacing="1">FIXED PRICE</text>
+    <text x="22" y="312" fill="#6B7280" font-size="14">Repo scaffolding + guides</text>
+  </g>
+
+  <!-- Card 6: Sustain (optional retainer) -->
+  <g transform="translate(1560,230)">
+    <rect width="280" height="340" fill="#FFFFFF" stroke="#E5E7EB" stroke-width="1" rx="4"/>
+    <rect width="280" height="6" fill="#0F766E" rx="1"/>
+    <text x="22" y="46" fill="#6B7280" font-size="13" font-weight="700" letter-spacing="2">PHASE 5 · OPTIONAL</text>
+    <text x="22" y="86" fill="#111827" font-size="30" font-weight="700">Sustain</text>
+    <text x="22" y="116" fill="#6B7280" font-size="16">Monthly</text>
+    <line x1="22" y1="140" x2="258" y2="140" stroke="#F3F4F6" stroke-width="1"/>
+    <text x="22" y="172" fill="#374151" font-size="16" font-weight="600">Outcome</text>
+    <text x="22" y="198" fill="#374151" font-size="16"><tspan x="22" dy="0">Ongoing architecture</tspan><tspan x="22" dy="22">office: model refresh,</tspan><tspan x="22" dy="22">reviews, extensions.</tspan></text>
+    <text x="22" y="286" fill="#0F766E" font-size="13" font-weight="700" letter-spacing="1">RETAINER · CREDIT-BASED</text>
+    <text x="22" y="312" fill="#6B7280" font-size="14">Rolling monthly cadence</text>
+  </g>
+
+  <!-- Arrow strip beneath cards -->
+  <g transform="translate(80,590)">
+    <line x1="0" y1="8" x2="1760" y2="8" stroke="#D1D5DB" stroke-width="1" stroke-dasharray="4 4"/>
+    <polygon points="1760,0 1774,8 1760,16" fill="#D1D5DB"/>
+    <text x="880" y="34" text-anchor="middle" fill="#6B7280" font-size="14" font-style="italic">phase-gate acceptance signature between every phase</text>
+  </g>
+
+  <!-- ============ Bottom section (3 columns) ============ -->
+  <!-- Section header -->
+  <text x="80" y="686" fill="#6B7280" font-size="18" font-weight="700" letter-spacing="3">HOW WE WORK TOGETHER</text>
+  <line x1="360" y1="680" x2="1840" y2="680" stroke="#E5E7EB" stroke-width="1"/>
+
+  <!-- Column 1: Commercial -->
+  <g transform="translate(80,720)">
+    <rect width="560" height="290" fill="#FFFFFF" stroke="#E5E7EB" stroke-width="1" rx="4"/>
+    <rect x="0" y="0" width="6" height="290" fill="#EA580C" rx="1"/>
+    <text x="30" y="46" fill="#111827" font-size="24" font-weight="700">Commercial model</text>
+    <g fill="#374151" font-size="17">
+      <circle cx="34" cy="90" r="3" fill="#EA580C"/>
+      <text x="52" y="95">Fixed price per phase with clear acceptance criteria</text>
+      <circle cx="34" cy="130" r="3" fill="#EA580C"/>
+      <text x="52" y="135">T&amp;M only via signed change request</text>
+      <circle cx="34" cy="170" r="3" fill="#EA580C"/>
+      <text x="52" y="175">Phase 5 retainer, credit-based, one-month rollover</text>
+      <circle cx="34" cy="210" r="3" fill="#EA580C"/>
+      <text x="52" y="215">Client owns landscape + scenarios; libraries</text>
+      <text x="52" y="238">and meta-model extensions dual-licensed</text>
+    </g>
+  </g>
+
+  <!-- Column 2: Governance -->
+  <g transform="translate(680,720)">
+    <rect width="560" height="290" fill="#FFFFFF" stroke="#E5E7EB" stroke-width="1" rx="4"/>
+    <rect x="0" y="0" width="6" height="290" fill="#EA580C" rx="1"/>
+    <text x="30" y="46" fill="#111827" font-size="24" font-weight="700">Governance &amp; cadence</text>
+    <g fill="#374151" font-size="17">
+      <circle cx="34" cy="90" r="3" fill="#EA580C"/>
+      <text x="52" y="95">Weekly working session with client architects (2h)</text>
+      <circle cx="34" cy="130" r="3" fill="#EA580C"/>
+      <text x="52" y="135">Bi-weekly steering with sponsor (30m)</text>
+      <circle cx="34" cy="170" r="3" fill="#EA580C"/>
+      <text x="52" y="175">Signed phase-gate before next phase begins</text>
+      <circle cx="34" cy="210" r="3" fill="#EA580C"/>
+      <text x="52" y="215">Every non-trivial decision captured as an ADR</text>
+      <text x="52" y="238">committed alongside the landscape</text>
+    </g>
+  </g>
+
+  <!-- Column 3: Success metrics -->
+  <g transform="translate(1280,720)">
+    <rect width="560" height="290" fill="#FFFFFF" stroke="#E5E7EB" stroke-width="1" rx="4"/>
+    <rect x="0" y="0" width="6" height="290" fill="#0F766E" rx="1"/>
+    <text x="30" y="46" fill="#111827" font-size="24" font-weight="700">Success metrics</text>
+    <g fill="#374151" font-size="17">
+      <circle cx="34" cy="90" r="3" fill="#0F766E"/>
+      <text x="52" y="95">Coverage: % of in-scope domains modeled &amp; signed off</text>
+      <circle cx="34" cy="130" r="3" fill="#0F766E"/>
+      <text x="52" y="135">Adoption: downstream teams consuming the landscape</text>
+      <circle cx="34" cy="170" r="3" fill="#0F766E"/>
+      <text x="52" y="175">Cycle time: architecture question → grounded answer</text>
+      <circle cx="34" cy="210" r="3" fill="#0F766E"/>
+      <text x="52" y="215">Change velocity: client-authored PRs merged per month</text>
+      <text x="52" y="238">without our involvement</text>
+    </g>
+  </g>
+
+  <!-- Footer -->
+  <line x1="80" y1="1040" x2="1840" y2="1040" stroke="#E5E7EB" stroke-width="1"/>
+  <text x="80" y="1066" fill="#9CA3AF" font-size="13" letter-spacing="1">EXIT CRITERION · Client team merges a landscape change without us in the room</text>
+  <text x="1840" y="1066" text-anchor="end" fill="#9CA3AF" font-size="13" letter-spacing="1">plexus · TODL · tech-architecture</text>
+</svg>

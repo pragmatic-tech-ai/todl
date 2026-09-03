@@ -1,0 +1,34 @@
+namespace tech_architecture
+{
+    concept billing_model
+    {
+        description = """
+            Library_defined visual binding for a `billing_model` enum
+            value. The meta_instance's name resolves to a `billing_model`
+            term; the body sets the meter icon and an optional short unit
+            label rendered next to the meter in cost_dimension views.
+            """;
+
+        id         : identifier;
+        unit_label : label?;
+
+        invariant
+        {
+            description = """
+                Multiple `billing_model_style` declarations for the same
+                enum value across libraries are a compile error —
+                ambiguous authority.
+                """;
+        }
+
+        authoring library_entry
+        {
+            description = "Inside a `<lib>.technology-library.model` body.";
+            example = """
+                billing_model_style m365_copilot_usl   { annotate icon { path = "resources/meter-usl.svg"; }     unit_label = "USL"; }
+                billing_model_style copilot_credits    { annotate icon { path = "resources/meter-credits.svg"; } unit_label = "credits"; }
+                billing_model_style azure_consumption  { annotate icon { path = "resources/meter-azure.svg"; }   unit_label = "$"; }
+                """;
+        }
+    }
+}

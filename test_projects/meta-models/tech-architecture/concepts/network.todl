@@ -1,0 +1,52 @@
+namespace tech_architecture
+{
+    concept network
+    {
+        description = """
+            A virtual or physical network that hosts deployment slots and
+            constrains reachability. Examples: an Azure vnet, an AWS VPC, an
+            on_premises network segment. Subnets within this network are modelled
+            as separate `subnet` records with `parent` pointing back here.
+
+            Peering relationships are declared on the cloud_vnet side by
+            convention; on_prem and SaaS_vendor_fabric networks are passive
+            endpoints in peer_edges. This convention is documentary — the
+            compiler does not enforce symmetry — so authors should declare
+            each peer_edge once, on whichever side is the more active
+            participant.
+            """;
+
+        id     : identifier;
+        label  : label;
+        region : string;
+        cidr   : string?;
+        peers  : network_peer[];
+
+        relationship in              -> location;
+        relationship in_subscription -> subscription;
+
+        invariant "Network ids are globally unique within the model.";
+        invariant "`in` resolves to a known location.";
+        invariant "`in-subscription` resolves to a known subscription.";
+        invariant
+        {
+            description = """
+                The subscription's `in` location must equal this network's `in`.
+                Catches "Azure network claimed to belong to an on-prem
+                subscription" mismatches.
+                """;
+            formal = "∀ n: n.in-subscription.in = n.in";
+        }
+        invariant
+        {
+            description = """
+                Every `peers[].network` resolves to a different known network
+                (no self_peering).
+                """;
+        }
+
+        references = [
+            "docs/superpowers/specs/2026-05-28-deployment-viewpoint-design.md",
+        ];
+    }
+}

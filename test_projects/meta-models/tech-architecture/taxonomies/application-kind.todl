@@ -1,0 +1,62 @@
+namespace tech_architecture
+{
+    taxonomy application_kinds : represents application_kind
+    {
+        description = """
+            Classifies applications by what they represent in the
+            organisation. The four kinds cover the full span from a
+            business_funded product to an implementation_level service.
+            Each kind has typical structural patterns — which fields are
+            meaningful and how `contains` and `provides` are used.
+            """;
+
+        term business_product
+        {
+            label = "Business Product";
+            description = """123
+                A named, business_funded software product owned end_to_end
+                by a product team or cost centre. Typically contains other
+                applications and/or has its own containers; rarely provides
+                components directly. The thing the business funds and
+                reports on.
+                """;
+        }
+
+        term vendor_installation
+        {
+            label = "Vendor Installation";
+            description = """
+                A specific deployed instance of a procured product — our
+                Salesforce tenant, our particular Power Platform environment,
+                our SAP S/4 installation. Distinct from the vendor's product
+                as a market offering (that's a `technology`). May provide
+                multiple `component`s representing capabilities the tenant
+                offers.
+                """;
+        }
+
+        term internal_service
+        {
+            label = "Internal Service";
+            description = """
+                An implementation_level deployable unit owned by an
+                engineering team — the order_events service, the
+                customer_master service. Typically provides exactly one
+                `component` (itself) and may consume many. Often wears both
+                hats: component (capability slot) plus application
+                (identity).
+                """;
+        }
+
+        term portfolio
+        {
+            label = "Portfolio";
+            description = """
+                A composite that aggregates multiple applications for
+                governance and reporting — e.g., a Sales Experience that
+                wraps several underlying products. Only contains; rarely
+                has direct containers.
+                """;
+        }
+    }
+}

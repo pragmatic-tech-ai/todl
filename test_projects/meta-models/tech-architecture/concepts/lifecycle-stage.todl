@@ -1,0 +1,36 @@
+namespace tech_architecture
+{
+    concept lifecycle_stage
+    {
+        description = """
+            Library_defined visual binding for a `lifecycle_styles` enum value.
+            The meta_instance's name resolves to a `lifecycle_styles` term; the
+            body sets the delivery_stage swatch (traffic_light coding for
+            dev / test / staging / prod / sandbox) and optional glyph.
+            """;
+
+        id     : identifier;
+        swatch : string;
+
+        invariant
+        {
+            description = """
+                Multiple `lifecycle_style` declarations for the same enum
+                value across libraries are a compile error — ambiguous
+                authority.
+                """;
+        }
+
+        authoring library_entry
+        {
+            description = "Inside a `<lib>.technology-library.model` body.";
+            example = """
+                lifecycle_style dev     { swatch = "#94a3b8"; }
+                lifecycle_style test    { swatch = "#3b82f6"; }
+                lifecycle_style staging { swatch = "#f59e0b"; }
+                lifecycle_style prod    { swatch = "#22c55e"; }
+                lifecycle_style sandbox { swatch = "#a855f7"; }
+                """;
+        }
+    }
+}

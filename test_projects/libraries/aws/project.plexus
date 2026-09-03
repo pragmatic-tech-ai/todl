@@ -1,0 +1,11 @@
+{
+  "type": "library",
+  "name": "todl-test-aws",
+  "version": 1,
+  "id": "todl-test-aws",
+  "libVersion": "0.1.0",
+  "metaModel": {
+    "id": "todl-test-tech-architecture",
+    "version": "0.1.0"
+  }
+}

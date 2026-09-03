@@ -1,0 +1,39 @@
+namespace tech_architecture
+{
+    concept actor
+    {
+        description = """
+            A party outside the component graph that initiates interactions
+            with the architecture. Most commonly the Entry Point of a scenario
+            sequence — though a sequence's Entry Point may also be a component.
+            """;
+
+        id : identifier;
+        label : label;
+
+        invariant
+        {
+            description = """
+                Actor ids share the global namespace; collisions with
+                components, blocks, or locations are forbidden.
+                """;
+        }
+
+        authoring dict_form
+        {
+            example = """
+                actors:
+                  business_user:
+                    label: Business User
+                    type: internal
+                  external_ai_agent:
+                    label: External AI Agent
+                    type: external_ai
+                """;
+        }
+
+        references = [
+            "docs/meta-models/technology-architecture/primitives/actor.md",
+        ];
+    }
+}

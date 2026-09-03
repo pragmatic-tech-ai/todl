@@ -1,0 +1,60 @@
+namespace tech_architecture
+{
+    concept container
+    {
+        description = """
+            A separately deployable runtime unit owned by an `application` —
+            the C4 Container. Examples: a web application, an API service,
+            a database, a mobile app, a function app. Authored as the
+            team's code, not procured as a technology. A container is
+            named after what it does within its application; its technology
+            stack (React, .NET, Power Fx, etc.) is informal metadata, never
+            a `technology` catalogue entry.
+
+            "Container" is the strict C4 term and does not refer to
+            Docker/OCI containers, though the two often coincide in practice.
+            """;
+
+        id             : identifier;
+        label          : label;
+
+        app_components : app_component[];
+
+        delivered_by   : component?;
+        deployed_into  : identifier[];
+
+        invariant "Container ids are globally unique within the model.";
+        invariant
+        {
+            description = """
+                If `delivered_by` is set, it resolves to a known `component`.
+                """;
+        }
+        invariant
+        {
+            description = """
+                Every slot reference in `deployed_into` (form
+                `<component_id>.<slot_id>`) must resolve to a slot declared
+                on the same `component` referenced by `delivered_by`. Catches
+                accidental cross_platform deployment claims at build time.
+                """;
+            formal = """
+                ∀ s ∈ deployed_into:
+                  slot_component(s) = delivered_by
+                """;
+        }
+        invariant
+        {
+            description = """
+                Every id in `app_components` resolves to a known
+                `app_component` that is not also referenced by another
+                container's `app_components`. App_components are owned by
+                exactly one container.
+                """;
+        }
+
+        references = [
+            "docs/meta-models/technology-architecture/three-viewpoints.md",
+        ];
+    }
+}

@@ -1,0 +1,86 @@
+namespace tech_architecture
+{
+    taxonomy container_roles : represents container_role
+    {
+        description = """
+            The architectural tier a `container` occupies within its parent
+            application. Drives visual treatment in C4 Container views and
+            clarifies what the container is responsible for.
+            """;
+
+        term web_tier
+        {
+            label = "Web Tier";
+            description = """
+                User_facing web, mobile, or desktop UX. The presentation
+                surface that actors interact with directly.
+                """;
+        }
+
+        term service_tier
+        {
+            label = "Service Tier";
+            description = """
+                Backend service or API; orchestrates business logic between
+                presentation and persistence.
+                """;
+        }
+
+        term data_tier
+        {
+            label = "Data Tier";
+            description = """
+                Container that holds state — database, document store,
+                table set, blob store. The container is the data, not
+                just an accessor of it.
+                """;
+        }
+
+        term integration_tier
+        {
+            label = "Integration Tier";
+            description = """
+                Adapter or connector to external systems. Bridges to
+                vendor products, partner integrations, or legacy
+                applications.
+                """;
+        }
+
+        term batch_tier
+        {
+            label = "Batch Tier";
+            description = """
+                Scheduled or asynchronous processing. Long_running jobs,
+                ETL pipelines, queue consumers.
+                """;
+        }
+
+        term gateway_tier
+        {
+            label = "Gateway Tier";
+            description = """
+                API gateway, reverse proxy, or backend_for_frontend.
+                Aggregates upstream services for downstream presentation.
+                """;
+        }
+
+        term messaging_tier
+        {
+            label = "Messaging Tier";
+            description = """
+                Message bus or event broker owned by the application
+                (not the shared platform). Pub/sub, queues, event streams.
+                """;
+        }
+
+        term cross_cutting
+        {
+            label = "Cross-Cutting";
+            description = """
+                Observability, configuration, security wrapper, or other
+                capability that doesn't sit on the main result_production
+                chain.
+                """;
+        }
+    }
+}

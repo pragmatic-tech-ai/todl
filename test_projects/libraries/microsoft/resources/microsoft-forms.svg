@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="a" data-name="Слой 1" xmlns="http://www.w3.org/2000/svg" width="486" height="500" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 486 500">
+  <defs>
+    <radialGradient id="b" data-name="Безымянный градиент" cx="-748.95" cy="775.26" fx="-748.95" fy="775.26" r="13.89" gradientTransform="translate(7582.07 -34653.1) rotate(-121.55) scale(35.03 -31.66) skewX(-.01)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1a7f7c"/>
+      <stop offset=".45" stop-color="#14717c"/>
+      <stop offset=".8" stop-color="#08567b"/>
+    </radialGradient>
+    <radialGradient id="c" data-name="Безымянный градиент 2" cx="-774.34" cy="772.3" fx="-774.34" fy="772.3" r="13.89" gradientTransform="translate(-2337.75 -15646.47) rotate(-136.68) scale(16.46 -12.72)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#06517b"/>
+      <stop offset=".99" stop-color="#06517b" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="d" data-name="Безымянный градиент 3" x1="98.42" y1="265.38" x2="492.72" y2="493.04" gradientTransform="translate(0 502) scale(1 -1)" gradientUnits="userSpaceOnUse">
+      <stop offset=".23" stop-color="#15b4d5"/>
+      <stop offset="1" stop-color="#43e5ca"/>
+    </linearGradient>
+    <linearGradient id="e" data-name="Безымянный градиент 4" x1="184.19" y1="334.96" x2="69.43" y2="334.96" gradientTransform="translate(0 502) scale(1 -1)" gradientUnits="userSpaceOnUse">
+      <stop offset=".18" stop-color="#29cbdc" stop-opacity="0"/>
+      <stop offset="1" stop-color="#36dff1"/>
+    </linearGradient>
+    <linearGradient id="f" data-name="Безымянный градиент 5" x1="305.77" y1="453.74" x2="403.98" y2="311.88" gradientTransform="translate(0 502) scale(1 -1)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#119fc5"/>
+      <stop offset="1" stop-color="#22918b"/>
+    </linearGradient>
+    <linearGradient id="g" data-name="Безымянный градиент 6" x1="327.73" y1="422.01" x2="381.3" y2="344.64" gradientTransform="translate(0 502) scale(1 -1)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#06517b"/>
+      <stop offset="1" stop-color="#1a7f7c"/>
+    </linearGradient>
+    <linearGradient id="h" data-name="Безымянный градиент 7" x1="314.55" y1="191.05" x2="394.9" y2="74.99" gradientTransform="translate(0 502) scale(1 -1)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#119fc5"/>
+      <stop offset="1" stop-color="#20ac9d"/>
+    </linearGradient>
+    <radialGradient id="i" data-name="Безымянный градиент 8" cx="-675.64" cy="797.48" fx="-675.64" fy="797.48" r="13.89" gradientTransform="translate(-1949 23805.98) rotate(45.01) scale(22.62 -22.62) skewX(-.01)" gradientUnits="userSpaceOnUse">
+      <stop offset=".06" stop-color="#009bbc"/>
+      <stop offset=".59" stop-color="#01657d"/>
+      <stop offset=".94" stop-color="#014354"/>
+    </radialGradient>
+    <radialGradient id="j" data-name="Безымянный градиент 9" cx="-657.62" cy="854.73" fx="-657.62" fy="854.73" r="13.89" gradientTransform="translate(-10784.26 7734.8) rotate(90) scale(11.2 -12.75)" gradientUnits="userSpaceOnUse">
+      <stop offset=".57" stop-color="#1e8581" stop-opacity="0"/>
+      <stop offset=".97" stop-color="#1ecbe6"/>
+    </radialGradient>
+  </defs>
+  <path d="M69.43,305.55c0-61.37,49.73-111.11,111.09-111.11h305.49v263.89c0,23.01-18.65,41.67-41.66,41.67H153.23c-46.28,0-83.8-37.53-83.8-83.82v-110.62Z" fill="url(#b)"/>
+  <path d="M69.43,305.55c0-61.37,49.73-111.11,111.09-111.11h305.49v263.89c0,23.01-18.65,41.67-41.66,41.67H153.23c-46.28,0-83.8-37.53-83.8-83.82v-110.62Z" fill="url(#c)" fill-opacity=".8"/>
+  <path d="M69.43,83.82C69.43,37.53,106.95,0,153.23,0h287.32c25.1,0,45.44,20.35,45.44,45.45v159.09c0,25.1-20.35,45.45-45.44,45.45H153.23c-46.28,0-83.8,37.8-83.8,84.09V83.82Z" fill="url(#d)"/>
+  <path d="M69.43,83.82C69.43,37.53,106.95,0,153.23,0h287.32c25.1,0,45.44,20.35,45.44,45.45v159.09c0,25.1-20.35,45.45-45.44,45.45H153.23c-46.28,0-83.8,37.8-83.8,84.09V83.82Z" fill="url(#e)"/>
+  <path d="M354.09,194.44c42.18,0,76.37-34.2,76.37-76.39s-34.19-76.39-76.37-76.39-76.37,34.2-76.37,76.39,34.19,76.39,76.37,76.39Z" fill="url(#f)"/>
+  <path d="M354.09,159.72c23.01,0,41.66-18.65,41.66-41.67s-18.65-41.67-41.66-41.67-41.66,18.65-41.66,41.67,18.65,41.67,41.66,41.67Z" fill="url(#g)"/>
+  <path d="M405.21,305.55h-102.25c-6.27,0-11.36,5.09-11.36,11.36v102.27c0,6.28,5.09,11.36,11.36,11.36h102.25c6.27,0,11.36-5.09,11.36-11.36v-102.27c0-6.28-5.09-11.36-11.36-11.36Z" fill="url(#h)"/>
+  <rect y="236.11" width="222.17" height="222.22" rx="45.13" ry="45.13" fill="url(#i)"/>
+  <rect y="236.11" width="222.17" height="222.22" rx="45.13" ry="45.13" fill="url(#j)" fill-opacity=".6"/>
+  <path d="M147.79,307.43h-44.81v30.56h41.18v23.56h-41.18v49.16h-28.6v-127.01h73.41v23.74Z" fill="#fff"/>
+</svg>

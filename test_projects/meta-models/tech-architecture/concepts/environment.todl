@@ -1,0 +1,92 @@
+namespace tech_architecture
+{
+    concept environment
+    {
+        description = """
+            A deployment context with a lifecycle role. Examples: a Power
+            Platform environment (managed or classic), an Azure subscription
+            playing the role of a deployment env, an AWS account_as_env, an
+            on_prem deployment group. Components instantiate slots in
+            environments; containers deploy into those slots. Environment
+            is what slots reference for placement; environment carries
+            lifecycle (prod/dev/staging) so that two slots with the same
+            lifecycle but in different environments are distinct deployment
+            instances.
+
+            Environment is distinct from `tenant` (identity_only) and from
+            `subscription` (billing/resource only). One tenant can host
+            many environments; one subscription can host many environments;
+            one environment binds to one tenant for identity and optionally
+            one subscription for resources.
+
+            Environment carries an optional `in_subnet` for the PP
+            managed_environment_with_VNet_integration case (the env's
+            runtime containers inject NICs into that subnet). Other env
+            kinds typically leave it unset.
+
+            Environment carries a default `public_ingress` list; slots can
+            override per_instance.
+            """;
+
+        id        : identifier;
+        label     : label;
+        region    : string?;
+
+        public_ingress : ingress[];
+
+        relationship in_tenant       -> tenant;
+        // @containment picks subscription as the environment's VISUAL parent
+        // (subscription ⊃ environment); in_tenant / in_subnet stay plain refs so
+        // the node has exactly one visual container.
+        relationship in_subscription -> subscription? { annotate containment {} }
+        relationship in_subnet       -> subnet?;
+        relationship resource_groups -> resource_group[];
+
+        invariant "Environment ids are globally unique within the model.";
+        invariant "`in-tenant` resolves to a known tenant.";
+        invariant
+        {
+            description = """
+                If `in_subscription` is set, the subscription's `in_tenant`
+                (if set) must equal this environment's `in_tenant`. Catches
+                "PP env in tenant A but subscription in tenant B" mismatches.
+                """;
+            formal = """
+                ∀ e where e.in_subscription ≠ ∅ ∧ e.in_subscription.in_tenant ≠ ∅:
+                  e.in_subscription.in_tenant = e.in_tenant
+            """;
+        }
+        invariant
+        {
+            description = """
+                Every `resource_groups` entry resolves to a known resource_group
+                whose `in_subscription` matches `environment.in_subscription`
+                (when both are set).
+                """;
+        }
+        invariant
+        {
+            description = """
+                If `in_subnet` is set, the subnet's parent network's
+                `in_subscription` must equal `environment.in_subscription`
+                (when env has in_subscription set). Catches "env claims a
+                subnet in a different subscription than its own."
+                """;
+        }
+        invariant
+        {
+            description = """
+                If `region` is set AND `in_subnet` is set, `region` must equal
+                the subnet's parent network's region — except for environment
+                classes whose runtime region maps indirectly (e.g. Power Platform
+                managed environments, where the PP_region_to_Azure_region mapping
+                applies and the validator skips this check). Otherwise `region`
+                is informational.
+                """;
+        }
+
+        references = [
+            "docs/superpowers/specs/2026-05-28-deployment-placement-model-design.md",
+        ];
+    }
+}

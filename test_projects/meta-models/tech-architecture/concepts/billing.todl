@@ -1,0 +1,29 @@
+namespace tech_architecture
+{
+    concept billing
+    {
+        description = """
+            A technology's cost_dimension stack. Each named dimension, when set,
+            resolves to a `billing_model_styles` term. Authors fill only the dimensions
+            that apply; a technology may carry several simultaneously — e.g. a
+            hosted MCP server bills `hosting` for its App Service envelope AND
+            `per_call` for its AI calls. Authored as a nested `billing` record on
+            a `technology` (`billing : billing?`).
+            """;
+
+        id       : identifier;
+        hosting  : billing_models?;
+        per_call : billing_models?;
+        per_seat : billing_models?;
+        capacity : billing_models?;
+
+        invariant
+        {
+            description = """
+                Each set dimension (`hosting`, `per_call`, `per_seat`,
+                `capacity`) resolves to a known `billing_model_styles` term. A
+                technology with no metered runtime cost omits `billing`.
+                """;
+        }
+    }
+}

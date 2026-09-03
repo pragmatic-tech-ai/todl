@@ -1,0 +1,2237 @@
+// AUTO: rewrite of technology_library/microsoft/index.yaml as TODL.
+
+namespace libraries.microsoft
+{
+    import tech_architecture;
+
+    taxonomy microsoft_tech : represents location, technology uses categories
+    {
+        annotate toolbox { visible = true; }
+
+        // ── Locations ───────────────────────────────────────────────
+        // Microsoft_stack hosting regions. Authored here (rather than in
+        // each consuming architecture model) so any project that pulls
+        // in this library inherits them. `type` composes location_type
+        // flags via `|` (spec §6.5).
+        location azure          { label = "Azure";         type = cloud | paas; }
+        location m365           { label = "Microsoft 365"; type = cloud | saas; parent = azure; }
+        location power_platform { label = "Power Platform"; type = cloud | saas; parent = m365; }
+        location azure_government { label = "Azure Government (United States)"; type = cloud | paas; parent = azure; }
+        location azure_21vianet   { label = "Azure operated by 21Vianet"; type = cloud | paas; parent = azure; }
+
+        // ── Microsoft 365 ───────────────────────────────────────────
+        technology microsoft_graph
+        {
+            label         = "Microsoft Graph";
+            annotate icon { path = "resources/microsoft_graph.svg"; }
+            available_in  = [m365];
+            applicable_to = [platform_api];
+            wiki          = "microsoft-graph.md";
+        }
+
+        technology microsoft_teams
+        {
+            label         = "Microsoft Teams";
+            annotate icon { path = "resources/teams.svg"; }
+            available_in  = [m365];
+            applicable_to = [conversational_interface];
+            wiki          = "microsoft-teams.md";
+        }
+
+        technology sharepoint_online
+        {
+            label         = "SharePoint";
+            annotate icon { path = "resources/sharepoint_online.svg"; }
+            available_in  = [m365, azure];
+            applicable_to = [document_store];
+            wiki          = "sharepoint-online.md";
+        }
+
+        technology sharepoint_embedded
+        {
+            label         = "SharePoint Embedded";
+            annotate icon { path = "resources/sharepoint_online.svg"; }
+            available_in  = [m365];
+            applicable_to = [conversational_interface, document_store];
+            wiki          = "sharepoint-embedded.md";
+        }
+
+        technology m365_copilot
+        {
+            label         = "M365 Copilot";
+            annotate icon { path = "resources/copilot.svg"; }
+            available_in  = [m365];
+            applicable_to = [conversational_interface, orchestration_engine];
+            wiki          = "m365-copilot.md";
+        }
+
+        technology dynamics_365
+        {
+            label         = "Dynamics 365";
+            annotate icon { path = "resources/dynamics365.svg"; }
+            available_in  = [m365];
+            applicable_to = [conversational_interface, web_portal];
+            wiki          = "dynamics-365.md";
+        }
+
+        // ── Power Platform ──────────────────────────────────────────
+        technology copilot_studio
+        {
+            label         = "Copilot Studio";
+            annotate icon { path = "resources/copilotstudio.svg"; }
+            available_in  = [power_platform];
+            applicable_to = [agent_authoring_studio];
+            wiki          = "copilot-studio.md";
+        }
+
+        technology copilot_agent
+        {
+            label         = "Copilot Agent";
+            annotate icon { path = "resources/agent.svg"; }
+            available_in  = [power_platform];
+            applicable_to = [ai_agent];
+            wiki          = "copilot-agent.md";
+        }
+
+        technology power_automate
+        {
+            label         = "Power Automate";
+            annotate icon { path = "resources/power_automate.svg"; }
+            available_in  = [power_platform];
+            applicable_to = [workflow_engine];
+            wiki          = "power-automate.md";
+        }
+
+        technology power_bi
+        {
+            label         = "Power BI";
+            annotate icon { path = "resources/power_bi.svg"; }
+            available_in  = [power_platform];
+            applicable_to = [reporting_surface];
+            wiki          = "power-bi.md";
+        }
+
+        technology dataverse
+        {
+            label         = "Microsoft Dataverse";
+            annotate icon { path = "resources/dataverse.svg"; }
+            available_in  = [power_platform];
+            applicable_to = [relational_store];
+            wiki          = "dataverse.md";
+        }
+
+        technology microsoft_work_iq
+        {
+            label         = "Microsoft Work IQ";
+            annotate icon { path = "resources/copilot.svg"; }
+            available_in  = [power_platform];
+            applicable_to = [api_service];
+            wiki          = "microsoft-work-iq.md";
+        }
+
+        technology microsoft_autonomous_agent
+        {
+            label         = "Microsoft Autonomous Agent";
+            annotate icon { path = "resources/agent.svg"; }
+            available_in  = [power_platform];
+            applicable_to = [ai_agent];
+            wiki          = "microsoft-autonomous-agent.md";
+        }
+
+        // ── Azure ───────────────────────────────────────────────────
+        technology azure_ai_search
+        {
+            label         = "Azure AI Search";
+            annotate icon { path = "resources/ai_search.svg"; }
+            available_in  = [azure];
+            applicable_to = [semantic_index];
+            wiki          = "azure-ai-search.md";
+        }
+
+        technology ai_foundry_agent_svc
+        {
+            label         = "Foundry Agent Service";
+            annotate icon { path = "resources/ai-foundry-agent-svc.svg"; }
+            available_in  = [azure];
+            applicable_to = [ai_agent, agent_runtime_service];
+            wiki          = "ai-foundry-agent-svc.md";
+        }
+
+        technology ai_foundry_multi_agent
+        {
+            label         = "AI Foundry Multi-Agent";
+            annotate icon { path = "resources/agent.svg"; }
+            available_in  = [azure];
+            applicable_to = [ai_agent, agent_runtime_service];
+            wiki          = "ai-foundry-multi-agent.md";
+        }
+
+        technology ai_foundry_iq
+        {
+            label         = "Foundry IQ";
+            annotate icon { path = "resources/agent.svg"; }
+            available_in  = [azure];
+            applicable_to = [agent_runtime_service];
+            wiki          = "ai-foundry-iq.md";
+        }
+
+        technology azure_openai_gpt4o
+        {
+            label         = "Azure OpenAI GPT-4o";
+            annotate icon { path = "resources/llm.svg"; }
+            available_in  = [azure];
+            applicable_to = [language_model];
+            wiki          = "azure-openai-gpt4o.md";
+        }
+
+        technology azure_event_hub
+        {
+            label         = "Azure Event Hub";
+            annotate icon { path = "resources/azure_event_hub.svg"; }
+            available_in  = [azure];
+            applicable_to = [event_log];
+            wiki          = "azure-event-hub.md";
+        }
+
+        technology azure_service_bus
+        {
+            label         = "Azure Service Bus";
+            annotate icon { path = "resources/azure_service_bus.svg"; }
+            available_in  = [azure];
+            applicable_to = [message_queue];
+            wiki          = "azure-service-bus.md";
+        }
+
+        technology azure_blob_storage
+        {
+            label         = "Azure Blob Storage";
+            annotate icon { path = "resources/azure_storage_blob.svg"; }
+            available_in  = [azure];
+            applicable_to = [file_store];
+            wiki          = "azure-blob-storage.md";
+        }
+
+        technology azure_sql
+        {
+            label         = "Azure SQL";
+            annotate icon { path = "resources/sql.svg"; }
+            available_in  = [azure];
+            applicable_to = [relational_store];
+            wiki          = "azure-sql.md";
+        }
+
+        technology microsoft_fabric
+        {
+            label         = "Microsoft Fabric";
+            annotate icon { path = "resources/fabric.svg"; }
+            available_in  = [azure];
+            applicable_to = [data_platform_suite];
+            wiki          = "microsoft-fabric.md";
+        }
+
+        technology onelake
+        {
+            label         = "OneLake";
+            annotate icon { path = "resources/onelake.svg"; }
+            available_in  = [azure];
+            applicable_to = [file_store];
+            wiki          = "onelake.md";
+        }
+
+        // ── Microsoft Foundry Platform ──────────────────────────────
+        technology microsoft_foundry
+        {
+            label         = "Microsoft Foundry";
+            annotate icon { path = "resources/microsoft-foundry.png"; }
+            available_in  = [azure, azure_government];
+            applicable_to = [ai_platform_suite];
+            wiki          = "microsoft-foundry.md";
+        }
+
+        technology foundry_control_plane
+        {
+            label         = "Foundry Control Plane";
+            annotate icon { path = "resources/foundry-control-plane.svg"; }
+            available_in  = [azure];
+            applicable_to = [cloud_control_plane];
+            wiki          = "foundry-control-plane.md";
+        }
+
+        technology foundry_models
+        {
+            label         = "Foundry Models";
+            annotate icon { path = "resources/foundry-models.png"; }
+            available_in  = [azure, azure_government];
+            applicable_to = [language_model];
+            wiki          = "foundry-models.md";
+        }
+
+        technology foundry_local
+        {
+            label         = "Foundry Local";
+            annotate icon { path = "resources/foundry-local.png"; }
+            available_in  = [azure];
+            applicable_to = [language_model];
+            wiki          = "foundry-local.md";
+        }
+
+        technology ai_red_teaming_agent
+        {
+            label         = "AI Red Teaming Agent";
+            annotate icon { path = "resources/ai-red-teaming-agent.svg"; }
+            available_in  = [azure];
+            applicable_to = [ai_agent];
+            wiki          = "ai-red-teaming-agent.md";
+        }
+
+        // ── Azure AI / Foundry Tools ────────────────────────────────
+        technology azure_ai_content_safety
+        {
+            label         = "Azure AI Content Safety";
+            annotate icon { path = "resources/azure-ai-content-safety.svg"; }
+            available_in  = [azure, azure_government];
+            applicable_to = [content_safety_service];
+            wiki          = "azure-ai-content-safety.md";
+        }
+
+        technology azure_ai_immersive_reader
+        {
+            label         = "Azure AI Immersive Reader";
+            annotate icon { path = "resources/azure-ai-immersive-reader.svg"; }
+            available_in  = [azure];
+            applicable_to = [immersive_reader_service];
+            wiki          = "azure-ai-immersive-reader.md";
+        }
+
+        technology azure_content_understanding
+        {
+            label         = "Azure Content Understanding";
+            annotate icon { path = "resources/azure-content-understanding.svg"; }
+            available_in  = [azure];
+            applicable_to = [content_understanding_service];
+            wiki          = "azure-content-understanding.md";
+        }
+
+        technology azure_document_intelligence
+        {
+            label         = "Azure Document Intelligence";
+            annotate icon { path = "resources/azure-document-intelligence.svg"; }
+            available_in  = [azure, azure_government];
+            applicable_to = [document_intelligence_service];
+            wiki          = "azure-document-intelligence.md";
+        }
+
+        technology azure_face
+        {
+            label         = "Azure AI Face";
+            annotate icon { path = "resources/azure-face.svg"; }
+            available_in  = [azure];
+            applicable_to = [face_cognitive_service];
+            wiki          = "azure-face.md";
+        }
+
+        technology azure_language
+        {
+            label         = "Azure AI Language";
+            annotate icon { path = "resources/azure-language.svg"; }
+            available_in  = [azure];
+            applicable_to = [language_cognitive_service];
+            wiki          = "azure-language.md";
+        }
+
+        technology azure_machine_learning
+        {
+            label         = "Azure Machine Learning";
+            annotate icon { path = "resources/azure-machine-learning.png"; }
+            available_in  = [azure];
+            applicable_to = [ml_lifecycle_platform];
+            wiki          = "azure-machine-learning.md";
+        }
+
+        technology azure_speech
+        {
+            label         = "Speech";
+            annotate icon { path = "resources/azure-speech.svg"; }
+            available_in  = [azure, azure_government, azure_21vianet];
+            applicable_to = [speech_cognitive_service];
+            wiki          = "azure-speech.md";
+        }
+
+        technology azure_translator
+        {
+            label         = "Translator";
+            annotate icon { path = "resources/azure-translator.svg"; }
+            available_in  = [azure, azure_government];
+            applicable_to = [translation_cognitive_service];
+            wiki          = "azure-translator.md";
+        }
+
+        technology azure_vision
+        {
+            label         = "Vision";
+            annotate icon { path = "resources/azure-vision.svg"; }
+            available_in  = [azure];
+            applicable_to = [vision_cognitive_service];
+            wiki          = "azure-vision.md";
+        }
+
+        // ── Azure AI / Foundry Tools (expanded) ─────────────────────
+        technology azure_ai_bot_service
+        {
+            label         = "Azure AI Bot Service";
+            annotate icon { path = "resources/azure-ai-bot-service.svg"; }
+            available_in  = [azure];
+            applicable_to = [bot_platform];
+            wiki          = "azure-ai-bot-service.md";
+        }
+
+        technology azure_ai_custom_vision
+        {
+            label         = "Azure AI Custom Vision";
+            annotate icon { path = "resources/azure-ai-custom-vision.svg"; }
+            available_in  = [azure];
+            applicable_to = [vision_cognitive_service];
+            wiki          = "azure-ai-custom-vision.md";
+        }
+
+        technology azure_ai_foundry_models
+        {
+            label         = "Azure AI Foundry Models";
+            annotate icon { path = "resources/azure-ai-foundry-models.svg"; }
+            available_in  = [azure];
+            applicable_to = [language_model];
+            wiki          = "azure-ai-foundry-models.md";
+        }
+
+        technology azure_ai_services
+        {
+            label         = "Azure AI Services";
+            annotate icon { path = "resources/azure-ai-services.svg"; }
+            available_in  = [azure];
+            applicable_to = [cognitive_service_suite];
+            wiki          = "azure-ai-services.md";
+        }
+
+        technology azure_ai_video_indexer
+        {
+            label         = "Azure AI Video Indexer";
+            annotate icon { path = "resources/azure-ai-video-indexer.svg"; }
+            available_in  = [azure];
+            applicable_to = [video_indexing_service];
+            wiki          = "azure-ai-video-indexer.md";
+        }
+
+        technology azure_openai_service
+        {
+            label         = "Azure OpenAI Service";
+            annotate icon { path = "resources/azure-openai-service.svg"; }
+            available_in  = [azure];
+            applicable_to = [language_model];
+            wiki          = "azure-openai-service.md";
+        }
+
+        technology foundry_tools
+        {
+            label         = "Foundry Tools";
+            annotate icon { path = "resources/foundry-tools.svg"; }
+            available_in  = [azure];
+            applicable_to = [api_service];
+            wiki          = "foundry-tools.md";
+        }
+
+        technology health_bot
+        {
+            label         = "Health Bot";
+            annotate icon { path = "resources/health-bot.svg"; }
+            available_in  = [azure];
+            applicable_to = [bot_platform];
+            wiki          = "health-bot.md";
+        }
+
+        technology azure_databricks
+        {
+            label         = "Azure Databricks";
+            annotate icon { path = "resources/azure-databricks.svg"; }
+            available_in  = [azure];
+            applicable_to = [lakehouse_platform, analytical_store];
+            wiki          = "azure-databricks.md";
+        }
+
+        technology azure_open_datasets
+        {
+            label         = "Azure Open Datasets";
+            annotate icon { path = "resources/azure-ai-services.svg"; }
+            available_in  = [azure];
+            applicable_to = [knowledge_source];
+            wiki          = "azure-open-datasets.md";
+        }
+
+        technology data_science_vms
+        {
+            label         = "Data Science Virtual Machines";
+            annotate icon { path = "resources/data-science-vms.svg"; }
+            available_in  = [azure];
+            applicable_to = [virtual_machine];
+            wiki          = "data-science-vms.md";
+        }
+
+        // ── Compute ────────────────────────────────────────────────
+        technology app_service
+        {
+            label         = "App Service";
+            annotate icon { path = "resources/app-service.svg"; }
+            available_in  = [azure];
+            applicable_to = [hosting_fabric];
+            wiki          = "app-service.md";
+        }
+
+        technology azure_virtual_machines
+        {
+            label         = "Azure Virtual Machines";
+            annotate icon { path = "resources/azure-virtual-machines.svg"; }
+            available_in  = [azure];
+            applicable_to = [virtual_machine];
+            wiki          = "azure-virtual-machines.md";
+        }
+
+        technology virtual_machine_scale_sets
+        {
+            label         = "Virtual Machine Scale Sets";
+            annotate icon { path = "resources/virtual-machine-scale-sets.svg"; }
+            available_in  = [azure];
+            applicable_to = [virtual_machine];
+            wiki          = "virtual-machine-scale-sets.md";
+        }
+
+        technology azure_spot_virtual_machines
+        {
+            label         = "Azure Spot Virtual Machines";
+            annotate icon { path = "resources/azure-spot-virtual-machines.svg"; }
+            available_in  = [azure];
+            applicable_to = [virtual_machine];
+            wiki          = "azure-spot-virtual-machines.md";
+        }
+
+        technology azure_dedicated_host
+        {
+            label         = "Azure Dedicated Host";
+            annotate icon { path = "resources/azure-dedicated-host.svg"; }
+            available_in  = [azure];
+            applicable_to = [virtual_machine];
+            wiki          = "azure-dedicated-host.md";
+        }
+
+        technology azure_compute_fleet
+        {
+            label         = "Azure Compute Fleet";
+            annotate icon { path = "resources/azure-compute-fleet.svg"; }
+            available_in  = [azure];
+            applicable_to = [virtual_machine];
+            wiki          = "azure-compute-fleet.md";
+        }
+
+        technology azure_functions
+        {
+            label         = "Azure Functions";
+            annotate icon { path = "resources/azure-functions.svg"; }
+            available_in  = [azure];
+            applicable_to = [event_processor, api_service];
+            wiki          = "azure-functions.md";
+        }
+
+        technology azure_cyclecloud
+        {
+            label         = "Azure CycleCloud";
+            annotate icon { path = "resources/azure-cyclecloud.svg"; }
+            available_in  = [azure];
+            applicable_to = [hpc_cluster_manager];
+            wiki          = "azure-cyclecloud.md";
+        }
+
+        technology azure_service_fabric
+        {
+            label         = "Azure Service Fabric";
+            annotate icon { path = "resources/azure-service-fabric.svg"; }
+            available_in  = [azure];
+            applicable_to = [microservices_runtime];
+            wiki          = "azure-service-fabric.md";
+        }
+
+        technology azure_spring_apps
+        {
+            label         = "Azure Spring Apps";
+            annotate icon { path = "resources/azure-spring-apps.svg"; }
+            available_in  = [azure];
+            applicable_to = [microservices_runtime];
+            wiki          = "azure-spring-apps.md";
+        }
+
+        technology azure_virtual_desktop
+        {
+            label         = "Azure Virtual Desktop";
+            annotate icon { path = "resources/azure-virtual-desktop.svg"; }
+            available_in  = [azure];
+            applicable_to = [virtual_desktop_infrastructure];
+            wiki          = "azure-virtual-desktop.md";
+        }
+
+        technology azure_vmware_solution
+        {
+            label         = "Azure VMware Solution";
+            annotate icon { path = "resources/azure-vmware-solution.svg"; }
+            available_in  = [azure];
+            applicable_to = [virtual_machine];
+            wiki          = "azure-vmware-solution.md";
+        }
+
+        technology azure_quantum
+        {
+            label         = "Azure Quantum";
+            annotate icon { path = "resources/azure-quantum.svg"; }
+            available_in  = [azure];
+            applicable_to = [quantum_compute_service];
+            wiki          = "azure-quantum.md";
+        }
+
+        technology batch
+        {
+            label         = "Batch";
+            annotate icon { path = "resources/batch.svg"; }
+            available_in  = [azure];
+            applicable_to = [batch_compute];
+            wiki          = "batch.md";
+        }
+
+        technology cloud_services
+        {
+            label         = "Cloud Services";
+            annotate icon { path = "resources/cloud-services.svg"; }
+            available_in  = [azure];
+            applicable_to = [virtual_machine];
+            wiki          = "cloud-services.md";
+        }
+
+        technology sql_server_on_vms
+        {
+            label         = "SQL Server on Virtual Machines";
+            annotate icon { path = "resources/sql-server-on-vms.svg"; }
+            available_in  = [azure];
+            applicable_to = [relational_store];
+            wiki          = "sql-server-on-vms.md";
+        }
+
+        technology static_web_apps
+        {
+            label         = "Static Web Apps";
+            annotate icon { path = "resources/static-web-apps.svg"; }
+            available_in  = [azure];
+            applicable_to = [static_web_app_hosting];
+            wiki          = "static-web-apps.md";
+        }
+
+        // ── Containers ─────────────────────────────────────────────
+        technology azure_container_apps
+        {
+            label         = "Azure Container Apps";
+            annotate icon { path = "resources/azure-container-apps.svg"; }
+            available_in  = [azure];
+            applicable_to = [container_service];
+            wiki          = "azure-container-apps.md";
+        }
+
+        technology azure_container_instances
+        {
+            label         = "Azure Container Instances";
+            annotate icon { path = "resources/azure-container-instances.svg"; }
+            available_in  = [azure];
+            applicable_to = [container_service];
+            wiki          = "azure-container-instances.md";
+        }
+
+        technology azure_container_registry
+        {
+            label         = "Azure Container Registry";
+            annotate icon { path = "resources/azure-container-registry.svg"; }
+            available_in  = [azure];
+            applicable_to = [container_registry];
+            wiki          = "azure-container-registry.md";
+        }
+
+        technology azure_container_storage
+        {
+            label         = "Azure Container Storage";
+            annotate icon { path = "resources/azure-container-storage.svg"; }
+            available_in  = [azure];
+            applicable_to = [container_persistent_volume_service];
+            wiki          = "azure-container-storage.md";
+        }
+
+        technology azure_kubernetes_service
+        {
+            label         = "Azure Kubernetes Service (AKS)";
+            annotate icon { path = "resources/azure-kubernetes-service.svg"; }
+            available_in  = [azure];
+            applicable_to = [kubernetes_platform];
+            wiki          = "azure-kubernetes-service.md";
+        }
+
+        technology azure_kubernetes_fleet_manager
+        {
+            label         = "Azure Kubernetes Fleet Manager";
+            annotate icon { path = "resources/azure-kubernetes-fleet-manager.svg"; }
+            available_in  = [azure];
+            applicable_to = [kubernetes_platform];
+            wiki          = "azure-kubernetes-fleet-manager.md";
+        }
+
+        technology azure_red_hat_openshift
+        {
+            label         = "Azure Red Hat OpenShift";
+            annotate icon { path = "resources/azure-red-hat-openshift.svg"; }
+            available_in  = [azure];
+            applicable_to = [kubernetes_platform];
+            wiki          = "azure-red-hat-openshift.md";
+        }
+
+        technology web_app_for_containers
+        {
+            label         = "Web App for Containers";
+            annotate icon { path = "resources/web-app-for-containers.svg"; }
+            available_in  = [azure];
+            applicable_to = [api_service, web_portal];
+            wiki          = "web-app-for-containers.md";
+        }
+
+        // ── Databases ──────────────────────────────────────────────
+        technology azure_cache_for_redis
+        {
+            label         = "Azure Cache for Redis";
+            annotate icon { path = "resources/azure-cache-for-redis.svg"; }
+            available_in  = [azure];
+            applicable_to = [cache];
+            wiki          = "azure-cache-for-redis.md";
+        }
+
+        technology azure_managed_redis
+        {
+            label         = "Azure Managed Redis";
+            annotate icon { path = "resources/azure-managed-redis.svg"; }
+            available_in  = [azure];
+            applicable_to = [cache];
+            wiki          = "azure-managed-redis.md";
+        }
+
+        technology azure_cosmos_db
+        {
+            label         = "Azure Cosmos DB";
+            annotate icon { path = "resources/azure-cosmos-db.svg"; }
+            available_in  = [azure];
+            applicable_to = [document_store];
+            wiki          = "azure-cosmos-db.md";
+        }
+
+        technology azure_database_for_mariadb
+        {
+            label         = "Azure Database for MariaDB";
+            annotate icon { path = "resources/azure-database-for-mariadb.svg"; }
+            available_in  = [azure];
+            applicable_to = [relational_store];
+            wiki          = "azure-database-for-mariadb.md";
+        }
+
+        technology azure_database_for_mysql
+        {
+            label         = "Azure Database for MySQL";
+            annotate icon { path = "resources/azure-database-for-mysql.svg"; }
+            available_in  = [azure];
+            applicable_to = [relational_store];
+            wiki          = "azure-database-for-mysql.md";
+        }
+
+        technology azure_database_for_postgresql
+        {
+            label         = "Azure Database for PostgreSQL";
+            annotate icon { path = "resources/azure-database-for-postgresql.svg"; }
+            available_in  = [azure];
+            applicable_to = [relational_store];
+            wiki          = "azure-database-for-postgresql.md";
+        }
+
+        technology azure_database_migration_service
+        {
+            label         = "Azure Database Migration Service";
+            annotate icon { path = "resources/azure-database-migration-service.svg"; }
+            available_in  = [azure];
+            applicable_to = [database_migration_service];
+            wiki          = "azure-database-migration-service.md";
+        }
+
+        technology azure_documentdb
+        {
+            label         = "Azure DocumentDB";
+            annotate icon { path = "resources/azure-documentdb.svg"; }
+            available_in  = [azure];
+            applicable_to = [document_store];
+            wiki          = "azure-documentdb.md";
+        }
+
+        technology azure_managed_instance_apache_cassandra
+        {
+            label         = "Azure Managed Instance for Apache Cassandra";
+            annotate icon { path = "resources/azure-managed-instance-apache-cassandra.svg"; }
+            available_in  = [azure];
+            applicable_to = [document_store];
+            wiki          = "azure-managed-instance-apache-cassandra.md";
+        }
+
+        technology azure_sql_database
+        {
+            label         = "Azure SQL Database";
+            annotate icon { path = "resources/azure-sql-database.svg"; }
+            available_in  = [azure];
+            applicable_to = [relational_store];
+            wiki          = "azure-sql-database.md";
+        }
+
+        technology azure_sql_managed_instance
+        {
+            label         = "Azure SQL Managed Instance";
+            annotate icon { path = "resources/azure-sql-managed-instance.svg"; }
+            available_in  = [azure];
+            applicable_to = [relational_store];
+            wiki          = "azure-sql-managed-instance.md";
+        }
+
+        technology table_storage
+        {
+            label         = "Table Storage";
+            annotate icon { path = "resources/table-storage.svg"; }
+            available_in  = [azure];
+            applicable_to = [document_store];
+            wiki          = "table-storage.md";
+        }
+
+        // ── Storage ────────────────────────────────────────────────
+        technology archive_storage
+        {
+            label         = "Archive Storage";
+            annotate icon { path = "resources/archive-storage.svg"; }
+            available_in  = [azure];
+            applicable_to = [file_store];
+            wiki          = "archive-storage.md";
+        }
+
+        technology azure_backup
+        {
+            label         = "Azure Backup";
+            annotate icon { path = "resources/azure-backup.svg"; }
+            available_in  = [azure];
+            applicable_to = [backup_service];
+            wiki          = "azure-backup.md";
+        }
+
+        technology azure_data_box
+        {
+            label         = "Azure Data Box";
+            annotate icon { path = "resources/azure-data-box.svg"; }
+            available_in  = [azure];
+            applicable_to = [bulk_data_import_appliance];
+            wiki          = "azure-data-box.md";
+        }
+
+        technology azure_data_lake_storage
+        {
+            label         = "Azure Data Lake Storage";
+            annotate icon { path = "resources/azure-data-lake-storage.svg"; }
+            available_in  = [azure];
+            applicable_to = [file_store];
+            wiki          = "azure-data-lake-storage.md";
+        }
+
+        technology azure_disk_storage
+        {
+            label         = "Azure Disk Storage";
+            annotate icon { path = "resources/azure-disk-storage.svg"; }
+            available_in  = [azure];
+            applicable_to = [file_store];
+            wiki          = "azure-disk-storage.md";
+        }
+
+        technology azure_elastic_san
+        {
+            label         = "Azure Elastic SAN";
+            annotate icon { path = "resources/azure-elastic-san.svg"; }
+            available_in  = [azure];
+            applicable_to = [file_store];
+            wiki          = "azure-elastic-san.md";
+        }
+
+        technology azure_files
+        {
+            label         = "Azure Files";
+            annotate icon { path = "resources/azure-files.svg"; }
+            available_in  = [azure];
+            applicable_to = [file_store];
+            wiki          = "azure-files.md";
+        }
+
+        technology azure_managed_lustre
+        {
+            label         = "Azure Managed Lustre";
+            annotate icon { path = "resources/azure-managed-lustre.svg"; }
+            available_in  = [azure];
+            applicable_to = [file_store];
+            wiki          = "azure-managed-lustre.md";
+        }
+
+        technology azure_netapp_files
+        {
+            label         = "Azure NetApp Files";
+            annotate icon { path = "resources/azure-netapp-files.svg"; }
+            available_in  = [azure];
+            applicable_to = [file_store];
+            wiki          = "azure-netapp-files.md";
+        }
+
+        technology azure_storage_actions
+        {
+            label         = "Azure Storage Actions";
+            annotate icon { path = "resources/azure-storage-actions.svg"; }
+            available_in  = [azure];
+            applicable_to = [scheduler];
+            wiki          = "azure-storage-actions.md";
+        }
+
+        technology queue_storage
+        {
+            label         = "Queue Storage";
+            annotate icon { path = "resources/queue-storage.svg"; }
+            available_in  = [azure];
+            applicable_to = [message_queue];
+            wiki          = "queue-storage.md";
+        }
+
+        technology storage_explorer
+        {
+            label         = "Storage Explorer";
+            annotate icon { path = "resources/storage-explorer.svg"; }
+            available_in  = [azure];
+            applicable_to = [desktop_app];
+            wiki          = "storage-explorer.md";
+        }
+
+        // ── Networking ─────────────────────────────────────────────
+        technology application_gateway
+        {
+            label         = "Application Gateway";
+            annotate icon { path = "resources/application-gateway.svg"; }
+            available_in  = [azure];
+            applicable_to = [internal_api_gateway];
+            wiki          = "application-gateway.md";
+        }
+
+        technology azure_ddos_protection
+        {
+            label         = "Azure DDoS Protection";
+            annotate icon { path = "resources/azure-ddos-protection.svg"; }
+            available_in  = [azure];
+            applicable_to = [ddos_protection];
+            wiki          = "azure-ddos-protection.md";
+        }
+
+        technology azure_dns
+        {
+            label         = "Azure DNS";
+            annotate icon { path = "resources/azure-dns.svg"; }
+            available_in  = [azure];
+            applicable_to = [dns_service];
+            wiki          = "azure-dns.md";
+        }
+
+        technology azure_expressroute
+        {
+            label         = "Azure ExpressRoute";
+            annotate icon { path = "resources/azure-expressroute.svg"; }
+            available_in  = [azure];
+            applicable_to = [dedicated_network_circuit];
+            wiki          = "azure-expressroute.md";
+        }
+
+        technology azure_firewall
+        {
+            label         = "Azure Firewall";
+            annotate icon { path = "resources/azure-firewall.svg"; }
+            available_in  = [azure];
+            applicable_to = [network_firewall];
+            wiki          = "azure-firewall.md";
+        }
+
+        technology azure_front_door
+        {
+            label         = "Azure Front Door";
+            annotate icon { path = "resources/azure-front-door.svg"; }
+            available_in  = [azure];
+            applicable_to = [cdn_edge];
+            wiki          = "azure-front-door.md";
+        }
+
+        technology azure_private_link
+        {
+            label         = "Azure Private Link";
+            annotate icon { path = "resources/azure-private-link.svg"; }
+            available_in  = [azure];
+            applicable_to = [private_endpoint_service];
+            wiki          = "azure-private-link.md";
+        }
+
+        technology load_balancer
+        {
+            label         = "Load Balancer";
+            annotate icon { path = "resources/load-balancer.svg"; }
+            available_in  = [azure];
+            applicable_to = [categories.load_balancer];
+            wiki          = "load-balancer.md";
+        }
+
+        technology nat_gateway
+        {
+            label         = "NAT Gateway";
+            annotate icon { path = "resources/nat-gateway.svg"; }
+            available_in  = [azure];
+            applicable_to = [categories.nat_gateway];
+            wiki          = "nat-gateway.md";
+        }
+
+        technology virtual_network
+        {
+            label         = "Virtual Network";
+            annotate icon { path = "resources/virtual-network.svg"; }
+            available_in  = [azure];
+            applicable_to = [categories.virtual_network];
+            wiki          = "virtual-network.md";
+        }
+
+        technology virtual_wan
+        {
+            label         = "Virtual WAN";
+            annotate icon { path = "resources/virtual-wan.svg"; }
+            available_in  = [azure];
+            applicable_to = [global_network_backbone];
+            wiki          = "virtual-wan.md";
+        }
+
+        technology vpn_gateway
+        {
+            label         = "VPN Gateway";
+            annotate icon { path = "resources/vpn-gateway.svg"; }
+            available_in  = [azure];
+            applicable_to = [categories.vpn_gateway];
+            wiki          = "vpn-gateway.md";
+        }
+
+        technology web_application_firewall
+        {
+            label         = "Web Application Firewall";
+            annotate icon { path = "resources/web-application-firewall.svg"; }
+            available_in  = [azure];
+            applicable_to = [categories.web_application_firewall];
+            wiki          = "web-application-firewall.md";
+        }
+
+        // ── Integration ────────────────────────────────────────────
+        technology api_management
+        {
+            label         = "API Management";
+            annotate icon { path = "resources/api-management.svg"; }
+            available_in  = [azure];
+            applicable_to = [internal_api_gateway, enterprise_api_catalogue];
+            wiki          = "api-management.md";
+        }
+
+        technology app_configuration
+        {
+            label         = "App Configuration";
+            annotate icon { path = "resources/app-configuration.svg"; }
+            available_in  = [azure];
+            applicable_to = [config_store];
+            wiki          = "app-configuration.md";
+        }
+
+        technology azure_api_for_fhir
+        {
+            label         = "Azure API for FHIR";
+            annotate icon { path = "resources/azure-api-for-fhir.svg"; }
+            available_in  = [azure];
+            applicable_to = [api_service];
+            wiki          = "azure-api-for-fhir.md";
+        }
+
+        technology azure_data_manager_for_agriculture
+        {
+            label         = "Azure Data Manager for Agriculture";
+            annotate icon { path = "resources/azure-data-manager-for-agriculture.svg"; }
+            available_in  = [azure];
+            applicable_to = [integration_adapter];
+            wiki          = "azure-data-manager-for-agriculture.md";
+        }
+
+        technology azure_health_data_services
+        {
+            label         = "Azure Health Data Services";
+            annotate icon { path = "resources/azure-health-data-services.svg"; }
+            available_in  = [azure];
+            applicable_to = [api_service];
+            wiki          = "azure-health-data-services.md";
+        }
+
+        technology azure_logic_apps
+        {
+            label         = "Azure Logic Apps";
+            annotate icon { path = "resources/azure-logic-apps.svg"; }
+            available_in  = [azure];
+            applicable_to = [workflow_engine];
+            wiki          = "azure-logic-apps.md";
+        }
+
+        technology azure_web_pubsub
+        {
+            label         = "Azure Web PubSub";
+            annotate icon { path = "resources/azure-web-pubsub.svg"; }
+            available_in  = [azure];
+            applicable_to = [message_topic];
+            wiki          = "azure-web-pubsub.md";
+        }
+
+        technology event_grid
+        {
+            label         = "Event Grid";
+            annotate icon { path = "resources/event-grid.svg"; }
+            available_in  = [azure];
+            applicable_to = [message_topic];
+            wiki          = "event-grid.md";
+        }
+
+        technology event_hubs
+        {
+            label         = "Event Hubs";
+            annotate icon { path = "resources/event-hubs.svg"; }
+            available_in  = [azure];
+            applicable_to = [event_log];
+            wiki          = "event-hubs.md";
+        }
+
+        // ── Analytics ──────────────────────────────────────────────
+        technology azure_analysis_services
+        {
+            label         = "Azure Analysis Services";
+            annotate icon { path = "resources/azure-analysis-services.svg"; }
+            available_in  = [azure];
+            applicable_to = [analytical_store];
+            wiki          = "azure-analysis-services.md";
+        }
+
+        technology azure_chaos_studio
+        {
+            label         = "Azure Chaos Studio";
+            annotate icon { path = "resources/azure-chaos-studio.svg"; }
+            available_in  = [azure];
+            applicable_to = [chaos_engineering];
+            wiki          = "azure-chaos-studio.md";
+        }
+
+        technology azure_data_explorer
+        {
+            label         = "Azure Data Explorer";
+            annotate icon { path = "resources/azure-data-explorer.svg"; }
+            available_in  = [azure];
+            applicable_to = [analytical_store];
+            wiki          = "azure-data-explorer.md";
+        }
+
+        technology azure_data_factory
+        {
+            label         = "Azure Data Factory";
+            annotate icon { path = "resources/azure-data-factory.svg"; }
+            available_in  = [azure];
+            applicable_to = [data_pipeline_orchestrator];
+            wiki          = "azure-data-factory.md";
+        }
+
+        technology azure_data_lake_analytics
+        {
+            label         = "Azure Data Lake Analytics";
+            annotate icon { path = "resources/azure-data-lake-analytics.svg"; }
+            available_in  = [azure];
+            applicable_to = [bigdata_analytics_platform];
+            wiki          = "azure-data-lake-analytics.md";
+        }
+
+        technology azure_stream_analytics
+        {
+            label         = "Azure Stream Analytics";
+            annotate icon { path = "resources/azure-stream-analytics.svg"; }
+            available_in  = [azure];
+            applicable_to = [streaming_analytics];
+            wiki          = "azure-stream-analytics.md";
+        }
+
+        technology azure_synapse_analytics
+        {
+            label         = "Azure Synapse Analytics";
+            annotate icon { path = "resources/azure-synapse-analytics.svg"; }
+            available_in  = [azure];
+            applicable_to = [analytical_store];
+            wiki          = "azure-synapse-analytics.md";
+        }
+
+        technology hdinsight
+        {
+            label         = "HDInsight";
+            annotate icon { path = "resources/hdinsight.svg"; }
+            available_in  = [azure];
+            applicable_to = [bigdata_analytics_platform];
+            wiki          = "hdinsight.md";
+        }
+
+        technology microsoft_purview
+        {
+            label         = "Microsoft Purview";
+            annotate icon { path = "resources/microsoft-purview.svg"; }
+            available_in  = [azure];
+            applicable_to = [data_catalog];
+            wiki          = "microsoft-purview.md";
+        }
+
+        technology power_bi_embedded
+        {
+            label         = "Power BI Embedded";
+            annotate icon { path = "resources/power-bi-embedded.svg"; }
+            available_in  = [azure];
+            applicable_to = [reporting_surface, embedded_widget];
+            wiki          = "power-bi-embedded.md";
+        }
+
+        // ── Identity ───────────────────────────────────────────────
+        technology azure_information_protection
+        {
+            label         = "Azure Information Protection";
+            annotate icon { path = "resources/azure-information-protection.svg"; }
+            available_in  = [azure, m365];
+            applicable_to = [data_protection_service];
+            wiki          = "azure-information-protection.md";
+        }
+
+        technology microsoft_entra_domain_services
+        {
+            label         = "Microsoft Entra Domain Services";
+            annotate icon { path = "resources/microsoft-entra-domain-services.svg"; }
+            available_in  = [azure];
+            applicable_to = [federated_identity_provider];
+            wiki          = "microsoft-entra-domain-services.md";
+        }
+
+        technology microsoft_entra_external_id
+        {
+            label         = "Microsoft Entra External ID";
+            annotate icon { path = "resources/microsoft-entra-external-id.svg"; }
+            available_in  = [azure];
+            applicable_to = [federated_identity_provider];
+            wiki          = "microsoft-entra-external-id.md";
+        }
+
+        technology microsoft_entra_id
+        {
+            label         = "Microsoft Entra ID";
+            annotate icon { path = "resources/microsoft-entra-id.svg"; }
+            available_in  = [azure, m365];
+            applicable_to = [federated_identity_provider];
+            wiki          = "microsoft-entra-id.md";
+        }
+
+        // ── Security ───────────────────────────────────────────────
+        technology azure_confidential_ledger
+        {
+            label         = "Azure confidential ledger";
+            annotate icon { path = "resources/azure-confidential-ledger.svg"; }
+            available_in  = [azure];
+            applicable_to = [confidential_ledger];
+            wiki          = "azure-confidential-ledger.md";
+        }
+
+        technology azure_dedicated_hsm
+        {
+            label         = "Azure Dedicated HSM";
+            annotate icon { path = "resources/azure-dedicated-hsm.svg"; }
+            available_in  = [azure];
+            applicable_to = [hardware_security_module];
+            wiki          = "azure-dedicated-hsm.md";
+        }
+
+        technology azure_key_vault
+        {
+            label         = "Azure Key Vault";
+            annotate icon { path = "resources/azure-key-vault.svg"; }
+            available_in  = [azure];
+            applicable_to = [secret_store];
+            wiki          = "azure-key-vault.md";
+        }
+
+        technology microsoft_defender_for_cloud
+        {
+            label         = "Microsoft Defender for Cloud";
+            annotate icon { path = "resources/microsoft-defender-for-cloud.svg"; }
+            available_in  = [azure];
+            applicable_to = [cloud_security_posture_mgmt];
+            wiki          = "microsoft-defender-for-cloud.md";
+        }
+
+        technology microsoft_defender_easm
+        {
+            label         = "Microsoft Defender for External Attack Surface Management";
+            annotate icon { path = "resources/microsoft-defender-easm.svg"; }
+            available_in  = [azure];
+            applicable_to = [external_attack_surface_mgmt];
+            wiki          = "microsoft-defender-easm.md";
+        }
+
+        technology microsoft_defender_for_iot
+        {
+            label         = "Microsoft Defender for IoT";
+            annotate icon { path = "resources/microsoft-defender-for-iot.svg"; }
+            available_in  = [azure];
+            applicable_to = [iot_security_monitor];
+            wiki          = "microsoft-defender-for-iot.md";
+        }
+
+        technology microsoft_sentinel
+        {
+            label         = "Microsoft Sentinel";
+            annotate icon { path = "resources/microsoft-sentinel.svg"; }
+            available_in  = [azure];
+            applicable_to = [siem];
+            wiki          = "microsoft-sentinel.md";
+        }
+
+        // ── Internet of Things ─────────────────────────────────────
+        technology azure_digital_twins
+        {
+            label         = "Azure Digital Twins";
+            annotate icon { path = "resources/azure-digital-twins.svg"; }
+            available_in  = [azure];
+            applicable_to = [digital_twin_store];
+            wiki          = "azure-digital-twins.md";
+        }
+
+        technology azure_iot
+        {
+            label         = "Azure IoT";
+            annotate icon { path = "resources/azure-iot.svg"; }
+            available_in  = [azure];
+            applicable_to = [iot_platform_suite];
+            wiki          = "azure-iot.md";
+        }
+
+        technology azure_iot_central
+        {
+            label         = "Azure IoT Central";
+            annotate icon { path = "resources/azure-iot-central.svg"; }
+            available_in  = [azure];
+            applicable_to = [iot_saas_platform];
+            wiki          = "azure-iot-central.md";
+        }
+
+        technology azure_iot_edge
+        {
+            label         = "Azure IoT Edge";
+            annotate icon { path = "resources/azure-iot-edge.svg"; }
+            available_in  = [azure];
+            applicable_to = [iot_edge_runtime];
+            wiki          = "azure-iot-edge.md";
+        }
+
+        technology azure_iot_hub
+        {
+            label         = "Azure IoT Hub";
+            annotate icon { path = "resources/azure-iot-hub.svg"; }
+            available_in  = [azure];
+            applicable_to = [event_log];
+            wiki          = "azure-iot-hub.md";
+        }
+
+        technology azure_iot_operations
+        {
+            label         = "Azure IoT Operations";
+            annotate icon { path = "resources/azure-iot-operations.svg"; }
+            available_in  = [azure];
+            applicable_to = [iot_edge_runtime];
+            wiki          = "azure-iot-operations.md";
+        }
+
+        technology azure_maps
+        {
+            label         = "Azure Maps";
+            annotate icon { path = "resources/azure-maps.svg"; }
+            available_in  = [azure];
+            applicable_to = [geospatial_service];
+            wiki          = "azure-maps.md";
+        }
+
+        technology azure_sphere
+        {
+            label         = "Azure Sphere";
+            annotate icon { path = "resources/azure-sphere.svg"; }
+            available_in  = [azure];
+            applicable_to = [secured_microcontroller_platform];
+            wiki          = "azure-sphere.md";
+        }
+
+        technology notification_hubs
+        {
+            label         = "Notification Hubs";
+            annotate icon { path = "resources/notification-hubs.svg"; }
+            available_in  = [azure];
+            applicable_to = [notification_service];
+            wiki          = "notification-hubs.md";
+        }
+
+        technology windows_10_iot_core_services
+        {
+            label         = "Windows 10 IoT Core Services";
+            annotate icon { path = "resources/windows-10-iot-core-services.svg"; }
+            available_in  = [azure];
+            applicable_to = [embedded_iot_os];
+            wiki          = "windows-10-iot-core-services.md";
+        }
+
+        technology windows_for_iot
+        {
+            label         = "Windows for IoT";
+            annotate icon { path = "resources/windows-for-iot.svg"; }
+            available_in  = [azure];
+            applicable_to = [embedded_iot_os];
+            wiki          = "windows-for-iot.md";
+        }
+
+        // ── Hybrid + Multicloud ────────────────────────────────────
+        technology azure_arc
+        {
+            label         = "Azure Arc";
+            annotate icon { path = "resources/azure-arc.svg"; }
+            available_in  = [azure];
+            applicable_to = [hybrid_resource_manager];
+            wiki          = "azure-arc.md";
+        }
+
+        technology aks_edge_essentials
+        {
+            label         = "Azure Kubernetes Service Edge Essentials";
+            annotate icon { path = "resources/aks-edge-essentials.svg"; }
+            available_in  = [azure];
+            applicable_to = [edge_kubernetes_distribution];
+            wiki          = "aks-edge-essentials.md";
+        }
+
+        technology azure_local
+        {
+            label         = "Azure Local";
+            annotate icon { path = "resources/azure-local.svg"; }
+            available_in  = [azure];
+            applicable_to = [private_cloud_appliance];
+            wiki          = "azure-local.md";
+        }
+
+        technology azure_operator_nexus
+        {
+            label         = "Azure Operator Nexus";
+            annotate icon { path = "resources/azure-operator-nexus.svg"; }
+            available_in  = [azure];
+            applicable_to = [carrier_edge_platform];
+            wiki          = "azure-operator-nexus.md";
+        }
+
+        technology azure_operator_service_manager
+        {
+            label         = "Azure Operator Service Manager";
+            annotate icon { path = "resources/azure-operator-service-manager.svg"; }
+            available_in  = [azure];
+            applicable_to = [network_function_manager];
+            wiki          = "azure-operator-service-manager.md";
+        }
+
+        technology azure_stack_edge
+        {
+            label         = "Azure Stack Edge";
+            annotate icon { path = "resources/azure-stack-edge.svg"; }
+            available_in  = [azure];
+            applicable_to = [private_cloud_appliance];
+            wiki          = "azure-stack-edge.md";
+        }
+
+        technology azure_stack_hub
+        {
+            label         = "Azure Stack Hub";
+            annotate icon { path = "resources/azure-stack-hub.svg"; }
+            available_in  = [azure];
+            applicable_to = [private_cloud_appliance];
+            wiki          = "azure-stack-hub.md";
+        }
+
+        // ── Web ────────────────────────────────────────────────────
+        technology azure_communication_services
+        {
+            label         = "Azure Communication Services";
+            annotate icon { path = "resources/azure-communication-services.svg"; }
+            available_in  = [azure];
+            applicable_to = [communication_platform];
+            wiki          = "azure-communication-services.md";
+        }
+
+        technology azure_fluid_relay
+        {
+            label         = "Azure Fluid Relay";
+            annotate icon { path = "resources/azure-fluid-relay.svg"; }
+            available_in  = [azure];
+            applicable_to = [realtime_collaboration_service];
+            wiki          = "azure-fluid-relay.md";
+        }
+
+        technology azure_signalr_service
+        {
+            label         = "Azure SignalR Service";
+            annotate icon { path = "resources/azure-signalr-service.svg"; }
+            available_in  = [azure];
+            applicable_to = [message_topic];
+            wiki          = "azure-signalr-service.md";
+        }
+
+        // ── Media ──────────────────────────────────────────────────
+        technology azure_media_player
+        {
+            label         = "Azure Media Player";
+            annotate icon { path = "resources/azure-media-player.svg"; }
+            available_in  = [azure];
+            applicable_to = [embedded_widget];
+            wiki          = "azure-media-player.md";
+        }
+
+        technology content_protection
+        {
+            label         = "Content Protection";
+            annotate icon { path = "resources/content-protection.svg"; }
+            available_in  = [azure];
+            applicable_to = [media_drm_service];
+            wiki          = "content-protection.md";
+        }
+
+        technology encoding
+        {
+            label         = "Encoding";
+            annotate icon { path = "resources/encoding.svg"; }
+            available_in  = [azure];
+            applicable_to = [media_encoding_service];
+            wiki          = "encoding.md";
+        }
+
+        technology live_on_demand_streaming
+        {
+            label         = "Live and On-Demand Streaming";
+            annotate icon { path = "resources/live-on-demand-streaming.svg"; }
+            available_in  = [azure];
+            applicable_to = [live_streaming_service];
+            wiki          = "live-on-demand-streaming.md";
+        }
+
+        technology media_services
+        {
+            label         = "Media Services";
+            annotate icon { path = "resources/media-services.svg"; }
+            available_in  = [azure];
+            applicable_to = [media_platform_suite];
+            wiki          = "media-services.md";
+        }
+
+        // ── Developer Tools ────────────────────────────────────────
+        technology azure_artifacts
+        {
+            label         = "Azure Artifacts";
+            annotate icon { path = "resources/azure-artifacts.svg"; }
+            available_in  = [azure];
+            applicable_to = [artifact_registry];
+            wiki          = "azure-artifacts.md";
+        }
+
+        technology azure_boards
+        {
+            label         = "Azure Boards";
+            annotate icon { path = "resources/azure-boards.svg"; }
+            available_in  = [azure];
+            applicable_to = [issue_tracking];
+            wiki          = "azure-boards.md";
+        }
+
+        technology azure_devops
+        {
+            label         = "Azure DevOps";
+            annotate icon { path = "resources/azure-devops.svg"; }
+            available_in  = [azure];
+            applicable_to = [devops_platform_suite];
+            wiki          = "azure-devops.md";
+        }
+
+        technology azure_devtest_labs
+        {
+            label         = "Azure DevTest Labs";
+            annotate icon { path = "resources/azure-devtest-labs.svg"; }
+            available_in  = [azure];
+            applicable_to = [vm_lab_service];
+            wiki          = "azure-devtest-labs.md";
+        }
+
+        technology azure_pipelines
+        {
+            label         = "Azure Pipelines";
+            annotate icon { path = "resources/azure-pipelines.svg"; }
+            available_in  = [azure];
+            applicable_to = [ci_cd_pipeline];
+            wiki          = "azure-pipelines.md";
+        }
+
+        technology azure_repos
+        {
+            label         = "Azure Repos";
+            annotate icon { path = "resources/azure-repos.svg"; }
+            available_in  = [azure];
+            applicable_to = [source_repository];
+            wiki          = "azure-repos.md";
+        }
+
+        technology azure_test_plans
+        {
+            label         = "Azure Test Plans";
+            annotate icon { path = "resources/azure-test-plans.svg"; }
+            available_in  = [azure];
+            applicable_to = [test_management];
+            wiki          = "azure-test-plans.md";
+        }
+
+        technology azure_app_testing
+        {
+            label         = "Azure App Testing";
+            annotate icon { path = "resources/azure-app-testing.svg"; }
+            available_in  = [azure];
+            applicable_to = [app_test_runner];
+            wiki          = "azure-app-testing.md";
+        }
+
+        technology azure_deployment_environments
+        {
+            label         = "Azure Deployment Environments";
+            annotate icon { path = "resources/azure-deployment-environments.svg"; }
+            available_in  = [azure];
+            applicable_to = [environment_template_service];
+            wiki          = "azure-deployment-environments.md";
+        }
+
+        technology microsoft_dev_box
+        {
+            label         = "Microsoft Dev Box";
+            annotate icon { path = "resources/microsoft-dev-box.svg"; }
+            available_in  = [azure];
+            applicable_to = [cloud_dev_workstation];
+            wiki          = "microsoft-dev-box.md";
+        }
+
+        technology microsoft_playwright_testing
+        {
+            label         = "Microsoft Playwright Testing";
+            annotate icon { path = "resources/microsoft-playwright-testing.svg"; }
+            available_in  = [azure];
+            applicable_to = [web_test_runner];
+            wiki          = "microsoft-playwright-testing.md";
+        }
+
+        // ── Management and Governance ──────────────────────────────
+        technology arm_templates
+        {
+            label         = "ARM Templates";
+            annotate icon { path = "resources/azure-resource-manager.svg"; }
+            available_in  = [azure];
+            applicable_to = [iac_template_engine];
+            wiki          = "arm-templates.md";
+        }
+
+        technology automation
+        {
+            label         = "Automation";
+            annotate icon { path = "resources/automation.svg"; }
+            available_in  = [azure];
+            applicable_to = [workflow_engine];
+            wiki          = "automation.md";
+        }
+
+        technology azure_advisor
+        {
+            label         = "Azure Advisor";
+            annotate icon { path = "resources/azure-advisor.svg"; }
+            available_in  = [azure];
+            applicable_to = [cloud_advisory_service];
+            wiki          = "azure-advisor.md";
+        }
+
+        technology azure_blueprints
+        {
+            label         = "Azure Blueprints";
+            annotate icon { path = "resources/azure-blueprints.svg"; }
+            available_in  = [azure];
+            applicable_to = [policy_engine];
+            wiki          = "azure-blueprints.md";
+        }
+
+        technology azure_cloud_shell
+        {
+            label         = "Azure Cloud Shell";
+            annotate icon { path = "resources/azure-cloud-shell.svg"; }
+            available_in  = [azure];
+            applicable_to = [web_shell];
+            wiki          = "azure-cloud-shell.md";
+        }
+
+        technology azure_copilot
+        {
+            label         = "Azure Copilot";
+            annotate icon { path = "resources/azure-copilot.svg"; }
+            available_in  = [azure];
+            applicable_to = [ai_agent];
+            wiki          = "azure-copilot.md";
+        }
+
+        technology azure_lighthouse
+        {
+            label         = "Azure Lighthouse";
+            annotate icon { path = "resources/azure-lighthouse.svg"; }
+            available_in  = [azure];
+            applicable_to = [multi_tenant_management];
+            wiki          = "azure-lighthouse.md";
+        }
+
+        technology azure_managed_applications
+        {
+            label         = "Azure Managed Applications";
+            annotate icon { path = "resources/azure-managed-applications.svg"; }
+            available_in  = [azure];
+            applicable_to = [iac_template_engine];
+            wiki          = "azure-managed-applications.md";
+        }
+
+        technology azure_managed_grafana
+        {
+            label         = "Azure Managed Grafana";
+            annotate icon { path = "resources/fabric.svg"; }
+            available_in  = [azure];
+            applicable_to = [observability_dashboard];
+            wiki          = "azure-managed-grafana.md";
+        }
+
+        technology azure_migrate
+        {
+            label         = "Azure Migrate";
+            annotate icon { path = "resources/azure-migrate.svg"; }
+            available_in  = [azure];
+            applicable_to = [migration_assessment_service];
+            wiki          = "azure-migrate.md";
+        }
+
+        technology azure_monitor
+        {
+            label         = "Azure Monitor";
+            annotate icon { path = "resources/azure-monitor.svg"; }
+            available_in  = [azure];
+            applicable_to = [observability_platform];
+            wiki          = "azure-monitor.md";
+        }
+
+        technology azure_policy
+        {
+            label         = "Azure Policy";
+            annotate icon { path = "resources/azure-policy.svg"; }
+            available_in  = [azure];
+            applicable_to = [policy_engine];
+            wiki          = "azure-policy.md";
+        }
+
+        technology azure_resource_manager
+        {
+            label         = "Azure Resource Manager";
+            annotate icon { path = "resources/azure-resource-manager.svg"; }
+            available_in  = [azure];
+            applicable_to = [cloud_control_plane];
+            wiki          = "azure-resource-manager.md";
+        }
+
+        technology azure_resource_mover
+        {
+            label         = "Azure Resource Mover";
+            annotate icon { path = "resources/azure-resource-mover.svg"; }
+            available_in  = [azure];
+            applicable_to = [resource_relocator];
+            wiki          = "azure-resource-mover.md";
+        }
+
+        technology azure_service_health
+        {
+            label         = "Azure Service Health";
+            annotate icon { path = "resources/azure-service-health.svg"; }
+            available_in  = [azure];
+            applicable_to = [cloud_health_feed];
+            wiki          = "azure-service-health.md";
+        }
+
+        technology azure_site_recovery
+        {
+            label         = "Azure Site Recovery";
+            annotate icon { path = "resources/azure-site-recovery.svg"; }
+            available_in  = [azure];
+            applicable_to = [disaster_recovery_service];
+            wiki          = "azure-site-recovery.md";
+        }
+
+        technology azure_update_manager
+        {
+            label         = "Azure Update Manager";
+            annotate icon { path = "resources/azure-update-manager.svg"; }
+            available_in  = [azure];
+            applicable_to = [patch_management_service];
+            wiki          = "azure-update-manager.md";
+        }
+
+        technology cost_management_billing
+        {
+            label         = "Cost Management + Billing";
+            annotate icon { path = "resources/cost-management-billing.svg"; }
+            available_in  = [azure];
+            applicable_to = [cost_management_service];
+            wiki          = "cost-management-billing.md";
+        }
+
+        technology microsoft_azure_portal
+        {
+            label         = "Microsoft Azure portal";
+            annotate icon { path = "resources/microsoft-azure-portal.svg"; }
+            available_in  = [azure];
+            applicable_to = [web_portal];
+            wiki          = "microsoft-azure-portal.md";
+        }
+
+        // ── Microsoft 365 productivity ──────────────────────────────
+        technology exchange_online
+        {
+            label         = "Exchange Online";
+            annotate icon { path = "resources/exchange-online.svg"; }
+            available_in  = [m365];
+            applicable_to = [email_solution];
+            wiki          = "exchange-online.md";
+        }
+
+        technology microsoft_365_archive
+        {
+            label         = "Microsoft 365 Archive";
+            annotate icon { path = "resources/microsoft-365-archive.svg"; }
+            available_in  = [m365];
+            applicable_to = [archive_store];
+            wiki          = "microsoft-365-archive.md";
+        }
+
+        technology microsoft_365_backup
+        {
+            label         = "Microsoft 365 Backup";
+            annotate icon { path = "resources/microsoft-365-backup.svg"; }
+            available_in  = [m365];
+            applicable_to = [backup_service];
+            wiki          = "microsoft-365-backup.md";
+        }
+
+        technology microsoft_bookings
+        {
+            label         = "Microsoft Bookings";
+            annotate icon { path = "resources/microsoft-bookings.svg"; }
+            available_in  = [m365];
+            applicable_to = [scheduling_solution];
+            wiki          = "microsoft-bookings.md";
+        }
+
+        technology microsoft_clipchamp
+        {
+            label         = "Microsoft Clipchamp";
+            annotate icon { path = "resources/microsoft-clipchamp.svg"; }
+            available_in  = [m365];
+            applicable_to = [video_editing_solution];
+            wiki          = "microsoft-clipchamp.md";
+        }
+
+        technology microsoft_forms
+        {
+            label         = "Microsoft Forms";
+            annotate icon { path = "resources/microsoft-forms.svg"; }
+            available_in  = [m365];
+            applicable_to = [forms_solution];
+            wiki          = "microsoft-forms.md";
+        }
+
+        technology microsoft_intune
+        {
+            label         = "Microsoft Intune";
+            annotate icon { path = "resources/microsoft-intune.svg"; }
+            available_in  = [m365];
+            applicable_to = [endpoint_management];
+            wiki          = "microsoft-intune.md";
+        }
+
+        technology microsoft_whiteboard
+        {
+            label         = "Microsoft Whiteboard";
+            annotate icon { path = "resources/microsoft-whiteboard.png"; }
+            available_in  = [m365];
+            applicable_to = [realtime_collaboration_service];
+            wiki          = "microsoft-whiteboard.md";
+        }
+
+        technology onedrive
+        {
+            label         = "OneDrive";
+            annotate icon { path = "resources/onedrive.svg"; }
+            available_in  = [m365];
+            applicable_to = [file_store];
+            wiki          = "onedrive.md";
+        }
+
+        technology planner
+        {
+            label         = "Planner";
+            annotate icon { path = "resources/planner.svg"; }
+            available_in  = [m365];
+            applicable_to = [issue_tracking];
+            wiki          = "planner.md";
+        }
+
+        // ── Power Platform (added) ──────────────────────────────────
+        technology ai_builder
+        {
+            label         = "AI Builder";
+            annotate icon { path = "resources/ai-builder.svg"; }
+            available_in  = [power_platform];
+            applicable_to = [ai_applications_builder];
+            wiki          = "ai-builder.md";
+        }
+
+        technology power_apps
+        {
+            label         = "Power Apps";
+            annotate icon { path = "resources/power-apps.svg"; }
+            available_in  = [power_platform];
+            applicable_to = [business_applications_builder];
+            wiki          = "power-apps.md";
+        }
+
+        technology power_pages
+        {
+            label         = "Power Pages";
+            annotate icon { path = "resources/power-pages.svg"; }
+            available_in  = [power_platform];
+            applicable_to = [web_portal];
+            wiki          = "power-pages.md";
+        }
+
+        // ── Microsoft Viva ──────────────────────────────────────────
+        technology microsoft_viva_engage
+        {
+            label         = "Microsoft Viva Engage";
+            annotate icon { path = "resources/microsoft-viva-engage.svg"; }
+            available_in  = [m365];
+            applicable_to = [conversational_interface];
+            wiki          = "microsoft-viva-engage.md";
+        }
+
+        // ── Microsoft Fabric workloads ──────────────────────────────
+        technology fabric_data_engineering
+        {
+            label         = "Fabric Data Engineering";
+            annotate icon { path = "resources/fabric-data-engineering.png"; }
+            available_in  = [azure];
+            applicable_to = [lakehouse_platform];
+            wiki          = "fabric-data-engineering.md";
+        }
+
+        technology fabric_data_factory
+        {
+            label         = "Fabric Data Factory";
+            annotate icon { path = "resources/fabric-data-factory.png"; }
+            available_in  = [azure];
+            applicable_to = [data_pipeline_orchestrator];
+            wiki          = "fabric-data-factory.md";
+        }
+
+        technology fabric_data_science
+        {
+            label         = "Fabric Data Science";
+            annotate icon { path = "resources/fabric-data-science.png"; }
+            available_in  = [azure];
+            applicable_to = [ml_lifecycle_platform];
+            wiki          = "fabric-data-science.md";
+        }
+
+        technology fabric_data_warehouse
+        {
+            label         = "Fabric Data Warehouse";
+            annotate icon { path = "resources/fabric-data-warehouse.png"; }
+            available_in  = [azure];
+            applicable_to = [analytical_store];
+            wiki          = "fabric-data-warehouse.md";
+        }
+
+        technology fabric_databases
+        {
+            label         = "Fabric Databases";
+            annotate icon { path = "resources/fabric-databases.svg"; }
+            available_in  = [azure];
+            applicable_to = [relational_store, document_store];
+            wiki          = "fabric-databases.md";
+        }
+
+        technology fabric_iq
+        {
+            label         = "Fabric IQ";
+            annotate icon { path = "resources/fabric-iq.svg"; }
+            available_in  = [azure];
+            applicable_to = [knowledge_graph];
+            wiki          = "fabric-iq.md";
+        }
+
+        technology fabric_real_time_intelligence
+        {
+            label         = "Fabric Real-Time Intelligence";
+            annotate icon { path = "resources/fabric-real-time-intelligence.png"; }
+            available_in  = [azure];
+            applicable_to = [streaming_analytics];
+            wiki          = "fabric-real-time-intelligence.md";
+        }
+
+        // ── Microsoft Entra (added) ─────────────────────────────────
+        technology microsoft_entra_agent_id
+        {
+            label         = "Microsoft Entra Agent ID";
+            annotate icon { path = "resources/microsoft-entra-agent-id.png"; }
+            available_in  = [azure];
+            applicable_to = [non_human_identity_provider];
+            wiki          = "microsoft-entra-agent-id.md";
+        }
+
+        technology microsoft_entra_id_governance
+        {
+            label         = "Microsoft Entra ID Governance";
+            annotate icon { path = "resources/microsoft-entra-id-governance.png"; }
+            available_in  = [azure];
+            applicable_to = [authorization_service];
+            wiki          = "microsoft-entra-id-governance.md";
+        }
+
+        technology microsoft_entra_id_protection
+        {
+            label         = "Microsoft Entra ID Protection";
+            annotate icon { path = "resources/microsoft-entra-id-protection.png"; }
+            available_in  = [azure];
+            applicable_to = [identity_threat_detection];
+            wiki          = "microsoft-entra-id-protection.md";
+        }
+
+        technology microsoft_entra_internet_access
+        {
+            label         = "Microsoft Entra Internet Access";
+            annotate icon { path = "resources/microsoft-entra-internet-access.png"; }
+            available_in  = [azure];
+            applicable_to = [secure_web_gateway];
+            wiki          = "microsoft-entra-internet-access.md";
+        }
+
+        technology microsoft_entra_private_access
+        {
+            label         = "Microsoft Entra Private Access";
+            annotate icon { path = "resources/microsoft-entra-private-access.png"; }
+            available_in  = [azure];
+            applicable_to = [zero_trust_network_access];
+            wiki          = "microsoft-entra-private-access.md";
+        }
+
+        technology microsoft_entra_verified_id
+        {
+            label         = "Microsoft Entra Verified ID";
+            annotate icon { path = "resources/microsoft-entra-verified-id.png"; }
+            available_in  = [azure];
+            applicable_to = [federated_identity_provider];
+            wiki          = "microsoft-entra-verified-id.md";
+        }
+
+        technology microsoft_entra_workload_id
+        {
+            label         = "Microsoft Entra Workload ID";
+            annotate icon { path = "resources/microsoft-entra-workload-id.png"; }
+            available_in  = [azure];
+            applicable_to = [non_human_identity_provider];
+            wiki          = "microsoft-entra-workload-id.md";
+        }
+
+        // ── Dynamics 365 sub_apps ───────────────────────────────────
+        technology dynamics_365_business_central
+        {
+            label         = "Dynamics 365 Business Central";
+            annotate icon { path = "resources/dynamics-365-business-central.svg"; }
+            available_in  = [m365];
+            applicable_to = [smb_erp_solution];
+            wiki          = "dynamics-365-business-central.md";
+        }
+
+        technology dynamics_365_commerce
+        {
+            label         = "Dynamics 365 Commerce";
+            annotate icon { path = "resources/dynamics-365-commerce.svg"; }
+            available_in  = [m365];
+            applicable_to = [enterprise_erp_solution];
+            wiki          = "dynamics-365-commerce.md";
+        }
+
+        technology dynamics_365_contact_center
+        {
+            label         = "Dynamics 365 Contact Center";
+            annotate icon { path = "resources/dynamics-365-contact-center.svg"; }
+            available_in  = [m365];
+            applicable_to = [conversational_interface, bot_platform];
+            wiki          = "dynamics-365-contact-center.md";
+        }
+
+        technology dynamics_365_customer_insights
+        {
+            label         = "Dynamics 365 Customer Insights";
+            annotate icon { path = "resources/dynamics-365-customer-insights.svg"; }
+            available_in  = [m365];
+            applicable_to = [analytical_store, knowledge_source];
+            wiki          = "dynamics-365-customer-insights.md";
+        }
+
+        technology dynamics_365_customer_service
+        {
+            label         = "Dynamics 365 Customer Service";
+            annotate icon { path = "resources/dynamics-365-customer-service.svg"; }
+            available_in  = [m365];
+            applicable_to = [web_portal, conversational_interface];
+            wiki          = "dynamics-365-customer-service.md";
+        }
+
+        technology dynamics_365_customer_voice
+        {
+            label         = "Dynamics 365 Customer Voice";
+            annotate icon { path = "resources/dynamics-365-customer-voice.svg"; }
+            available_in  = [m365];
+            applicable_to = [enterprise_feedback_management_solution];
+            wiki          = "dynamics-365-customer-voice.md";
+        }
+
+        technology dynamics_365_field_service
+        {
+            label         = "Dynamics 365 Field Service";
+            annotate icon { path = "resources/dynamics-365-field-service.svg"; }
+            available_in  = [m365];
+            applicable_to = [web_portal, workflow_engine];
+            wiki          = "dynamics-365-field-service.md";
+        }
+
+        technology dynamics_365_finance
+        {
+            label         = "Dynamics 365 Finance";
+            annotate icon { path = "resources/dynamics-365-finance.svg"; }
+            available_in  = [m365];
+            applicable_to = [enterprise_erp_solution];
+            wiki          = "dynamics-365-finance.md";
+        }
+
+        technology dynamics_365_human_resources
+        {
+            label         = "Dynamics 365 Human Resources";
+            annotate icon { path = "resources/dynamics-365-human-resources.svg"; }
+            available_in  = [m365];
+            applicable_to = [enterprise_erp_solution];
+            wiki          = "dynamics-365-human-resources.md";
+        }
+
+        technology dynamics_365_intelligent_order_management
+        {
+            label         = "Dynamics 365 Intelligent Order Management";
+            annotate icon { path = "resources/dynamics-365-intelligent-order-management.svg"; }
+            available_in  = [m365];
+            applicable_to = [workflow_engine];
+            wiki          = "dynamics-365-intelligent-order-management.md";
+        }
+
+        technology dynamics_365_project_operations
+        {
+            label         = "Dynamics 365 Project Operations";
+            annotate icon { path = "resources/dynamics-365-project-operations.svg"; }
+            available_in  = [m365];
+            applicable_to = [enterprise_erp_solution];
+            wiki          = "dynamics-365-project-operations.md";
+        }
+
+        technology dynamics_365_remote_assist
+        {
+            label         = "Dynamics 365 Remote Assist";
+            annotate icon { path = "resources/dynamics-365-remote-assist.svg"; }
+            available_in  = [m365];
+            applicable_to = [communication_platform];
+            wiki          = "dynamics-365-remote-assist.md";
+        }
+
+        technology dynamics_365_sales
+        {
+            label         = "Dynamics 365 Sales";
+            annotate icon { path = "resources/dynamics-365-sales.svg"; }
+            available_in  = [m365];
+            applicable_to = [web_portal, workflow_engine];
+            wiki          = "dynamics-365-sales.md";
+        }
+
+        technology dynamics_365_supply_chain_management
+        {
+            label         = "Dynamics 365 Supply Chain Management";
+            annotate icon { path = "resources/dynamics-365-supply-chain-management.svg"; }
+            available_in  = [m365];
+            applicable_to = [enterprise_erp_solution];
+            wiki          = "dynamics-365-supply-chain-management.md";
+        }
+
+        // ── Azure misc (added) ──────────────────────────────────────
+        technology azure_lab_services
+        {
+            label         = "Azure Lab Services";
+            annotate icon { path = "resources/azure-lab-services.svg"; }
+            available_in  = [azure];
+            applicable_to = [vm_lab_service];
+            wiki          = "azure-lab-services.md";
+        }
+
+        technology azure_data_share
+        {
+            label         = "Azure Data Share";
+            annotate icon { path = "resources/azure-data-share.svg"; }
+            available_in  = [azure];
+            applicable_to = [knowledge_source];
+            wiki          = "azure-data-share.md";
+        }
+
+        technology azure_data_manager_for_energy
+        {
+            label         = "Azure Data Manager for Energy";
+            annotate icon { path = "resources/azure-data-manager-for-energy.svg"; }
+            available_in  = [azure];
+            applicable_to = [knowledge_source];
+            wiki          = "azure-data-manager-for-energy.md";
+        }
+    }
+}

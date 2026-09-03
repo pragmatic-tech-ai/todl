@@ -1,0 +1,60 @@
+namespace tech_architecture
+{
+    concept application
+    {
+        description = """
+            A named, owned, lifecycle_managed unit of delivery, realised by
+            binding capability slots from the IT landscape and integrating
+            with other applications where required. It exists to enable
+            business processes — sequential build_ups of actions executed
+            by personnel under their job descriptions and applicable
+            policies.
+
+            Structurally, an application is a package of logically_defined
+            functional components (containers) that interact with each
+            other and with the user to execute a function and deliver the
+            result back to the user.
+            """;
+
+        id          : identifier;
+        label       : label;
+
+        containers  : container[];
+        consumes    : component[];
+        provides    : component[];
+        contains    : application[];
+
+        owner       : actor?;
+        enables     : identifier[];
+
+        invariant "Application ids are globally unique within the model.";
+        invariant
+        {
+            description = """
+                Every id in `containers` resolves to a known `container` that
+                is not also referenced by another application's `containers`.
+                Containers are owned by exactly one application.
+                """;
+        }
+        invariant
+        {
+            description = """
+                Every id in `consumes` and `provides` resolves to a known
+                `component`. Every id in `contains` resolves to another
+                `application`. Every id in `enables` resolves to a `process`
+                in a BPMN model loaded into the same project — cross_meta_model
+                resolution handled by the orchestrator.
+                """;
+        }
+        invariant
+        {
+            description = """
+                If `owner` is set, it resolves to a known `actor`.
+                """;
+        }
+
+        references = [
+            "docs/meta-models/technology-architecture/three-viewpoints.md",
+        ];
+    }
+}

@@ -1,0 +1,33 @@
+namespace tech_architecture
+{
+    concept container_role
+    {
+        description = """
+            Library_defined visual binding for a `container_role_styles` enum
+            value. The meta_instance's name resolves to a `container_role_styles`
+            term; the body sets the tier icon and optional accent swatch
+            used in C4 Container views.
+            """;
+
+        id     : identifier;
+        swatch : string?;
+
+        invariant
+        {
+            description = """
+                Multiple `container_role_style` declarations for the same
+                enum value across libraries are a compile error — ambiguous
+                authority.
+                """;
+        }
+
+        authoring library_entry
+        {
+            description = "Inside a `<lib>.technology-library.model` body.";
+            example = """
+                container_role_style web_tier  { annotate icon { path = "resources/tier-web.svg"; }  swatch = "#0ea5e9"; }
+                container_role_style data_tier { annotate icon { path = "resources/tier-data.svg"; } swatch = "#f59e0b"; }
+                """;
+        }
+    }
+}

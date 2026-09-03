@@ -1,0 +1,60 @@
+namespace tech_architecture
+{
+    taxonomy billing_models : represents billing_model
+    {
+        description = """
+            How a technology's runtime usage is metered and paid for.
+            Used as the value type of each dimension in a technology's
+            `billing` block (`hosting`, `per_call`, `per_seat`, `capacity`).
+            A technology can carry several dimensions simultaneously — a
+            hosted MCP server carries `hosting = azure_consumption` for
+            its App Service envelope AND `per_call = azure_consumption`
+            for its AI calls; Copilot Studio carries `per_call =
+            copilot_credits` and `capacity = copilot_credits` for the
+            prepaid pack. The meter is fixed by what runs, so it lives
+            on the technology rather than the consuming component;
+            components inherit their effective billing from their
+            `implemented_by` technology.
+            """;
+
+        term m365_copilot_usl
+        {
+            label = "M365 Copilot USL";
+            description = """
+                Absorbed by the Microsoft 365 Copilot user
+                subscription licence under fair_use limits. Applies
+                to components that run under the authenticated M365
+                Copilot_licensed user's identity — typically the
+                M365 Copilot orchestrator and skills it invokes
+                inline.
+                """;
+        }
+
+        term copilot_credits
+        {
+            label = "Copilot Credits";
+            description = """
+                Metered against the tenant's Microsoft Copilot
+                Studio Copilot Credit pool (prepaid pack or
+                pay_as_you_go meter). Applies to Copilot Studio
+                orchestrator dispatches, agent actions, generative
+                answers, tenant_graph grounding, and autonomous
+                agent runs outside the M365 Copilot umbrella.
+                """;
+        }
+
+        term azure_consumption
+        {
+            label = "Azure Consumption";
+            description = """
+                Direct Azure resource consumption — SKU_based or
+                per_unit (tokens, requests, throughput units).
+                Applies to Azure OpenAI, Azure AI Search, App
+                Service / Functions, Service Bus, Event Hubs, and
+                similar infrastructure components whose meters are
+                billed against the Azure subscription, not against
+                a Copilot licence.
+                """;
+        }
+    }
+}

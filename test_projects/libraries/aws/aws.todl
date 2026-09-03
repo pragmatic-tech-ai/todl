@@ -1,0 +1,2357 @@
+// AWS technology library — enriched from aws.discovery_report.md.
+// 258 technologies grouped by vendor section. Transitive `import default;`
+// so categories cited in `applicable_to` resolve.
+//
+// Per_product icons resolved from maintenance/icons_fallback/ (AWS official
+// Architecture_Service_Icons set, 01302026 release). Each `annotate icon`
+// block points to resources/<slug>.svg; runtime falls through to
+// category_level rendering only when no per_service icon is available
+// (13 entries).
+
+namespace libraries.aws
+{
+    import tech_architecture;
+
+    taxonomy aws_tech : represents location, technology uses categories
+    {
+        annotate toolbox { visible = true; }
+
+        // ── Locations ───────────────────────────────────────────────
+        // AWS_stack hosting tiers. `type` composes location_type flags
+        // via `|` (spec §6.5).
+        location aws                  { label = "AWS";                    type = cloud | paas; }
+        location aws_govcloud         { label = "AWS GovCloud (US)";      type = cloud | paas; parent = aws; }
+        location aws_china            { label = "AWS China";              type = cloud | paas; parent = aws; }
+        location aws_local_zones      { label = "AWS Local Zones";        type = cloud | paas; parent = aws; }
+        location aws_wavelength_zones { label = "AWS Wavelength Zones";   type = cloud | paas; parent = aws; }
+        location aws_outposts         { label = "AWS Outposts";           type = physical | on_premises; }
+
+        // ── Networking and content delivery ─────────────────────────
+        technology amazon_api_gateway
+        {
+            label         = "Amazon API Gateway";
+            annotate icon { path = "resources/amazon-api-gateway.svg"; }
+            available_in  = [aws];
+            applicable_to = [internal_api_gateway];
+            wiki          = "amazon-api-gateway.md";
+        }
+
+        technology amazon_cloudfront
+        {
+            label         = "Amazon CloudFront";
+            annotate icon { path = "resources/amazon-cloudfront.svg"; }
+            available_in  = [aws];
+            applicable_to = [cdn_edge];
+            wiki          = "amazon-cloudfront.md";
+        }
+
+        technology amazon_route_53
+        {
+            label         = "Amazon Route 53";
+            annotate icon { path = "resources/amazon-route-53.svg"; }
+            available_in  = [aws];
+            applicable_to = [dns_service];
+            wiki          = "amazon-route-53.md";
+        }
+
+        technology amazon_vpc
+        {
+            label         = "Amazon VPC";
+            annotate icon { path = "resources/amazon-vpc.svg"; }
+            available_in  = [aws];
+            applicable_to = [virtual_network];
+            wiki          = "amazon-vpc.md";
+        }
+
+        technology amazon_vpc_lattice
+        {
+            label         = "Amazon VPC Lattice";
+            annotate icon { path = "resources/amazon-vpc-lattice.svg"; }
+            available_in  = [aws];
+            applicable_to = [virtual_network];
+            wiki          = "amazon-vpc-lattice.md";
+        }
+
+        technology aws_app_mesh
+        {
+            label         = "AWS App Mesh";
+            annotate icon { path = "resources/aws-app-mesh.svg"; }
+            available_in  = [aws];
+            applicable_to = [virtual_network];
+            wiki          = "aws-app-mesh.md";
+        }
+
+        technology aws_cloud_map
+        {
+            label         = "AWS Cloud Map";
+            annotate icon { path = "resources/aws-cloud-map.svg"; }
+            available_in  = [aws];
+            applicable_to = [dns_service];
+            wiki          = "aws-cloud-map.md";
+        }
+
+        technology aws_direct_connect
+        {
+            label         = "AWS Direct Connect";
+            annotate icon { path = "resources/aws-direct-connect.svg"; }
+            available_in  = [aws];
+            applicable_to = [dedicated_network_circuit];
+            wiki          = "aws-direct-connect.md";
+        }
+
+        technology aws_global_accelerator
+        {
+            label         = "AWS Global Accelerator";
+            annotate icon { path = "resources/aws-global-accelerator.svg"; }
+            available_in  = [aws];
+            applicable_to = [global_network_backbone];
+            wiki          = "aws-global-accelerator.md";
+        }
+
+        technology aws_private_5g
+        {
+            label         = "AWS Private 5G";
+            available_in  = [aws];
+            applicable_to = [carrier_edge_platform];
+            wiki          = "aws-private-5g.md";
+        }
+
+        technology aws_privatelink
+        {
+            label         = "AWS PrivateLink";
+            annotate icon { path = "resources/aws-privatelink.svg"; }
+            available_in  = [aws];
+            applicable_to = [private_endpoint_service];
+            wiki          = "aws-privatelink.md";
+        }
+
+        technology aws_transit_gateway
+        {
+            label         = "AWS Transit Gateway";
+            annotate icon { path = "resources/aws-transit-gateway.svg"; }
+            available_in  = [aws];
+            applicable_to = [virtual_network];
+            wiki          = "aws-transit-gateway.md";
+        }
+
+        technology aws_verified_access
+        {
+            label         = "AWS Verified Access";
+            annotate icon { path = "resources/aws-verified-access.svg"; }
+            available_in  = [aws];
+            applicable_to = [authorization_service];
+            wiki          = "aws-verified-access.md";
+        }
+
+        technology aws_direct_connect_shortform
+        {
+            label         = "Direct Connect";
+            annotate icon { path = "resources/aws-direct-connect-shortform.svg"; }
+            available_in  = [aws];
+            applicable_to = [dedicated_network_circuit];
+            wiki          = "aws-direct-connect-shortform.md";
+        }
+
+        technology elastic_load_balancing
+        {
+            label         = "Elastic Load Balancing";
+            annotate icon { path = "resources/elastic-load-balancing.svg"; }
+            available_in  = [aws];
+            applicable_to = [load_balancer];
+            wiki          = "elastic-load-balancing.md";
+        }
+
+        technology integrated_private_wireless
+        {
+            label         = "Integrated Private Wireless on AWS";
+            available_in  = [aws, aws_local_zones, aws_outposts];
+            applicable_to = [carrier_edge_platform];
+            wiki          = "integrated-private-wireless.md";
+        }
+
+        technology site_to_site_vpn
+        {
+            label         = "Site-to-Site VPN";
+            annotate icon { path = "resources/site-to-site-vpn.svg"; }
+            available_in  = [aws];
+            applicable_to = [vpn_gateway];
+            wiki          = "site-to-site-vpn.md";
+        }
+
+        // ── Application integration ─────────────────────────────────
+        technology amazon_appflow
+        {
+            label         = "Amazon AppFlow";
+            annotate icon { path = "resources/amazon-appflow.svg"; }
+            available_in  = [aws];
+            applicable_to = [integration_adapter];
+            wiki          = "amazon-appflow.md";
+        }
+
+        technology amazon_eventbridge
+        {
+            label         = "Amazon EventBridge";
+            annotate icon { path = "resources/amazon-eventbridge.svg"; }
+            available_in  = [aws];
+            applicable_to = [event_processor, message_topic];
+            wiki          = "amazon-eventbridge.md";
+        }
+
+        technology amazon_mq
+        {
+            label         = "Amazon MQ";
+            annotate icon { path = "resources/amazon-mq.svg"; }
+            available_in  = [aws];
+            applicable_to = [message_queue];
+            wiki          = "amazon-mq.md";
+        }
+
+        technology amazon_mwaa
+        {
+            label         = "Amazon Managed Workflows for Apache Airflow";
+            annotate icon { path = "resources/amazon-mwaa.svg"; }
+            available_in  = [aws];
+            applicable_to = [data_pipeline_orchestrator];
+            wiki          = "amazon-mwaa.md";
+        }
+
+        technology amazon_sns
+        {
+            label         = "Amazon Simple Notification Service";
+            annotate icon { path = "resources/amazon-sns.svg"; }
+            available_in  = [aws];
+            applicable_to = [message_topic, notification_service];
+            wiki          = "amazon-sns.md";
+        }
+
+        technology amazon_sqs
+        {
+            label         = "Amazon Simple Queue Service";
+            annotate icon { path = "resources/amazon-sqs.svg"; }
+            available_in  = [aws];
+            applicable_to = [message_queue];
+            wiki          = "amazon-sqs.md";
+        }
+
+        technology amazon_swf
+        {
+            label         = "Amazon Simple Workflow Service";
+            available_in  = [aws];
+            applicable_to = [workflow_engine];
+            wiki          = "amazon-swf.md";
+        }
+
+        technology aws_b2b_data_interchange
+        {
+            label         = "AWS B2B Data Interchange";
+            annotate icon { path = "resources/aws-b2b-data-interchange.svg"; }
+            available_in  = [aws];
+            applicable_to = [integration_adapter, partner_integration_endpoint];
+            wiki          = "aws-b2b-data-interchange.md";
+        }
+
+        technology aws_step_functions
+        {
+            label         = "AWS Step Functions";
+            annotate icon { path = "resources/aws-step-functions.svg"; }
+            available_in  = [aws];
+            applicable_to = [workflow_engine];
+            wiki          = "aws-step-functions.md";
+        }
+
+        // ── Analytics ───────────────────────────────────────────────
+        technology amazon_athena
+        {
+            label         = "Amazon Athena";
+            annotate icon { path = "resources/amazon-athena.svg"; }
+            available_in  = [aws];
+            applicable_to = [analytical_store];
+            wiki          = "amazon-athena.md";
+        }
+
+        technology amazon_cloudsearch
+        {
+            label         = "Amazon CloudSearch";
+            annotate icon { path = "resources/amazon-cloudsearch.svg"; }
+            available_in  = [aws];
+            applicable_to = [semantic_index];
+            wiki          = "amazon-cloudsearch.md";
+        }
+
+        technology amazon_data_firehose
+        {
+            label         = "Amazon Data Firehose";
+            annotate icon { path = "resources/amazon-data-firehose.svg"; }
+            available_in  = [aws];
+            applicable_to = [streaming_analytics, data_pipeline_orchestrator];
+            wiki          = "amazon-data-firehose.md";
+        }
+
+        technology amazon_datazone
+        {
+            label         = "Amazon DataZone";
+            annotate icon { path = "resources/amazon-datazone.svg"; }
+            available_in  = [aws];
+            applicable_to = [data_catalog];
+            wiki          = "amazon-datazone.md";
+        }
+
+        technology amazon_emr
+        {
+            label         = "Amazon EMR";
+            annotate icon { path = "resources/amazon-emr.svg"; }
+            available_in  = [aws];
+            applicable_to = [lakehouse_platform];
+            wiki          = "amazon-emr.md";
+        }
+
+        technology amazon_finspace
+        {
+            label         = "Amazon FinSpace";
+            annotate icon { path = "resources/amazon-finspace.svg"; }
+            available_in  = [aws];
+            applicable_to = [analytical_store];
+            wiki          = "amazon-finspace.md";
+        }
+
+        technology amazon_kinesis
+        {
+            label         = "Amazon Kinesis";
+            annotate icon { path = "resources/amazon-kinesis.svg"; }
+            available_in  = [aws];
+            applicable_to = [streaming_analytics];
+            wiki          = "amazon-kinesis.md";
+        }
+
+        technology amazon_kinesis_data_streams
+        {
+            label         = "Amazon Kinesis Data Streams";
+            annotate icon { path = "resources/amazon-kinesis-data-streams.svg"; }
+            available_in  = [aws];
+            applicable_to = [event_log];
+            wiki          = "amazon-kinesis-data-streams.md";
+        }
+
+        technology amazon_kinesis_video_streams
+        {
+            label         = "Amazon Kinesis Video Streams";
+            annotate icon { path = "resources/amazon-kinesis-video-streams.svg"; }
+            available_in  = [aws];
+            applicable_to = [live_streaming_service];
+            wiki          = "amazon-kinesis-video-streams.md";
+        }
+
+        technology amazon_managed_flink
+        {
+            label         = "Amazon Managed Service for Apache Flink";
+            annotate icon { path = "resources/amazon-managed-flink.svg"; }
+            available_in  = [aws];
+            applicable_to = [streaming_analytics];
+            wiki          = "amazon-managed-flink.md";
+        }
+
+        technology amazon_msk
+        {
+            label         = "Amazon Managed Streaming for Apache Kafka";
+            annotate icon { path = "resources/amazon-msk.svg"; }
+            available_in  = [aws];
+            applicable_to = [event_log];
+            wiki          = "amazon-msk.md";
+        }
+
+        technology amazon_opensearch_serverless
+        {
+            label         = "Amazon OpenSearch Serverless";
+            annotate icon { path = "resources/amazon-opensearch-serverless.svg"; }
+            available_in  = [aws];
+            applicable_to = [semantic_index];
+            wiki          = "amazon-opensearch-serverless.md";
+        }
+
+        technology amazon_opensearch_service
+        {
+            label         = "Amazon OpenSearch Service";
+            annotate icon { path = "resources/amazon-opensearch-service.svg"; }
+            available_in  = [aws];
+            applicable_to = [semantic_index];
+            wiki          = "amazon-opensearch-service.md";
+        }
+
+        technology amazon_redshift
+        {
+            label         = "Amazon Redshift";
+            annotate icon { path = "resources/amazon-redshift.svg"; }
+            available_in  = [aws];
+            applicable_to = [analytical_store];
+            wiki          = "amazon-redshift.md";
+        }
+
+        technology amazon_redshift_serverless
+        {
+            label         = "Amazon Redshift Serverless";
+            annotate icon { path = "resources/amazon-redshift-serverless.svg"; }
+            available_in  = [aws];
+            applicable_to = [analytical_store];
+            wiki          = "amazon-redshift-serverless.md";
+        }
+
+        technology aws_clean_rooms
+        {
+            label         = "AWS Clean Rooms";
+            annotate icon { path = "resources/aws-clean-rooms.svg"; }
+            available_in  = [aws];
+            applicable_to = [analytical_store];
+            wiki          = "aws-clean-rooms.md";
+        }
+
+        technology aws_data_exchange
+        {
+            label         = "AWS Data Exchange";
+            annotate icon { path = "resources/aws-data-exchange.svg"; }
+            available_in  = [aws];
+            applicable_to = [data_catalog];
+            wiki          = "aws-data-exchange.md";
+        }
+
+        technology aws_data_pipeline
+        {
+            label         = "AWS Data Pipeline";
+            available_in  = [aws];
+            applicable_to = [data_pipeline_orchestrator];
+            wiki          = "aws-data-pipeline.md";
+        }
+
+        technology aws_entity_resolution
+        {
+            label         = "AWS Entity Resolution";
+            annotate icon { path = "resources/aws-entity-resolution.svg"; }
+            available_in  = [aws];
+            applicable_to = [data_pipeline_orchestrator];
+            wiki          = "aws-entity-resolution.md";
+        }
+
+        technology aws_glue
+        {
+            label         = "AWS Glue";
+            annotate icon { path = "resources/aws-glue.svg"; }
+            available_in  = [aws];
+            applicable_to = [data_pipeline_orchestrator, data_catalog];
+            wiki          = "aws-glue.md";
+        }
+
+        technology aws_lake_formation
+        {
+            label         = "AWS Lake Formation";
+            annotate icon { path = "resources/aws-lake-formation.svg"; }
+            available_in  = [aws];
+            applicable_to = [lakehouse_platform, data_catalog];
+            wiki          = "aws-lake-formation.md";
+        }
+
+        technology quicksight
+        {
+            label         = "Amazon Quick Suite";
+            annotate icon { path = "resources/quicksight.svg"; }
+            available_in  = [aws];
+            applicable_to = [reporting_surface];
+            wiki          = "quicksight.md";
+        }
+
+        // ── Machine Learning and AI ─────────────────────────────────
+        technology amazon_augmented_ai
+        {
+            label         = "Amazon Augmented AI";
+            annotate icon { path = "resources/amazon-augmented-ai.svg"; }
+            available_in  = [aws];
+            applicable_to = [workflow_engine];
+            wiki          = "amazon-augmented-ai.md";
+        }
+
+        technology amazon_bedrock
+        {
+            label         = "Amazon Bedrock";
+            annotate icon { path = "resources/amazon-bedrock.svg"; }
+            available_in  = [aws];
+            applicable_to = [language_model, ai_platform_suite];
+            wiki          = "amazon-bedrock.md";
+        }
+
+        technology amazon_codeguru
+        {
+            label         = "Amazon CodeGuru";
+            annotate icon { path = "resources/amazon-codeguru.svg"; }
+            available_in  = [aws];
+            applicable_to = [ai_platform_suite];
+            wiki          = "amazon-codeguru.md";
+        }
+
+        technology amazon_comprehend
+        {
+            label         = "Amazon Comprehend";
+            annotate icon { path = "resources/amazon-comprehend.svg"; }
+            available_in  = [aws];
+            applicable_to = [language_cognitive_service];
+            wiki          = "amazon-comprehend.md";
+        }
+
+        technology amazon_comprehend_medical
+        {
+            label         = "Amazon Comprehend Medical";
+            annotate icon { path = "resources/amazon-comprehend-medical.svg"; }
+            available_in  = [aws];
+            applicable_to = [language_cognitive_service];
+            wiki          = "amazon-comprehend-medical.md";
+        }
+
+        technology amazon_devops_guru
+        {
+            label         = "Amazon DevOps Guru";
+            annotate icon { path = "resources/amazon-devops-guru.svg"; }
+            available_in  = [aws];
+            applicable_to = [observability_platform];
+            wiki          = "amazon-devops-guru.md";
+        }
+
+        technology amazon_forecast
+        {
+            label         = "Amazon Forecast";
+            annotate icon { path = "resources/amazon-forecast.svg"; }
+            available_in  = [aws];
+            applicable_to = [ml_lifecycle_platform];
+            wiki          = "amazon-forecast.md";
+        }
+
+        technology amazon_fraud_detector
+        {
+            label         = "Amazon Fraud Detector";
+            annotate icon { path = "resources/amazon-fraud-detector.svg"; }
+            available_in  = [aws];
+            applicable_to = [ml_lifecycle_platform];
+            wiki          = "amazon-fraud-detector.md";
+        }
+
+        technology amazon_kendra
+        {
+            label         = "Amazon Kendra";
+            annotate icon { path = "resources/amazon-kendra.svg"; }
+            available_in  = [aws];
+            applicable_to = [semantic_index];
+            wiki          = "amazon-kendra.md";
+        }
+
+        technology amazon_lex
+        {
+            label         = "Amazon Lex";
+            annotate icon { path = "resources/amazon-lex.svg"; }
+            available_in  = [aws];
+            applicable_to = [bot_platform];
+            wiki          = "amazon-lex.md";
+        }
+
+        technology amazon_lookout_equipment
+        {
+            label         = "Amazon Lookout for Equipment";
+            annotate icon { path = "resources/amazon-lookout-equipment.svg"; }
+            available_in  = [aws];
+            applicable_to = [ml_lifecycle_platform];
+            wiki          = "amazon-lookout-equipment.md";
+        }
+
+        technology amazon_lookout_metrics
+        {
+            label         = "Amazon Lookout for Metrics";
+            available_in  = [aws];
+            applicable_to = [ml_lifecycle_platform];
+            wiki          = "amazon-lookout-metrics.md";
+        }
+
+        technology amazon_lookout_vision
+        {
+            label         = "Amazon Lookout for Vision";
+            annotate icon { path = "resources/amazon-lookout-vision.svg"; }
+            available_in  = [aws];
+            applicable_to = [vision_cognitive_service];
+            wiki          = "amazon-lookout-vision.md";
+        }
+
+        technology amazon_monitron
+        {
+            label         = "Amazon Monitron";
+            annotate icon { path = "resources/amazon-monitron.svg"; }
+            available_in  = [aws];
+            applicable_to = [iot_saas_platform];
+            wiki          = "amazon-monitron.md";
+        }
+
+        technology amazon_panorama
+        {
+            label         = "Amazon Panorama";
+            annotate icon { path = "resources/amazon-panorama.svg"; }
+            available_in  = [aws];
+            applicable_to = [vision_cognitive_service];
+            wiki          = "amazon-panorama.md";
+        }
+
+        technology amazon_partyrock
+        {
+            label         = "Amazon PartyRock";
+            available_in  = [aws];
+            applicable_to = [ai_applications_builder];
+            wiki          = "amazon-partyrock.md";
+        }
+
+        technology amazon_personalize
+        {
+            label         = "Amazon Personalize";
+            annotate icon { path = "resources/amazon-personalize.svg"; }
+            available_in  = [aws];
+            applicable_to = [ml_lifecycle_platform];
+            wiki          = "amazon-personalize.md";
+        }
+
+        technology amazon_polly
+        {
+            label         = "Amazon Polly";
+            annotate icon { path = "resources/amazon-polly.svg"; }
+            available_in  = [aws];
+            applicable_to = [speech_cognitive_service];
+            wiki          = "amazon-polly.md";
+        }
+
+        technology amazon_q
+        {
+            label         = "Amazon Q";
+            annotate icon { path = "resources/amazon-q.svg"; }
+            available_in  = [aws];
+            applicable_to = [ai_platform_suite];
+            wiki          = "amazon-q.md";
+        }
+
+        technology amazon_q_business
+        {
+            label         = "Amazon Q Business";
+            annotate icon { path = "resources/amazon-q-business.svg"; }
+            available_in  = [aws];
+            applicable_to = [ai_agent, conversational_interface];
+            wiki          = "amazon-q-business.md";
+        }
+
+        technology amazon_q_developer
+        {
+            label         = "Amazon Q Developer";
+            annotate icon { path = "resources/amazon-q-developer.svg"; }
+            available_in  = [aws];
+            applicable_to = [ai_agent];
+            wiki          = "amazon-q-developer.md";
+        }
+
+        technology amazon_q_chat
+        {
+            label         = "Amazon Q Developer in chat applications";
+            annotate icon { path = "resources/amazon-q-chat.svg"; }
+            available_in  = [aws];
+            applicable_to = [ai_agent];
+            wiki          = "amazon-q-chat.md";
+        }
+
+        technology amazon_rekognition
+        {
+            label         = "Amazon Rekognition";
+            annotate icon { path = "resources/amazon-rekognition.svg"; }
+            available_in  = [aws];
+            applicable_to = [vision_cognitive_service];
+            wiki          = "amazon-rekognition.md";
+        }
+
+        technology amazon_sagemaker
+        {
+            label         = "Amazon SageMaker AI";
+            annotate icon { path = "resources/amazon-sagemaker.svg"; }
+            available_in  = [aws];
+            applicable_to = [ml_lifecycle_platform];
+            wiki          = "amazon-sagemaker.md";
+        }
+
+        technology amazon_sagemaker_autopilot
+        {
+            label         = "Amazon SageMaker AI Autopilot";
+            annotate icon { path = "resources/amazon-sagemaker-autopilot.svg"; }
+            available_in  = [aws];
+            applicable_to = [ml_lifecycle_platform];
+            wiki          = "amazon-sagemaker-autopilot.md";
+        }
+
+        technology amazon_sagemaker_canvas
+        {
+            label         = "Amazon SageMaker AI Canvas";
+            annotate icon { path = "resources/amazon-sagemaker-canvas.svg"; }
+            available_in  = [aws];
+            applicable_to = [ai_applications_builder];
+            wiki          = "amazon-sagemaker-canvas.md";
+        }
+
+        technology amazon_sagemaker_clarify
+        {
+            label         = "Amazon SageMaker AI Clarify";
+            annotate icon { path = "resources/amazon-sagemaker-clarify.svg"; }
+            available_in  = [aws];
+            applicable_to = [ml_lifecycle_platform];
+            wiki          = "amazon-sagemaker-clarify.md";
+        }
+
+        technology amazon_sagemaker_data_labeling
+        {
+            label         = "Amazon SageMaker AI Data Labeling";
+            annotate icon { path = "resources/amazon-sagemaker-data-labeling.svg"; }
+            available_in  = [aws];
+            applicable_to = [ml_lifecycle_platform];
+            wiki          = "amazon-sagemaker-data-labeling.md";
+        }
+
+        technology amazon_sagemaker_data_wrangler
+        {
+            label         = "Amazon SageMaker AI Data Wrangler";
+            annotate icon { path = "resources/amazon-sagemaker-data-wrangler.svg"; }
+            available_in  = [aws];
+            applicable_to = [ml_lifecycle_platform];
+            wiki          = "amazon-sagemaker-data-wrangler.md";
+        }
+
+        technology amazon_sagemaker_edge
+        {
+            label         = "Amazon SageMaker AI Edge";
+            annotate icon { path = "resources/amazon-sagemaker-edge.svg"; }
+            available_in  = [aws];
+            applicable_to = [ml_lifecycle_platform];
+            wiki          = "amazon-sagemaker-edge.md";
+        }
+
+        technology amazon_sagemaker_feature_store
+        {
+            label         = "Amazon SageMaker AI Feature Store";
+            annotate icon { path = "resources/amazon-sagemaker-feature-store.svg"; }
+            available_in  = [aws];
+            applicable_to = [ml_lifecycle_platform];
+            wiki          = "amazon-sagemaker-feature-store.md";
+        }
+
+        technology amazon_sagemaker_geospatial
+        {
+            label         = "Amazon SageMaker AI geospatial capabilities";
+            annotate icon { path = "resources/amazon-sagemaker-geospatial.svg"; }
+            available_in  = [aws];
+            applicable_to = [ml_lifecycle_platform];
+            wiki          = "amazon-sagemaker-geospatial.md";
+        }
+
+        technology amazon_sagemaker_hyperpod
+        {
+            label         = "Amazon SageMaker AI HyperPod";
+            annotate icon { path = "resources/amazon-sagemaker-hyperpod.svg"; }
+            available_in  = [aws];
+            applicable_to = [ml_lifecycle_platform];
+            wiki          = "amazon-sagemaker-hyperpod.md";
+        }
+
+        technology amazon_sagemaker_jumpstart
+        {
+            label         = "Amazon SageMaker AI JumpStart";
+            annotate icon { path = "resources/amazon-sagemaker-jumpstart.svg"; }
+            available_in  = [aws];
+            applicable_to = [ml_lifecycle_platform];
+            wiki          = "amazon-sagemaker-jumpstart.md";
+        }
+
+        technology amazon_sagemaker_pipelines
+        {
+            label         = "Amazon SageMaker AI Pipelines";
+            annotate icon { path = "resources/amazon-sagemaker-pipelines.svg"; }
+            available_in  = [aws];
+            applicable_to = [ml_lifecycle_platform];
+            wiki          = "amazon-sagemaker-pipelines.md";
+        }
+
+        technology amazon_sagemaker_studio_lab
+        {
+            label         = "Amazon SageMaker AI Studio Lab";
+            annotate icon { path = "resources/amazon-sagemaker-studio-lab.svg"; }
+            available_in  = [aws];
+            applicable_to = [ml_lifecycle_platform];
+            wiki          = "amazon-sagemaker-studio-lab.md";
+        }
+
+        technology amazon_textract
+        {
+            label         = "Amazon Textract";
+            annotate icon { path = "resources/amazon-textract.svg"; }
+            available_in  = [aws];
+            applicable_to = [document_intelligence_service];
+            wiki          = "amazon-textract.md";
+        }
+
+        technology amazon_transcribe
+        {
+            label         = "Amazon Transcribe";
+            annotate icon { path = "resources/amazon-transcribe.svg"; }
+            available_in  = [aws];
+            applicable_to = [speech_cognitive_service];
+            wiki          = "amazon-transcribe.md";
+        }
+
+        technology amazon_translate
+        {
+            label         = "Amazon Translate";
+            annotate icon { path = "resources/amazon-translate.svg"; }
+            available_in  = [aws];
+            applicable_to = [translation_cognitive_service];
+            wiki          = "amazon-translate.md";
+        }
+
+        technology apache_mxnet
+        {
+            label         = "Apache MXNet on AWS";
+            annotate icon { path = "resources/apache-mxnet.svg"; }
+            available_in  = [aws];
+            applicable_to = [ml_lifecycle_platform];
+            wiki          = "apache-mxnet.md";
+        }
+
+        technology aws_deepcomposer
+        {
+            label         = "AWS DeepComposer";
+            available_in  = [aws];
+            applicable_to = [ml_lifecycle_platform];
+            wiki          = "aws-deepcomposer.md";
+        }
+
+        technology aws_deep_learning_amis
+        {
+            label         = "AWS Deep Learning AMIs";
+            annotate icon { path = "resources/aws-deep-learning-amis.svg"; }
+            available_in  = [aws];
+            applicable_to = [ml_lifecycle_platform];
+            wiki          = "aws-deep-learning-amis.md";
+        }
+
+        technology aws_deep_learning_containers
+        {
+            label         = "AWS Deep Learning Containers";
+            annotate icon { path = "resources/aws-deep-learning-containers.svg"; }
+            available_in  = [aws];
+            applicable_to = [ml_lifecycle_platform];
+            wiki          = "aws-deep-learning-containers.md";
+        }
+
+        technology aws_deepracer
+        {
+            label         = "AWS DeepRacer";
+            annotate icon { path = "resources/aws-deepracer.svg"; }
+            available_in  = [aws];
+            applicable_to = [ml_lifecycle_platform];
+            wiki          = "aws-deepracer.md";
+        }
+
+        technology aws_healthlake
+        {
+            label         = "AWS HealthLake";
+            annotate icon { path = "resources/aws-healthlake.svg"; }
+            available_in  = [aws];
+            applicable_to = [analytical_store, language_cognitive_service];
+            wiki          = "aws-healthlake.md";
+        }
+
+        technology aws_healthscribe
+        {
+            label         = "AWS HealthScribe";
+            annotate icon { path = "resources/aws-healthscribe.svg"; }
+            available_in  = [aws];
+            applicable_to = [speech_cognitive_service];
+            wiki          = "aws-healthscribe.md";
+        }
+
+        technology aws_panorama_svc
+        {
+            label         = "AWS Panorama";
+            annotate icon { path = "resources/aws-panorama-svc.svg"; }
+            available_in  = [aws];
+            applicable_to = [vision_cognitive_service];
+            wiki          = "aws-panorama-svc.md";
+        }
+
+        technology hugging_face_on_aws
+        {
+            label         = "Hugging Face on AWS";
+            available_in  = [aws];
+            applicable_to = [ml_lifecycle_platform, language_model];
+            wiki          = "hugging-face-on-aws.md";
+        }
+
+        technology pytorch_on_aws
+        {
+            label         = "PyTorch on AWS";
+            annotate icon { path = "resources/pytorch-on-aws.svg"; }
+            available_in  = [aws];
+            applicable_to = [ml_lifecycle_platform];
+            wiki          = "pytorch-on-aws.md";
+        }
+
+        technology tensorflow_on_aws
+        {
+            label         = "TensorFlow on AWS";
+            annotate icon { path = "resources/tensorflow-on-aws.svg"; }
+            available_in  = [aws];
+            applicable_to = [ml_lifecycle_platform];
+            wiki          = "tensorflow-on-aws.md";
+        }
+
+        // ── Databases ───────────────────────────────────────────────
+        technology amazon_aurora
+        {
+            label         = "Amazon Aurora";
+            annotate icon { path = "resources/amazon-aurora.svg"; }
+            available_in  = [aws];
+            applicable_to = [relational_store];
+            wiki          = "amazon-aurora.md";
+        }
+
+        technology amazon_documentdb
+        {
+            label         = "Amazon DocumentDB";
+            annotate icon { path = "resources/amazon-documentdb.svg"; }
+            available_in  = [aws];
+            applicable_to = [document_store];
+            wiki          = "amazon-documentdb.md";
+        }
+
+        technology amazon_dynamodb
+        {
+            label         = "Amazon DynamoDB";
+            annotate icon { path = "resources/amazon-dynamodb.svg"; }
+            available_in  = [aws];
+            applicable_to = [document_store];
+            wiki          = "amazon-dynamodb.md";
+        }
+
+        technology amazon_elasticache
+        {
+            label         = "Amazon ElastiCache";
+            annotate icon { path = "resources/amazon-elasticache.svg"; }
+            available_in  = [aws];
+            applicable_to = [cache];
+            wiki          = "amazon-elasticache.md";
+        }
+
+        technology amazon_keyspaces
+        {
+            label         = "Amazon Keyspaces";
+            annotate icon { path = "resources/amazon-keyspaces.svg"; }
+            available_in  = [aws];
+            applicable_to = [document_store];
+            wiki          = "amazon-keyspaces.md";
+        }
+
+        technology amazon_lightsail_databases
+        {
+            label         = "Amazon Lightsail managed databases";
+            annotate icon { path = "resources/amazon-lightsail-databases.svg"; }
+            available_in  = [aws];
+            applicable_to = [relational_store];
+            wiki          = "amazon-lightsail-databases.md";
+        }
+
+        technology amazon_memorydb
+        {
+            label         = "Amazon MemoryDB";
+            annotate icon { path = "resources/amazon-memorydb.svg"; }
+            available_in  = [aws];
+            applicable_to = [cache, document_store];
+            wiki          = "amazon-memorydb.md";
+        }
+
+        technology amazon_neptune
+        {
+            label         = "Amazon Neptune";
+            annotate icon { path = "resources/amazon-neptune.svg"; }
+            available_in  = [aws];
+            applicable_to = [knowledge_graph];
+            wiki          = "amazon-neptune.md";
+        }
+
+        technology amazon_rds
+        {
+            label         = "Amazon Relational Database Service";
+            annotate icon { path = "resources/amazon-rds.svg"; }
+            available_in  = [aws];
+            applicable_to = [relational_store];
+            wiki          = "amazon-rds.md";
+        }
+
+        technology amazon_rds_db2
+        {
+            label         = "Amazon RDS for Db2";
+            annotate icon { path = "resources/amazon-rds-db2.svg"; }
+            available_in  = [aws];
+            applicable_to = [relational_store];
+            wiki          = "amazon-rds-db2.md";
+        }
+
+        technology amazon_rds_vmware
+        {
+            label         = "Amazon RDS on VMware";
+            annotate icon { path = "resources/amazon-rds-vmware.svg"; }
+            available_in  = [aws, aws_outposts];
+            applicable_to = [relational_store];
+            wiki          = "amazon-rds-vmware.md";
+        }
+
+        technology amazon_timestream
+        {
+            label         = "Amazon Timestream";
+            annotate icon { path = "resources/amazon-timestream.svg"; }
+            available_in  = [aws];
+            applicable_to = [analytical_store];
+            wiki          = "amazon-timestream.md";
+        }
+
+        // ── Compute ─────────────────────────────────────────────────
+        technology amazon_ec2
+        {
+            label         = "Amazon EC2";
+            annotate icon { path = "resources/amazon-ec2.svg"; }
+            available_in  = [aws];
+            applicable_to = [hosting_fabric];
+            wiki          = "amazon-ec2.md";
+        }
+
+        technology amazon_ec2_autoscaling
+        {
+            label         = "Amazon EC2 Auto Scaling";
+            annotate icon { path = "resources/amazon-ec2-autoscaling.svg"; }
+            available_in  = [aws];
+            applicable_to = [hosting_fabric];
+            wiki          = "amazon-ec2-autoscaling.md";
+        }
+
+        technology amazon_ec2_image_builder
+        {
+            label         = "Amazon EC2 Image Builder";
+            annotate icon { path = "resources/amazon-ec2-image-builder.svg"; }
+            available_in  = [aws];
+            applicable_to = [iac_template_engine];
+            wiki          = "amazon-ec2-image-builder.md";
+        }
+
+        technology amazon_lightsail
+        {
+            label         = "Amazon Lightsail";
+            annotate icon { path = "resources/amazon-lightsail.svg"; }
+            available_in  = [aws];
+            applicable_to = [hosting_fabric];
+            wiki          = "amazon-lightsail.md";
+        }
+
+        technology amazon_linux_2023
+        {
+            label         = "Amazon Linux 2023";
+            annotate icon { path = "resources/amazon-linux-2023.svg"; }
+            available_in  = [aws, aws_govcloud, aws_china];
+            applicable_to = [hosting_fabric];
+            wiki          = "amazon-linux-2023.md";
+        }
+
+        technology aws_app_runner
+        {
+            label         = "AWS App Runner";
+            annotate icon { path = "resources/aws-app-runner.svg"; }
+            available_in  = [aws];
+            applicable_to = [hosting_fabric];
+            wiki          = "aws-app-runner.md";
+        }
+
+        technology aws_batch
+        {
+            label         = "AWS Batch";
+            annotate icon { path = "resources/aws-batch.svg"; }
+            available_in  = [aws];
+            applicable_to = [batch_compute];
+            wiki          = "aws-batch.md";
+        }
+
+        technology aws_elastic_beanstalk
+        {
+            label         = "AWS Elastic Beanstalk";
+            annotate icon { path = "resources/aws-elastic-beanstalk.svg"; }
+            available_in  = [aws];
+            applicable_to = [hosting_fabric];
+            wiki          = "aws-elastic-beanstalk.md";
+        }
+
+        technology aws_fargate
+        {
+            label         = "AWS Fargate";
+            annotate icon { path = "resources/aws-fargate.svg"; }
+            available_in  = [aws];
+            applicable_to = [hosting_fabric];
+            wiki          = "aws-fargate.md";
+        }
+
+        technology aws_lambda
+        {
+            label         = "AWS Lambda";
+            annotate icon { path = "resources/aws-lambda.svg"; }
+            available_in  = [aws];
+            applicable_to = [hosting_fabric];
+            wiki          = "aws-lambda.md";
+        }
+
+        technology aws_outposts_svc
+        {
+            label         = "AWS Outposts";
+            annotate icon { path = "resources/aws-outposts-svc.svg"; }
+            available_in  = [aws, aws_outposts];
+            applicable_to = [private_cloud_appliance];
+            wiki          = "aws-outposts-svc.md";
+        }
+
+        technology aws_serverless_application_repository
+        {
+            label         = "AWS Serverless Application Repository";
+            annotate icon { path = "resources/aws-serverless-application-repository.svg"; }
+            available_in  = [aws];
+            applicable_to = [artifact_registry];
+            wiki          = "aws-serverless-application-repository.md";
+        }
+
+        technology aws_wavelength
+        {
+            label         = "AWS Wavelength";
+            annotate icon { path = "resources/aws-wavelength.svg"; }
+            available_in  = [aws, aws_wavelength_zones];
+            applicable_to = [carrier_edge_platform];
+            wiki          = "aws-wavelength.md";
+        }
+
+        technology vmware_cloud_on_aws
+        {
+            label         = "VMware Cloud on AWS";
+            annotate icon { path = "resources/vmware-cloud-on-aws.svg"; }
+            available_in  = [aws, aws_govcloud];
+            applicable_to = [hosting_fabric];
+            wiki          = "vmware-cloud-on-aws.md";
+        }
+
+        // ── Storage ─────────────────────────────────────────────────
+        technology amazon_ebs
+        {
+            label         = "Amazon Elastic Block Store";
+            annotate icon { path = "resources/amazon-ebs.svg"; }
+            available_in  = [aws];
+            applicable_to = [file_store];
+            wiki          = "amazon-ebs.md";
+        }
+
+        technology amazon_efs
+        {
+            label         = "Amazon Elastic File System";
+            annotate icon { path = "resources/amazon-efs.svg"; }
+            available_in  = [aws];
+            applicable_to = [file_store];
+            wiki          = "amazon-efs.md";
+        }
+
+        technology amazon_file_cache
+        {
+            label         = "Amazon File Cache";
+            annotate icon { path = "resources/amazon-file-cache.svg"; }
+            available_in  = [aws];
+            applicable_to = [cache, file_store];
+            wiki          = "amazon-file-cache.md";
+        }
+
+        technology amazon_fsx_lustre
+        {
+            label         = "Amazon FSx for Lustre";
+            annotate icon { path = "resources/amazon-fsx-lustre.svg"; }
+            available_in  = [aws];
+            applicable_to = [file_store];
+            wiki          = "amazon-fsx-lustre.md";
+        }
+
+        technology amazon_fsx_netapp
+        {
+            label         = "Amazon FSx for NetApp ONTAP";
+            annotate icon { path = "resources/amazon-fsx-netapp.svg"; }
+            available_in  = [aws];
+            applicable_to = [file_store];
+            wiki          = "amazon-fsx-netapp.md";
+        }
+
+        technology amazon_fsx_openzfs
+        {
+            label         = "Amazon FSx for OpenZFS";
+            annotate icon { path = "resources/amazon-fsx-openzfs.svg"; }
+            available_in  = [aws];
+            applicable_to = [file_store];
+            wiki          = "amazon-fsx-openzfs.md";
+        }
+
+        technology amazon_fsx_windows
+        {
+            label         = "Amazon FSx for Windows File Server";
+            annotate icon { path = "resources/amazon-fsx-windows.svg"; }
+            available_in  = [aws];
+            applicable_to = [file_store];
+            wiki          = "amazon-fsx-windows.md";
+        }
+
+        technology amazon_s3
+        {
+            label         = "Amazon S3";
+            annotate icon { path = "resources/amazon-s3.svg"; }
+            available_in  = [aws];
+            applicable_to = [file_store, archive_store];
+            wiki          = "amazon-s3.md";
+        }
+
+        technology aws_backup
+        {
+            label         = "AWS Backup";
+            annotate icon { path = "resources/aws-backup.svg"; }
+            available_in  = [aws];
+            applicable_to = [backup_service];
+            wiki          = "aws-backup.md";
+        }
+
+        technology aws_elastic_disaster_recovery
+        {
+            label         = "AWS Elastic Disaster Recovery";
+            annotate icon { path = "resources/aws-elastic-disaster-recovery.svg"; }
+            available_in  = [aws];
+            applicable_to = [disaster_recovery_service];
+            wiki          = "aws-elastic-disaster-recovery.md";
+        }
+
+        technology aws_storage_gateway
+        {
+            label         = "AWS Storage Gateway";
+            annotate icon { path = "resources/aws-storage-gateway.svg"; }
+            available_in  = [aws];
+            applicable_to = [hybrid_resource_manager];
+            wiki          = "aws-storage-gateway.md";
+        }
+
+        // ── Containers ──────────────────────────────────────────────
+        technology amazon_ecr
+        {
+            label         = "Amazon Elastic Container Registry";
+            annotate icon { path = "resources/amazon-ecr.svg"; }
+            available_in  = [aws];
+            applicable_to = [container_registry];
+            wiki          = "amazon-ecr.md";
+        }
+
+        technology amazon_ecs
+        {
+            label         = "Amazon Elastic Container Service";
+            annotate icon { path = "resources/amazon-ecs.svg"; }
+            available_in  = [aws];
+            applicable_to = [hosting_fabric];
+            wiki          = "amazon-ecs.md";
+        }
+
+        technology amazon_eks
+        {
+            label         = "Amazon Elastic Kubernetes Service";
+            annotate icon { path = "resources/amazon-eks.svg"; }
+            available_in  = [aws];
+            applicable_to = [hosting_fabric];
+            wiki          = "amazon-eks.md";
+        }
+
+        technology aws_app2container
+        {
+            label         = "AWS App2Container";
+            available_in  = [aws];
+            applicable_to = [migration_assessment_service];
+            wiki          = "aws-app2container.md";
+        }
+
+        technology rosa
+        {
+            label         = "Red Hat OpenShift Service on AWS";
+            annotate icon { path = "resources/rosa.svg"; }
+            available_in  = [aws];
+            applicable_to = [hosting_fabric];
+            wiki          = "rosa.md";
+        }
+
+        // ── Security, identity, and compliance ──────────────────────
+        technology amazon_cognito
+        {
+            label         = "Amazon Cognito";
+            annotate icon { path = "resources/amazon-cognito.svg"; }
+            available_in  = [aws];
+            applicable_to = [federated_identity_provider];
+            wiki          = "amazon-cognito.md";
+        }
+
+        technology amazon_detective
+        {
+            label         = "Amazon Detective";
+            annotate icon { path = "resources/amazon-detective.svg"; }
+            available_in  = [aws];
+            applicable_to = [siem];
+            wiki          = "amazon-detective.md";
+        }
+
+        technology amazon_guardduty
+        {
+            label         = "Amazon GuardDuty";
+            annotate icon { path = "resources/amazon-guardduty.svg"; }
+            available_in  = [aws];
+            applicable_to = [siem];
+            wiki          = "amazon-guardduty.md";
+        }
+
+        technology amazon_inspector
+        {
+            label         = "Amazon Inspector";
+            annotate icon { path = "resources/amazon-inspector.svg"; }
+            available_in  = [aws];
+            applicable_to = [cloud_security_posture_mgmt];
+            wiki          = "amazon-inspector.md";
+        }
+
+        technology amazon_macie
+        {
+            label         = "Amazon Macie";
+            annotate icon { path = "resources/amazon-macie.svg"; }
+            available_in  = [aws];
+            applicable_to = [data_protection_service];
+            wiki          = "amazon-macie.md";
+        }
+
+        technology amazon_security_lake
+        {
+            label         = "Amazon Security Lake";
+            annotate icon { path = "resources/amazon-security-lake.svg"; }
+            available_in  = [aws];
+            applicable_to = [siem];
+            wiki          = "amazon-security-lake.md";
+        }
+
+        technology amazon_verified_permissions
+        {
+            label         = "Amazon Verified Permissions";
+            annotate icon { path = "resources/amazon-verified-permissions.svg"; }
+            available_in  = [aws];
+            applicable_to = [authorization_service];
+            wiki          = "amazon-verified-permissions.md";
+        }
+
+        technology aws_artifact
+        {
+            label         = "AWS Artifact";
+            annotate icon { path = "resources/aws-artifact.svg"; }
+            available_in  = [aws];
+            applicable_to = [policy_engine];
+            wiki          = "aws-artifact.md";
+        }
+
+        technology aws_audit_manager
+        {
+            label         = "AWS Audit Manager";
+            annotate icon { path = "resources/aws-audit-manager.svg"; }
+            available_in  = [aws];
+            applicable_to = [policy_engine];
+            wiki          = "aws-audit-manager.md";
+        }
+
+        technology aws_certificate_manager
+        {
+            label         = "AWS Certificate Manager";
+            annotate icon { path = "resources/aws-certificate-manager.svg"; }
+            available_in  = [aws];
+            applicable_to = [secret_store];
+            wiki          = "aws-certificate-manager.md";
+        }
+
+        technology aws_cloudhsm
+        {
+            label         = "AWS CloudHSM";
+            annotate icon { path = "resources/aws-cloudhsm.svg"; }
+            available_in  = [aws];
+            applicable_to = [hardware_security_module];
+            wiki          = "aws-cloudhsm.md";
+        }
+
+        technology aws_directory_service
+        {
+            label         = "AWS Directory Service";
+            annotate icon { path = "resources/aws-directory-service.svg"; }
+            available_in  = [aws];
+            applicable_to = [domain_services];
+            wiki          = "aws-directory-service.md";
+        }
+
+        technology aws_firewall_manager
+        {
+            label         = "AWS Firewall Manager";
+            annotate icon { path = "resources/aws-firewall-manager.svg"; }
+            available_in  = [aws];
+            applicable_to = [network_firewall];
+            wiki          = "aws-firewall-manager.md";
+        }
+
+        technology aws_iam_identity_center
+        {
+            label         = "AWS IAM Identity Center";
+            annotate icon { path = "resources/aws-iam-identity-center.svg"; }
+            available_in  = [aws];
+            applicable_to = [federated_identity_provider];
+            wiki          = "aws-iam-identity-center.md";
+        }
+
+        technology aws_iam
+        {
+            label         = "AWS Identity and Access Management";
+            annotate icon { path = "resources/aws-iam.svg"; }
+            available_in  = [aws];
+            applicable_to = [authorization_service];
+            wiki          = "aws-iam.md";
+        }
+
+        technology aws_kms
+        {
+            label         = "AWS Key Management Service";
+            annotate icon { path = "resources/aws-kms.svg"; }
+            available_in  = [aws];
+            applicable_to = [secret_store];
+            wiki          = "aws-kms.md";
+        }
+
+        technology aws_network_firewall
+        {
+            label         = "AWS Network Firewall";
+            annotate icon { path = "resources/aws-network-firewall.svg"; }
+            available_in  = [aws];
+            applicable_to = [network_firewall];
+            wiki          = "aws-network-firewall.md";
+        }
+
+        technology aws_resource_access_manager
+        {
+            label         = "AWS Resource Access Manager";
+            annotate icon { path = "resources/aws-resource-access-manager.svg"; }
+            available_in  = [aws];
+            applicable_to = [multi_tenant_management];
+            wiki          = "aws-resource-access-manager.md";
+        }
+
+        technology aws_secrets_manager
+        {
+            label         = "AWS Secrets Manager";
+            annotate icon { path = "resources/aws-secrets-manager.svg"; }
+            available_in  = [aws];
+            applicable_to = [secret_store];
+            wiki          = "aws-secrets-manager.md";
+        }
+
+        technology aws_security_hub
+        {
+            label         = "AWS Security Hub CSPM";
+            annotate icon { path = "resources/aws-security-hub.svg"; }
+            available_in  = [aws];
+            applicable_to = [cloud_security_posture_mgmt];
+            wiki          = "aws-security-hub.md";
+        }
+
+        technology aws_shield
+        {
+            label         = "AWS Shield";
+            annotate icon { path = "resources/aws-shield.svg"; }
+            available_in  = [aws];
+            applicable_to = [ddos_protection];
+            wiki          = "aws-shield.md";
+        }
+
+        technology aws_waf
+        {
+            label         = "AWS WAF";
+            annotate icon { path = "resources/aws-waf.svg"; }
+            available_in  = [aws];
+            applicable_to = [web_application_firewall];
+            wiki          = "aws-waf.md";
+        }
+
+        technology aws_waf_captcha
+        {
+            label         = "AWS WAF Captcha";
+            annotate icon { path = "resources/aws-waf-captcha.svg"; }
+            available_in  = [aws];
+            applicable_to = [web_application_firewall];
+            wiki          = "aws-waf-captcha.md";
+        }
+
+        // ── Management and governance ───────────────────────────────
+        technology amazon_cloudwatch
+        {
+            label         = "Amazon CloudWatch";
+            annotate icon { path = "resources/amazon-cloudwatch.svg"; }
+            available_in  = [aws];
+            applicable_to = [observability_platform];
+            wiki          = "amazon-cloudwatch.md";
+        }
+
+        technology amazon_managed_grafana
+        {
+            label         = "Amazon Managed Grafana";
+            annotate icon { path = "resources/amazon-managed-grafana.svg"; }
+            available_in  = [aws];
+            applicable_to = [observability_dashboard];
+            wiki          = "amazon-managed-grafana.md";
+        }
+
+        technology amazon_managed_prometheus
+        {
+            label         = "Amazon Managed Service for Prometheus";
+            annotate icon { path = "resources/amazon-managed-prometheus.svg"; }
+            available_in  = [aws];
+            applicable_to = [observability_platform];
+            wiki          = "amazon-managed-prometheus.md";
+        }
+
+        technology aws_auto_scaling
+        {
+            label         = "AWS Auto Scaling";
+            annotate icon { path = "resources/aws-auto-scaling.svg"; }
+            available_in  = [aws];
+            applicable_to = [cloud_control_plane];
+            wiki          = "aws-auto-scaling.md";
+        }
+
+        technology aws_cloudformation
+        {
+            label         = "AWS CloudFormation";
+            annotate icon { path = "resources/aws-cloudformation.svg"; }
+            available_in  = [aws];
+            applicable_to = [iac_template_engine];
+            wiki          = "aws-cloudformation.md";
+        }
+
+        technology aws_cloudtrail
+        {
+            label         = "AWS CloudTrail";
+            annotate icon { path = "resources/aws-cloudtrail.svg"; }
+            available_in  = [aws];
+            applicable_to = [observability_platform];
+            wiki          = "aws-cloudtrail.md";
+        }
+
+        technology aws_compute_optimizer
+        {
+            label         = "AWS Compute Optimizer";
+            annotate icon { path = "resources/aws-compute-optimizer.svg"; }
+            available_in  = [aws];
+            applicable_to = [cloud_advisory_service];
+            wiki          = "aws-compute-optimizer.md";
+        }
+
+        technology aws_config
+        {
+            label         = "AWS Config";
+            annotate icon { path = "resources/aws-config.svg"; }
+            available_in  = [aws];
+            applicable_to = [policy_engine];
+            wiki          = "aws-config.md";
+        }
+
+        technology aws_console_mobile
+        {
+            label         = "AWS Console Mobile Application";
+            annotate icon { path = "resources/aws-console-mobile.svg"; }
+            available_in  = [aws];
+            applicable_to = [mobile_app];
+            wiki          = "aws-console-mobile.md";
+        }
+
+        technology aws_control_tower
+        {
+            label         = "AWS Control Tower";
+            annotate icon { path = "resources/aws-control-tower.svg"; }
+            available_in  = [aws];
+            applicable_to = [multi_tenant_management];
+            wiki          = "aws-control-tower.md";
+        }
+
+        technology aws_health
+        {
+            label         = "AWS Health";
+            annotate icon { path = "resources/aws-health.svg"; }
+            available_in  = [aws];
+            applicable_to = [cloud_health_feed];
+            wiki          = "aws-health.md";
+        }
+
+        technology aws_launch_wizard
+        {
+            label         = "AWS Launch Wizard";
+            annotate icon { path = "resources/aws-launch-wizard.svg"; }
+            available_in  = [aws];
+            applicable_to = [iac_template_engine];
+            wiki          = "aws-launch-wizard.md";
+        }
+
+        technology aws_license_manager
+        {
+            label         = "AWS License Manager";
+            annotate icon { path = "resources/aws-license-manager.svg"; }
+            available_in  = [aws];
+            applicable_to = [policy_engine];
+            wiki          = "aws-license-manager.md";
+        }
+
+        technology aws_organizations
+        {
+            label         = "AWS Organizations";
+            annotate icon { path = "resources/aws-organizations.svg"; }
+            available_in  = [aws];
+            applicable_to = [multi_tenant_management];
+            wiki          = "aws-organizations.md";
+        }
+
+        technology aws_proton
+        {
+            label         = "AWS Proton";
+            annotate icon { path = "resources/aws-proton.svg"; }
+            available_in  = [aws];
+            applicable_to = [ci_cd_pipeline];
+            wiki          = "aws-proton.md";
+        }
+
+        technology aws_service_catalog
+        {
+            label         = "AWS Service Catalog";
+            annotate icon { path = "resources/aws-service-catalog.svg"; }
+            available_in  = [aws];
+            applicable_to = [enterprise_api_catalogue];
+            wiki          = "aws-service-catalog.md";
+        }
+
+        technology aws_systems_manager
+        {
+            label         = "AWS Systems Manager";
+            annotate icon { path = "resources/aws-systems-manager.svg"; }
+            available_in  = [aws];
+            applicable_to = [hybrid_resource_manager];
+            wiki          = "aws-systems-manager.md";
+        }
+
+        technology aws_trusted_advisor
+        {
+            label         = "AWS Trusted Advisor";
+            annotate icon { path = "resources/aws-trusted-advisor.svg"; }
+            available_in  = [aws];
+            applicable_to = [cloud_advisory_service];
+            wiki          = "aws-trusted-advisor.md";
+        }
+
+        technology aws_user_notifications
+        {
+            label         = "AWS User Notifications";
+            annotate icon { path = "resources/aws-user-notifications.svg"; }
+            available_in  = [aws];
+            applicable_to = [notification_service];
+            wiki          = "aws-user-notifications.md";
+        }
+
+        technology aws_well_architected_tool
+        {
+            label         = "AWS Well-Architected Tool";
+            annotate icon { path = "resources/aws-well-architected-tool.svg"; }
+            available_in  = [aws];
+            applicable_to = [cloud_advisory_service];
+            wiki          = "aws-well-architected-tool.md";
+        }
+
+        technology opsworks
+        {
+            label         = "OpsWorks";
+            available_in  = [aws];
+            applicable_to = [iac_template_engine];
+            wiki          = "opsworks.md";
+        }
+
+        // ── Developer tools ─────────────────────────────────────────
+        technology amazon_codecatalyst
+        {
+            label         = "Amazon CodeCatalyst";
+            annotate icon { path = "resources/amazon-codecatalyst.svg"; }
+            available_in  = [aws];
+            applicable_to = [ci_cd_pipeline];
+            wiki          = "amazon-codecatalyst.md";
+        }
+
+        technology amazon_corretto
+        {
+            label         = "Amazon Corretto";
+            annotate icon { path = "resources/amazon-corretto.svg"; }
+            available_in  = [aws];
+            applicable_to = [hosting_fabric];
+            wiki          = "amazon-corretto.md";
+        }
+
+        technology aws_cloud9
+        {
+            label         = "AWS Cloud9";
+            annotate icon { path = "resources/aws-cloud9.svg"; }
+            available_in  = [aws];
+            applicable_to = [cloud_dev_workstation];
+            wiki          = "aws-cloud9.md";
+        }
+
+        technology aws_cloudshell
+        {
+            label         = "AWS CloudShell";
+            annotate icon { path = "resources/aws-cloudshell.svg"; }
+            available_in  = [aws];
+            applicable_to = [cloud_dev_workstation];
+            wiki          = "aws-cloudshell.md";
+        }
+
+        technology aws_codeartifact
+        {
+            label         = "AWS CodeArtifact";
+            annotate icon { path = "resources/aws-codeartifact.svg"; }
+            available_in  = [aws];
+            applicable_to = [artifact_registry];
+            wiki          = "aws-codeartifact.md";
+        }
+
+        technology aws_codebuild
+        {
+            label         = "AWS CodeBuild";
+            annotate icon { path = "resources/aws-codebuild.svg"; }
+            available_in  = [aws];
+            applicable_to = [ci_cd_pipeline];
+            wiki          = "aws-codebuild.md";
+        }
+
+        technology aws_codecommit
+        {
+            label         = "AWS CodeCommit";
+            annotate icon { path = "resources/aws-codecommit.svg"; }
+            available_in  = [aws];
+            applicable_to = [source_repository];
+            wiki          = "aws-codecommit.md";
+        }
+
+        technology aws_codedeploy
+        {
+            label         = "AWS CodeDeploy";
+            annotate icon { path = "resources/aws-codedeploy.svg"; }
+            available_in  = [aws];
+            applicable_to = [ci_cd_pipeline];
+            wiki          = "aws-codedeploy.md";
+        }
+
+        technology aws_codepipeline
+        {
+            label         = "AWS CodePipeline";
+            annotate icon { path = "resources/aws-codepipeline.svg"; }
+            available_in  = [aws];
+            applicable_to = [ci_cd_pipeline];
+            wiki          = "aws-codepipeline.md";
+        }
+
+        technology aws_fault_injection_service
+        {
+            label         = "AWS Fault Injection Service";
+            annotate icon { path = "resources/aws-fault-injection-service.svg"; }
+            available_in  = [aws];
+            applicable_to = [chaos_engineering];
+            wiki          = "aws-fault-injection-service.md";
+        }
+
+        technology aws_infrastructure_composer
+        {
+            label         = "AWS Infrastructure Composer";
+            annotate icon { path = "resources/aws-infrastructure-composer.svg"; }
+            available_in  = [aws];
+            applicable_to = [iac_template_engine];
+            wiki          = "aws-infrastructure-composer.md";
+        }
+
+        technology aws_xray
+        {
+            label         = "AWS X-Ray";
+            annotate icon { path = "resources/aws-xray.svg"; }
+            available_in  = [aws];
+            applicable_to = [observability_platform];
+            wiki          = "aws-xray.md";
+        }
+
+        // ── Business applications ───────────────────────────────────
+        technology amazon_chime
+        {
+            label         = "Amazon Chime";
+            annotate icon { path = "resources/amazon-chime.svg"; }
+            available_in  = [aws];
+            applicable_to = [communication_platform];
+            wiki          = "amazon-chime.md";
+        }
+
+        technology amazon_chime_sdk
+        {
+            label         = "Amazon Chime SDK";
+            annotate icon { path = "resources/amazon-chime-sdk.svg"; }
+            available_in  = [aws];
+            applicable_to = [communication_platform];
+            wiki          = "amazon-chime-sdk.md";
+        }
+
+        technology amazon_connect
+        {
+            label         = "Amazon Connect";
+            annotate icon { path = "resources/amazon-connect.svg"; }
+            available_in  = [aws];
+            applicable_to = [communication_platform];
+            wiki          = "amazon-connect.md";
+        }
+
+        technology amazon_pinpoint
+        {
+            label         = "Amazon Pinpoint";
+            annotate icon { path = "resources/amazon-pinpoint.svg"; }
+            available_in  = [aws];
+            applicable_to = [notification_service];
+            wiki          = "amazon-pinpoint.md";
+        }
+
+        technology amazon_ses
+        {
+            label         = "Amazon SES";
+            annotate icon { path = "resources/amazon-ses.svg"; }
+            available_in  = [aws];
+            applicable_to = [notification_service];
+            wiki          = "amazon-ses.md";
+        }
+
+        technology amazon_workdocs
+        {
+            label         = "Amazon WorkDocs";
+            annotate icon { path = "resources/amazon-workdocs.svg"; }
+            available_in  = [aws];
+            applicable_to = [document_store];
+            wiki          = "amazon-workdocs.md";
+        }
+
+        technology amazon_workmail
+        {
+            label         = "Amazon WorkMail";
+            annotate icon { path = "resources/amazon-workmail.svg"; }
+            available_in  = [aws];
+            applicable_to = [email_solution];
+            wiki          = "amazon-workmail.md";
+        }
+
+        technology aws_appfabric
+        {
+            label         = "AWS AppFabric";
+            annotate icon { path = "resources/aws-appfabric.svg"; }
+            available_in  = [aws];
+            applicable_to = [integration_adapter, siem];
+            wiki          = "aws-appfabric.md";
+        }
+
+        // ── Frontend web and mobile services ────────────────────────
+        technology amazon_location_service
+        {
+            label         = "Amazon Location Service";
+            annotate icon { path = "resources/amazon-location-service.svg"; }
+            available_in  = [aws];
+            applicable_to = [geospatial_service];
+            wiki          = "amazon-location-service.md";
+        }
+
+        technology aws_amplify
+        {
+            label         = "AWS Amplify";
+            annotate icon { path = "resources/aws-amplify.svg"; }
+            available_in  = [aws];
+            applicable_to = [static_web_app_hosting];
+            wiki          = "aws-amplify.md";
+        }
+
+        technology aws_appsync
+        {
+            label         = "AWS AppSync";
+            annotate icon { path = "resources/aws-appsync.svg"; }
+            available_in  = [aws];
+            applicable_to = [public_api];
+            wiki          = "aws-appsync.md";
+        }
+
+        technology aws_device_farm
+        {
+            label         = "AWS Device Farm";
+            annotate icon { path = "resources/aws-device-farm.svg"; }
+            available_in  = [aws];
+            applicable_to = [app_test_runner];
+            wiki          = "aws-device-farm.md";
+        }
+
+        // ── Media ───────────────────────────────────────────────────
+        technology amazon_elastic_transcoder
+        {
+            label         = "Amazon Elastic Transcoder";
+            available_in  = [aws];
+            applicable_to = [media_encoding_service];
+            wiki          = "amazon-elastic-transcoder.md";
+        }
+
+        technology amazon_ivs
+        {
+            label         = "Amazon Interactive Video Service";
+            annotate icon { path = "resources/amazon-ivs.svg"; }
+            available_in  = [aws];
+            applicable_to = [live_streaming_service];
+            wiki          = "amazon-ivs.md";
+        }
+
+        technology amazon_nimble_studio
+        {
+            label         = "Amazon Nimble Studio";
+            available_in  = [aws];
+            applicable_to = [media_platform_suite];
+            wiki          = "amazon-nimble-studio.md";
+        }
+
+        technology aws_elemental_appliances
+        {
+            label         = "AWS Elemental Appliances and Software";
+            annotate icon { path = "resources/aws-elemental-appliances.svg"; }
+            available_in  = [aws_outposts];
+            applicable_to = [media_platform_suite];
+            wiki          = "aws-elemental-appliances.md";
+        }
+
+        technology aws_elemental_mediaconnect
+        {
+            label         = "AWS Elemental MediaConnect";
+            annotate icon { path = "resources/aws-elemental-mediaconnect.svg"; }
+            available_in  = [aws];
+            applicable_to = [live_streaming_service];
+            wiki          = "aws-elemental-mediaconnect.md";
+        }
+
+        technology aws_elemental_mediaconvert
+        {
+            label         = "AWS Elemental MediaConvert";
+            annotate icon { path = "resources/aws-elemental-mediaconvert.svg"; }
+            available_in  = [aws];
+            applicable_to = [media_encoding_service];
+            wiki          = "aws-elemental-mediaconvert.md";
+        }
+
+        technology aws_elemental_medialive
+        {
+            label         = "AWS Elemental MediaLive";
+            annotate icon { path = "resources/aws-elemental-medialive.svg"; }
+            available_in  = [aws];
+            applicable_to = [live_streaming_service];
+            wiki          = "aws-elemental-medialive.md";
+        }
+
+        technology aws_elemental_mediapackage
+        {
+            label         = "AWS Elemental MediaPackage";
+            annotate icon { path = "resources/aws-elemental-mediapackage.svg"; }
+            available_in  = [aws];
+            applicable_to = [live_streaming_service, media_drm_service];
+            wiki          = "aws-elemental-mediapackage.md";
+        }
+
+        technology aws_elemental_mediastore
+        {
+            label         = "AWS Elemental MediaStore";
+            annotate icon { path = "resources/aws-elemental-mediastore.svg"; }
+            available_in  = [aws];
+            applicable_to = [file_store];
+            wiki          = "aws-elemental-mediastore.md";
+        }
+
+        technology aws_elemental_mediatailor
+        {
+            label         = "AWS Elemental MediaTailor";
+            annotate icon { path = "resources/aws-elemental-mediatailor.svg"; }
+            available_in  = [aws];
+            applicable_to = [live_streaming_service];
+            wiki          = "aws-elemental-mediatailor.md";
+        }
+
+        // ── End user computing ──────────────────────────────────────
+        technology amazon_workspaces
+        {
+            label         = "Amazon WorkSpaces";
+            annotate icon { path = "resources/amazon-workspaces.svg"; }
+            available_in  = [aws];
+            applicable_to = [virtual_desktop_infrastructure];
+            wiki          = "amazon-workspaces.md";
+        }
+
+        technology amazon_workspaces_applications
+        {
+            label         = "Amazon WorkSpaces Applications";
+            annotate icon { path = "resources/amazon-workspaces-applications.svg"; }
+            available_in  = [aws];
+            applicable_to = [virtual_desktop_infrastructure];
+            wiki          = "amazon-workspaces-applications.md";
+        }
+
+        technology amazon_workspaces_core
+        {
+            label         = "Amazon WorkSpaces Core";
+            annotate icon { path = "resources/amazon-workspaces-core.svg"; }
+            available_in  = [aws];
+            applicable_to = [virtual_desktop_infrastructure];
+            wiki          = "amazon-workspaces-core.md";
+        }
+
+        technology amazon_workspaces_thin_client
+        {
+            label         = "Amazon WorkSpaces Thin Client";
+            annotate icon { path = "resources/amazon-workspaces-thin-client.svg"; }
+            available_in  = [aws];
+            applicable_to = [virtual_desktop_infrastructure];
+            wiki          = "amazon-workspaces-thin-client.md";
+        }
+
+        technology amazon_workspaces_web
+        {
+            label         = "Amazon WorkSpaces Web";
+            annotate icon { path = "resources/amazon-workspaces-web.svg"; }
+            available_in  = [aws];
+            applicable_to = [virtual_desktop_infrastructure];
+            wiki          = "amazon-workspaces-web.md";
+        }
+
+        // ── Internet of Things (IoT) ────────────────────────────────
+        technology aws_iot_analytics
+        {
+            label         = "AWS IoT Analytics";
+            annotate icon { path = "resources/aws-iot-analytics.svg"; }
+            available_in  = [aws];
+            applicable_to = [iot_saas_platform, streaming_analytics];
+            wiki          = "aws-iot-analytics.md";
+        }
+
+        technology aws_iot_button
+        {
+            label         = "AWS IoT Button";
+            annotate icon { path = "resources/aws-iot-button.svg"; }
+            available_in  = [aws];
+            applicable_to = [iot_saas_platform];
+            wiki          = "aws-iot-button.md";
+        }
+
+        technology aws_iot_core
+        {
+            label         = "AWS IoT Core";
+            annotate icon { path = "resources/aws-iot-core.svg"; }
+            available_in  = [aws];
+            applicable_to = [iot_saas_platform];
+            wiki          = "aws-iot-core.md";
+        }
+
+        technology aws_iot_device_defender
+        {
+            label         = "AWS IoT Device Defender";
+            annotate icon { path = "resources/aws-iot-device-defender.svg"; }
+            available_in  = [aws];
+            applicable_to = [iot_security_monitor];
+            wiki          = "aws-iot-device-defender.md";
+        }
+
+        technology aws_iot_device_management
+        {
+            label         = "AWS IoT Device Management";
+            annotate icon { path = "resources/aws-iot-device-management.svg"; }
+            available_in  = [aws];
+            applicable_to = [iot_saas_platform];
+            wiki          = "aws-iot-device-management.md";
+        }
+
+        technology aws_iot_events
+        {
+            label         = "AWS IoT Events";
+            annotate icon { path = "resources/aws-iot-events.svg"; }
+            available_in  = [aws];
+            applicable_to = [event_processor];
+            wiki          = "aws-iot-events.md";
+        }
+
+        technology aws_iot_expresslink
+        {
+            label         = "AWS IoT ExpressLink";
+            annotate icon { path = "resources/aws-iot-expresslink.svg"; }
+            available_in  = [aws];
+            applicable_to = [iot_saas_platform];
+            wiki          = "aws-iot-expresslink.md";
+        }
+
+        technology aws_iot_fleetwise
+        {
+            label         = "AWS IoT FleetWise";
+            annotate icon { path = "resources/aws-iot-fleetwise.svg"; }
+            available_in  = [aws];
+            applicable_to = [iot_saas_platform];
+            wiki          = "aws-iot-fleetwise.md";
+        }
+
+        technology aws_iot_greengrass
+        {
+            label         = "AWS IoT Greengrass";
+            annotate icon { path = "resources/aws-iot-greengrass.svg"; }
+            available_in  = [aws];
+            applicable_to = [iot_edge_runtime];
+            wiki          = "aws-iot-greengrass.md";
+        }
+
+        technology aws_iot_sitewise
+        {
+            label         = "AWS IoT SiteWise";
+            annotate icon { path = "resources/aws-iot-sitewise.svg"; }
+            available_in  = [aws];
+            applicable_to = [iot_saas_platform];
+            wiki          = "aws-iot-sitewise.md";
+        }
+
+        technology aws_iot_twinmaker
+        {
+            label         = "AWS IoT TwinMaker";
+            annotate icon { path = "resources/aws-iot-twinmaker.svg"; }
+            available_in  = [aws];
+            applicable_to = [digital_twin_store];
+            wiki          = "aws-iot-twinmaker.md";
+        }
+
+        technology aws_partner_device_catalog
+        {
+            label         = "AWS Partner Device Catalog";
+            available_in  = [aws];
+            applicable_to = [enterprise_api_catalogue];
+            wiki          = "aws-partner-device-catalog.md";
+        }
+
+        technology freertos
+        {
+            label         = "FreeRTOS";
+            annotate icon { path = "resources/freertos.svg"; }
+            available_in  = [aws];
+            applicable_to = [embedded_iot_os];
+            wiki          = "freertos.md";
+        }
+
+        // ── Migration and transfer ──────────────────────────────────
+        technology aws_application_discovery
+        {
+            label         = "AWS Application Discovery Service";
+            annotate icon { path = "resources/aws-application-discovery.svg"; }
+            available_in  = [aws];
+            applicable_to = [migration_assessment_service];
+            wiki          = "aws-application-discovery.md";
+        }
+
+        technology aws_application_migration
+        {
+            label         = "AWS Application Migration Service";
+            annotate icon { path = "resources/aws-application-migration.svg"; }
+            available_in  = [aws];
+            applicable_to = [migration_assessment_service];
+            wiki          = "aws-application-migration.md";
+        }
+
+        technology aws_database_migration_service
+        {
+            label         = "AWS Database Migration Service";
+            annotate icon { path = "resources/aws-database-migration-service.svg"; }
+            available_in  = [aws];
+            applicable_to = [database_migration_service];
+            wiki          = "aws-database-migration-service.md";
+        }
+
+        technology aws_datasync
+        {
+            label         = "AWS DataSync";
+            annotate icon { path = "resources/aws-datasync.svg"; }
+            available_in  = [aws];
+            applicable_to = [migration_assessment_service];
+            wiki          = "aws-datasync.md";
+        }
+
+        technology aws_mainframe_modernization
+        {
+            label         = "AWS Mainframe Modernization Service";
+            annotate icon { path = "resources/aws-mainframe-modernization.svg"; }
+            available_in  = [aws];
+            applicable_to = [migration_assessment_service];
+            wiki          = "aws-mainframe-modernization.md";
+        }
+
+        technology aws_migration_hub
+        {
+            label         = "AWS Migration Hub";
+            annotate icon { path = "resources/aws-migration-hub.svg"; }
+            available_in  = [aws];
+            applicable_to = [migration_assessment_service];
+            wiki          = "aws-migration-hub.md";
+        }
+
+        technology aws_snow_family
+        {
+            label         = "AWS Snow Family";
+            annotate icon { path = "resources/aws-snow-family.svg"; }
+            available_in  = [aws];
+            applicable_to = [bulk_data_import_appliance];
+            wiki          = "aws-snow-family.md";
+        }
+
+        technology aws_snowball
+        {
+            label         = "AWS Snowball";
+            annotate icon { path = "resources/aws-snowball.svg"; }
+            available_in  = [aws];
+            applicable_to = [bulk_data_import_appliance];
+            wiki          = "aws-snowball.md";
+        }
+
+        technology aws_snowball_edge
+        {
+            label         = "AWS Snowball Edge";
+            annotate icon { path = "resources/aws-snowball-edge.svg"; }
+            available_in  = [aws];
+            applicable_to = [bulk_data_import_appliance, iot_edge_runtime];
+            wiki          = "aws-snowball-edge.md";
+        }
+
+        technology aws_transfer_family
+        {
+            label         = "AWS Transfer Family";
+            annotate icon { path = "resources/aws-transfer-family.svg"; }
+            available_in  = [aws];
+            applicable_to = [integration_adapter];
+            wiki          = "aws-transfer-family.md";
+        }
+
+        // ── Cloud financial management ──────────────────────────────
+        technology aws_billing_conductor
+        {
+            label         = "AWS Billing Conductor";
+            annotate icon { path = "resources/aws-billing-conductor.svg"; }
+            available_in  = [aws];
+            applicable_to = [cost_management_service];
+            wiki          = "aws-billing-conductor.md";
+        }
+
+        technology aws_budgets
+        {
+            label         = "AWS Budgets";
+            annotate icon { path = "resources/aws-budgets.svg"; }
+            available_in  = [aws];
+            applicable_to = [cost_management_service];
+            wiki          = "aws-budgets.md";
+        }
+
+        technology aws_cost_and_usage_report
+        {
+            label         = "AWS Cost and Usage Report";
+            annotate icon { path = "resources/aws-cost-and-usage-report.svg"; }
+            available_in  = [aws];
+            applicable_to = [cost_management_service];
+            wiki          = "aws-cost-and-usage-report.md";
+        }
+
+        technology aws_cost_explorer
+        {
+            label         = "AWS Cost Explorer";
+            annotate icon { path = "resources/aws-cost-explorer.svg"; }
+            available_in  = [aws];
+            applicable_to = [cost_management_service];
+            wiki          = "aws-cost-explorer.md";
+        }
+
+        technology reserved_instance_reporting
+        {
+            label         = "Reserved Instance (RI) reporting";
+            annotate icon { path = "resources/reserved-instance-reporting.svg"; }
+            available_in  = [aws];
+            applicable_to = [cost_management_service];
+            wiki          = "reserved-instance-reporting.md";
+        }
+
+        technology savings_plans
+        {
+            label         = "Savings Plans";
+            annotate icon { path = "resources/savings-plans.svg"; }
+            available_in  = [aws];
+            applicable_to = [cost_management_service];
+            wiki          = "savings-plans.md";
+        }
+
+        // ── Customer enablement, game tech, quantum, blockchain, satellite ──
+        technology aws_managed_services
+        {
+            label         = "AWS Managed Services";
+            annotate icon { path = "resources/aws-managed-services.svg"; }
+            available_in  = [aws];
+            applicable_to = [hybrid_resource_manager];
+            wiki          = "aws-managed-services.md";
+        }
+
+        technology aws_repost_private
+        {
+            label         = "AWS re:Post Private";
+            annotate icon { path = "resources/aws-repost-private.svg"; }
+            available_in  = [aws];
+            applicable_to = [knowledge_source];
+            wiki          = "aws-repost-private.md";
+        }
+
+        technology amazon_gamelift
+        {
+            label         = "Amazon GameLift Servers";
+            annotate icon { path = "resources/amazon-gamelift.svg"; }
+            available_in  = [aws];
+            applicable_to = [hosting_fabric];
+            wiki          = "amazon-gamelift.md";
+        }
+
+        technology amazon_braket
+        {
+            label         = "Amazon Braket";
+            annotate icon { path = "resources/amazon-braket.svg"; }
+            available_in  = [aws];
+            applicable_to = [quantum_compute_service];
+            wiki          = "amazon-braket.md";
+        }
+
+        technology amazon_managed_blockchain
+        {
+            label         = "Amazon Managed Blockchain";
+            annotate icon { path = "resources/amazon-managed-blockchain.svg"; }
+            available_in  = [aws];
+            applicable_to = [confidential_ledger];
+            wiki          = "amazon-managed-blockchain.md";
+        }
+
+        technology aws_ground_station
+        {
+            label         = "AWS Ground Station";
+            annotate icon { path = "resources/aws-ground-station.svg"; }
+            available_in  = [aws];
+            applicable_to = [iot_saas_platform];
+            wiki          = "aws-ground-station.md";
+        }
+    }
+}

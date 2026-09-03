@@ -1,0 +1,32 @@
+namespace tech_architecture
+{
+    concept slot
+    {
+        description = """
+            A deployment slot of a `component` — where one instance of the
+            component runs, and how it is reached. Authored as nested `slot`
+            records on a `component` (`slots : slot[]`). The slot id is unique
+            within its component; containers reference slots by
+            `<component_id>.<slot_id>`.
+            """;
+
+        id                : identifier;
+        label             : string;
+        environment       : environment;
+        in_resource_group : resource_group?;
+        in_subnet         : subnet?;
+        public_ingress    : ingress[];
+
+        invariant
+        {
+            description = """
+                `environment` resolves to a known environment. `in_resource_group`
+                (if set) resolves to a known resource_group in that environment.
+                `in_subnet` (if set) resolves to a known subnet whose parent
+                network's `in_subscription` matches the environment's
+                `in_subscription`. Every `public_ingress` entry resolves to a
+                known `ingress_kind_styles` term.
+                """;
+        }
+    }
+}

@@ -1,0 +1,75 @@
+namespace tech_architecture
+{
+    taxonomy app_components : represents app_component
+    {
+        description = """
+            The role an `app_component` (C4 Level_3 Component) plays inside
+            its parent container. Optional — an app_component without a
+            declared role is still valid. Drives visual treatment in the
+            C4 Component view.
+            """;
+
+        term controller
+        {
+            label = "Controller";
+            description = """
+                Handles inbound requests or events. The entry point from
+                outside the container.
+                """;
+        }
+
+        term service
+        {
+            label = "Service";
+            description = """
+                Orchestrates business logic within the container.
+                """;
+            annotate icon { path = "resources/service.svg"; }
+        }
+
+        term repository
+        {
+            label = "Repository";
+            description = """
+                Encapsulates data access; mediates between domain logic
+                and the underlying store.
+                """;
+        }
+
+        term adapter
+        {
+            label = "Adapter";
+            description = """
+                Translates between the container's internal model and an
+                external system or protocol.
+                """;
+        }
+
+        term validator
+        {
+            label = "Validator";
+            description = """
+                Enforces rules and invariants; rejects malformed or
+                non_compliant inputs.
+                """;
+            annotate icon { path = "resources/validator.svg"; }
+        }
+
+        term mapper
+        {
+            label = "Mapper";
+            description = """
+                Translates between data shapes — DTO, entity, view_model.
+                """;
+        }
+
+        term client
+        {
+            label = "Client";
+            description = """
+                Outbound call to another container or external system.
+                The complement to a controller.
+                """;
+        }
+    }
+}

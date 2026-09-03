@@ -1,0 +1,46 @@
+namespace tech_architecture
+{
+    taxonomy actors : represents actor
+    {
+        description = """
+            Classifies actors by their relationship to the enterprise trust
+            boundary. Drives visual treatment in the architecture viewer and
+            informs scenario validation.
+            """;
+
+        term internal
+        {
+            label = "Internal";
+            description = """
+                Authenticated party inside the enterprise — employees,
+                contractors, operations stakeholders. Authenticates via the
+                enterprise identity provider; sees internal applications.
+                """;
+                annotate icon {path = "resources/ai-agent.svg"; }
+        }
+
+        term external
+        {
+            label = "External";
+            description = """
+                Unauthenticated or partner_trust party outside the enterprise.
+                Reaches the system only through public surfaces (public_api,
+                partner_integration_endpoint, public_mcp_server).
+                """;
+        }
+
+        term external_ai
+        {
+            label = "External AI Agent";
+            description = """
+                Autonomous agent operated by a third party that interacts with
+                the enterprise via published machine surfaces (public_mcp_server,
+                partner_integration_endpoint). Distinct from `external` because
+                the semantics of agent_driven traffic differ — different rate
+                limits, different audit trails, different consent model. Worth a
+                separate visual treatment so a viewer can tell at a glance which
+                actors are humans vs which are agents.
+                """;
+        }
+    }
+}

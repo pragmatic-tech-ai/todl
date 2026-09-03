@@ -1,0 +1,36 @@
+namespace tech_architecture
+{
+    concept connectivity_kind
+    {
+        description = """
+            Library_defined visual binding for a `connectivity_kind_styles` enum
+            value. The meta_instance's name resolves to a
+            `connectivity_kind_styles` term; the body sets the edge style (dashed
+            / solid / dotted) and optional glyph used to render peering
+            and VPN edges in the C4 Deployment view.
+            """;
+
+        id         : identifier;
+        edge_style : string;
+
+        invariant
+        {
+            description = """
+                Multiple `connectivity_kind_style` declarations for the
+                same enum value across libraries are a compile error —
+                ambiguous authority.
+                """;
+        }
+
+        authoring library_entry
+        {
+            description = "Inside a `<lib>.technology-library.model` body.";
+            example = """
+                connectivity_kind_style vnet_peering      { edge_style = "solid"; }
+                connectivity_kind_style express_route     { edge_style = "solid"; annotate icon { path = "resources/edge-express-route.svg"; } }
+                connectivity_kind_style site_to_site_vpn  { edge_style = "dashed"; }
+                connectivity_kind_style point_to_site_vpn { edge_style = "dotted"; }
+                """;
+        }
+    }
+}

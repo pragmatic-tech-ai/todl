@@ -1,0 +1,28 @@
+namespace tech_architecture
+{
+    concept app_component
+    {
+        description = """
+            A C4 Level_3 Component — a sub_module inside a `container`,
+            encapsulated behind a defined interface. Not independently
+            deployable; ships inside its parent container's deployment
+            artefact. Optional: a container with no `app_components`
+            declared is treated as a black box at Level 3 — its Component
+            view simply isn't drawn.
+
+            The intended authoring alias `module` is deferred to a future
+            iteration that adds concept_level alias support to the compiler
+            (see three_viewpoints.md open decision #12). For now only
+            `app_component` is accepted by the parser.
+            """;
+
+        id    : identifier;
+        label : label;
+
+        invariant "App-component ids are globally unique within the model.";
+
+        references = [
+            "docs/meta-models/technology-architecture/three-viewpoints.md",
+        ];
+    }
+}

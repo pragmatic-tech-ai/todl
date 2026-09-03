@@ -1,0 +1,28 @@
+namespace tech_architecture
+{
+    concept scenario
+    {
+        description = """
+            A named narrative of how actors and components interact to
+            achieve a business outcome. A scenario carries one or more
+            `sequence`s — alternative paths that arrive at the same
+            outcome via different front_doors or cost models.
+            """;
+
+        annotate icon { path = "resources/scenario.svg"; }
+
+        id        : identifier;
+        label     : label;
+        outcome   : string;
+        sequences : sequence[];
+
+        invariant "Scenario ids are globally unique within the model.";
+        invariant
+        {
+            description = """
+                A scenario carries at least one `sequence`; a scenario
+                with no paths is meaningless.
+                """;
+        }
+    }
+}

@@ -1,0 +1,15 @@
+namespace tech_architecture
+{
+    concept meta
+    {
+        description = """
+            A model's descriptor header — its human title and the meta_model it
+            conforms to. Authored as a single nested `meta` record on a `model`
+            (`meta : meta`). The record id equals the model id.
+            """;
+
+        id         : identifier;
+        title      : string;
+        meta_model : identifier;
+    }
+}

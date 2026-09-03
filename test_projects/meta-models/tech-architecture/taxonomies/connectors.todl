@@ -1,0 +1,115 @@
+namespace tech_architecture
+{
+    taxonomy connectors : represents connector
+    {
+        description = """dsaf
+            The six typed edges between model elements. Three describe runtime
+            behaviour (calls, event, consumes); three describe structural facts
+            (available_through, enabled_by, hosted_by). Every connector in the
+            compiled model carries exactly one of these as its `type:`.
+            """;
+
+        term calls
+        {
+            label = "Calls";
+            description = """
+                Synchronous runtime invocation. A calls B and waits for response.
+                Default for scenario steps when no kind is annotated; the most
+                common edge in any architecture.
+                """;
+        }
+
+        term event
+        {
+            label = "Event";
+            description = """
+                Asynchronous runtime emission. A emits an event B reacts to.
+                Visual rendering and semantics differ from `calls` (UML's
+                async_message convention is what we follow here). When the
+                receiver is a topic/queue/log, prefer this over `calls` even if
+                the wire_level mechanics involve a synchronous publish API.
+                """;
+        }
+
+        term consumes
+        {
+            label = "Consumes";
+            description = """
+                A reads or uses data/services from B as part of its operation.
+                Distinct from `calls` (no specific method invocation; can be
+                data flow, subscription, lookup). Common targets: data stores,
+                knowledge sources, semantic indexes.
+                """;
+        }
+
+        term available_through
+        {
+            label = "Available Through";
+            description = """
+                A is exposed/accessed via B. The "access path" relationship —
+                a public API exposed through an internal gateway, a tool exposed
+                through an MCP server, a model served through an inference
+                endpoint.
+                """;
+        }
+
+        term enabled_by
+        {
+            label = "Enabled By";
+            description = """
+                B is the platform/tool used to author, build, or configure A.
+                Build_time / authoring relationship. Example: a Power Platform
+                agent is enabled_by Copilot Studio (the authoring surface), not
+                hosted_by it.
+                """;
+        }
+
+        term hosted_by
+        {
+            label = "Hosted By";
+            description = """
+                B is the runtime container that operates A in production. UML's
+                `«deploy»` stereotype. Distinct from enabled_by because the same
+                tool may both author AND host an artifact (Copilot Studio does
+                both for its agents) — the model says so explicitly with two
+                separate hosted_by + enabled_by edges.
+                """;
+        }
+
+        term integration
+        {
+            label = "Integration";
+            description = """
+                Peer_to_peer data or control exchange between two
+                applications. The typical app_to_app connector —
+                sales_console integrates with customer_360,
+                agent_bridge integrates with agent_service.
+                """;
+        }
+
+        term replacement
+        {
+            label = "Replacement";
+            description = """
+                Lifecycle transition between two applications.
+                Application A is being replaced by application B;
+                renders as a transition arrow in app_portfolio and
+                modernization views. Both apps continue to compile —
+                the connector records the intent, not a hard cut_over.
+                Desugared from the `==>` operator.
+                """;
+        }
+
+        term runtime_dependency
+        {
+            label = "Runtime Dependency";
+            description = """
+                A depends on B being available at runtime without a
+                direct data/control integration — shared identity,
+                shared infrastructure, environmental prerequisite.
+                Distinguishes 'integrates with' from 'requires the
+                presence of'. Desugared from the `~~>` operator.
+                """;
+        }
+    }
+}

@@ -1,0 +1,53 @@
+namespace tech_architecture
+{
+    taxonomy connectivity_kinds : represents connectivity_kind
+    {
+        description = """
+            The kind of link between two `network`s. Authored on
+            `network.peers[].via`. Strictly network_to_network — public
+            exposure is captured separately on `deployment_slot.public_ingress`
+            via the `ingress_kind_styles` taxonomy.
+            """;
+
+        term vnet_peering
+        {
+            label = "VNet Peering";
+            description = """
+                Azure_style vnet peering — routed private link between
+                two vnets in the same or different regions. AWS VPC
+                peering and GCP VPC Network Peering belong here too.
+                """;
+        }
+
+        term express_route
+        {
+            label = "ExpressRoute";
+            description = """
+                Dedicated private circuit between a cloud vnet and an
+                on_premises network. Carries the BGP_routed traffic
+                via a customer_owned edge router; no public internet
+                transit.
+                """;
+        }
+
+        term site_to_site_vpn
+        {
+            label = "Site-to-Site VPN";
+            description = """
+                IPSec_tunnelled link between a vnet and an on_premises
+                network. Lower bandwidth than ExpressRoute; uses public
+                internet as transport but encrypts the payload.
+                """;
+        }
+
+        term point_to_site_vpn
+        {
+            label = "Point-to-Site VPN";
+            description = """
+                Per_device VPN client connecting a single host (user
+                laptop, admin jumpbox) to a vnet. Less common in
+                architecture_level modelling; included for completeness.
+                """;
+        }
+    }
+}

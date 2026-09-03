@@ -1,0 +1,94 @@
+namespace tech_architecture
+{
+    concept connector
+    {
+        description = """
+            A typed edge between two model elements. Six types (three runtime,
+            three structural). Authored via scenario steps OR the standalone
+            `connectors:` block; the compiler emits a unified list. The visual
+            engine joins drawn lines to scenario_step records via a
+            (from, to) → [flows] index — a single line can carry multiple
+            flow memberships.
+
+            Six types described above are the original taxonomy; three
+            app_tier types (`integration`, `replacement`, `runtime_dependency`)
+            support application_to_application connectors. The tier is
+            inferred from `type`: when `type` is an app_tier type, application
+            records are accepted as endpoints; otherwise the connector stays
+            component_grained.
+            """;
+
+        scenario : scenario?;
+        sequence : slug?;
+        step : integer?;
+        natural : string?;
+
+        relationship from -> actor | block | location | component | application;
+        relationship to   -> actor | block | location | component | application;
+
+        invariant
+        {
+            description = """
+                The compiler checks that `from` and `to` each reference a
+                known actor, block, location, component, or application (a
+                union relationship). The compiler reports the field name
+                (`src` / `dst` for steps, `from` / `to` for standalone) plus
+                the unresolved id when the check fails.
+
+                Applications are valid endpoints when `type` is one of
+                `integration`, `replacement`, or `runtime_dependency`.
+                For every other type — and for scenario steps — application
+                endpoints are rejected; those tiers stay component_grained.
+                """;
+        }
+        invariant
+        {
+            description = """
+                Qualified `<location>:<id>` form is forbidden — references are
+                bare ids in the global namespace. Detected by the colon and
+                rejected with an explicit error.
+                """;
+        }
+
+        authoring object_form
+        {
+            description = """
+                Fully explicit. Required for non_default types or extra
+                metadata. The most "structured" of the three.
+                """;
+            example = """
+                connectors:
+                  - { from: business_agent, to: agent_orchestrator, type: enabled_by }
+                  - { from: app_database,   to: power_platform,     type: hosted_by }
+                """;
+        }
+        authoring pair_shorthand
+        {
+            description = "Two-element list, shorthand for `type: calls`.";
+            example = """
+                connectors:
+                  - [business_agent, agent_orchestrator]
+                """;
+        }
+        authoring natural_language
+        {
+            description = """
+                Plain_string verb phrase. Subject + verb + object. Direction is
+                always `from = subject, to = object` regardless of voice
+                (active or passive). Original prose preserved as `natural:` on
+                the resolved record. Reads more naturally than object_form for
+                structural relationships.
+                """;
+            example = """
+                connectors:
+                  - business_agent is enabled by agent_orchestrator
+                  - legacy_application is available through legacy_tool_bridge
+                  - workflow_engine consumes app_database
+                  - platform_api emits to command_bus
+                """;
+        }
+    }
+
+    // Infix edge operator: `a --> b` mints a connector binding from/to.
+    operator --> : connector (from, to);
+}

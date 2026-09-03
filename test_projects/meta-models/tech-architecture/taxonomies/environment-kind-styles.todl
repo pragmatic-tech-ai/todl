@@ -1,0 +1,61 @@
+namespace tech_architecture
+{
+    taxonomy environments : represents environment
+    {
+        description = """34
+            Classifies an environment by what platform pattern it represents.
+            Open taxonomy — new terms can be added without schema work as new
+            cloud platforms or deployment patterns are modelled.
+            """;
+
+        term pp_managed
+        {
+            label = "Power Platform Managed Environment";
+            description = """
+                A Power Platform environment with Managed Environments
+                features enabled. May or may not have VNet integration
+                (subnet injection via enterprise policy).
+                """;
+        }
+
+        term pp_classic
+        {
+            label = "Power Platform Classic Environment";
+            description = """
+                A Power Platform environment without Managed Environments
+                features. Cannot have VNet integration; lives only in
+                Microsoft_managed M365 tenant infrastructure.
+                """;
+        }
+
+        term azure_subscription_env
+        {
+            label = "Azure Subscription Environment";
+            description = """
+                An Azure subscription serving as a deployment environment.
+                Either the subscription itself is the env (Pattern A:
+                env_per_sub) or a portion of the subscription (Pattern B/C:
+                env_scoped_to_RGs_within_sub).
+                """;
+        }
+
+        term aws_account_env
+        {
+            label = "AWS Account Environment";
+            description = """
+                An AWS account serving as a deployment environment.
+                Most common AWS pattern (one account per lifecycle).
+                """;
+        }
+
+        term on_prem_deployment_group
+        {
+            label = "On-Premises Deployment Group";
+            description = """
+                A logical grouping of on_premises deployments. May represent
+                a datacenter, a logical zone within a datacenter, or any
+                customer_defined on_prem deployment boundary.
+                """;
+        }
+    }
+}

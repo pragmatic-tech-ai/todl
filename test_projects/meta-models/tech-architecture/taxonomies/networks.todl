@@ -1,0 +1,72 @@
+namespace tech_architecture
+{
+    taxonomy networks : represents network
+    {
+        description = """
+            Classifies a `network` by ownership and topology role. Drives
+            visual treatment in the C4 Deployment view (shared vs dedicated
+            backgrounds, hub_spoke hierarchy hints) and lets validation
+            distinguish customer_controlled networks from vendor_managed
+            ones.
+            """;
+
+        term shared_network
+        {
+            label = "Shared Network";
+            description = """
+                A network shared across multiple application teams or
+                workloads. Typical for a customer's enterprise vnet/VPC
+                that hosts many subnets serving different purposes.
+                """;
+        }
+
+        term dedicated_network
+        {
+            label = "Dedicated Network";
+            description = """
+                A network owned by a single application or workload. No
+                other team or workload deploys into it.
+                """;
+        }
+
+        term hub_network
+        {
+            label = "Hub Network";
+            description = """
+                The central network in a hub_and_spoke topology. Typically
+                hosts shared services (DNS, firewall, ExpressRoute
+                gateway) and peers to multiple spoke networks.
+                """;
+        }
+
+        term spoke_network
+        {
+            label = "Spoke Network";
+            description = """
+                A workload network in a hub_and_spoke topology. Peers to
+                exactly one hub; reaches other spokes only via the hub.
+                """;
+        }
+
+        term on_prem_segment
+        {
+            label = "On-Premises Segment";
+            description = """
+                A physical or logical network segment in the customer's
+                own datacenter, reachable from the cloud only via
+                ExpressRoute or VPN.
+                """;
+        }
+
+        term saas_vendor_fabric
+        {
+            label = "SaaS Vendor Fabric";
+            description = """
+                A vendor_managed network the customer doesn't control —
+                placeholder for the rare case where a network reference
+                is structurally needed but no real authoring detail
+                applies.
+                """;
+        }
+    }
+}

@@ -1,0 +1,235 @@
+namespace tech_architecture
+{
+    taxonomy categories : represents category
+    {
+        description = """
+            The type_level archetype every component instantiates. Categories
+            group components by the role they play in the architecture
+            regardless of the underlying technology. Around 40 terms across
+            six fundamental roles (application, service, data store, capability
+            surface, public surface, federated surface). Several terms declare
+            aliases that the resolver treats as equivalent.
+            """;
+
+        annotate toolbox { visible = true; }
+
+        term web_portal                       { label = "Web Portal"; description = "Browser-rendered application accessed via URL."; annotate icon { path = "resources/web-portal.svg"; } }
+        term mobile_app                       { label = "Mobile App"; description = "Native or hybrid mobile application."; annotate icon { path = "resources/mobile-app.svg"; } }
+        term desktop_app                      { label = "Desktop App"; description = "Native desktop application installed on a workstation."; annotate icon { path = "resources/desktop-app.svg"; } }
+        term conversational_interface
+        {
+            label = "Conversational Interface";
+            description = "Chat-based front-end through which actors converse with the system.";
+            annotate icon { path = "resources/conversational-interface.svg"; }
+        }
+        term legacy_application
+        {
+            label = "Legacy Application";
+            description = "Pre-existing application not slated for replacement; integrated via adapters.";
+            annotate icon { path = "resources/legacy_application.svg"; }
+        }
+        term embedded_widget
+        {
+            label = "Embedded Widget";
+            description = "Application surface hosted inside another application's chrome.";
+            annotate icon { path = "resources/embedded-widget.svg"; }
+        }
+        term reporting_surface                { label = "Reporting Surface"; description = "Dashboard or report-rendering application."; annotate icon { path = "resources/reporting-surface.svg"; } }
+        term forms_solution                   { label = "Forms Solution"; description = "Tool for authoring forms, surveys, and quizzes with response collection and analytics."; }
+        term scheduling_solution              { label = "Scheduling Solution"; description = "Application for managing customer appointments, calendar coordination, and meeting bookings."; }
+        term video_editing_solution           { label = "Video Editing Solution"; description = "Application for recording, editing, and publishing video content."; }
+        term virtual_desktop_infrastructure   { label = "Virtual Desktop Infrastructure"; description = "Cloud-hosted desktop and application virtualisation; users connect to remote sessions instead of local installs."; }
+        term email_solution                   { label = "Email Solution"; description = "Hosted email and calendaring platform providing mailboxes, distribution lists, and shared calendars."; }
+        term smb_erp_solution                 { label = "SMB ERP Solution"; description = "ERP application targeted at small and mid-sized businesses, bundling finance, sales, service, and operations."; }
+        term enterprise_erp_solution          { label = "Enterprise ERP Solution"; description = "ERP application targeted at large enterprises, covering finance, supply chain, manufacturing, HR, or commerce at scale; per-module configuration and operational-system integration are typical."; }
+        term enterprise_feedback_management_solution { label = "Enterprise Feedback Management Solution"; description = "Application for collecting customer or employee feedback at scale through surveys, with response orchestration and insights integrated with downstream CRM/HR systems."; }
+        term api_service
+        {
+            label = "API Service";
+            description = "A service that exposes a programmatic interface; typically RESTful or RPC.";
+            annotate icon { path = "resources/api-service.svg"; }
+        }
+        term workflow_engine
+        {
+            label = "Workflow Engine";
+            description = "Orchestrates long-running processes spanning multiple services or human steps.";
+            annotate icon { path = "resources/workflow-engine.svg"; }
+        }
+        term orchestration_engine
+        {
+            label = "Orchestration Engine";
+            description = "Coordinates short-running interactions between agents or services.";
+            annotate icon { path = "resources/orchestration-engine.svg"; }
+        }
+        term microservices_runtime            { label = "Microservices Runtime"; description = "Managed runtime for stateful and stateless microservices, distinct from Kubernetes container orchestration."; }
+        term integration_adapter
+        {
+            label = "Integration Adapter";
+            description = "Bridges between architectures or between protocols/data formats.";
+            annotate icon { path = "resources/integration-adapter.svg"; }
+        }
+        term event_processor
+        {
+            label = "Event Processor";
+            description = "Consumes events from a stream and reacts (transform, dispatch, accumulate).";
+            annotate icon { path = "resources/event-processor.svg"; }
+        }
+        term notification_service             { label = "Notification Service"; description = "Delivers messages to actors via email, push, SMS, etc."; annotate icon { path = "resources/notification-service.svg"; } }
+        term ai_agent
+        {
+            label = "AI Agent";
+            description = "An autonomous or semi-autonomous AI workload that takes actions on behalf of a user or system.";
+            annotate icon { path = "resources/ai-agent.svg"; }
+        }
+        term language_model                   { label = "Language Model"; description = "Foundation model serving completions/embeddings."; annotate icon { path = "resources/language-model.svg"; } }
+        term rag                              { label = "RAG"; description = "Retrieval-augmented generation pipeline component."; annotate icon { path = "resources/rag.svg"; } }
+        term scheduler                        { label = "Scheduler"; description = "Triggers workloads on a time- or event-based schedule."; annotate icon { path = "resources/scheduler.svg"; } }
+        term authorization_service
+        {
+            label = "Authorization Service";
+            description = "Decides whether a principal may perform an action on a resource.";
+            annotate icon { path = "resources/authorization-service.svg"; }
+        }
+        term platform_api
+        {
+            label = "Platform API";
+            description = "A unified platform-wide programmatic surface (e.g. Microsoft Graph).";
+        }
+        term relational_store                 { label = "Relational Store"; description = "Tables-and-rows persistence."; annotate icon { path = "resources/relational-store.svg"; } }
+        term document_store                   { label = "Document Store"; description = "Semi-structured document persistence."; annotate icon { path = "resources/document-store.svg"; } }
+        term file_store                       { label = "File Store"; description = "Blob/object storage indexed by path or key."; annotate icon { path = "resources/file-store.svg"; } }
+        term archive_store                    { label = "Archive Store"; description = "Cold-tier storage for rarely-accessed data with long retention; retrieval may be deferred."; }
+        term config_store                     { label = "Configuration Store"; description = "Managed store for application settings and feature flags shared across services."; }
+        term event_log                        { label = "Event Log"; description = "Append-only stream of events; consumers replay or tail."; annotate icon { path = "resources/event-log.svg"; } }
+        term message_queue                    { label = "Message Queue"; description = "Point-to-point durable message delivery."; annotate icon { path = "resources/message-queue.svg"; } }
+        term knowledge_source
+        {
+            label = "Knowledge Source";
+            description = "External or curated body of knowledge intended for AI grounding.";
+            annotate icon { path = "resources/knowledge-source.svg"; }
+        }
+        term analytical_store                 { label = "Analytical Store"; description = "Columnar / OLAP store optimised for aggregate queries."; annotate icon { path = "resources/analytical-store.svg"; } }
+        term cache                            { label = "Cache"; description = "In-memory or near-memory store for fast retrieval."; annotate icon { path = "resources/cache.svg"; } }
+        term internal_api_gateway             { label = "Internal API Gateway"; description = "Aggregates and exposes internal APIs to in-tenant consumers."; annotate icon { path = "resources/internal-api-gateway.svg"; } }
+        term message_topic                    { label = "Message Topic"; description = "Pub/sub topic exposing event streams across capabilities."; annotate icon { path = "resources/message-topic.svg"; } }
+        term internal_mcp_server
+        {
+            label = "Internal MCP Server";
+            description = "Model Context Protocol server exposing tools to in-tenant agents.";
+        }
+        term public_api                       { label = "Public API"; description = "API exposed across the enterprise trust boundary."; annotate icon { path = "resources/public-api.svg"; } }
+        term partner_integration_endpoint     { label = "Partner Integration Endpoint"; description = "B2B integration surface for named external partners."; annotate icon { path = "resources/partner-integration-endpoint.svg"; } }
+        term public_mcp_server                { label = "Public MCP Server"; description = "Model Context Protocol server exposed to external agents."; annotate icon { path = "resources/public-mcp-server.svg"; } }
+        term enterprise_api_catalogue         { label = "Enterprise API Catalogue"; description = "Discoverable registry of APIs across the enterprise."; annotate icon { path = "resources/enterprise-api-catalogue.svg"; } }
+        term federated_identity_provider      { label = "Federated Identity Provider"; description = "Identity provider trusted across capability boundaries."; annotate icon { path = "resources/federated-identity-provider.svg"; } }
+        term non_human_identity_provider      { label = "Non-Human Identity Provider"; description = "Identity provider issuing credentials to agents, workloads, and service principals (as opposed to end users)."; }
+        term domain_services                  { label = "Domain Services"; description = "Managed directory providing classic Active Directory features (domain join, group policy, LDAP, Kerberos) without on-prem domain controllers."; }
+        term semantic_index                   { label = "Semantic Index"; description = "Cross-capability vector / semantic search index."; annotate icon { path = "resources/semantic-index.svg"; } }
+        term secret_store                     { label = "Secret Store"; description = "Managed store for secrets, keys, and certificates."; }
+        term hardware_security_module         { label = "Hardware Security Module"; description = "FIPS-validated hardware for cryptographic key custody."; }
+        term siem                             { label = "SIEM"; description = "Security information and event management; correlation, detection, and threat hunting."; }
+        term identity_threat_detection        { label = "Identity Threat Detection"; description = "Risk-based detection of compromised identities via sign-in and behaviour signals."; }
+        term cloud_security_posture_mgmt      { label = "Cloud Security Posture Management"; description = "Continuous posture, compliance, and misconfiguration detection across cloud assets."; }
+        term external_attack_surface_mgmt     { label = "External Attack Surface Management"; description = "Discovers and monitors externally-exposed assets for risk."; }
+        term iot_security_monitor             { label = "IoT Security Monitor"; description = "Threat detection for OT/IoT devices and networks."; }
+        term data_protection_service          { label = "Data Protection Service"; description = "Information classification, labelling, and data loss prevention."; }
+        term confidential_ledger              { label = "Confidential Ledger"; description = "Tamper-evident, append-only ledger with cryptographic verification."; }
+        term virtual_network                  { label = "Virtual Network"; description = "Tenant-scoped software-defined network."; }
+        term global_network_backbone          { label = "Global Network Backbone"; description = "Provider-managed global WAN / SD-WAN backbone."; }
+        term nat_gateway                      { label = "NAT Gateway"; description = "Managed network address translation for egress traffic."; }
+        term private_endpoint_service         { label = "Private Endpoint Service"; description = "Private network endpoints into managed cloud services."; }
+        term dedicated_network_circuit        { label = "Dedicated Network Circuit"; description = "Dedicated physical or virtual circuit between on-prem and cloud."; }
+        term vpn_gateway                      { label = "VPN Gateway"; description = "IPsec/SSL VPN gateway bridging external networks."; }
+        term zero_trust_network_access        { label = "Zero Trust Network Access"; description = "Identity-brokered per-app access to private resources without a full-tunnel VPN."; }
+        term network_firewall                 { label = "Network Firewall"; description = "L3/L4 network firewall with policy-based filtering."; }
+        term web_application_firewall         { label = "Web Application Firewall"; description = "L7 HTTP/HTTPS request filtering for web applications."; }
+        term secure_web_gateway               { label = "Secure Web Gateway"; description = "Cloud-delivered egress filtering, URL/category controls, and internet access policy for identities (part of SSE/SASE)."; }
+        term ddos_protection                  { label = "DDoS Protection"; description = "Volumetric and protocol attack mitigation."; }
+        term load_balancer                    { label = "Load Balancer"; description = "L4 traffic distribution across backends."; }
+        term dns_service                      { label = "DNS Service"; description = "Authoritative or recursive DNS resolution."; }
+        term cdn_edge                         { label = "CDN / Edge"; description = "Global edge network with content delivery, caching, and public-facing routing."; }
+        term container_registry               { label = "Container Registry"; description = "OCI/Docker image and artifact registry."; }
+        term container_service                { label = "Container Service"; description = "Managed runtime that hosts containers without exposing an orchestrator; typically serverless or per-container billing."; }
+        term kubernetes_platform              { label = "Kubernetes Platform"; description = "Managed Kubernetes-family control plane for orchestrating containerised workloads."; }
+        term container_persistent_volume_service { label = "Container Persistent Volume Service"; description = "Managed persistent-volume provisioning for containerised workloads (CSI-driven)."; }
+        term iot_edge_runtime                 { label = "IoT Edge Runtime"; description = "Managed runtime for containerised workloads on IoT or industrial edge devices."; }
+        term private_cloud_appliance          { label = "Private Cloud Appliance"; description = "Provider-managed hardware extending cloud services on-prem."; }
+        term edge_kubernetes_distribution     { label = "Edge Kubernetes Distribution"; description = "Lightweight Kubernetes distribution for edge or constrained sites."; }
+        term carrier_edge_platform            { label = "Carrier Edge Platform"; description = "Carrier-grade edge compute for telco network functions."; }
+        term network_function_manager         { label = "Network Function Manager"; description = "Lifecycle manager for telco network functions (VNF/CNF)."; }
+        term hpc_cluster_manager              { label = "HPC Cluster Manager"; description = "Provisioning and scheduling for HPC clusters."; }
+        term virtual_machine                  { label = "Virtual Machine"; description = "Tenant-managed IaaS compute — Linux/Windows virtual machines and VM-fleet primitives on which higher-level compute services are layered."; }
+        term batch_compute                    { label = "Batch Compute"; description = "Managed batch job execution across pooled compute."; }
+        term hosting_fabric                   { label = "Hosting Fabric"; description = "Managed platform-as-a-service for hosting web and API workloads, abstracting compute infrastructure."; }
+        term static_web_app_hosting           { label = "Static Web App Hosting"; description = "Service for building and serving static web frontends with CDN distribution and integrated serverless APIs."; }
+        term quantum_compute_service          { label = "Quantum Compute Service"; description = "Access to quantum and quantum-inspired compute backends."; }
+        term data_pipeline_orchestrator       { label = "Data Pipeline Orchestrator"; description = "Authoring and execution of ETL/ELT data pipelines."; }
+        term streaming_analytics              { label = "Streaming Analytics"; description = "Windowed real-time analytics over event streams."; }
+        term data_catalog                     { label = "Data Catalog"; description = "Discovery, lineage, and governance over data assets."; }
+        term digital_twin_store               { label = "Digital Twin Store"; description = "Spatial / property graph store for digital-twin models."; }
+        term knowledge_graph                  { label = "Knowledge Graph"; description = "Graph-structured store of entities and relationships, often used as a semantic layer for AI grounding."; }
+        term ml_lifecycle_platform            { label = "ML Lifecycle Platform"; description = "ML training, registry, deployment, and MLOps."; }
+        term lakehouse_platform               { label = "Lakehouse Platform"; description = "Unified Spark/SQL lakehouse for analytics and ML."; }
+        term bigdata_analytics_platform       { label = "Big Data Analytics Platform"; description = "Managed cluster for distributed batch/interactive analytics engines (Hadoop, Spark, Presto, U-SQL)."; }
+        term ai_platform_suite                { label = "AI Platform Suite"; description = "Umbrella AI / agent platform spanning models, tooling, and runtimes."; }
+        term data_platform_suite              { label = "Data Platform Suite"; description = "Umbrella analytics / data platform spanning lakehouse, warehouse, pipelines, and BI under one product."; }
+        term agent_authoring_studio           { label = "Agent Authoring Studio"; description = "Low-code or visual environment for authoring AI agents."; }
+        term ai_applications_builder          { label = "AI Applications Builder"; description = "No-code/low-code platform for authoring AI models and AI-driven flows without data-science expertise."; }
+        term business_applications_builder    { label = "Business Applications Builder"; description = "Low-code platform for building line-of-business applications without traditional coding."; }
+        term agent_runtime_service            { label = "Agent Runtime Service"; description = "Hosted runtime for executing and orchestrating AI agents."; }
+        term bot_platform                     { label = "Bot Platform"; description = "Framework and runtime for conversational bots."; annotate icon { path = "resources/chatbot.svg"; } }
+        term vision_cognitive_service         { label = "Vision Cognitive Service"; description = "Managed image classification, OCR, and object detection."; }
+        term video_indexing_service           { label = "Video Indexing Service"; description = "Managed video scene, speaker, and content indexing."; }
+        term face_cognitive_service           { label = "Face Cognitive Service"; description = "Managed face detection, identification, and verification."; }
+        term speech_cognitive_service         { label = "Speech Cognitive Service"; description = "Managed text-to-speech and speech-to-text."; }
+        term translation_cognitive_service    { label = "Translation Cognitive Service"; description = "Managed machine translation across languages."; }
+        term language_cognitive_service       { label = "Language Cognitive Service"; description = "Managed natural-language understanding — entities, sentiment, summarisation."; }
+        term document_intelligence_service    { label = "Document Intelligence Service"; description = "Managed extraction of structured data from documents."; }
+        term content_safety_service           { label = "Content Safety Service"; description = "Managed moderation, toxicity, and content safety classification."; }
+        term content_understanding_service    { label = "Content Understanding Service"; description = "Managed multimodal extraction across documents, audio, video, and images."; }
+        term immersive_reader_service         { label = "Immersive Reader Service"; description = "Accessibility reader with read-aloud, translation, and reading aids."; }
+        term cognitive_service_suite          { label = "Cognitive Service Suite"; description = "Multi-capability AI service umbrella exposing cognitive APIs through a single resource."; }
+        term observability_platform           { label = "Observability Platform"; description = "Logs, metrics, traces, and APM in a unified backend."; }
+        term observability_dashboard          { label = "Observability Dashboard"; description = "Dashboard surface for metrics and operational visualisations."; }
+        term cloud_health_feed                { label = "Cloud Health Feed"; description = "Provider-published service health and incident feed."; }
+        term cloud_advisory_service           { label = "Cloud Advisory Service"; description = "Automated best-practice and configuration recommendations."; }
+        term policy_engine                    { label = "Policy Engine"; description = "Authors and enforces governance policy at the control plane."; }
+        term cost_management_service          { label = "Cost Management Service"; description = "Cost visibility, budgets, and chargeback."; }
+        term cloud_control_plane              { label = "Cloud Control Plane"; description = "Resource provisioning and management API surface."; annotate icon { path = "resources/gear.svg"; } }
+        term iac_template_engine              { label = "IaC Template Engine"; description = "Declarative templates for cloud resource provisioning."; }
+        term backup_service                   { label = "Backup Service"; description = "Workload backup scheduling and storage."; }
+        term disaster_recovery_service        { label = "Disaster Recovery Service"; description = "DR replication and orchestrated failover."; }
+        term migration_assessment_service     { label = "Migration Assessment Service"; description = "Discovery, assessment, and planning for cloud migrations."; }
+        term database_migration_service       { label = "Database Migration Service"; description = "Schema and data migration between database engines."; }
+        term resource_relocator               { label = "Resource Relocator"; description = "Relocates cloud resources between regions or subscriptions."; }
+        term bulk_data_import_appliance       { label = "Bulk Data Import Appliance"; description = "Physical appliance for offline bulk data ingestion."; }
+        term chaos_engineering                { label = "Chaos Engineering"; description = "Controlled failure injection for resilience testing."; }
+        term hybrid_resource_manager          { label = "Hybrid Resource Manager"; description = "Extends cloud management plane to non-cloud resources."; }
+        term multi_tenant_management          { label = "Multi-tenant Management"; description = "Cross-tenant or cross-account management plane."; }
+        term endpoint_management              { label = "Endpoint Management"; description = "Cloud-based endpoint management for mobile, desktop, and virtual devices via MDM/MAM policies."; }
+        term patch_management_service         { label = "Patch Management Service"; description = "Scheduled OS/application patch assessment, approval, and rollout across managed fleets."; }
+        term artifact_registry                { label = "Artifact Registry"; description = "Package registry for build artifacts (npm, NuGet, Maven, etc.)."; }
+        term source_repository                { label = "Source Repository"; description = "Hosted source-code repository."; }
+        term ci_cd_pipeline                   { label = "CI/CD Pipeline"; description = "Continuous-integration and continuous-deployment pipeline service."; }
+        term devops_platform_suite            { label = "DevOps Platform Suite"; description = "Umbrella DevOps product spanning source control, boards, pipelines, artifacts, and test plans."; }
+        term issue_tracking                   { label = "Issue Tracking"; description = "Backlog, issue, and work-item tracking."; }
+        term test_management                  { label = "Test Management"; description = "Test-case planning and execution tracking."; }
+        term cloud_dev_workstation            { label = "Cloud Dev Workstation"; description = "Managed cloud-hosted developer workstations."; }
+        term web_shell                        { label = "Web Shell"; description = "Browser-hosted authenticated terminal into a cloud tenant."; }
+        term vm_lab_service                   { label = "VM Lab Service"; description = "Pre-baked VM lab environments for dev/test."; }
+        term environment_template_service     { label = "Environment Template Service"; description = "On-demand environments provisioned from templates."; }
+        term web_test_runner                  { label = "Web Test Runner"; description = "Managed execution of browser-based test suites."; }
+        term app_test_runner                  { label = "App Test Runner"; description = "Managed execution of application and device tests."; }
+        term communication_platform           { label = "Communication Platform"; description = "CPaaS — voice, video, SMS, and chat as APIs."; }
+        term realtime_collaboration_service   { label = "Realtime Collaboration Service"; description = "State-sync relay for collaborative editing."; }
+        term media_encoding_service           { label = "Media Encoding Service"; description = "File-based audio/video encoding and transcoding."; }
+        term live_streaming_service           { label = "Live Streaming Service"; description = "Live and on-demand video ingest, packaging, and delivery."; }
+        term media_drm_service                { label = "Media DRM Service"; description = "Content protection and digital rights management."; }
+        term media_platform_suite             { label = "Media Platform Suite"; description = "Umbrella media-services platform."; }
+        term geospatial_service               { label = "Geospatial Service"; description = "Maps, geocoding, and routing APIs."; }
+        term iot_saas_platform                { label = "IoT SaaS Platform"; description = "Managed application platform for IoT solutions."; }
+        term iot_platform_suite               { label = "IoT Platform Suite"; description = "Umbrella IoT product spanning device management, ingestion, and analytics."; }
+        term secured_microcontroller_platform { label = "Secured Microcontroller Platform"; description = "Hardware-rooted secured microcontroller with OS and cloud service."; }
+        term embedded_iot_os                  { label = "Embedded IoT OS"; description = "Embedded operating system for IoT devices."; }
+    }
+}

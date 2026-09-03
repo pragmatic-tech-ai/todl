@@ -1,0 +1,38 @@
+namespace tech_architecture
+{
+    concept resource_group
+    {
+        description = """
+            An infra_organization sub_container within a `subscription`. Models
+            Azure Resource Groups directly. Generalizes to AWS Resource Groups
+            (tag_based queries — different mechanics, similar conceptual role)
+            and GCP folders/labels. Optional throughout the model: environments
+            that don't use RG_level organization leave their `resource_groups`
+            empty, and slots that don't pin to a specific RG leave
+            `in_resource_group` unset.
+
+            Resource_group is distinct from `environment`: an env is a
+            deployment_context with lifecycle, an RG is an organizational
+            grouping within a subscription. Pattern A (env_per_sub, RGs
+            partition workloads) and Pattern C (sub_per_BU_and_lifecycle,
+            RGs per workload within each) both model RGs as separate from
+            envs. Pattern B (env_per_RG within single sub) models an env
+            that lists one RG.
+            """;
+
+        id     : identifier;
+        label  : label;
+        region : string?;
+
+        // @containment so a resource_group nests inside its subscription on the
+        // diagram (subscription ⊃ resource_group). Member isn't named `in`.
+        relationship in_subscription -> subscription { annotate containment {} }
+
+        invariant "Resource-group ids are globally unique within the model.";
+        invariant "`in-subscription` resolves to a known subscription.";
+
+        references = [
+            "docs/superpowers/specs/2026-05-28-deployment-placement-model-design.md",
+        ];
+    }
+}

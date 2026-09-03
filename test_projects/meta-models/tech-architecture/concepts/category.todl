@@ -1,0 +1,36 @@
+namespace tech_architecture
+{
+    concept category
+    {
+        description = """
+            Library_defined icon binding for a `categories` enum
+            value. The meta_instance's name resolves to a `categories`
+            enum member; the body sets the icon used when a component of
+            that category has no `implemented_by` technology icon.
+            """;
+
+        id : identifier;
+
+        invariant
+        {
+            description = """
+                Multiple `category` declarations for the same enum value
+                across libraries are a compile error — ambiguous authority.
+                """;
+        }
+
+        authoring library_entry
+        {
+            description = "Inside a `<lib>.technology-library.model` body.";
+            example = """
+                category api_service { annotate icon { path = "resources/api-service.svg"; } }
+                category mobile_app  { annotate icon { path = "resources/mobile-app.svg"; } }
+                """;
+        }
+
+        references = [
+            "tools/todl/technology-library-design.md",
+            "technology_library/default/default.technology-library.model",
+        ];
+    }
+}

@@ -1,0 +1,34 @@
+namespace tech_architecture
+{
+    concept ingress
+    {
+        description = """
+            Library_defined visual binding for an `ingress_kind_styles` enum
+            value. The meta_instance's name resolves to an `ingress_kind_styles`
+            term; the body sets the slot badge icon and an optional
+            edge_decoration used to mark the ingress edge in deployment
+            views.
+            """;
+
+        id              : identifier;
+        edge_decoration : string?;
+
+        invariant
+        {
+            description = """
+                Multiple `ingress_kind_style` declarations for the same
+                enum value across libraries are a compile error —
+                ambiguous authority.
+                """;
+        }
+
+        authoring library_entry
+        {
+            description = "Inside a `<lib>.technology-library.model` body.";
+            example = """
+                ingress_kind_style public_internet  { annotate icon { path = "resources/ingress-public.svg"; }  edge_decoration = "globe"; }
+                ingress_kind_style private_endpoint { annotate icon { path = "resources/ingress-private.svg"; } }
+                """;
+        }
+    }
+}

@@ -1,0 +1,33 @@
+namespace tech_architecture
+{
+    concept step
+    {
+        description = """
+            A directional flow edge within a `sequence`. Authored as a
+            bare `step &src -> &dst;` line inside the sequence body;
+            the parser binds the shorthand endpoints to `src` and `dst`
+            (mirroring the compiler's diagnostic vocabulary — see the
+            `connector` concept, which uses `from` / `to` for
+            standalone edges but `src` / `dst` for scenario steps).
+            """;
+
+        annotate toolbox { visible = false; }
+
+        relationship src -> actor | block | component;
+        relationship dst -> actor | block | component | step;
+
+        invariant
+        {
+            description = """
+                The compiler checks that `src` and `dst` each reference a
+                known actor, block, or component. Cross_container references
+                (`<block_id>.<component_id>`) are not supported at the
+                step level — reference the target directly by its bare
+                id.
+                """;
+        }
+    }
+
+    // Infix edge operator: `a ==> b` mints a step binding src/dst.
+    operator ==> : step (src, dst);
+}

@@ -1,0 +1,78 @@
+namespace tech_architecture
+{
+    concept technology
+    {
+        description = """
+            A concrete tool, service, or product that can realise a component.
+            Carries two compatibility lists used by the validator —
+            `available_in` (allowed locations) and `applicable_to` (allowed
+            categories). Lives in libraries or as project_custom entries.
+            """;
+
+        id : identifier;
+        label : string;
+        available_in : location[];
+        applicable_to : categories[];
+        billing : billing?;
+
+        invariant
+        {
+            description = """
+                `available_in` entries must resolve to declared locations in
+                the models that import this technology. Validation runs
+                per_model (not at library load time) since locations are
+                model_defined, not library_defined.
+                """;
+        }
+        invariant
+        {
+            description = """
+                `applicable_to` entries must resolve in the
+                `categories` enum or an alias thereof. A technology
+                pointing at a non_existent category is a typo.
+                """;
+        }
+        invariant
+        {
+            description = """
+                `billing`, when present, is a nested `billing` record whose set
+                dimensions each resolve to a known `billing_model_styles` term.
+                """;
+        }
+
+        authoring library_entry
+        {
+            description = "Inside a `<lib>.technology-library.model` body.";
+            example = """
+                technology azure_openai_gpt4o
+                {
+                    label         = "Azure OpenAI (GPT-4o)";
+                    annotate icon { path = "resources/azure-openai.svg"; }
+                    available_in  = [azure];
+                    applicable_to = [language_model, foundation_model];
+                }
+                """;
+        }
+        authoring project_custom
+        {
+            description = """
+                Inline in the `.architecture.model` body — used for
+                project_specific entries (custom services, validators,
+                glue). Overrides library entries on slug collision.
+                """;
+            example = """
+                technology custom_validator_svc
+                {
+                    label         = "Request Validator";
+                    annotate icon { path = "pilot_project/resources/validator.svg"; }
+                    available_in  = [azure];
+                    applicable_to = [service];
+                }
+                """;
+        }
+
+        references = [
+            "tools/todl/technology-library-design.md",
+        ];
+    }
+}

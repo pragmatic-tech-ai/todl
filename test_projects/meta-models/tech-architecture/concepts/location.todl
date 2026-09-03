@@ -1,0 +1,67 @@
+namespace tech_architecture
+{
+    concept location
+    {
+        annotate has_children {}
+
+        description = """
+            A region of the architecture where components run. May declare a
+            parent location for organisational nesting. Locations are
+            containment for components but not part of component identity —
+            references everywhere are bare component ids.
+            """;
+
+        id : identifier;
+        label : label;
+        // `parent` is a CONTAINMENT relationship (not a plain field) so nested
+        // locations (azure ⊃ m365 ⊃ power_platform) project as visual nesting on
+        // the diagram — the arch binding's containment reader walks relationships
+        // annotated @containment. Instances still author it as `parent = azure;`.
+        relationship parent -> location? { annotate containment {} }
+
+        invariant "Location ids share the global namespace; collisions with components/actors/blocks are forbidden.";
+        invariant
+        {
+            description = """
+                `parent`, when set, must resolve to another declared
+                location reachable from the same model — either declared
+                inline in the model or harvested from an imported
+                technology library. Library_declared locations let
+                technology_specific regions (Azure, M365, Power Platform,
+                …) ship with the corresponding architecture library
+                rather than being redeclared in every project.
+                """;
+        }
+        invariant
+        {
+            description = """
+                No location_parent cycles: starting from any location and
+                following `parent` must terminate. Cycles fail the build with
+                a clear error.
+                """;
+        }
+
+        authoring dict_form
+        {
+            description = "YAML key is the id. The most common form for locations.";
+            example = """
+                locations:
+                  azure:
+                    label: Azure
+                    type: cloud/paas
+                  m365:
+                    label: Microsoft 365
+                    type: cloud/saas
+                    parent: azure
+                  power_platform:
+                    label: Power Platform
+                    type: cloud/saas
+                    parent: m365
+                """;
+        }
+
+        references = [
+            "docs/meta-models/technology-architecture/primitives/architecture-location.md",
+        ];
+    }
+}

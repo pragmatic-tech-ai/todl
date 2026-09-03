@@ -1,0 +1,36 @@
+namespace tech_architecture
+{
+    concept application_lifecycle_stage
+    {
+        description = """
+            Library_defined visual binding for an `application_lifecycle_styles`
+            enum value. The meta_instance's name resolves to an
+            `application_lifecycle_styles` term; the body sets the status swatch
+            (traffic_light coding) and optional glyph used in
+            application_portfolio views.
+            """;
+
+        id     : identifier;
+        swatch : string;
+
+        invariant
+        {
+            description = """
+                Multiple `application_lifecycle_style` declarations for the
+                same enum value across libraries are a compile error —
+                ambiguous authority.
+                """;
+        }
+
+        authoring library_entry
+        {
+            description = "Inside a `<lib>.technology-library.model` body.";
+            example = """
+                application_lifecycle_style planned { swatch = "#94a3b8"; }
+                application_lifecycle_style live    { swatch = "#22c55e"; }
+                application_lifecycle_style sunset  { swatch = "#f59e0b"; }
+                application_lifecycle_style retired { swatch = "#71717a"; annotate icon { path = "resources/lifecycle-retired.svg"; } }
+                """;
+        }
+    }
+}

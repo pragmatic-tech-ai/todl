@@ -1,0 +1,143 @@
+namespace tech_architecture
+{
+    // Drop-resolution binding read by Plexus's architecture canvas: a concept
+    // marked `materialize` is what a term-drop creates; the term's type picks the
+    // reference member, and the term's own refs propagate onto the instance. All
+    // params optional — a bare `annotate materialize {}` infers everything.
+    annotation materialize { concept : identifier?; via : identifier?; propagate : boolean?; }
+
+    concept component
+    {
+        description = """
+            A first_class entity in the architecture — the unit that runs in a
+            location and participates in scenarios. Carries a globally unique
+            id, a display label, a category, and at most one `implemented_by`
+            technology binding. Naming is purpose_first; tech choice lives in
+            `implemented_by`. Single_valued: a component can be implemented by
+            at most one technology at any point in time. (To express "either
+            of two technologies could fill this slot," model the alternatives
+            as separate components.)
+            """;
+
+        annotate materialize {}
+        annotate wiki { path = "wiki/component.md"; }
+
+        id : identifier;
+        label : label;
+        slots : slot[];
+
+        relationship in -> location?;
+        // A component may sit inside a `block` (a named grouping that shares a
+        // hosting location). `in_block` is a CONTAINMENT relationship so the
+        // component projects as a nested node inside its block on the diagram —
+        // the arch binding walks relationships annotated @containment. A blocked
+        // component leaves `in` unset and inherits the block's location; only
+        // one of `in` / `in_block` is set, so containment resolves unambiguously
+        // (block for a member, location for a top-level component).
+        relationship in_block -> block? { annotate containment {} }
+        // Icon fallback order when a component defines no icon of its own:
+        // its implementing technology, then its category (todl `iconSource`).
+        // `implemented_by` is a relationship (not a field) so icon resolution —
+        // which walks relationship members — can reach it.
+        relationship implemented_by -> technology? { annotate iconSource { order = 1; } }
+        relationship category -> category? { annotate iconSource { order = 2; } }
+
+        invariant "Component ids are globally unique within the model.";
+        invariant "`implemented-by`, if set, resolves to a known technology.";
+        invariant
+        {
+            description = """
+                A component's effective `in` is its own `in` (if set),
+                otherwise the `in` of its containing `block`. A
+                top_level component with no `in` is an error; a
+                block_nested component whose own `in`, if set, does not
+                equal the block's `in`, is an error.
+                """;
+        }
+        invariant
+        {
+            description = """
+                Component's effective location must appear in the implementing
+                technology's `available_in` list. Catches "Power Platform
+                component implemented by an Azure-only technology" without
+                requiring the author to memorise the matrix.
+                """;
+            formal = """
+                ∀ c ∈ components where c.implemented_by ≠ ∅:
+                  c.in ∈ c.implemented_by.available_in
+                """;
+        }
+        invariant
+        {
+            description = """
+                Slot ids are unique within a component. Containers reference
+                slots by `<component_id>.<slot_id>` so duplicates would be
+                ambiguous.
+                """;
+            formal = """
+                ∀ c ∈ components: |{s.id : s ∈ c.slots}| = |c.slots|
+                """;
+        }
+        invariant
+        {
+            description = """
+                Every slot's `environment` resolves to a known environment.
+                Every slot's `in_resource_group` (if set) resolves to a known
+                resource_group, AND the resource_group appears in the
+                environment's `resource_groups` list.
+                Every slot's `in_subnet` (if set) resolves to a known subnet, AND
+                the subnet's parent network's `in_subscription` matches the
+                environment's `in_subscription` (when env has one).
+                Every slot's `public_ingress` entry resolves to a known
+                ingress_kind_styles value.
+                """;
+        }
+        invariant
+        {
+            description = """
+                Component dicts must NOT carry inline `enabled_by`, `hosted_by`,
+                `consumes`, or `available_through` fields — those are connector
+                types now and must be expressed in the `connectors:` block. The
+                compiler errors with a clear "express as a connector entry"
+                hint.
+                """;
+        }
+
+        authoring list_form
+        {
+            description = """
+                Primary form. Each entry is an object with explicit `id:` (or
+                autogenerated from label + category). Used by the architecture
+                source today.
+                """;
+            example = """
+                components:
+                  power_platform:
+                    - id: business_agent
+                      label: AI Agent
+                      category: ai_agent
+                      implemented_by: copilot_agent
+                """;
+        }
+        authoring dict_form
+        {
+            description = """
+                Legacy/compact form. YAML key is the id, no autogeneration.
+                Still accepted by the compiler.
+                """;
+            example = """
+                components:
+                  power_platform:
+                    business_agent:
+                      label: AI Agent
+                      category: ai_agent
+                      implemented_by: copilot_agent
+                """;
+        }
+
+        references = [
+            "docs/meta-models/technology-architecture/primitives/component.md",
+            "docs/meta-models/technology-architecture/concepts/architecture-component.md",
+        ];
+    }
+}
