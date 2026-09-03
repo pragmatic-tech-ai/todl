@@ -1,6 +1,30 @@
 /**
- * Parse AST for the TODL surface (design spec §3). Distinct from the runtime
- * graph model — the loader (a later step) walks this tree to build a Repository.
+ * Parse AST for the TODL surface (design spec §3) — the tree the PARSER produces
+ * and the LOADER consumes. This is the parse-time shape of a `.todl` file: one
+ * {@link NamespaceNode} per file, holding a flat list of top-level
+ * {@link Declaration}s, each mirroring a chunk of surface syntax almost verbatim.
+ *
+ * ─────────────────────────────── Where it sits ─────────────────────────────────
+ *   source text ──parser──▶  AST (this file)  ──loader──▶  Repository (typed graph)
+ *
+ * These interfaces are DUMB DATA: they capture *what was written*, not *what it
+ * means*. Nothing here resolves references, classifies a value as attr-vs-edge, or
+ * knows a concept's schema — all of that is the loader's job (see loader.ts). So,
+ * for example, a value written as a bare identifier is just a {@link NameValue};
+ * only the loader decides (from the member's declared type) whether it becomes a
+ * scalar attr or a graph edge.
+ *
+ * ───────────────────────────────── Conventions ─────────────────────────────────
+ *   • Every node is a plain interface tagged by a `kind` enum member
+ *     ({@link DeclKind} for declarations, {@link ValueKind} for values), so the
+ *     loader can `switch` on it exhaustively.
+ *   • `span` (and the many optional `…Span` fields) carry source locations so
+ *     downstream diagnostics and the language server can point back at the exact
+ *     text. Optional `…Span?` fields are absent on synthesized nodes or older
+ *     parses that predate span capture.
+ *   • Parallel arrays: several decls keep a `fooSpans?` array positionally aligned
+ *     with a `foo` array (e.g. `uses` / `usesSpans`), so span[i] belongs to foo[i].
+ *
  * Cardinality reuses the model enum. Invariant predicates are captured as raw
  * token slices here; the predicate parser turns them into expression ASTs.
  */
@@ -8,6 +32,14 @@
 import type { Token } from "./lexer.js";
 import type { Cardinality } from "../model/graph.js";
 import type { SourceSpan } from "../diagnostics/span.js";
+
+// ═══════════════════════════════ DISCRIMINANT ENUMS ═══════════════════════════
+// The two tag enums every node carries. `kind` on a declaration is one of
+// DeclKind; `kind` on a value is one of ValueKind. Both let the loader switch
+// exhaustively over the union types (Declaration / ValueNode) defined below.
+
+/** The kind of a top-level declaration — one member per statement the language
+ * supports at file scope (`primitive`, `taxonomy`, `concept`, `model`, …). */
 
 export enum DeclKind {
   Primitive,
@@ -21,6 +53,8 @@ export enum DeclKind {
   Operator,
 }
 
+/** The kind of an authored VALUE (the right-hand side of `name = …`, an array
+ * element, or an annotation param) — the surface shapes a value can take. */
 export enum ValueKind {
   String,
   Name,
@@ -31,6 +65,13 @@ export enum ValueKind {
   Edge,
 }
 
+// ══════════════════════════════════ VALUES ════════════════════════════════════
+// The right-hand side of an assignment (`name = value`), a list item, or an
+// annotation param value. Every value is one of these, united as ValueNode below.
+// Reminder: the AST does NOT decide attr-vs-edge; the loader does, from the
+// member's declared type — so a plain `NameValue` may end up as either.
+
+/** A quoted string literal — `name = "text"`. */
 export interface StringValue {
   kind: ValueKind.String;
   text: string;
@@ -52,6 +93,8 @@ export interface NameValue {
   span?: SourceSpan;
 }
 
+/** A bracketed list value — `name = [a, b, c]` (a repeated member). Each item is
+ * itself a value node; the loader realizes one attr/edge per item. */
 export interface ListValue {
   kind: ValueKind.List;
   items: ValueNode[];
@@ -85,6 +128,7 @@ export interface EdgeValue {
   edge: EdgeApplication;
 }
 
+/** The union of every value shape; discriminate on `.kind` (a {@link ValueKind}). */
 export type ValueNode =
   | StringValue
   | NameValue
@@ -94,8 +138,12 @@ export type ValueNode =
   | ObjectValue
   | EdgeValue;
 
-/** A `left <glyph> right [ { … } | ; ]` edge usage (design §3). Shape-only: the
- * loader resolves `glyph` against the operator table and materializes the edge. */
+// ═══════════════════════════ EDGES & ASSIGNMENTS ══════════════════════════════
+
+/** A `left <glyph> right [ { … } | ; ]` edge usage (design §3), e.g.
+ * `frontend --> database { calls = "REST" }`. Shape-only: the loader resolves
+ * `glyph` against the operator table and materializes the reified edge, with
+ * `body` supplying the edge entity's own field assignments. */
 export interface EdgeApplication {
   glyph: string;
   left: string;
@@ -107,6 +155,7 @@ export interface EdgeApplication {
   span: SourceSpan;
 }
 
+/** One `name = value` assignment — the atom of every record/term/annotation body. */
 export interface AssignmentNode {
   name: string;
   value: ValueNode;
@@ -114,6 +163,15 @@ export interface AssignmentNode {
   span?: SourceSpan;
 }
 
+// ══════════════════════════════ DECLARATIONS ══════════════════════════════════
+// The top-level statements of a file, united as Declaration below. Roughly two
+// families: INSTANCE-side (concrete data — Instance, Model) and ONTOLOGY-side
+// (types — Concept, Taxonomy, Viewpoint, Primitive, Annotation, Operator), plus
+// the singleton Package. The loader stages them in dependency order across passes.
+
+/** A record — a concrete object or a `class` (a partial, fixed-value definition),
+ * e.g. `component api { … }` inside a model, or `class widget { … }`. Legal as a
+ * concrete object only inside a `model { … }`; classes may live at file scope. */
 export interface InstanceDecl {
   kind: DeclKind.Instance;
   concept: string;
@@ -141,6 +199,9 @@ export interface InstanceDecl {
   idSpan?: SourceSpan;
 }
 
+/** A `model <id> : <meta-model> [uses …] [conforms …] { … }` container — the
+ * instance-carrier that holds concrete objects and body-level edges. May be split
+ * across several files under one id (each block then required to `conforms`). */
 export interface ModelDecl {
   kind: DeclKind.Model;
   id: string;
@@ -163,6 +224,9 @@ export interface ModelDecl {
   conformsSpan?: SourceSpan;
 }
 
+/** A USE of an annotation — `target@Ann(param = v)` (or `annotate @Ann` in a
+ * body). Decorates concepts, members, taxonomies/terms, classes, or the package.
+ * The declaration of the annotation itself is {@link AnnotationDecl}. */
 export interface AnnotationApplication {
   /** The annotation being applied. */
   name: string;
@@ -172,6 +236,9 @@ export interface AnnotationApplication {
   nameSpan?: SourceSpan;
 }
 
+/** An `annotation <Name> [ : <Base> ] { <params> }` declaration — defines a
+ * reusable type-level decorator with typed params. Applied via
+ * {@link AnnotationApplication}. */
 export interface AnnotationDecl {
   kind: DeclKind.Annotation;
   name: string;
@@ -184,6 +251,9 @@ export interface AnnotationDecl {
   nameSpan?: SourceSpan;
 }
 
+/** A `package { … }` block — carries annotation applications on the singleton
+ * package node (per-package metadata). There is one shared package node across all
+ * `package` blocks in a compile. */
 export interface PackageDecl {
   kind: DeclKind.Package;
   annotations: AnnotationApplication[];
@@ -207,6 +277,13 @@ export interface OperatorDecl {
   span: SourceSpan;
 }
 
+// ── Concept members (fields, relationships, invariants) ────────────────────────
+// The building blocks of a ConceptDecl body. Also reused elsewhere: FieldDecl
+// doubles as an annotation's typed param.
+
+/** A `:` field member — `<name> : <type>` (with cardinality). Whether it becomes a
+ * scalar attr or a reference edge depends on `type` (a primitive vs a
+ * concept/taxonomy) — the loader decides. Also reused for annotation params. */
 export interface FieldDecl {
   name: string;
   type: string;
@@ -215,6 +292,9 @@ export interface FieldDecl {
   typeSpan?: SourceSpan;
 }
 
+/** A `->` relationship member — `<name> -> <T1>, <T2> …` (with cardinality). Always
+ * reference-like: materialized as graph edges, never scalar attrs. May itself carry
+ * member-level annotations. */
 export interface RelationshipDecl {
   name: string;
   targets: string[];
@@ -224,12 +304,18 @@ export interface RelationshipDecl {
   targetSpans?: SourceSpan[];
 }
 
+/** An `invariant "<description>" [ predicate = … ]` — a constraint on a concept.
+ * The predicate is kept as raw lexer tokens here; the predicate parser turns it
+ * into an expression AST at load time. Prose-only invariants have `predicate: null`. */
 export interface InvariantDecl {
   description: string;
   /** Raw tokens of the `predicate = …` expression, or `null` for prose-only invariants. */
   predicate: Token[] | null;
 }
 
+/** A `concept <Name> [ : <parent> ] { … }` declaration — a type in the ontology,
+ * with fields, relationships, invariants, and annotations. A parent-less concept
+ * implicitly extends the prelude root `element` (the loader adds that). */
 export interface ConceptDecl {
   kind: DeclKind.Concept;
   name: string;
@@ -246,6 +332,12 @@ export interface ConceptDecl {
   nameSpan?: SourceSpan;
 }
 
+// ── Taxonomy terms ─────────────────────────────────────────────────────────────
+
+/** One term inside a taxonomy — e.g. `location azure { region = "..." }`. A term is
+ * a CLASS of a represented concept, carrying that concept's fixed field values, and
+ * may nest child terms (a hierarchy). Not a top-level Declaration; it only appears
+ * inside a {@link TaxonomyDecl}. */
 export interface Term {
   id: string;
   /** The concept this term is a class of, from the leading keyword
@@ -262,6 +354,9 @@ export interface Term {
   idSpan?: SourceSpan;
 }
 
+/** A `taxonomy <Name> : represents <C…> [uses …] { <terms> }` declaration — a
+ * classification tree of {@link Term}s over one or more concepts. `uses` brings
+ * sibling taxonomies' terms into bare scope for this one's term-body references. */
 export interface TaxonomyDecl {
   kind: DeclKind.Taxonomy;
   name: string;
@@ -285,6 +380,8 @@ export interface TaxonomyDecl {
   nameSpan?: SourceSpan;
 }
 
+/** A `viewpoint <Name> : frames <C…>` declaration — names a set of concepts that
+ * form one "view" of a model; a {@link ModelDecl} may `conforms` to a viewpoint. */
 export interface ViewpointDecl {
   kind: DeclKind.Viewpoint;
   name: string;
@@ -297,6 +394,9 @@ export interface ViewpointDecl {
   nameSpan?: SourceSpan;
 }
 
+/** A `primitive <name> [ : <base> ] [ /regex/ ]` declaration — a scalar value type
+ * (the leaves of the type system, e.g. `string`, `int`). `base` refines another
+ * primitive; `regex` optionally constrains its literal form. */
 export interface PrimitiveDecl {
   kind: DeclKind.Primitive;
   name: string;
@@ -308,10 +408,18 @@ export interface PrimitiveDecl {
   nameSpan?: SourceSpan;
 }
 
+/** The union of every top-level declaration; discriminate on `.kind` (a
+ * {@link DeclKind}). This is what a {@link NamespaceNode} holds. */
 export type Declaration =
   | ConceptDecl | TaxonomyDecl | ViewpointDecl | PrimitiveDecl | InstanceDecl | ModelDecl
   | AnnotationDecl | PackageDecl | OperatorDecl;
 
+// ═══════════════════════════════ FILE ROOT ════════════════════════════════════
+
+/** The root of a parsed file — one per `.todl` source. Carries the file's
+ * `namespace <path>` (visibility), its `import <path>` list (what it can see), and
+ * the flat list of top-level {@link Declaration}s. The loader flattens all files'
+ * namespace nodes into per-declaration "units" tagged with ns + imports + uri. */
 export interface NamespaceNode {
   path: string;
   imports: string[];

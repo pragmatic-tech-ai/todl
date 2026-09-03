@@ -12,6 +12,30 @@ import { preludeDocument, preludeNames } from "./stdlib/prelude.js";
  * Load the sources and validate the result; every diagnostic is spanned. The
  * default library (prelude) is injected as the implicit foundation base, so
  * standard names (`identifier`, `icon`, `element`, …) resolve everywhere.
+ *
+ * @example A self-contained tech-architecture model (meta-model + instances in one
+ * source). `check` compiles it and returns the populated graph plus diagnostics.
+ * ```ts
+ * const { model, diagnostics } = check([{
+ *   uri: "landscape.todl",
+ *   text: `
+ *     namespace acme.ea {
+ *       // The meta-model: what a Component is.
+ *       concept Component { name : string; calls : Component?; }
+ *
+ *       // The model: concrete components wired together. \`calls = api\` becomes a
+ *       // Relationship edge because \`calls\` is a Component-typed (reference) member;
+ *       // \`api\` may be referenced before it is declared.
+ *       model Landscape : acme.ea {
+ *         Component web { name = "Web"; calls = api; }
+ *         Component api { name = "API"; }
+ *       }
+ *     }`,
+ * }]);
+ *
+ * diagnostics;                        // []  — compiles clean
+ * model.instancesOf("Component");     // ["web", "api"]
+ * ```
  */
 export function check(sources: SourceFile[], idGenerator?: IdGenerator): { model: Repository; diagnostics: Diagnostic[]; provenance: Map<string, string> } {
   return checkAgainst([], sources, idGenerator);
@@ -22,6 +46,33 @@ export function check(sources: SourceFile[], idGenerator?: IdGenerator): { model
  * meta-models / libraries, as TodlDocument JSON). Bases seed the graph so a
  * source reference resolves to a base node instead of being reported undefined.
  * `checkAgainst([], sources)` is equivalent to `check(sources)`.
+ *
+ * @example Split the architecture across a published meta-model and a downstream
+ * model — the real deployment shape. The meta-model is compiled once to a
+ * `TodlDocument`; the model is then checked against it, and `acme.ea.Component`
+ * resolves to the base node rather than being reported undefined.
+ * ```ts
+ * // 1. The meta-model, compiled to a portable document (e.g. a published package).
+ * const eaBase = toJSON(check([{
+ *   uri: "ea.todl",
+ *   text: `namespace acme.ea { concept Component { name : string; calls : Component?; } }`,
+ * }]).model);
+ *
+ * // 2. A downstream model compiled AGAINST that base.
+ * const { model, diagnostics } = checkAgainst([eaBase], [{
+ *   uri: "landscape.todl",
+ *   text: `
+ *     namespace acme.app {
+ *       model Landscape : acme.ea {
+ *         acme.ea.Component web { name = "Web"; calls = api; }
+ *         acme.ea.Component api { name = "API"; }
+ *       }
+ *     }`,
+ * }]);
+ *
+ * diagnostics;                     // []  — the base node satisfies the reference
+ * model.instancesOf("Component");   // ["web", "api"]  (node ids are flat)
+ * ```
  */
 export function checkAgainst(
   bases: TodlDocument[],
@@ -41,6 +92,20 @@ export function checkAgainst(
  * foundation (a library carrying its meta-model) compose without duplicate nodes
  * or double-counted edges. All nodes are added before any edges, since an edge
  * requires both endpoints to exist.
+ *
+ * @example Seed one graph from the prelude plus a compiled architecture base —
+ * exactly what `checkAgainst` does internally before loading sources. Because the
+ * base itself was compiled with the prelude, the shared prelude nodes collapse to
+ * one copy (first-wins), rather than being duplicated.
+ * ```ts
+ * const eaBase = toJSON(check([{
+ *   uri: "ea.todl",
+ *   text: `namespace acme.ea { concept Component { name : string; } }`,
+ * }]).model);
+ *
+ * const seed = mergeBases([preludeDocument(), eaBase]);
+ * const model = new Repository(seed); // ready to load downstream sources into
+ * ```
  */
 export function mergeBases(bases: TodlDocument[]): Graph {
   const graph = new Graph();

@@ -1,15 +1,55 @@
 /**
- * Loader (design spec §5) — parse TODL sources and build a {@link Repository}.
+ * Loader (design spec §5) — the front door of the compiler. It takes raw `.todl`
+ * source text and produces a fully-populated {@link Repository} (the reflective
+ * typed graph) plus a flat list of {@link Diagnostic}s. Everything downstream —
+ * validation, emit, publish, the language server — reads the graph this file
+ * builds.
  *
- * Two passes over the combined declarations: pass one defines the bare type
- * declarations (primitives, enums + case nodes, concepts + extends); pass two
- * adds concept members and instances. Executable invariants register after
- * loading. Field types / relationship targets are attrs, so they need no node —
- * only extends parents and instance value refs become edges.
+ * ───────────────────────────── The graph it builds ─────────────────────────────
+ * A Repository wraps a graph of NODES and typed EDGES.
+ *   • A node is `{ id, tier, typeOf, attrs }`. `tier` is Ontology (types:
+ *     concepts, taxonomies, annotations, operators…) or Instance (concrete
+ *     objects + models). `typeOf` is the node's meta-kind or its concept.
+ *   • Scalar data lives in `attrs` (a field like `name = "x"` becomes an attr) —
+ *     it needs NO node. Only *relationships between nodes* become edges:
+ *       - Contains       structural parent → child (a model contains its objects,
+ *                         a record contains its nested records)
+ *       - InstanceOf     an instance → its class/term
+ *       - Subtype        `extends` parent
+ *       - Relationship   a `->` member or a reference-typed field pointing at
+ *                         another node (carries the member name in `via`)
+ *       - Targets        an operator → the edge concept it mints
  *
- * Any id that is referenced but never defined (in the sources or in a previously
- * loaded base model) emits a `reference.undefined` diagnostic and all staged
- * edges to that id are dropped — no placeholder node is created.
+ * ───────────────────────── Why several passes? (forward refs) ──────────────────
+ * TODL lets you reference names before they are declared, and instances lean on
+ * type information that only exists once types are committed. So the loader stages
+ * the graph in dependency order, each pass committing before the next reads it:
+ *
+ *   PARSE            every source → AST; flattened into `units` (one per top-level
+ *                    declaration, tagged with its namespace + imports + file uri).
+ *   RESOLVE (pre)    walk every reference, gate it by namespace visibility, and
+ *                    rewrite qualified / bare names to their flat node id BEFORE
+ *                    anything is staged. Unresolved ids are collected so their
+ *                    edges can be dropped at commit time.
+ *   PASS 1           bare type declarations — primitives, concepts (+extends),
+ *                    taxonomies (+terms), annotations, viewpoints, operators.
+ *   PASS 2a          concept/annotation MEMBERS (fields, relationships) +
+ *                    invariants. Committed before instances so a nested record can
+ *                    consult its parent's schema.
+ *   PASS 2b          INSTANCES + models + deferred term values + compositions —
+ *                    the concrete objects, whose value refs become edges.
+ *   APPLICATIONS     annotation applications (`target@Ann`) on concepts, taxonomy
+ *                    terms, the package node, and class instances.
+ *   INVARIANTS       executable predicates register on the model, last.
+ *
+ * ─────────────────────────── Undefined references ──────────────────────────────
+ * Any id referenced but never defined (here or in a previously-loaded base model)
+ * emits `reference.undefined` and is added to `undefinedIds`. Every
+ * `Builder.commit(undefinedIds)` then drops staged edges touching those ids — so
+ * no dangling/placeholder nodes are ever created.
+ *
+ * The staging is done through {@link Builder} (see model/builder.ts): each pass
+ * opens a fresh builder, stages nodes/edges, and `commit()`s them into the model.
  */
 
 import { parse } from "./parser.js";
@@ -38,6 +78,8 @@ import { EdgeKind, Direction, type NodeId, type Scalar } from "../model/graph.js
 import type { SourceFile, SourceSpan } from "../diagnostics/span.js";
 import { Severity, DiagnosticCode, type Diagnostic } from "../diagnostics/diagnostic.js";
 
+/** What a load produces: the populated graph, every diagnostic gathered across
+ * all passes, and a nodeId → source-uri map (which file each own node came from). */
 export interface LoadResult {
   model: Repository;
   diagnostics: Diagnostic[];
@@ -57,6 +99,10 @@ function recordHome(rec: HomeRecorder | undefined, id: string): void {
   if (rec !== undefined && rec.current !== null && !rec.map.has(id)) rec.map.set(id, rec.current);
 }
 
+// One occurrence of a reference in the source (the id `technology` written inside
+// some term, a field type, an edge endpoint, …). The resolver pre-pass walks these
+// and either accepts, rewrites, or reports each one. `home` is where the reference
+// lives (its namespace + that file's imports), which decides what it can see.
 interface RefSite {
   id: string;
   span: SourceSpan | null;
@@ -73,12 +119,42 @@ interface RefSite {
   scope?: { taxonomy: string; uses: readonly string[] };
 }
 
+// A parsed-but-not-yet-registered invariant: its predicate AST + the concept it
+// guards. Collected during Pass 2a and registered on the model at the very end,
+// once every node it might reference exists.
 interface PendingInvariant {
   concept: string;
   expr: Expr;
   description: string;
 }
 
+/** Load `sources` into a BRAND-NEW empty Repository. The common entry point for a
+ * standalone compile with no pre-loaded bases. Delegates to {@link loadInto}.
+ *
+ * Note: `load` only BUILDS the graph — it does not inject the prelude or run
+ * semantic {@link validate}. For a full front-end compile (prelude + validation)
+ * use `check` / `checkAgainst` in `api.ts`; reach for `load` when you want the raw
+ * graph and provenance without those layers.
+ *
+ * @example
+ * ```ts
+ * const { model, diagnostics, provenance } = load([{
+ *   uri: "landscape.todl",
+ *   text: `
+ *     namespace acme.ea {
+ *       concept Component { name : string; calls : Component?; }
+ *       model Landscape : acme.ea {
+ *         Component web { name = "Web"; calls = api; }
+ *         Component api { name = "API"; }
+ *       }
+ *     }`,
+ * }]);
+ *
+ * diagnostics;                     // []
+ * model.instancesOf("Component");  // ["web", "api"]
+ * provenance.get("web");           // "landscape.todl"  (which file minted the node)
+ * ```
+ */
 export function load(sources: SourceFile[], idGenerator: IdGenerator = new SnowflakeIdGenerator()): LoadResult {
   const model = new Repository();
   const provenance = new Map<string, string>();
@@ -99,6 +175,13 @@ export function loadInto(
 ): Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
   const rec: HomeRecorder | undefined = provenance !== undefined ? { current: null, map: provenance } : undefined;
+
+  // ── Parse & flatten ──────────────────────────────────────────────────────────
+  // Parse every source file and flatten the results into one list of `units`. A
+  // unit is a single top-level declaration paired with the context it needs later:
+  // its namespace `ns`, that file's `imports` (its visibility set), and its `uri`
+  // (for provenance + split-model file grouping). From here on the loader works
+  // over `units`, not files — the file boundary only matters for those three tags.
   const units: { ns: string; imports: readonly string[]; uri: string; decl: Declaration }[] = [];
   for (const source of sources) {
     const result = parse(source.text, source.uri);
@@ -131,29 +214,46 @@ export function loadInto(
     }
     return true;
   });
+  // Replace `units` in place with only the surviving (non-redeclared) units.
   units.length = 0;
   units.push(...active);
 
   const declarations = units.map((u) => u.decl);
 
+  // A concrete object is only legal inside a `model { … }`. Flag any that float
+  // at the top level before we bother staging anything.
   detectOrphans(declarations, diagnostics);
 
+  // ── Build the two inputs the resolver needs ──────────────────────────────────
+  // `defined`  = every id these sources declare (so the resolver knows what exists
+  //              locally, on top of what the pre-loaded `model` already has).
+  // `sourceNs` = each source-defined id → its namespace (base nodes instead carry a
+  //              `namespace` attr; this map covers the not-yet-committed source ids).
+  // `sites`    = every reference occurrence, captured with its rewrite hook + scope.
   const defined = new Set<string>();
   const sites: RefSite[] = [];
-  // Namespace of each SOURCE-defined id (base nodes carry their ns as a
-  // `namespace` attr). Drives the reachability gate below.
   const sourceNs = new Map<string, string>();
   for (const { ns, imports, decl } of units) {
     collectDefinitions(decl, ns, defined, sourceNs);
     const home: Home = { ns, imports };
+    // `visitReferences` is the one unified AST walk that yields every reference in a
+    // declaration together with a `rewrite` callback that mutates the exact AST slot
+    // it came from — so resolving `ns.x` → `x` here updates the value Pass 1 reads.
     visitReferences(decl, (v) => {
       sites.push({ id: v.name, span: v.span ?? null, node: v.ownerNode, path: v.memberPath, home, rewrite: v.rewrite, ...(v.scope ? { scope: v.scope } : {}) });
     });
   }
 
-  // ---- Namespace-scoped resolution (design: unified-reference-resolver) ----
-  // The single resolver module gates every reference by namespace reachability
-  // (own ns / imports / global) and resolves qualified `ns.x` to its flat node.
+  // ═══════════════════════ RESOLVE (pre-pass): names → flat node ids ═══════════
+  // (design: unified-reference-resolver) The single resolver module is the whole
+  // language's name→node law, so namespace visibility lives in exactly one place.
+  // For any name from a given `home` it answers one of:
+  //   ok         → resolves as written, and is reachable
+  //   qualified  → an explicit `ns.x` that maps to flat node `x` (rewrite to flat)
+  //   unreachable→ the target exists but is in a namespace this file didn't import
+  //   undefined  → no such node anywhere
+  // `undefinedIds` accumulates everything that fails to resolve; it is threaded
+  // into every `commit()` below so edges to those ids are dropped, not dangled.
   const undefinedIds = new Set<string>();
   const { nsOf, exists, reachable, resolveRef } = makeResolver(model, defined, sourceNs, reserved);
 
@@ -163,6 +263,9 @@ export function loadInto(
   // beforehand. Each target must resolve (via ns / import / qualifier) to a
   // known taxonomy. Mutating decl.uses in place updates the same array the
   // captured term `scope` holds.
+  // Kind predicates that look in BOTH the not-yet-committed source declarations and
+  // the already-loaded base model — used to validate `uses` / `conforms` targets
+  // before Pass 1 has staged anything.
   const isTaxonomy = (id: string): boolean => {
     for (const decl of declarations) if (decl.kind === DeclKind.Taxonomy && decl.name === id) return true;
     return model.resolve(id)?.typeOf === MetaKind.Taxonomy;
@@ -265,12 +368,17 @@ export function loadInto(
     }
   }
 
-  // Resolve references BEFORE Pass 1 — Pass 1's defineTaxonomy reads term value
-  // refs, so any rewrite must be applied first. A qualified name is rewritten to
-  // its flat id; a bare term-body ref resolves against the enclosing taxonomy's
-  // own terms (sibling shadows `uses`) even when the bare id also exists
-  // unreachably elsewhere. Anything unresolved is reference.undefined /
-  // reference.unreachable and its edges are dropped by Builder.commit.
+  // Now resolve EVERY reference occurrence, applying rewrites in place. This must
+  // run BEFORE Pass 1, because Pass 1's defineTaxonomy already reads term value
+  // refs — so a qualified `ns.x` must have been flattened to `x` by then. Outcomes:
+  //   • ok        → nothing to do, the name stands.
+  //   • qualified → rewrite the AST slot from `ns.x` to the flat id `x`.
+  //   • otherwise → try term-scope resolution (below), else record it undefined.
+  // Term-scope: a bare name inside a taxonomy term (e.g. `technology` written in a
+  // term body) resolves first against a SIBLING term of the same taxonomy, then
+  // against terms of the taxonomies this one `uses`. A sibling shadows `uses`, and
+  // shadows even a same-named node that exists but is unreachable elsewhere. Two
+  // `uses` matches is genuinely ambiguous → error and drop the edge.
   for (const site of sites) {
     const r = resolveRef(site.id, site.home);
     if (r.kind === "ok") continue;
@@ -313,18 +421,21 @@ export function loadInto(
         });
   }
 
-  // Composition records nested in a taxonomy term (a `billing` record inside a
-  // `technology` term) — deferred to pass 2b so they can bind to the term's
-  // field once concept schemas are committed.
+  // Two "work queues" filled during Pass 1 but drained in Pass 2b, once concept
+  // schemas exist to classify them against:
+  //   deferredCompositions — a nested record of a DIFFERENT represented concept
+  //     inside a term (a `billing` record inside a `technology` term). It has to
+  //     wait so it can bind to the term's field typed by its concept.
   const deferredCompositions: { ns: string; uri: string; parentId: string; parentConcept: string; decl: InstanceDecl }[] = [];
-  // Term assignments whose realization (attr vs edge) depends on the represented
-  // concept's schema — deferred until schemas commit (Pass 2a), then applied in
-  // Pass 2b through the shared type-directed helper.
+  //   deferredTermValues — a non-literal term assignment (Name/List/Composite),
+  //     whose "attr or edge?" decision depends on the represented concept's schema.
   const deferredTermValues: { ns: string; uri: string; concept: string; termId: string; name: string; value: ValueNode }[] = [];
 
-  // Pass 1: bare type declarations. Any referenced id absent from both the new
-  // sources and the existing model was flagged above and its edges are skipped
-  // by Builder.commit.
+  // ═══════════════════════════ PASS 1: bare type declarations ══════════════════
+  // Stage the *shells* of every type: primitives, viewpoints, taxonomies (+ their
+  // term hierarchy), concepts (+ their `extends` parent), annotations, operators.
+  // Members and instances come later. Referenced ids that failed to resolve above
+  // are in `undefinedIds`, so the closing `commit` drops their edges.
   const first = model.builder();
   const definedOps = new Set<string>(); // glyph → staged once; duplicates diagnosed in validateOperators
   for (const { ns, uri, decl: declaration } of units) {
@@ -337,6 +448,9 @@ export function loadInto(
         first.defineViewpoint(declaration.name, declaration.frames);
         break;
       case DeclKind.Taxonomy: {
+        // A taxonomy is a hierarchy of TERMS, each classifying one of the concepts
+        // it `represents`. `multi` (represents >1 concept) forces each term to name
+        // its own concept; `primary` is the default concept for single-concept taxa.
         const decl = declaration;
         const represented = new Set(decl.represents);
         const multi = decl.represents.length > 1;
@@ -431,8 +545,12 @@ export function loadInto(
   }
   first.commit(undefinedIds);
 
-  // Pass 2a: concept members (fields / relationships / invariants). Committing
-  // these before instances lets a nested record consult the parent's schema.
+  // ══════════════════════ PASS 2a: concept & annotation members ════════════════
+  // Now that every type shell exists, attach their MEMBERS: fields (`x : T`),
+  // relationships (`r -> T`), annotation params, and invariant predicates. This is
+  // committed before instances (Pass 2b) so that a nested record can look up the
+  // parent concept's effective (inherited) schema to decide field bindings.
+  // Invariants are parsed here but only registered at the very end.
   const second = model.builder();
   const invariants: PendingInvariant[] = [];
   for (const { ns, decl: declaration } of units) {
@@ -461,11 +579,16 @@ export function loadInto(
   }
   second.commit(undefinedIds);
 
-  // Operator declarations validate against the now-committed concept schemas.
+  // Operator glyphs can now be checked against the concept schemas they reference.
   validateOperators(model, units, diagnostics);
 
-  // Pass 2b: instances. The schema is committed, so a nested record binds to the
-  // parent field typed by its concept (in addition to the structural Contains).
+  // ═══════════════════════════ PASS 2b: instances & models ═════════════════════
+  // Stage the concrete graph: model containers, their objects, deferred term
+  // compositions/values, and reified edges. This is where authored VALUES turn into
+  // attrs-or-edges — decided type-directedly from each member's declared type, not
+  // from the value's surface syntax (see realizeValue). `asserted` dedups a node id
+  // authored in more than one place (legacy split records) so it is asserted once
+  // and later blocks merge fields onto it. `ops` is the glyph→operator lookup.
   const third = model.builder();
   const asserted = new Set<string>();
   // Operators were committed in Pass 1, so the table sees bases + this load.
@@ -494,9 +617,14 @@ export function loadInto(
   }
   third.commit(undefinedIds);
 
-  // Applications pass: annotation applications on concepts + package. Runs after
-  // member schemas are committed. A duplicate `<target>@<Ann>` is diagnosed and
-  // skipped (the builder would throw on the duplicate node id).
+  // ═════════════════════════ APPLICATIONS: annotation uses ═════════════════════
+  // Stage every annotation application (`target@Ann` + its param values) onto the
+  // things annotations may decorate: concepts and their members, taxonomies and
+  // their terms, the singleton package node, and class instances. It runs last of
+  // the staging passes so that annotation param values classify against committed
+  // schemas. A repeated `<target>@<Ann>` is diagnosed and skipped (the builder
+  // would otherwise throw on the duplicate node id). `packageStaged` guarantees the
+  // one shared package node is created only once across all `package` blocks.
   const fourth = model.builder();
   const seenApps = new Set<string>();
   let packageStaged = false;
@@ -535,13 +663,31 @@ export function loadInto(
   }
   fourth.commit(undefinedIds);
 
+  // ═══════════════════════════ INVARIANTS & spans ══════════════════════════════
+  // Register the executable invariants collected in Pass 2a — done last, when every
+  // node they might reference is guaranteed to exist.
   for (const invariant of invariants) {
     model.defineInvariant(invariant.concept, invariant.expr, invariant.description);
   }
 
+  // Stamp every declaration/instance/assignment with its source span, so downstream
+  // diagnostics (validate, the language server) can point back at the exact text.
   recordSpans(model, declarations);
   return diagnostics;
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  HELPERS  — everything below is called by the passes above.
+//  • recordSpans / recordInstanceSpans        source-location bookkeeping
+//  • isReferenceType / isReferenceMember /
+//    referenceMemberType / termLiteralAttrs    the "attr vs edge?" type oracle
+//  • detectOrphans / flagOrphans              structural legality check
+//  • stageApplications / stageInstanceAnnotations   annotation staging
+//  • applyModel / applyInstance / bindToField / bindEntityToField / realizeValue /
+//    realizeInlineObject                       the instance-materialisation engine
+//  • operatorTable / validateOperators / applyEdges / applyEdge / mintReifiedEdge /
+//    realizeEdgeValue                          the operator/edge machinery (design §4)
+// ══════════════════════════════════════════════════════════════════════════════
 
 /** Record each declaration's, instance's, and assignment's source span on the model. */
 function recordSpans(model: Repository, declarations: Declaration[]): void {
@@ -596,6 +742,11 @@ function recordInstanceSpans(model: Repository, decl: InstanceDecl): void {
   for (const child of decl.children) recordInstanceSpans(model, child);
 }
 
+
+// ── The "attr vs edge?" oracle ────────────────────────────────────────────────
+// TODL is type-directed: whether `x = foo` becomes a scalar attr or a graph edge
+// depends on the DECLARED TYPE of member `x`, never on how `foo` is written. These
+// four helpers answer that question and require Pass 2a schemas to be committed.
 
 /** A type is reference-like when it resolves to a concept or taxonomy node;
  * primitives and unresolved ids are value-like. */
@@ -749,6 +900,14 @@ function stageInstanceAnnotations(
   for (const child of decl.children) stageInstanceAnnotations(builder, model, child, seen, diagnostics, asserted, idGen, ops);
 }
 
+// ── The instance-materialisation engine ───────────────────────────────────────
+// applyModel → applyInstance (recursive) is the core of Pass 2b. It asserts nodes,
+// wires Contains/InstanceOf/Relationship edges, and hands each authored assignment
+// to realizeValue. It is deliberately reused for things that aren't literal
+// records — inline objects and reified edges synthesise an InstanceDecl and run it
+// through applyInstance so containment, dedup, and reference resolution all behave
+// identically to a hand-written record.
+
 /** Stage a model container node and its contained objects (rooted via Contains). */
 function applyModel(
   builder: Builder,
@@ -887,9 +1046,18 @@ function bindEntityToField(
   builder.addRelationship(parent, only.name, id);
 }
 
-/** Realize one authored assignment onto `id`, choosing attr vs edge from the
- * member's declared type (not the value's syntax). Shared by the instance pass
- * and the deferred-term pass. */
+/**
+ * Realize one authored assignment `name = value` onto node `id`, choosing attr vs
+ * edge from the MEMBER'S DECLARED TYPE (via isReferenceMember), not the value's
+ * syntax. Shared by the instance pass and the deferred-term pass. The switch covers
+ * every surface value kind:
+ *   String / Boolean → scalar attr (error if the member is actually a reference)
+ *   Name             → edge if the member is a reference, else a scalar attr
+ *   List             → recurse per item (a repeated member)
+ *   Object           → an inline typed object → a contained, field-bound node
+ *   Edge             → an operator application used as a value (reified edge)
+ *   Composite (`a|b`)→ multiple reference edges, OR a legacy `|`-joined enum flag
+ */
 function realizeValue(
   builder: Builder,
   model: Repository,
@@ -1021,6 +1189,16 @@ function referenceMemberType(model: Repository, concept: string, name: string): 
   const rel = schema.relationships.find((r) => r.name === name);
   return rel?.targets[0];
 }
+
+// ── The operator / edge machinery (design §4) ─────────────────────────────────
+// An OPERATOR is a user-declared glyph (e.g. `==>`) bound to an edge concept and
+// its endpoint members. Writing `a ==> b` then materialises an edge. There are two
+// forms: a RELATIONSHIP operator adds a single edge and no node; a REIFIED operator
+// mints a real contained node whose from/to members point at the endpoints (so the
+// edge can itself carry data). operatorTable builds the glyph lookup, applyEdge
+// dispatches the two forms, and mintReifiedEdge reuses applyInstance to create the
+// reified node. realizeEdgeValue is the same for an operator written as a VALUE
+// (`steps = [ a ==> b ]`), binding the minted node to a field.
 
 /** A glyph resolved to its edge concept + endpoint members (design §4). */
 interface ResolvedOperator {
