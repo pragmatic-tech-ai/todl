@@ -1,4 +1,4 @@
-import { check, type TodlDocument } from "@pragmatic-tech-ai/todl";
+import { check, type TodlDocument, type Repository } from "@pragmatic-tech-ai/todl";
 import type { ExampleSource, GoldenDiagnostic } from "./corpus-types.js";
 import { DeterministicIdGenerator, normalize, selectOwnDocument } from "./verify.js";
 
@@ -6,6 +6,10 @@ export interface DisplayResult {
   diagnostics: GoldenDiagnostic[];
   document: TodlDocument;
   ok: boolean;
+  /** The compiled model + provenance, so callers can re-emit (e.g. a debug
+   *  document for name-resolved views) without recompiling. */
+  model: Repository;
+  provenance: Map<string, string>;
 }
 
 export interface DisplayOptions {
@@ -26,5 +30,7 @@ export function compileForDisplay(sources: ExampleSource[], options?: DisplayOpt
     diagnostics: golden.diagnostics,
     document: golden.document,
     ok: golden.diagnostics.every((d) => d.severity !== "error"),
+    model,
+    provenance,
   };
 }

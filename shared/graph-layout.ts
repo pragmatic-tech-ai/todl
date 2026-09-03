@@ -15,9 +15,11 @@ export function edgeGeometry(from: LaidOutNode, to: LaidOutNode): EdgeGeometry {
 
 const NODE_W = 150, NODE_H = 48, H_GAP = 70, V_GAP = 26, PAD = 24;
 
-/** A readable label for a node: a name-ish attribute, else its tier + id, else
- *  the raw id. Kept deterministic for stable rendering + tests. */
+/** A readable label for a node: the debug name (real name — survives id
+ *  canonicalization, so it beats a `#n0` id), else a name-ish attribute, else its
+ *  tier + id, else the raw id. Kept deterministic for stable rendering + tests. */
 export function nodeLabel(node: JsonNode): string {
+  if (node.debug?.name && node.debug.name.length > 0) return node.debug.name;
   const a = node.attrs ?? {};
   for (const key of ["name", "label", "id", "title"]) {
     const v = a[key];

@@ -160,7 +160,7 @@ export class ExampleRunnerVM extends MuralBase {
     // (only when their tab is first shown) and get their text in compile().
     this.set_property_value(ExampleRunnerVM.JsonViewKey, ExampleRunnerVM.makeViewer("json"));
     this.set_property_value(ExampleRunnerVM.TokensViewKey, ExampleRunnerVM.makeViewer("plaintext"));
-    this.set_property_value(ExampleRunnerVM.AstViewKey, ExampleRunnerVM.makeViewer("plaintext"));
+    this.set_property_value(ExampleRunnerVM.AstViewKey, ExampleRunnerVM.makeViewer("json"));
     this.set_property_value(ExampleRunnerVM.ModelViewKey, ExampleRunnerVM.makeViewer("plaintext"));
   }
 
@@ -186,7 +186,9 @@ export class ExampleRunnerVM extends MuralBase {
     this.set_property_value(ExampleRunnerVM.StatusKey, hasError ? `${s.diagnostics.length} problem(s)` : "OK");
     const json = JSON.stringify(s.document, null, 2);
     const tokensText = s.tokens.map((t) => `${t.line}:${t.column}`.padEnd(7) + `${t.kind}`.padEnd(13) + t.value).join("\n");
-    const modelText = [...s.modelRows.map((r) => `${r.id}  ${r.tier}  ${r.label}`), "",
+    // Print nodes and edges by NAME (not raw id): each node row is its readable
+    // name + tier + type; edge endpoints were already name-resolved in compileStages.
+    const modelText = [...s.modelRows.map((r) => `${r.label}  ${r.tier}  ${r.typeOf}`), "",
       ...s.edgeRows.map((e) => `${e.from} --${e.kind}--> ${e.to}`)].join("\n");
     this.set_property_value(ExampleRunnerVM.JsonKey, json);   // still drives Copy/Download
     if (this.JsonView) this.JsonView.Text = json;
@@ -195,9 +197,12 @@ export class ExampleRunnerVM extends MuralBase {
     if (this.ModelView) this.ModelView.Text = modelText;
     // A fresh Canvas each compile avoids stale-child accumulation and re-triggers
     // ContentControl presentation.
+    // Inspect a node by NAME (its label), then tier + type; then its attrs.
     const onSelect = (n: LaidOutNode) => this.set_property_value(ExampleRunnerVM.SelectedNodeTextKey,
-      [`${n.id} · ${n.sub} · typeOf ${n.typeOf}`, ...Object.entries(n.attrs).map(([k, v]) => `${k} = ${JSON.stringify(v)}`)].join("\n"));
-    this.graph = buildGraphView(layoutGraph(s.document), onSelect);
+      [`${n.label} · ${n.sub} · typeOf ${n.typeOf}`, ...Object.entries(n.attrs).map(([k, v]) => `${k} = ${JSON.stringify(v)}`)].join("\n"));
+    // Lay out from the debug-named document so graph nodes render by name, not by
+    // the opaque canonical id used in the JSON tab.
+    this.graph = buildGraphView(layoutGraph(s.graphDocument), onSelect);
     this.set_property_value(ExampleRunnerVM.GraphKey, this.graph.view);
   }
 }
