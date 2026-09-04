@@ -1,5 +1,8 @@
 {
   "name": "todl-demo-app",
+  "version": "0.1.0",
+  "description": "TODL demo Electron application",
+  "author": "Pragmatic Lab <evgen.napryaglo@gmail.com>",
   "private": true,
   "main": "./out/main/index.js",
   "scripts": {
