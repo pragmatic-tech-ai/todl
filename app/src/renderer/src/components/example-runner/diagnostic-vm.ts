@@ -1,5 +1,5 @@
 import { MuralBase, MetaData } from "@pragmatic-tech-ai/mural/runtime";
-import type { GoldenDiagnostic } from "../../../../shared/corpus-types.js";
+import type { GoldenDiagnostic } from "@shared/corpus-types.js";
 
 export class DiagnosticVM extends MuralBase {
   static LineKey = MuralBase.RegisterProperty<string>(DiagnosticVM, "Line", "", MetaData.None);

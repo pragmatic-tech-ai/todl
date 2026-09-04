@@ -1,5 +1,5 @@
 import { MuralBase, MetaData, RelayCommand, type ICommand } from "@pragmatic-tech-ai/mural/runtime";
-import type { CorpusEntry } from "../../shared/corpus-types.js";
+import type { CorpusEntry } from "@shared/corpus-types.js";
 import { PlaygroundVM } from "./pages/playground/playground-vm.js";
 import { GalleryVM } from "./pages/gallery/gallery-vm.js";
 import { DocsVM } from "./pages/docs/docs-vm.js";

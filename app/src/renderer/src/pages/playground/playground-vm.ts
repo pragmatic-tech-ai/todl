@@ -1,7 +1,7 @@
 import { MuralBase, MetaData, RelayCommand, Visibility, type ICommand } from "@pragmatic-tech-ai/mural/runtime";
-import { CORPUS } from "../../../../examples/corpus.generated.js";
-import type { CorpusEntry } from "../../../../shared/corpus-types.js";
-import { compareToGolden } from "../../../../shared/golden-compare.js";
+import { CORPUS } from "@examples/corpus.generated.js";
+import type { CorpusEntry } from "@shared/corpus-types.js";
+import { compareToGolden } from "@shared/golden-compare.js";
 import { ExampleRunnerVM } from "../../components/example-runner/example-runner-vm.js";
 import { ExampleRefVM } from "./example-ref-vm.js";
 import { readSourceFromHash, writeSourceToHash, copyCurrentLink } from "./permalink-sync.js";

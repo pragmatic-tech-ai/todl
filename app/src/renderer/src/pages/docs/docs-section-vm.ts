@@ -1,6 +1,6 @@
 import { MuralBase, MetaData } from "@pragmatic-tech-ai/mural/runtime";
-import type { CorpusEntry } from "../../../../shared/corpus-types.js";
-import { compileForDisplay } from "../../../../shared/compile-for-display.js";
+import type { CorpusEntry } from "@shared/corpus-types.js";
+import { compileForDisplay } from "@shared/compile-for-display.js";
 import { MonacoEditorHost } from "../../editor/monaco-editor-host.js";
 
 /** Keep the first `n` lines; append an ellipsis marker if truncated. */

@@ -1,4 +1,4 @@
-import { encodeState, decodeState } from "../../../../shared/permalink.js";
+import { encodeState, decodeState } from "@shared/permalink.js";
 
 /** Read a shared source from the current URL hash, or null if none/invalid.
  *  Isolates all window/location access so PlaygroundVM stays testable. */

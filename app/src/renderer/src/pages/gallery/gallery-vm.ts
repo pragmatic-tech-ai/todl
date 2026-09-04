@@ -1,6 +1,6 @@
 import { MuralBase, MetaData } from "@pragmatic-tech-ai/mural/runtime";
-import { CORPUS } from "../../../../examples/corpus.generated.js";
-import type { CorpusEntry } from "../../../../shared/corpus-types.js";
+import { CORPUS } from "@examples/corpus.generated.js";
+import type { CorpusEntry } from "@shared/corpus-types.js";
 import { GalleryCardVM } from "./gallery-card-vm.js";
 
 export class GalleryVM extends MuralBase {

@@ -1,6 +1,6 @@
 import { MuralBase, MetaData } from "@pragmatic-tech-ai/mural/runtime";
-import type { CorpusEntry } from "../../../../shared/corpus-types.js";
-import { verifyExample } from "../../../../shared/verify.js";
+import type { CorpusEntry } from "@shared/corpus-types.js";
+import { verifyExample } from "@shared/verify.js";
 
 export class GalleryCardVM extends MuralBase {
   static TitleKey = MuralBase.RegisterProperty<string>(GalleryCardVM, "Title", "", MetaData.None);
