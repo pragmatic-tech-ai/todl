@@ -1,6 +1,6 @@
 import { MuralBase, MetaData } from "@pragmatic-tech-ai/mural/runtime";
-import { CORPUS } from "../../../../examples/corpus.generated.js";
-import { byGroup } from "../../../../shared/corpus-access.js";
+import { CORPUS } from "@examples/corpus.generated.js";
+import { byGroup } from "@shared/corpus-access.js";
 import { DocsSectionVM } from "./docs-section-vm.js";
 
 export class DocsVM extends MuralBase {

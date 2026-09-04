@@ -2,7 +2,7 @@ import { Canvas, Border, TextBlock, Line, StackPanel, Path } from "@pragmatic-te
 import { Pen, SolidColorBrush, Color, Thickness, RotateTransform, PointerEventArgs, PointerButton, WheelEventArgs, ModifierKeys, hasModifier, ScaleTransform } from "@pragmatic-tech-ai/mural/visual-engine";
 import { ScrollViewer } from "@pragmatic-tech-ai/mural/framework";
 import { Application } from "@pragmatic-tech-ai/mural/runtime";
-import { type GraphLayout, type LaidOutNode, edgeGeometry } from "../../../../shared/graph-layout.js";
+import { type GraphLayout, type LaidOutNode, edgeGeometry } from "@shared/graph-layout.js";
 
 const ARROW = "M 0 0 L -9 -4 L -9 4 Z";                 // tip at origin, body toward -X
 const ARROW_INSET = 14;                                 // keep the tip off the target box

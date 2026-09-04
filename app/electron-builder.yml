@@ -1,0 +1,17 @@
+appId: com.pragmatic-tech-ai.todl
+productName: TODL
+directories:
+  output: release
+  buildResources: build
+files:
+  - out/**
+  - package.json
+  - "!node_modules/**"
+asar: true
+win:
+  target: [msi]
+linux:
+  target: [AppImage, deb]
+  category: Development
+  maintainer: Pragmatic Lab <evgen.napryaglo@gmail.com>
+  artifactName: ${productName}-${version}-${arch}.${ext}

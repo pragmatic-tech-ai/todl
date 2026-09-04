@@ -1,8 +1,8 @@
 import { MuralBase, MetaData, RelayCommand, Visibility, type ICommand } from "@pragmatic-tech-ai/mural/runtime";
 import type { Visual } from "@pragmatic-tech-ai/mural/visual-engine";
-import type { CorpusEntry } from "../../../../shared/corpus-types.js";
-import { compileStages } from "../../../../shared/compile-stages.js";
-import { layoutGraph, type LaidOutNode } from "../../../../shared/graph-layout.js";
+import type { CorpusEntry } from "@shared/corpus-types.js";
+import { compileStages } from "@shared/compile-stages.js";
+import { layoutGraph, type LaidOutNode } from "@shared/graph-layout.js";
 import { DiagnosticVM } from "./diagnostic-vm.js";
 import { buildGraphView, type GraphController } from "./graph-view.js";
 import { downloadText, copyText } from "./download.js";
