@@ -76,10 +76,12 @@ export class PackageManager {
   // ── publish / fetch already-built packages ──
   /** Publish an ALREADY-compiled package directory (registry PUT). */
   publish(compiledDir: string): Promise<void>;
-  /** Download a published tarball to `outFile`. */
-  get(refInput: string, outFile: string): Promise<void>;
+  /** Download a published tarball. Writes to `outFile`, or a default
+   *  `<unscoped-name>-<version|latest>.tgz` in the cwd. Returns the path written. */
+  get(refInput: string, outFile?: string): Promise<string>;
 
   private static parseRef(input: string): PackageRef;  // "name@version" split
+  private static unscoped(name: string): string;       // for the default filename
 }
 ```
 
@@ -108,7 +110,7 @@ The constructor takes `NpmRegistryConfig` directly. Its transport seam
   and exit 1 **without publishing**; else
   `new PackageManager(config).publish(outDir)`.
 - `list` / `versions <name>` → `manager.list()` / `manager.versions(name)`.
-- `get <ref> [--out f]` → `manager.get(ref, outFile)`.
+- `get <ref> [--out f]` → `manager.get(ref, out)` (out optional); print the returned path.
 
 ### RegistryBridge (app)
 
