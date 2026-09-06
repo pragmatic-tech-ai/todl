@@ -42,6 +42,8 @@ export {
   FetchTransport,
   createTgz,
   type TarEntry,
+  TarReader,
+  type TarFile,
   integrity,
   shasum,
   verifyIntegrity,
