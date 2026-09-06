@@ -9,8 +9,7 @@ import { toJSON } from "../../emit/json.js";
 import { DocumentSource, TODL } from "../../runtime/index.js";
 import {
   parseManifest,
-  packProject,
-  FileSink,
+  PackageCompiler,
   readInstalledPackages,
   resolveClosure,
   composeClosure,
@@ -44,7 +43,8 @@ async function installFixture(): Promise<string> {
   const packInto = async (project: string, bases: ReturnType<typeof toJSON>[]): Promise<void> => {
     const m = manifest(project);
     const dir = join(nodeModules, "@pragmatic-tech-ai", m.id as string);
-    await packProject({ manifest: m, sources: sources(project), bases }, new FileSink(dir));
+    // Inject the bases the fixture already compiled, instead of resolving from disk.
+    await new PackageCompiler({ resolver: { resolve: () => Promise.resolve(bases) } }).compile(join(PROJECTS, project), { outDir: dir });
   };
   await packInto("meta-models/tech-architecture", []);
   await packInto("libraries/microsoft", [metaDoc]);

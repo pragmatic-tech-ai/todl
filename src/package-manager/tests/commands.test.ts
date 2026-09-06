@@ -1,27 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync, mkdtempSync, mkdirSync, copyFileSync } from "node:fs";
+import { readFileSync, mkdtempSync, mkdirSync, copyFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { parseManifest, packProject, FileSink, packCommand } from "../index.js";
+import { PackageCompiler, packCommand } from "../index.js";
 
 const PROJECTS = join(dirname(fileURLToPath(import.meta.url)), "../../../test_projects");
-
-type Src = { uri: string; text: string };
-function sources(project: string): Src[] {
-  const root = join(PROJECTS, project);
-  const walk = (dir: string): Src[] =>
-    readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
-      const p = join(dir, e.name);
-      if (e.isDirectory()) return walk(p);
-      return e.name.endsWith(".todl")
-        ? [{ uri: p.slice(root.length + 1).split("\\").join("/"), text: readFileSync(p, "utf8") }]
-        : [];
-    });
-  return walk(root);
-}
-const manifest = (project: string) => parseManifest(readFileSync(join(PROJECTS, project, "project.plexus"), "utf8"));
 
 /** A temp copy of the microsoft library project with its meta-model dependency
  *  installed into node_modules under `scope` — a realistic "ready to pack" project.
@@ -33,11 +18,9 @@ async function setupLibraryProject(scope = "@pragmatic-tech-ai"): Promise<string
   copyFileSync(join(PROJECTS, "libraries/microsoft/project.plexus"), join(dir, "project.plexus"));
   copyFileSync(join(PROJECTS, "libraries/microsoft/microsoft.todl"), join(dir, "microsoft.todl"));
   const dep = join(dir, "node_modules", scope, "todl-test-tech-architecture");
-  await packProject(
-    { manifest: manifest("meta-models/tech-architecture"), sources: sources("meta-models/tech-architecture"), bases: [] },
-    new FileSink(dep),
-    { scope },
-  );
+  // Compile the meta-model project straight into the library's node_modules (it has
+  // no deps of its own, so this is offline). Mirrors a real `npm install` of the dep.
+  await new PackageCompiler().compile(join(PROJECTS, "meta-models/tech-architecture"), { scope, outDir: dep });
   return dir;
 }
 
