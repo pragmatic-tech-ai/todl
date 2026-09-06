@@ -19,6 +19,8 @@ export {
   type PackageCompilerDeps,
 } from "./package-compiler.js";
 export { RegistryBaseResolver, type BaseResolver, type RegistryFactory } from "./base-resolver.js";
+export { PackageManager, type PackageSource } from "./package-manager.js";
+export { ProjectInstaller, type NpmRunner } from "./project-installer.js";
 export { FileSink, MemorySink } from "./sinks.js";
 export {
   resolveClosure,
@@ -29,15 +31,6 @@ export {
 } from "./resolve.js";
 export { readInstalledPackages } from "./node-loader.js";
 export { readProject, type Project } from "./project.js";
-export {
-  packCommand,
-  publishCommand,
-  installCommand,
-  listCommand,
-  versionsCommand,
-  getCommand,
-  type PackOptions,
-} from "./commands.js";
 export { resolveRegistryConfig, type RegistryCliOptions } from "./registry/config.js";
 export {
   NpmRegistry,

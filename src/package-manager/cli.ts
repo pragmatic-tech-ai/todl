@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
- * The `todl` package-manager CLI (design: todl-package-manager §5 + registry
- * client). `pack` and `install` are local/npm operations; `publish`, `list`,
- * `versions`, and `get` speak the registry protocol directly via {@link NpmRegistry}.
+ * The `todl` package-manager CLI (design: package-manager). It orchestrates the
+ * three classes directly: `PackageCompiler` (project → compiled package),
+ * `ProjectInstaller` (npm install), and `PackageManager` (registry ops).
+ * `publish` is the compile-then-publish composition.
  *
  *   todl pack     [dir] [--scope <s>]
  *   todl install  [dir]
@@ -13,15 +14,11 @@
  *
  * Registry config layers flags → env → .npmrc → defaults (see resolveRegistryConfig).
  */
-import {
-  packCommand,
-  publishCommand,
-  installCommand,
-  listCommand,
-  versionsCommand,
-  getCommand,
-} from "./commands.js";
-import type { RegistryCliOptions } from "./registry/config.js";
+import { join } from "node:path";
+import { PackageCompiler } from "./package-compiler.js";
+import { PackageManager } from "./package-manager.js";
+import { ProjectInstaller } from "./project-installer.js";
+import { resolveRegistryConfig, type RegistryCliOptions } from "./registry/config.js";
 
 interface ParsedArgs {
   positionals: string[];
@@ -62,11 +59,12 @@ async function main(argv: readonly string[]): Promise<number> {
   const [command, ...rest] = argv;
   const { positionals, flags, out } = parseArgs(rest);
   const cwd = ".";
+  const manager = () => new PackageManager(resolveRegistryConfig(cwd, flags, process.env));
 
   switch (command) {
     case "pack": {
       const directory = positionals[0] ?? cwd;
-      const result = await packCommand(directory, flags.scope !== undefined ? { scope: flags.scope } : {});
+      const result = await new PackageCompiler().compile(directory, flags.scope !== undefined ? { scope: flags.scope } : {});
       if (!result.ok) {
         console.error(result.errors.map((e) => e.message).join("\n"));
         return 1;
@@ -75,15 +73,22 @@ async function main(argv: readonly string[]): Promise<number> {
       return 0;
     }
     case "install":
-      return installCommand(positionals[0] ?? cwd);
+      return new ProjectInstaller().install(positionals[0] ?? cwd);
     case "publish": {
       const directory = positionals[0] ?? cwd;
-      await publishCommand(directory, flags);
+      const config = resolveRegistryConfig(directory, flags, process.env);
+      const outDir = out ?? join(directory, "dist");
+      const result = await new PackageCompiler().compile(directory, { scope: config.scope, outDir });
+      if (!result.ok) {
+        console.error(result.errors.map((e) => e.message).join("\n"));
+        return 1;
+      }
+      await new PackageManager(config).publish(outDir);
       console.error(`published ${directory}`);
       return 0;
     }
     case "list": {
-      const names = await listCommand(cwd, flags);
+      const names = await manager().list();
       for (const name of names) console.log(name);
       return 0;
     }
@@ -93,7 +98,7 @@ async function main(argv: readonly string[]): Promise<number> {
         console.error("usage: todl versions <name>");
         return 1;
       }
-      const { versions, distTags } = await versionsCommand(cwd, name, flags);
+      const { versions, distTags } = await manager().versions(name);
       for (const version of versions) console.log(version);
       for (const [tag, version] of Object.entries(distTags)) console.error(`  ${tag} -> ${version}`);
       return 0;
@@ -104,7 +109,7 @@ async function main(argv: readonly string[]): Promise<number> {
         console.error("usage: todl get <name>[@version] [--out <file.tgz>]");
         return 1;
       }
-      const file = await getCommand(cwd, ref, flags, out);
+      const file = await manager().get(ref, out);
       console.error(`wrote ${file}`);
       return 0;
     }

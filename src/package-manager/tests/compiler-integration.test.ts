@@ -4,7 +4,7 @@ import { readFileSync, mkdtempSync, mkdirSync, copyFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { PackageCompiler, packCommand } from "../index.js";
+import { PackageCompiler } from "../index.js";
 
 const PROJECTS = join(dirname(fileURLToPath(import.meta.url)), "../../../test_projects");
 
@@ -24,9 +24,9 @@ async function setupLibraryProject(scope = "@pragmatic-tech-ai"): Promise<string
   return dir;
 }
 
-test("packCommand compiles against installed deps and writes dist/", async () => {
+test("compile builds against installed deps and writes dist/", async () => {
   const dir = await setupLibraryProject();
-  const result = await packCommand(dir);
+  const result = await new PackageCompiler().compile(dir);
   assert.ok(result.ok, `expected clean pack; errors: ${result.errors.map((e) => e.message).join(", ")}`);
 
   const pkg = JSON.parse(readFileSync(join(dir, "dist", "package.json"), "utf8"));
@@ -36,9 +36,9 @@ test("packCommand compiles against installed deps and writes dist/", async () =>
   assert.match(readFileSync(join(dir, "dist", "index.js"), "utf8"), /export const document =/);
 });
 
-test("packCommand honors a scope override end-to-end (name + resolution)", async () => {
+test("compile honors a scope override end-to-end (name + resolution)", async () => {
   const dir = await setupLibraryProject("@acme");
-  const result = await packCommand(dir, { scope: "@acme" });
+  const result = await new PackageCompiler().compile(dir, { scope: "@acme" });
   assert.ok(result.ok, `expected clean pack; errors: ${result.errors.map((e) => e.message).join(", ")}`);
   const pkg = JSON.parse(readFileSync(join(dir, "dist", "package.json"), "utf8"));
   assert.equal(pkg.name, "@acme/todl-test-microsoft");
