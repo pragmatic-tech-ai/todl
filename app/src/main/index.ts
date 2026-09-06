@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog } from "electron";
 import { join } from "node:path";
 import { electronApp, is } from "@electron-toolkit/utils";
-import { NpmRegistry, TarReader, resolveClosure } from "@pragmatic-tech-ai/todl/package-manager";
+import { PackageManager } from "@pragmatic-tech-ai/todl/package-manager";
 import { TokenStore } from "./registry/token-store.js";
 import { SettingsStore } from "./registry/settings-store.js";
 import { RegistryBridge } from "./registry/registry-bridge.js";
@@ -39,10 +39,7 @@ void app.whenReady().then(() => {
   const bridge = new RegistryBridge({
     tokenStore: new TokenStore(userData, new SafeStorageEncryptor()),
     settingsStore: new SettingsStore(userData),
-    createRegistry: (config) => new NpmRegistry(config),
-    readPackage: (bytes) => TarReader.readPackage(bytes),
-    resolveClosure: (packages, rootDeps) => resolveClosure(packages, rootDeps),
-    readFiles: (bytes) => TarReader.read(bytes),
+    createManager: (config) => new PackageManager(config),
     env: process.env,
   });
   RegistryIpc.register(ipcMain, bridge, async () => {

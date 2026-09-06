@@ -53,7 +53,7 @@ test("getMeta returns the package kind via manifestKind", async () => {
 
 test("getPackage / getSources / resolveClosure / publishDir delegate to the manager", async () => {
   const bridge = makeBridge({
-    getPackage: () => Promise.resolve({ name: "@pragmatic-tech-ai/aws", meta: { kind: "library", id: "aws" }, dependencies: [], document: { nodes: [] } as any }),
+    getPackage: () => Promise.resolve({ name: "@pragmatic-tech-ai/aws", meta: { kind: "library", id: "aws" }, dependencies: [], document: { nodes: [] } } as any),
     getSources: () => Promise.resolve([{ name: "aws.todl", text: "concept EC2;\n" }]),
     resolveClosure: (deps) => Promise.resolve({ metaModels: [], libraries: [], order: [...deps] }),
     publish: () => Promise.resolve(),

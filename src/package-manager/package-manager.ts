@@ -41,7 +41,8 @@ export class PackageManager {
   /** The package's declared TODL kind, or "" if it carries no todl block. */
   async manifestKind(name: string): Promise<string> {
     const manifest = await this.registry.getManifest({ name });
-    return manifest.todl?.kind ?? "";
+    const todl = manifest.todl as { kind?: string } | undefined;
+    return todl?.kind ?? "";
   }
 
   /** Raw tarball bytes for a ref. */
