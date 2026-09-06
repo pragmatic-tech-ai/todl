@@ -13,6 +13,8 @@ import { Playground } from "./pages/playground/playground.mu";
 import { Gallery } from "./pages/gallery/gallery.mu";
 // @ts-expect-error compiled by vitePluginMural
 import { Docs } from "./pages/docs/docs.mu";
+// @ts-expect-error compiled by vitePluginMural
+import { Packages } from "./pages/packages/packages.mu";
 import { AppVM } from "./app-vm.js";
 import { initTodlEditor } from "./editor/todl-editor.js";
 
@@ -20,7 +22,7 @@ const app = new Application();
 // Boot dark unconditionally (ignore OS preference) — Plexus does the same via
 // `Application [ Theme = Material, Scheme = MaterialDark ]`.
 app.initialize({ theme: Material, scheme: MaterialDark });
-for (const dict of [AppShell, ExampleRunner, Playground, Gallery, Docs]) {
+for (const dict of [AppShell, ExampleRunner, Playground, Gallery, Docs, Packages]) {
   for (const [k, v] of dict.Clone().Entries()) app.Resources.Set(k, v);
 }
 

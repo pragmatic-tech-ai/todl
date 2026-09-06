@@ -5,6 +5,7 @@ import { compareToGolden } from "@shared/golden-compare.js";
 import { ExampleRunnerVM } from "../../components/example-runner/example-runner-vm.js";
 import { ExampleRefVM } from "./example-ref-vm.js";
 import { readSourceFromHash, writeSourceToHash, copyCurrentLink } from "./permalink-sync.js";
+import type { PackageSource } from "../../main/registry/registry-bridge.js";
 
 export class PlaygroundVM extends MuralBase {
   static RunnerKey = MuralBase.RegisterProperty<ExampleRunnerVM>(PlaygroundVM, "Runner", undefined as unknown as ExampleRunnerVM, MetaData.None);
@@ -70,4 +71,14 @@ export class PlaygroundVM extends MuralBase {
   }
 
   load(entry: CorpusEntry): void { this.loadEntry(entry); }
+
+  /** Load raw package sources into the editor (Open-in-Playground). Multiple files
+   *  are concatenated with a header per file; like a hashed session this has no
+   *  owning corpus example, so the golden chip stays collapsed. */
+  loadSource(sources: PackageSource[]): void {
+    this.loadedEntry = null;
+    const text = sources.map((s) => `// === ${s.name} ===\n${s.text}`).join("\n\n");
+    this.Runner.Source = text;
+    this.refreshGolden(); // collapses the chip (no loadedEntry)
+  }
 }

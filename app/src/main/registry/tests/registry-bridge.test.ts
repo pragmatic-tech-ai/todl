@@ -43,7 +43,12 @@ class FakeRegistry implements RegistryLike {
   }
 }
 
-function makeBridge(registry: RegistryLike, readPackage = () => undefined as any, resolve = () => ({}) as any) {
+function makeBridge(
+  registry: RegistryLike,
+  readPackage = () => undefined as any,
+  resolve = () => ({}) as any,
+  readFiles: (bytes: Uint8Array) => { path: string; bytes: Uint8Array }[] = () => [],
+) {
   const dir = freshDir();
   return new RegistryBridge({
     tokenStore: new TokenStore(dir, new PlainEncryptor()),
@@ -51,6 +56,7 @@ function makeBridge(registry: RegistryLike, readPackage = () => undefined as any
     createRegistry: () => registry,
     readPackage,
     resolveClosure: resolve,
+    readFiles,
   });
 }
 
@@ -82,6 +88,7 @@ test("setSettings is reflected by a rebuilt registry config", async () => {
     },
     readPackage: () => undefined as any,
     resolveClosure: () => ({}) as any,
+    readFiles: () => [],
   });
   await bridge.setSettings({ org: "acme" });
   await bridge.list();
@@ -105,6 +112,22 @@ test("resolveClosure BFS-fetches transitive deps then delegates to the pure reso
   );
   const closure: any = await bridge.resolveClosure(["@pragmatic-tech-ai/aws"]);
   assert.deepEqual(closure.order.sort(), ["@pragmatic-tech-ai/aws", "@pragmatic-tech-ai/tech-architecture"]);
+});
+
+test("getSources returns only package/src files, stripped to their uri", async () => {
+  const content = new Map<string, Uint8Array>([["@pragmatic-tech-ai/aws", enc.encode("aws-bytes")]]);
+  const files = [
+    { path: "package/package.json", bytes: enc.encode("{}") },
+    { path: "package/model.json", bytes: enc.encode("{}") },
+    { path: "package/src/aws.todl", bytes: enc.encode("concept EC2;\n") },
+    { path: "package/src/nested/more.todl", bytes: enc.encode("concept S3;\n") },
+  ];
+  const bridge = makeBridge(new FakeRegistry([], content), () => undefined as any, () => ({}) as any, () => files);
+  const sources = await bridge.getSources({ name: "@pragmatic-tech-ai/aws" });
+  assert.deepEqual(sources, [
+    { name: "aws.todl", text: "concept EC2;\n" },
+    { name: "nested/more.todl", text: "concept S3;\n" },
+  ]);
 });
 
 test("getPackage reads the fetched tarball into an InstalledPackage", async () => {
