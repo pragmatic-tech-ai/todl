@@ -9,7 +9,16 @@ export {
   type PackageJsonOptions,
   type TodlPackageMeta,
 } from "./package-json.js";
-export { packProject, type PackInput, type PackResult } from "./pack.js";
+export {
+  PackageCompiler,
+  NodeProjectReader,
+  type ProjectReader,
+  type SinkFactory,
+  type CompileOptions,
+  type CompileResult,
+  type PackageCompilerDeps,
+} from "./package-compiler.js";
+export { RegistryBaseResolver, type BaseResolver, type RegistryFactory } from "./base-resolver.js";
 export { FileSink, MemorySink } from "./sinks.js";
 export {
   resolveClosure,
