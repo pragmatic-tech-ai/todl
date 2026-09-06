@@ -26,6 +26,13 @@
         "development": "./src/language-server/index.ts",
         "default": "./dist/language-server/index.js"
       }
+    },
+    "./package-manager": {
+      "types": "./dist/package-manager/index.d.ts",
+      "import": {
+        "development": "./src/package-manager/index.ts",
+        "default": "./dist/package-manager/index.js"
+      }
     }
   },
   "bin": {

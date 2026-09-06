@@ -15,4 +15,5 @@ export {
   FetchTransport,
 } from "./transport.js";
 export { createTgz, type TarEntry } from "./tar.js";
+export { TarReader, type TarFile } from "./tar-reader.js";
 export { integrity, shasum, verifyIntegrity } from "./integrity.js";

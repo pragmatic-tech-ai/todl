@@ -8,7 +8,14 @@ const repoRoot = resolve(here, "..");
 const rendererSrc = resolve(here, "src/renderer");
 
 export default defineConfig({
-  main: { plugins: [externalizeDepsPlugin()] },
+  main: {
+    plugins: [externalizeDepsPlugin()],
+    resolve: {
+      alias: [
+        { find: /^@pragmatic-tech-ai\/todl\/package-manager$/, replacement: resolve(repoRoot, "dist/package-manager/index.js") },
+      ],
+    },
+  },
   preload: { plugins: [externalizeDepsPlugin()] },
   renderer: {
     plugins: [vitePluginMural()],
