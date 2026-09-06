@@ -10,26 +10,25 @@ export class PackagesVM extends MuralBase {
   static ItemsKey = MuralBase.RegisterProperty<PackageItemVM[]>(PackagesVM, "Items", [], MetaData.None);
   static SelectedKey = MuralBase.RegisterProperty<PackageItemVM | undefined>(PackagesVM, "Selected", undefined, MetaData.None);
   static DetailKey = MuralBase.RegisterProperty<PackageDetailVM | undefined>(PackagesVM, "Detail", undefined, MetaData.None);
-  static TokenInputKey = MuralBase.RegisterProperty<string>(PackagesVM, "TokenInput", "", MetaData.None);
   static SettingsVisibilityKey = MuralBase.RegisterProperty<Visibility>(PackagesVM, "SettingsVisibility", Visibility.Collapsed, MetaData.None);
   static StatusMessageKey = MuralBase.RegisterProperty<string>(PackagesVM, "StatusMessage", "", MetaData.None);
-  static SetTokenKey = MuralBase.RegisterProperty<ICommand | undefined>(PackagesVM, "SetToken", undefined, MetaData.None);
+  static ConfigureKey = MuralBase.RegisterProperty<ICommand | undefined>(PackagesVM, "Configure", undefined, MetaData.None);
 
   get Title(): string { return this.get_property_value(PackagesVM.TitleKey); }
   get Items(): PackageItemVM[] { return this.get_property_value(PackagesVM.ItemsKey); }
-  get TokenInput(): string { return this.get_property_value(PackagesVM.TokenInputKey); }
   get SettingsVisibility(): Visibility { return this.get_property_value(PackagesVM.SettingsVisibilityKey); }
   get StatusMessage(): string { return this.get_property_value(PackagesVM.StatusMessageKey); }
-  get SetToken(): ICommand | undefined { return this.get_property_value(PackagesVM.SetTokenKey); }
+  get Configure(): ICommand | undefined { return this.get_property_value(PackagesVM.ConfigureKey); }
 
   private scope = "@pragmatic-tech-ai";
 
   constructor(
     private readonly client: RegistryClient,
     private readonly onOpen: (name: string) => void,
+    private readonly onConfigure: () => void,
   ) {
     super();
-    this.set_property_value(PackagesVM.SetTokenKey, new RelayCommand(() => void this.applyToken()));
+    this.set_property_value(PackagesVM.ConfigureKey, new RelayCommand(() => this.onConfigure()));
     // Selecting a row builds + loads its detail pane.
     this.AddPropertyChangedListener(PackagesVM.SelectedKey, () => {
       const sel = this.get_property_value(PackagesVM.SelectedKey);
@@ -46,22 +45,19 @@ export class PackagesVM extends MuralBase {
     this.scope = config.scope;
     this.set_property_value(PackagesVM.SettingsVisibilityKey, config.hasToken ? Visibility.Collapsed : Visibility.Visible);
     if (!config.hasToken) {
-      this.set_property_value(PackagesVM.StatusMessageKey, "Set a GitHub Packages token to browse packages.");
+      this.set_property_value(PackagesVM.StatusMessageKey, "No token configured — open Setup to add one.");
       this.set_property_value(PackagesVM.ItemsKey, []);
       return;
     }
     try {
       const names = await this.client.list();
-      this.set_property_value(PackagesVM.ItemsKey, names.map((n) => new PackageItemVM(n)));
+      const items = names.map((n) => new PackageItemVM(n));
+      this.set_property_value(PackagesVM.ItemsKey, items);
       this.set_property_value(PackagesVM.StatusMessageKey, names.length === 0 ? "No packages found." : "");
+      // Stamp each row's kind badge from its manifest (cheap packument read).
+      void Promise.all(items.map(async (it) => it.setKind(await this.client.getMeta(it.name))));
     } catch (err) {
       this.set_property_value(PackagesVM.StatusMessageKey, `Failed to list packages: ${(err as Error).message}`);
     }
-  }
-
-  private async applyToken(): Promise<void> {
-    await this.client.setToken(this.TokenInput);
-    this.set_property_value(PackagesVM.TokenInputKey, "");
-    await this.load();
   }
 }

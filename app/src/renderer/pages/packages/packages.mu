@@ -5,7 +5,10 @@ import PackageDetailVM from "./package-detail-vm.ts"
 resources Packages {
     DataTemplate x:key="PackageItemTemplate" [DataType = PackageItemVM] {
         Border [ Fill = @SurfaceVariant, Padding = (12,8,12,8), Margin = (0,0,0,6) ] {
-            TextBlock [ FontSize = 13, Text = $Name ]
+            DockPanel {
+                TextBlock [ DockPanel.Dock = Right, FontSize = 10, Foreground = @Primary, Text = $Kind ]
+                TextBlock [ FontSize = 13, Text = $Name ]
+            }
         }
     }
     DataTemplate [DataType = PackageDetailVM] {
@@ -32,8 +35,7 @@ resources Packages {
             Border [ DockPanel.Dock = Top, Visibility = $SettingsVisibility, Margin = (12,0,12,8), Fill = @SurfaceVariant, Padding = (12,10,12,10) ] {
                 StackPanel [ Orientation = Vertical ] {
                     TextBlock [ FontSize = 12, Text = $StatusMessage ]
-                    TextBox [ Margin = (0,8,0,8), Text = $TokenInput ]
-                    Button [ Command = $SetToken ] { TextBlock [ Text = "Save token" ] }
+                    Button [ Margin = (0,8,0,0), Command = $Configure ] { TextBlock [ Text = "Open Setup" ] }
                 }
             }
             Border [ DockPanel.Dock = Left, Width = 260 ] {
