@@ -9,16 +9,25 @@
  * replace it — the mutable `__todlBridge` global is the injection point for tests
  * (never set in production).
  */
+import type { IServiceProvider } from "@pragmatic-tech-ai/mural/runtime";
 import type {
   PackageRef,
   VersionList,
   InstalledPackage,
   ResolvedClosure,
 } from "@pragmatic-tech-ai/todl/package-manager";
-import type { ConfigView, PackageSource } from "../../main/registry/registry-bridge.js";
-import type { TodlBridge } from "../env.js";
+import type { ConfigView, PackageSource } from "../../../main/registry/registry-bridge.js";
+import type { TodlBridge } from "../../env.js";
 
+// A plain class (NOT ServiceBase): it only wraps the window bridge and never
+// resolves peers, so keeping mural imports type-only preserves node-testability
+// (mural's ./runtime subpath is not node-resolvable). The service container
+// registers it by class-token and constructs it with the provider; peers resolve
+// it via `provider.getRequired(RegistryClient)`.
 export class RegistryClient {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  constructor(_provider?: IServiceProvider) {}
+
   private bridge(): TodlBridge {
     return (window as unknown as { __todlBridge?: TodlBridge }).__todlBridge ?? window.todl;
   }
