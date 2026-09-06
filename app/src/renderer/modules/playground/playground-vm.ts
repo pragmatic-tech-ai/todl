@@ -5,7 +5,7 @@ import { compareToGolden } from "@shared/golden-compare.js";
 import { ExampleRunnerVM } from "../../components/example-runner/example-runner-vm.js";
 import { ExampleRefVM } from "./example-ref-vm.js";
 import { readSourceFromHash, writeSourceToHash, copyCurrentLink } from "./permalink-sync.js";
-import type { PackageSource } from "../../main/registry/registry-bridge.js";
+import type { PackageSource } from "@pragmatic-tech-ai/todl/package-manager";
 
 export class PlaygroundVM extends MuralBase {
   static RunnerKey = MuralBase.RegisterProperty<ExampleRunnerVM>(PlaygroundVM, "Runner", undefined as unknown as ExampleRunnerVM, MetaData.None);

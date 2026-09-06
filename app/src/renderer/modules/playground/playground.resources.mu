@@ -1,6 +1,14 @@
 import PlaygroundVM from "./playground-vm.ts"
+import PlaygroundDocument from "./playground-document.ts"
 
-resources Playground {
+resources PlaygroundResources {
+    // The document tab: hosts its PlaygroundVM, whose own template renders the
+    // editor + graph. (A PlaygroundDocument is an IDocument; the content host
+    // materializes it through this template.)
+    DataTemplate [DataType = PlaygroundDocument] {
+        ContentControl [ Content = $VM ]
+    }
+
     DataTemplate [DataType = PlaygroundVM] {
         DockPanel {
             DockPanel [ DockPanel.Dock = Top, Margin = (8,8,8,4) ] {

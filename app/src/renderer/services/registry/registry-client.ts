@@ -15,8 +15,9 @@ import type {
   VersionList,
   InstalledPackage,
   ResolvedClosure,
+  PackageSource,
 } from "@pragmatic-tech-ai/todl/package-manager";
-import type { ConfigView, PackageSource } from "../../../main/registry/registry-bridge.js";
+import type { ConfigView } from "../../../main/registry/registry-bridge.js";
 import type { TodlBridge } from "../../env.js";
 
 // A plain class (NOT ServiceBase): it only wraps the window bridge and never
