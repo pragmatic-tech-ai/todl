@@ -7,6 +7,7 @@ import { SettingsStore } from "./registry/settings-store.js";
 import { RegistryBridge } from "./registry/registry-bridge.js";
 import { RegistryIpc } from "./registry/register-ipc.js";
 import { SafeStorageEncryptor } from "./registry/safe-storage-encryptor.js";
+import { Updater } from "./updater.js";
 
 function createWindow(): void {
   const window = new BrowserWindow({
@@ -53,6 +54,7 @@ void app.whenReady().then(() => {
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+  Updater.init();
 });
 
 app.on("window-all-closed", () => {

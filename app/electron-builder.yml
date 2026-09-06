@@ -15,3 +15,9 @@ linux:
   category: Development
   maintainer: Pragmatic Lab <evgen.napryaglo@gmail.com>
   artifactName: ${productName}-${version}-${arch}.${ext}
+# Auto-update feed (inert until a releases repo + CI publish artifacts). Only a
+# packaged Linux AppImage auto-updates; see src/main/updater.ts.
+publish:
+  provider: github
+  owner: pragmatic-tech-ai
+  repo: todl
