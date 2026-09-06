@@ -41,6 +41,7 @@ void app.whenReady().then(() => {
     createRegistry: (config) => new NpmRegistry(config),
     readPackage: (bytes) => TarReader.readPackage(bytes),
     resolveClosure: (packages, rootDeps) => resolveClosure(packages, rootDeps),
+    readFiles: (bytes) => TarReader.read(bytes),
   });
   RegistryIpc.register(ipcMain, bridge);
 

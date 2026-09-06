@@ -10,7 +10,7 @@ import type {
   InstalledPackage,
   ResolvedClosure,
 } from "@pragmatic-tech-ai/todl/package-manager";
-import type { ConfigView } from "../../main/registry/registry-bridge.js";
+import type { ConfigView, PackageSource } from "../../main/registry/registry-bridge.js";
 
 export class RegistryClient {
   list(): Promise<string[]> {
@@ -24,6 +24,9 @@ export class RegistryClient {
   }
   getPackage(ref: PackageRef): Promise<InstalledPackage> {
     return window.todl.registry.getPackage(ref);
+  }
+  getSources(ref: PackageRef): Promise<PackageSource[]> {
+    return window.todl.registry.getSources(ref);
   }
   resolveClosure(rootDeps: string[]): Promise<ResolvedClosure> {
     return window.todl.registry.resolveClosure(rootDeps);

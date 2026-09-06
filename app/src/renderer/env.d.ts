@@ -4,7 +4,7 @@ import type {
   InstalledPackage,
   ResolvedClosure,
 } from "@pragmatic-tech-ai/todl/package-manager";
-import type { ConfigView } from "../main/registry/registry-bridge.js";
+import type { ConfigView, PackageSource } from "../main/registry/registry-bridge.js";
 
 export interface TodlBridge {
   registry: {
@@ -14,6 +14,7 @@ export interface TodlBridge {
     getPackage(ref: PackageRef): Promise<InstalledPackage>;
     resolveClosure(rootDeps: string[]): Promise<ResolvedClosure>;
     publishDir(dir: string): Promise<void>;
+    getSources(ref: PackageRef): Promise<PackageSource[]>;
   };
   config: {
     get(): Promise<ConfigView>;

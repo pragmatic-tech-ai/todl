@@ -10,7 +10,7 @@ function stubWindow(overrides: Record<string, (...a: any[]) => any> = {}) {
   };
   (globalThis as any).window = {
     todl: {
-      registry: { list: record("list"), versions: record("versions"), getContent: record("getContent"), getPackage: record("getPackage"), resolveClosure: record("resolveClosure"), publishDir: record("publishDir") },
+      registry: { list: record("list"), versions: record("versions"), getContent: record("getContent"), getPackage: record("getPackage"), resolveClosure: record("resolveClosure"), publishDir: record("publishDir"), getSources: record("getSources") },
       config: { get: record("get"), setToken: record("setToken"), setSettings: record("setSettings") },
     },
   };
@@ -32,10 +32,12 @@ test("versions/getPackage/resolveClosure forward their arguments", async () => {
   await client.versions("microsoft");
   await client.getPackage({ name: "aws" });
   await client.resolveClosure(["@pragmatic-tech-ai/aws"]);
-  assert.deepEqual(calls.map((c) => c[0]), ["versions", "getPackage", "resolveClosure"]);
+  await client.getSources({ name: "aws" });
+  assert.deepEqual(calls.map((c) => c[0]), ["versions", "getPackage", "resolveClosure", "getSources"]);
   assert.deepEqual(calls[0]![1], ["microsoft"]);
   assert.deepEqual(calls[1]![1], [{ name: "aws" }]);
   assert.deepEqual(calls[2]![1], [["@pragmatic-tech-ai/aws"]]);
+  assert.deepEqual(calls[3]![1], [{ name: "aws" }]);
 });
 
 test("getConfig / setToken / setSettings forward to the config namespace", async () => {

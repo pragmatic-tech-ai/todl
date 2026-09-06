@@ -13,6 +13,7 @@ const bridge = {
     getPackage: (ref: unknown) => ipcRenderer.invoke("registry:getPackage", ref),
     resolveClosure: (rootDeps: string[]) => ipcRenderer.invoke("registry:resolveClosure", rootDeps),
     publishDir: (dir: string) => ipcRenderer.invoke("registry:publishDir", dir),
+    getSources: (ref: unknown) => ipcRenderer.invoke("registry:getSources", ref),
   },
   config: {
     get: () => ipcRenderer.invoke("config:get"),

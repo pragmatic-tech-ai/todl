@@ -24,6 +24,12 @@ export interface RegistryLike {
   publishDir(dir: string): Promise<void>;
 }
 
+/** One authored source file recovered from a package tarball (`package/src/**`). */
+export interface PackageSource {
+  name: string;
+  text: string;
+}
+
 /** What `config:get` returns — never the token. */
 export interface ConfigView {
   registry: string;
@@ -41,7 +47,12 @@ export interface RegistryBridgeDeps {
   readPackage(bytes: Uint8Array): InstalledPackage | undefined;
   /** Resolve a dependency closure (prod: the package-manager `resolveClosure`). */
   resolveClosure(packages: readonly InstalledPackage[], rootDeps: readonly string[]): ResolvedClosure;
+  /** Read every file from tarball bytes (prod: `TarReader.read`). */
+  readFiles(bytes: Uint8Array): { path: string; bytes: Uint8Array }[];
 }
+
+const SRC_PREFIX = "package/src/";
+const decoder = new TextDecoder();
 
 export class RegistryBridge {
   constructor(private readonly deps: RegistryBridgeDeps) {}
@@ -83,6 +94,14 @@ export class RegistryBridge {
 
   async publishDir(dir: string): Promise<void> {
     return this.registry().publishDir(dir);
+  }
+
+  async getSources(ref: PackageRef): Promise<PackageSource[]> {
+    const bytes = await this.registry().getContent(ref);
+    return this.deps
+      .readFiles(bytes)
+      .filter((f) => f.path.startsWith(SRC_PREFIX))
+      .map((f) => ({ name: f.path.slice(SRC_PREFIX.length), text: decoder.decode(f.bytes) }));
   }
 
   async getConfig(): Promise<ConfigView> {
