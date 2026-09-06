@@ -126,6 +126,15 @@ test("listVersions and listPackages report what was published", async () => {
   assert.deepEqual(packages.sort(), ["aws", "microsoft"]);
 });
 
+test("getManifest returns the published version manifest incl. the todl block", async () => {
+  const registry = client(new FakeRegistry());
+  const tar = createTgz([{ path: "package/a", bytes: enc.encode("a") }]);
+  await registry.publish({ name: `${SCOPE}/aws`, version: "0.1.0", todl: { kind: "library", id: "aws" } } as never, tar);
+  const manifest = await registry.getManifest({ name: "aws" });
+  assert.equal(manifest.version, "0.1.0");
+  assert.deepEqual((manifest as { todl?: unknown }).todl, { kind: "library", id: "aws" });
+});
+
 test("publishDir tars a packed directory and publishes it", async () => {
   const dir = join(mkdtempSync(join(tmpdir(), "todl-reg-")), "dist");
   mkdirSync(join(dir, "src"), { recursive: true });

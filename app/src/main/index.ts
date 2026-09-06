@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, ipcMain, dialog } from "electron";
 import { join } from "node:path";
 import { electronApp, is } from "@electron-toolkit/utils";
 import { NpmRegistry, TarReader, resolveClosure } from "@pragmatic-tech-ai/todl/package-manager";
@@ -7,6 +7,7 @@ import { SettingsStore } from "./registry/settings-store.js";
 import { RegistryBridge } from "./registry/registry-bridge.js";
 import { RegistryIpc } from "./registry/register-ipc.js";
 import { SafeStorageEncryptor } from "./registry/safe-storage-encryptor.js";
+import { Updater } from "./updater.js";
 
 function createWindow(): void {
   const window = new BrowserWindow({
@@ -42,13 +43,18 @@ void app.whenReady().then(() => {
     readPackage: (bytes) => TarReader.readPackage(bytes),
     resolveClosure: (packages, rootDeps) => resolveClosure(packages, rootDeps),
     readFiles: (bytes) => TarReader.read(bytes),
+    env: process.env,
   });
-  RegistryIpc.register(ipcMain, bridge);
+  RegistryIpc.register(ipcMain, bridge, async () => {
+    const result = await dialog.showOpenDialog({ properties: ["openDirectory"] });
+    return result.canceled || result.filePaths.length === 0 ? "" : result.filePaths[0]!;
+  });
 
   createWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+  Updater.init();
 });
 
 app.on("window-all-closed", () => {

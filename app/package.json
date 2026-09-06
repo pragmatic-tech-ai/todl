@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@pragmatic-tech-ai/mural": "file:../../Mural",
+    "electron-updater": "^6.3.9",
     "monaco-editor": "^0.52.0",
     "opentype.js": "^2.0.0",
     "vscode-jsonrpc": "^8.2.0",

@@ -37,16 +37,31 @@ export class RegistryClient {
   getSources(ref: PackageRef): Promise<PackageSource[]> {
     return this.bridge().registry.getSources(ref);
   }
+  getMeta(name: string): Promise<string> {
+    return this.bridge().registry.getMeta(name);
+  }
+  publishDir(dir: string): Promise<void> {
+    return this.bridge().registry.publishDir(dir);
+  }
   resolveClosure(rootDeps: string[]): Promise<ResolvedClosure> {
     return this.bridge().registry.resolveClosure(rootDeps);
   }
   getConfig(): Promise<ConfigView> {
     return this.bridge().config.get();
   }
-  setToken(token: string): Promise<void> {
+  setStoredToken(token: string): Promise<void> {
     return this.bridge().config.setToken(token);
+  }
+  useEnvToken(name: string): Promise<void> {
+    return this.bridge().config.useEnvToken(name);
+  }
+  listEnvVars(): Promise<string[]> {
+    return this.bridge().config.listEnvVars();
   }
   setSettings(partial: Partial<{ registry: string; scope: string; org: string; githubApi: string }>): Promise<void> {
     return this.bridge().config.setSettings(partial);
+  }
+  pickDirectory(): Promise<string> {
+    return this.bridge().dialog.pickDirectory();
   }
 }

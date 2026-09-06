@@ -57,10 +57,11 @@ export interface NpmRegistryConfig {
   transport?: HttpTransport;
 }
 
-/** The shape of a packument (registry metadata document) we read. */
+/** The shape of a packument (registry metadata document) we read. Each version
+ *  entry is the published manifest (incl. any `todl` block) plus its `dist`. */
 interface Packument {
   "dist-tags"?: Record<string, string>;
-  versions?: Record<string, { dist?: { tarball?: string; integrity?: string } }>;
+  versions?: Record<string, PackageManifestJson & { dist?: { tarball?: string; integrity?: string } }>;
 }
 
 const decoder = new TextDecoder();
@@ -132,6 +133,17 @@ export class NpmRegistry {
       throw new Error(`integrity check failed for ${name}@${version}`);
     }
     return res.body;
+  }
+
+  /** Read a package's resolved version manifest from the packument (no tarball
+   *  download). Includes any published fields such as the `todl` block. */
+  async getManifest(ref: PackageRef): Promise<PackageManifestJson> {
+    const name = this.qualify(ref);
+    const packument = await this.packument(name);
+    const version = this.resolveVersion(packument, name, ref.version);
+    const manifest = packument.versions?.[version];
+    if (manifest === undefined) throw new Error(`no manifest for ${name}@${version}`);
+    return manifest;
   }
 
   /** Publish a tarball for `manifest` (its parsed package.json) via a registry

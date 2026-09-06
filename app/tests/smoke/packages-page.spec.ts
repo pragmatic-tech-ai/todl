@@ -24,7 +24,8 @@ async function clickPackages(window: Page): Promise<void> {
 test("no token: the Packages page shows the settings affordance", async () => {
   const { app, window } = await launch();
   await clickPackages(window);
-  await expect(window.getByText("Set a GitHub Packages token to browse packages.")).toBeVisible({ timeout: 10_000 });
+  await expect(window.getByText("No token configured — open Setup to add one.")).toBeVisible({ timeout: 10_000 });
+  await expect(window.getByText("Open Setup", { exact: true })).toBeVisible();
   await app.close();
 });
 
@@ -39,14 +40,17 @@ test("with a fake registry: list -> select -> detail facets -> open in playgroun
     const model = { nodes: [{ id: "a" }, { id: "b" }], edges: [{ from: "a", to: "b" }] };
     (window as unknown as { __todlBridge: unknown }).__todlBridge = {
       config: {
-        get: () => Promise.resolve({ registry: "r", scope: "@pragmatic-tech-ai", org: "o", hasToken: true }),
+        get: () => Promise.resolve({ registry: "r", scope: "@pragmatic-tech-ai", org: "o", tokenSource: "stored", tokenEnvVar: "", hasToken: true }),
         setToken: () => Promise.resolve(),
+        useEnvToken: () => Promise.resolve(),
+        listEnvVars: () => Promise.resolve([]),
         setSettings: () => Promise.resolve(),
       },
       registry: {
         list: () => Promise.resolve(["aws"]),
         versions: () => Promise.resolve({ versions: ["0.1.0"], distTags: { latest: "0.1.0" } }),
         getPackage: () => Promise.resolve({ name: "@pragmatic-tech-ai/aws", meta: { kind: "library", id: "aws" }, dependencies: ["@pragmatic-tech-ai/tech-architecture"], document: model }),
+        getMeta: () => Promise.resolve("library"),
         resolveClosure: () => Promise.resolve({ metaModels: [], libraries: [model], order: ["@pragmatic-tech-ai/tech-architecture", "@pragmatic-tech-ai/aws"] }),
         getContent: () => Promise.resolve(new Uint8Array()),
         getSources: () => Promise.resolve([{ name: "aws.todl", text: "concept EC2;\n" }]),
@@ -57,13 +61,14 @@ test("with a fake registry: list -> select -> detail facets -> open in playgroun
 
   await clickPackages(window);
 
-  // Master list renders the fake package.
+  // Master list renders the fake package + its kind badge (stamped async).
   const row = window.getByText("aws", { exact: true });
   await expect(row).toBeVisible({ timeout: 10_000 });
+  await expect(window.getByText("library", { exact: true }).first()).toBeVisible({ timeout: 10_000 });
   await row.click();
 
-  // Detail facets populate.
-  await expect(window.getByText("library", { exact: true })).toBeVisible();
+  // Detail facets populate (kind now appears in both row + detail — the counts +
+  // closure are unique to the detail pane).
   await expect(window.getByText("2 nodes · 1 edges")).toBeVisible();
   await expect(window.getByText("@pragmatic-tech-ai/tech-architecture  →  @pragmatic-tech-ai/aws")).toBeVisible();
 

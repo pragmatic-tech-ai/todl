@@ -12,6 +12,7 @@ export interface TodlBridge {
     versions(name: string): Promise<VersionList>;
     getContent(ref: PackageRef): Promise<Uint8Array>;
     getPackage(ref: PackageRef): Promise<InstalledPackage>;
+    getMeta(name: string): Promise<string>;
     resolveClosure(rootDeps: string[]): Promise<ResolvedClosure>;
     publishDir(dir: string): Promise<void>;
     getSources(ref: PackageRef): Promise<PackageSource[]>;
@@ -19,7 +20,12 @@ export interface TodlBridge {
   config: {
     get(): Promise<ConfigView>;
     setToken(token: string): Promise<void>;
+    useEnvToken(name: string): Promise<void>;
+    listEnvVars(): Promise<string[]>;
     setSettings(partial: Partial<{ registry: string; scope: string; org: string; githubApi: string }>): Promise<void>;
+  };
+  dialog: {
+    pickDirectory(): Promise<string>;
   };
 }
 
