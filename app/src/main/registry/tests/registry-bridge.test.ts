@@ -38,6 +38,9 @@ class FakeRegistry implements RegistryLike {
     if (bytes === undefined) return Promise.reject(new Error(`no ${ref.name}`));
     return Promise.resolve(bytes);
   }
+  getManifest() {
+    return Promise.resolve({ todl: { kind: "library", id: "aws" } });
+  }
   publishDir() {
     return Promise.resolve();
   }
@@ -158,6 +161,11 @@ test("getSources returns only package/src files, stripped to their uri", async (
     { name: "aws.todl", text: "concept EC2;\n" },
     { name: "nested/more.todl", text: "concept S3;\n" },
   ]);
+});
+
+test("getMeta returns the package kind from its manifest", async () => {
+  const bridge = makeBridge(new FakeRegistry(["aws"], new Map()));
+  assert.equal(await bridge.getMeta("aws"), "library");
 });
 
 test("getPackage reads the fetched tarball into an InstalledPackage", async () => {

@@ -22,6 +22,7 @@ export interface RegistryLike {
   listPackages(): Promise<string[]>;
   listVersions(name: string): Promise<VersionList>;
   getContent(ref: PackageRef): Promise<Uint8Array>;
+  getManifest(ref: PackageRef): Promise<{ todl?: { kind: string; id: string } }>;
   publishDir(dir: string): Promise<void>;
 }
 
@@ -96,6 +97,11 @@ export class RegistryBridge {
       for (const dep of pkg.dependencies) if (!seen.has(dep)) queue.push(dep);
     }
     return this.deps.resolveClosure(collected, rootDeps);
+  }
+
+  async getMeta(name: string): Promise<string> {
+    const manifest = await this.registry().getManifest({ name });
+    return manifest.todl?.kind ?? "";
   }
 
   async publishDir(dir: string): Promise<void> {

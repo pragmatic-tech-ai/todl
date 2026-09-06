@@ -10,8 +10,9 @@ function stubWindow(overrides: Record<string, (...a: any[]) => any> = {}) {
   };
   (globalThis as any).window = {
     todl: {
-      registry: { list: record("list"), versions: record("versions"), getContent: record("getContent"), getPackage: record("getPackage"), resolveClosure: record("resolveClosure"), publishDir: record("publishDir"), getSources: record("getSources") },
-      config: { get: record("get"), setToken: record("setToken"), setSettings: record("setSettings") },
+      registry: { list: record("list"), versions: record("versions"), getContent: record("getContent"), getPackage: record("getPackage"), getMeta: record("getMeta"), resolveClosure: record("resolveClosure"), publishDir: record("publishDir"), getSources: record("getSources") },
+      config: { get: record("get"), setToken: record("setToken"), useEnvToken: record("useEnvToken"), listEnvVars: record("listEnvVars"), setSettings: record("setSettings") },
+      dialog: { pickDirectory: record("pickDirectory") },
     },
   };
 }
@@ -44,7 +45,7 @@ test("getConfig / setToken / setSettings forward to the config namespace", async
   stubWindow({ get: () => Promise.resolve({ registry: "r", scope: "@s", org: "o", hasToken: true }) });
   const client = new RegistryClient();
   assert.deepEqual(await client.getConfig(), { registry: "r", scope: "@s", org: "o", hasToken: true });
-  await client.setToken("ghp_x");
+  await client.setStoredToken("ghp_x");
   await client.setSettings({ org: "acme" });
   assert.deepEqual(calls.map((c) => c[0]), ["get", "setToken", "setSettings"]);
   assert.deepEqual(calls[1]![1], ["ghp_x"]);

@@ -11,6 +11,7 @@ const bridge = {
     versions: (name: string) => ipcRenderer.invoke("registry:versions", name),
     getContent: (ref: unknown) => ipcRenderer.invoke("registry:getContent", ref),
     getPackage: (ref: unknown) => ipcRenderer.invoke("registry:getPackage", ref),
+    getMeta: (name: string) => ipcRenderer.invoke("registry:getMeta", name),
     resolveClosure: (rootDeps: string[]) => ipcRenderer.invoke("registry:resolveClosure", rootDeps),
     publishDir: (dir: string) => ipcRenderer.invoke("registry:publishDir", dir),
     getSources: (ref: unknown) => ipcRenderer.invoke("registry:getSources", ref),
@@ -18,7 +19,12 @@ const bridge = {
   config: {
     get: () => ipcRenderer.invoke("config:get"),
     setToken: (token: string) => ipcRenderer.invoke("config:setToken", token),
+    useEnvToken: (name: string) => ipcRenderer.invoke("config:useEnvToken", name),
+    listEnvVars: () => ipcRenderer.invoke("config:envVars"),
     setSettings: (partial: unknown) => ipcRenderer.invoke("config:setSettings", partial),
+  },
+  dialog: {
+    pickDirectory: () => ipcRenderer.invoke("dialog:pickDirectory"),
   },
 };
 
