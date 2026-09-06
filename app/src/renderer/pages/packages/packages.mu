@@ -8,7 +8,7 @@ resources Packages {
             TextBlock [ FontSize = 13, Text = $Name ]
         }
     }
-    DataTemplate x:key="PackageDetailTemplate" [DataType = PackageDetailVM] {
+    DataTemplate [DataType = PackageDetailVM] {
         StackPanel [ Orientation = Vertical, Margin = (16,16,16,16) ] {
             TextBlock [ FontSize = 18, FontWeight = Bold, Text = $Title ]
             TextBlock [ Margin = (0,10,0,0), FontSize = 11, Foreground = @OnSurfaceVariant, Text = "Kind" ]
