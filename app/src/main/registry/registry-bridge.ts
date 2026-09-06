@@ -1,10 +1,11 @@
 /**
  * `RegistryBridge` — the logic behind the `registry:*` / `config:*` IPC channels
- * (design §5). Pure over injected collaborators (a registry factory, the tar
- * reader, the closure resolver, and the two stores) so it unit-tests with no
- * running Electron. `main/index.ts` constructs it with the real package-manager
- * symbols and wires each method to `ipcMain.handle`. Package-manager symbols are
- * type-only imports here, so the test runner needs no bundler alias.
+ * (design §5 + package-manager). It resolves the app's registry config from its
+ * settings + effective token, then delegates every package operation to a
+ * `PackageManager` built via the injected `createManager` factory. App-side
+ * concerns (config, token source, env-var tokens) stay here. Package-manager
+ * symbols are type-only imports, so the test runner needs no bundler alias;
+ * only `main/index.ts` runtime-imports package-manager to supply createManager.
  */
 import type { TokenStore } from "./token-store.js";
 import type { SettingsStore, RegistrySettings } from "./settings-store.js";
@@ -15,21 +16,19 @@ import type {
   VersionList,
   InstalledPackage,
   ResolvedClosure,
+  PackageSource,
 } from "@pragmatic-tech-ai/todl/package-manager";
 
-/** The subset of `NpmRegistry` the bridge uses (structurally satisfied by it). */
-export interface RegistryLike {
-  listPackages(): Promise<string[]>;
-  listVersions(name: string): Promise<VersionList>;
+/** The subset of `PackageManager` the bridge uses (structurally satisfied by it). */
+export interface PackageManagerLike {
+  list(): Promise<string[]>;
+  versions(name: string): Promise<VersionList>;
+  manifestKind(name: string): Promise<string>;
   getContent(ref: PackageRef): Promise<Uint8Array>;
-  getManifest(ref: PackageRef): Promise<{ todl?: { kind: string; id: string } }>;
-  publishDir(dir: string): Promise<void>;
-}
-
-/** One authored source file recovered from a package tarball (`package/src/**`). */
-export interface PackageSource {
-  name: string;
-  text: string;
+  getPackage(ref: PackageRef): Promise<InstalledPackage>;
+  getSources(ref: PackageRef): Promise<PackageSource[]>;
+  resolveClosure(rootDeps: readonly string[]): Promise<ResolvedClosure>;
+  publish(compiledDir: string): Promise<void>;
 }
 
 /** What `config:get` returns — never the token value (the env-var *name* is not
@@ -46,74 +45,45 @@ export interface ConfigView {
 export interface RegistryBridgeDeps {
   tokenStore: TokenStore;
   settingsStore: SettingsStore;
-  /** Build a registry client from a resolved config (prod: `new NpmRegistry(config)`). */
-  createRegistry(config: NpmRegistryConfig): RegistryLike;
-  /** Interpret tarball bytes as an installed package (prod: `TarReader.readPackage`). */
-  readPackage(bytes: Uint8Array): InstalledPackage | undefined;
-  /** Resolve a dependency closure (prod: the package-manager `resolveClosure`). */
-  resolveClosure(packages: readonly InstalledPackage[], rootDeps: readonly string[]): ResolvedClosure;
-  /** Read every file from tarball bytes (prod: `TarReader.read`). */
-  readFiles(bytes: Uint8Array): { path: string; bytes: Uint8Array }[];
+  /** Build a manager from a resolved config (prod: (c) => new PackageManager(c)). */
+  createManager(config: NpmRegistryConfig): PackageManagerLike;
   /** The process environment, for env-var tokens (prod: `process.env`). */
   env: Record<string, string | undefined>;
 }
 
-const SRC_PREFIX = "package/src/";
-const decoder = new TextDecoder();
-
 export class RegistryBridge {
   constructor(private readonly deps: RegistryBridgeDeps) {}
 
-  async list(): Promise<string[]> {
-    return this.registry().listPackages();
+  list(): Promise<string[]> {
+    return this.manager().list();
   }
 
-  async versions(name: string): Promise<VersionList> {
-    return this.registry().listVersions(name);
+  versions(name: string): Promise<VersionList> {
+    return this.manager().versions(name);
   }
 
-  async getContent(ref: PackageRef): Promise<Uint8Array> {
-    return this.registry().getContent(ref);
+  getContent(ref: PackageRef): Promise<Uint8Array> {
+    return this.manager().getContent(ref);
   }
 
-  async getPackage(ref: PackageRef): Promise<InstalledPackage> {
-    const pkg = this.deps.readPackage(await this.registry().getContent(ref));
-    if (pkg === undefined) throw new Error(`${ref.name} is not a TODL package`);
-    return pkg;
+  getPackage(ref: PackageRef): Promise<InstalledPackage> {
+    return this.manager().getPackage(ref);
   }
 
-  async resolveClosure(rootDeps: readonly string[]): Promise<ResolvedClosure> {
-    const registry = this.registry();
-    const collected: InstalledPackage[] = [];
-    const seen = new Set<string>();
-    const queue = [...rootDeps];
-    while (queue.length > 0) {
-      const name = queue.shift() as string;
-      if (seen.has(name)) continue;
-      seen.add(name);
-      const pkg = this.deps.readPackage(await registry.getContent({ name }));
-      if (pkg === undefined) continue; // a non-TODL npm dependency; ignore
-      collected.push(pkg);
-      for (const dep of pkg.dependencies) if (!seen.has(dep)) queue.push(dep);
-    }
-    return this.deps.resolveClosure(collected, rootDeps);
+  resolveClosure(rootDeps: readonly string[]): Promise<ResolvedClosure> {
+    return this.manager().resolveClosure(rootDeps);
   }
 
-  async getMeta(name: string): Promise<string> {
-    const manifest = await this.registry().getManifest({ name });
-    return manifest.todl?.kind ?? "";
+  getMeta(name: string): Promise<string> {
+    return this.manager().manifestKind(name);
   }
 
-  async publishDir(dir: string): Promise<void> {
-    return this.registry().publishDir(dir);
+  publishDir(dir: string): Promise<void> {
+    return this.manager().publish(dir);
   }
 
-  async getSources(ref: PackageRef): Promise<PackageSource[]> {
-    const bytes = await this.registry().getContent(ref);
-    return this.deps
-      .readFiles(bytes)
-      .filter((f) => f.path.startsWith(SRC_PREFIX))
-      .map((f) => ({ name: f.path.slice(SRC_PREFIX.length), text: decoder.decode(f.bytes) }));
+  getSources(ref: PackageRef): Promise<PackageSource[]> {
+    return this.manager().getSources(ref);
   }
 
   async getConfig(): Promise<ConfigView> {
@@ -156,10 +126,10 @@ export class RegistryBridge {
     return this.deps.tokenStore.getToken();
   }
 
-  /** Build a registry client from the current settings + effective token. */
-  private registry(): RegistryLike {
+  /** Build a manager from the current settings + effective token. */
+  private manager(): PackageManagerLike {
     const s = this.deps.settingsStore.get();
-    return this.deps.createRegistry({
+    return this.deps.createManager({
       registry: s.registry,
       scope: s.scope,
       org: s.org,
