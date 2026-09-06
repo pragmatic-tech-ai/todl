@@ -5,7 +5,7 @@ import { resolve, dirname } from "node:path";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..");
-const rendererSrc = resolve(here, "src/renderer/src");
+const rendererSrc = resolve(here, "src/renderer");
 
 export default defineConfig({
   main: { plugins: [externalizeDepsPlugin()] },
