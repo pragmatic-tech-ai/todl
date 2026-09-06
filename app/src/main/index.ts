@@ -1,6 +1,12 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, ipcMain } from "electron";
 import { join } from "node:path";
 import { electronApp, is } from "@electron-toolkit/utils";
+import { NpmRegistry, TarReader, resolveClosure } from "@pragmatic-tech-ai/todl/package-manager";
+import { TokenStore } from "./registry/token-store.js";
+import { SettingsStore } from "./registry/settings-store.js";
+import { RegistryBridge } from "./registry/registry-bridge.js";
+import { RegistryIpc } from "./registry/register-ipc.js";
+import { SafeStorageEncryptor } from "./registry/safe-storage-encryptor.js";
 
 function createWindow(): void {
   const window = new BrowserWindow({
@@ -27,6 +33,17 @@ function createWindow(): void {
 
 void app.whenReady().then(() => {
   electronApp.setAppUserModelId("com.pragmatic-tech-ai.todl");
+
+  const userData = app.getPath("userData");
+  const bridge = new RegistryBridge({
+    tokenStore: new TokenStore(userData, new SafeStorageEncryptor()),
+    settingsStore: new SettingsStore(userData),
+    createRegistry: (config) => new NpmRegistry(config),
+    readPackage: (bytes) => TarReader.readPackage(bytes),
+    resolveClosure: (packages, rootDeps) => resolveClosure(packages, rootDeps),
+  });
+  RegistryIpc.register(ipcMain, bridge);
+
   createWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
