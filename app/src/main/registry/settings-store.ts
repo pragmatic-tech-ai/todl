@@ -7,11 +7,20 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+/** Where the auth token comes from. */
+export enum TokenSource {
+  Stored = "stored",
+  Env = "env",
+}
+
 export interface RegistrySettings {
   registry: string;
   scope: string;
   org: string;
   githubApi: string;
+  tokenSource: TokenSource;
+  /** The env-var name holding the token when `tokenSource === Env`. */
+  tokenEnvVar: string;
 }
 
 const SETTINGS_FILE = "registry-settings.json";
@@ -20,6 +29,8 @@ const DEFAULTS: RegistrySettings = {
   scope: "@pragmatic-tech-ai",
   org: "pragmatic-tech-ai",
   githubApi: "https://api.github.com",
+  tokenSource: TokenSource.Stored,
+  tokenEnvVar: "",
 };
 
 export class SettingsStore {

@@ -48,6 +48,7 @@ function makeBridge(
   readPackage = () => undefined as any,
   resolve = () => ({}) as any,
   readFiles: (bytes: Uint8Array) => { path: string; bytes: Uint8Array }[] = () => [],
+  env: Record<string, string | undefined> = {},
 ) {
   const dir = freshDir();
   return new RegistryBridge({
@@ -57,6 +58,7 @@ function makeBridge(
     readPackage,
     resolveClosure: resolve,
     readFiles,
+    env,
   });
 }
 
@@ -71,9 +73,36 @@ test("getConfig reports settings + hasToken, never the token itself", async () =
   assert.equal(cfg.hasToken, false);
   assert.equal(cfg.scope, "@pragmatic-tech-ai");
   assert.ok(!("token" in cfg));
-  await bridge.setToken("ghp_x");
+  await bridge.setStoredToken("ghp_x");
   cfg = await bridge.getConfig();
   assert.equal(cfg.hasToken, true);
+});
+
+test("env-var token: hasToken reflects process.env and never the value", async () => {
+  const dir = freshDir();
+  const bridge = new RegistryBridge({
+    tokenStore: new TokenStore(dir, new PlainEncryptor()),
+    settingsStore: new SettingsStore(dir),
+    createRegistry: () => new FakeRegistry([], new Map()),
+    readPackage: () => undefined as any,
+    resolveClosure: () => ({}) as any,
+    readFiles: () => [],
+    env: { GH_PAT: "ghp_fromenv" },
+  });
+  await bridge.useEnvToken("GH_PAT");
+  const cfg = await bridge.getConfig();
+  assert.equal(cfg.tokenSource, "env");
+  assert.equal(cfg.tokenEnvVar, "GH_PAT");
+  assert.equal(cfg.hasToken, true);
+  assert.ok(!("token" in cfg));
+  // Missing var → no token.
+  await bridge.useEnvToken("NOPE");
+  assert.equal((await bridge.getConfig()).hasToken, false);
+});
+
+test("listEnvVars returns sorted defined env keys", async () => {
+  const bridge = makeBridge(new FakeRegistry([], new Map()), undefined, undefined, undefined, { B: "1", A: "2", C: undefined });
+  assert.deepEqual(await bridge.listEnvVars(), ["A", "B"]);
 });
 
 test("setSettings is reflected by a rebuilt registry config", async () => {
@@ -89,6 +118,7 @@ test("setSettings is reflected by a rebuilt registry config", async () => {
     readPackage: () => undefined as any,
     resolveClosure: () => ({}) as any,
     readFiles: () => [],
+    env: {},
   });
   await bridge.setSettings({ org: "acme" });
   await bridge.list();

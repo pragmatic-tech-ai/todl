@@ -7,7 +7,8 @@
  * type-only imports here, so the test runner needs no bundler alias.
  */
 import type { TokenStore } from "./token-store.js";
-import type { SettingsStore } from "./settings-store.js";
+import type { SettingsStore, RegistrySettings } from "./settings-store.js";
+import { TokenSource } from "./settings-store.js";
 import type {
   NpmRegistryConfig,
   PackageRef,
@@ -30,11 +31,14 @@ export interface PackageSource {
   text: string;
 }
 
-/** What `config:get` returns — never the token. */
+/** What `config:get` returns — never the token value (the env-var *name* is not
+ *  a secret and is returned so the Setup page can show the current source). */
 export interface ConfigView {
   registry: string;
   scope: string;
   org: string;
+  tokenSource: TokenSource;
+  tokenEnvVar: string;
   hasToken: boolean;
 }
 
@@ -49,6 +53,8 @@ export interface RegistryBridgeDeps {
   resolveClosure(packages: readonly InstalledPackage[], rootDeps: readonly string[]): ResolvedClosure;
   /** Read every file from tarball bytes (prod: `TarReader.read`). */
   readFiles(bytes: Uint8Array): { path: string; bytes: Uint8Array }[];
+  /** The process environment, for env-var tokens (prod: `process.env`). */
+  env: Record<string, string | undefined>;
 }
 
 const SRC_PREFIX = "package/src/";
@@ -106,18 +112,45 @@ export class RegistryBridge {
 
   async getConfig(): Promise<ConfigView> {
     const s = this.deps.settingsStore.get();
-    return { registry: s.registry, scope: s.scope, org: s.org, hasToken: this.deps.tokenStore.hasToken() };
+    return {
+      registry: s.registry,
+      scope: s.scope,
+      org: s.org,
+      tokenSource: s.tokenSource,
+      tokenEnvVar: s.tokenEnvVar,
+      hasToken: this.effectiveToken(s).length > 0,
+    };
   }
 
-  async setToken(token: string): Promise<void> {
+  async setStoredToken(token: string): Promise<void> {
     this.deps.tokenStore.setToken(token);
+    this.deps.settingsStore.update({ tokenSource: TokenSource.Stored });
+  }
+
+  async useEnvToken(varName: string): Promise<void> {
+    this.deps.settingsStore.update({ tokenSource: TokenSource.Env, tokenEnvVar: varName });
+  }
+
+  async listEnvVars(): Promise<string[]> {
+    return Object.keys(this.deps.env)
+      .filter((k) => this.deps.env[k] !== undefined)
+      .sort((a, b) => a.localeCompare(b));
   }
 
   async setSettings(partial: Partial<{ registry: string; scope: string; org: string; githubApi: string }>): Promise<void> {
     this.deps.settingsStore.update(partial);
   }
 
-  /** Build a registry client from the current settings + token. */
+  /** The effective token for the current source: the env var's value, or the
+   *  stored (encrypted) token. */
+  private effectiveToken(settings: RegistrySettings = this.deps.settingsStore.get()): string {
+    if (settings.tokenSource === TokenSource.Env) {
+      return this.deps.env[settings.tokenEnvVar] ?? "";
+    }
+    return this.deps.tokenStore.getToken();
+  }
+
+  /** Build a registry client from the current settings + effective token. */
   private registry(): RegistryLike {
     const s = this.deps.settingsStore.get();
     return this.deps.createRegistry({
@@ -125,7 +158,7 @@ export class RegistryBridge {
       scope: s.scope,
       org: s.org,
       githubApi: s.githubApi,
-      token: this.deps.tokenStore.getToken(),
+      token: this.effectiveToken(s),
     });
   }
 }
