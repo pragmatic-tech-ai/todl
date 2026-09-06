@@ -7,7 +7,8 @@ resources AppShell {
                 StackPanel [ Orientation = Vertical, Margin = (8,8,8,8) ] {
                     Button [ Command = $ShowPlayground, Margin = (0,0,0,4) ] { TextBlock [ Text = "Playground" ] }
                     Button [ Command = $ShowGallery,    Margin = (0,0,0,4) ] { TextBlock [ Text = "Gallery" ] }
-                    Button [ Command = $ShowDocs ]                          { TextBlock [ Text = "Docs" ] }
+                    Button [ Command = $ShowDocs, Margin = (0,0,0,4) ]      { TextBlock [ Text = "Docs" ] }
+                    Button [ Command = $ShowPackages ]                      { TextBlock [ Text = "Packages" ] }
                 }
             }
             ContentControl [ Content = $ActivePage ]
