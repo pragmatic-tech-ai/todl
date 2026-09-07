@@ -1,0 +1,17 @@
+// Home module — the single placeholder capability for the bare shell scaffold.
+// Its service is the HomeVM (registered below); the shell's side panel renders
+// it via DataTemplate[HomeVM] (home.resources.mu). The rail shows one item
+// (Name + Icon); selecting it reveals the side panel hosting the HomeVM.
+import HomeVM from "./home-vm.ts"
+
+module HomeModule [ Name = "Home" ] {
+    .services: { HomeVM }
+
+    // No Icon yet — the rail cell (a fixed 48×48 hit target) still renders and
+    // shows the selection accent. A capability icon needs an SVG `include`,
+    // which requires a file resolver wired into the app's build; deferred.
+    Capability [
+        Name       = "Home",
+        ServiceKey = HomeVM
+    ]
+}

@@ -1,49 +1,42 @@
-// app.mu — the TODL app composition root (Plexus architecture).
+// app.mu — the TODL app composition root (Plexus architecture, ViewerShell).
 //
-// An `Application` block compiles to `export const app`. The renderer bootstrap
-// (main.ts) hands it an HtmlTarget to paint into. The root is the framework
-// EditorShell; capabilities come from the modules listed in `.modules:`, and the
-// document Content region is a root-registered DocumentsContentHostService.
+// An `Application` block compiles to `export const app`. The root is the
+// framework ViewerShell carrying a custom template (@TodlAppShell): a header, a
+// left navigation rail built from the modules' capabilities, and a titled side
+// panel that hosts the active capability's service (NavigationService.
+// ActiveService), rendered by DataTemplate[ServiceType].
+//
+// This is the bare shell scaffold: one placeholder Home capability. Real
+// capabilities are added as modules, each contributing a rail entry + a service
+// + its DataTemplate.
 import Material from "@pragmatic-tech-ai/mural/resources/material"
 import MaterialDark from "@pragmatic-tech-ai/mural/resources/material"
-// ContentHostService + DocumentsContentHostService are already in the compiler's
-// default symbol table — importing them conflicts, so they're used unqualified.
 
-// Shared registry client (window.todl bridge wrapper), resolved by the
-// registry-facing services/documents.
+// Shared registry client (window.todl bridge wrapper) — a root service.
 import RegistryClient from "./services/registry/registry-client.ts"
 
-// Modules — each a `module NAME { … }` const from its own file.
-import PlaygroundModule from "./modules/playground/playground.module.mu"
+// Modules — each a `module NAME { … }` const contributing a rail capability.
+import HomeModule from "./modules/home/home.module.mu"
 
-// Per-module view resources, merged app-global here.
-import PlaygroundResources from "./modules/playground/playground.resources.mu"
-// Shared example-runner templates (DataTemplate[ExampleRunnerVM] + DiagnosticVM),
-// which the playground's $Runner content resolves against. Merged at the app root
-// (a nested merge inside PlaygroundResources does not flatten into scope).
-import ExampleRunner from "./components/example-runner/example-runner.mu"
+// Shell chrome (custom ViewerShell template) + per-module view resources.
+import AppShell from "./shell.resources.mu"
+import HomeResources from "./modules/home/home.resources.mu"
 
 Application [ Theme = Material, Scheme = MaterialDark ] {
     .services: {
-        // Shared window.todl bridge wrapper — registered by class token; services
-        // resolve it via provider.getRequired(RegistryClient).
         RegistryClient
-        // Content region host, root-registered so main.ts + modules resolve THIS
-        // instance through the framework ContentHostService key (EditorShell would
-        // otherwise register it shell-scoped, unreachable from root).
-        DocumentsContentHostService -> ContentHostService
     }
 
     .modules: {
-        PlaygroundModule
+        HomeModule
     }
 
     resources: {
-        merge ExampleRunner
-        merge PlaygroundResources
+        merge AppShell
+        merge HomeResources
 
-        // The app root — the framework EditorShell. Regions are data-driven
-        // (NavigationService from the modules + the active document).
-        EditorShell x:root { }
+        // Local Template value wins over the framework's default ViewerShell
+        // style, so the shell renders the rail + side-panel layout above.
+        ViewerShell x:root [ Template = @TodlAppShell ] { }
     }
 }
