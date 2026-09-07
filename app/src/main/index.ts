@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog } from "electron";
 import { join } from "node:path";
 import { electronApp, is } from "@electron-toolkit/utils";
-import { PackageManager } from "@pragmatic-tech-ai/todl/package-manager";
+import { PackageManager, PackageCompiler } from "@pragmatic-tech-ai/todl/package-manager";
 import { TokenStore } from "./registry/token-store.js";
 import { SettingsStore } from "./registry/settings-store.js";
 import { RegistryBridge } from "./registry/registry-bridge.js";
@@ -40,6 +40,7 @@ void app.whenReady().then(() => {
     tokenStore: new TokenStore(userData, new SafeStorageEncryptor()),
     settingsStore: new SettingsStore(userData),
     createManager: (config) => new PackageManager(config),
+    createCompiler: () => new PackageCompiler(),
     env: process.env,
   });
   RegistryIpc.register(ipcMain, bridge, async () => {

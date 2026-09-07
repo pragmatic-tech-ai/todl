@@ -10,6 +10,7 @@
 import type { TokenStore } from "./token-store.js";
 import type { SettingsStore, RegistrySettings } from "./settings-store.js";
 import { TokenSource } from "./settings-store.js";
+import { join } from "node:path";
 import type {
   NpmRegistryConfig,
   PackageRef,
@@ -17,6 +18,7 @@ import type {
   InstalledPackage,
   ResolvedClosure,
   PackageSource,
+  CompileResult,
 } from "@pragmatic-tech-ai/todl/package-manager";
 
 /** The subset of `PackageManager` the bridge uses (structurally satisfied by it). */
@@ -29,6 +31,25 @@ export interface PackageManagerLike {
   getSources(ref: PackageRef): Promise<PackageSource[]>;
   resolveClosure(rootDeps: readonly string[]): Promise<ResolvedClosure>;
   publish(compiledDir: string): Promise<void>;
+}
+
+/** The subset of `PackageCompiler` the bridge uses (structurally satisfied by it).
+ *  Compiling a directory is a Compiler concern — kept separate from the
+ *  PackageManager, which only handles registry / compiled / published packages. */
+export interface PackageCompilerLike {
+  compile(directory: string, options?: { scope?: string; outDir?: string }): Promise<CompileResult>;
+}
+
+/** A directory compile result, serialized for the renderer. The compiled output
+ *  is written to `outDir`; on success that directory is what `publishDir` takes. */
+export interface CompileResultView {
+  ok: boolean;
+  outDir: string;
+  files: string[];
+  diagnostics: { severity: string; message: string }[];
+  name?: string;
+  version?: string;
+  sourceCount?: number;
 }
 
 /** What `config:get` returns — never the token value (the env-var *name* is not
@@ -47,6 +68,8 @@ export interface RegistryBridgeDeps {
   settingsStore: SettingsStore;
   /** Build a manager from a resolved config (prod: (c) => new PackageManager(c)). */
   createManager(config: NpmRegistryConfig): PackageManagerLike;
+  /** Build the directory compiler (prod: () => new PackageCompiler()). */
+  createCompiler(): PackageCompilerLike;
   /** The process environment, for env-var tokens (prod: `process.env`). */
   env: Record<string, string | undefined>;
 }
@@ -80,6 +103,26 @@ export class RegistryBridge {
 
   publishDir(dir: string): Promise<void> {
     return this.manager().publish(dir);
+  }
+
+  /** Compile a project directory into a package under `<dir>/dist`, returning a
+   *  serializable view (identity, files written, diagnostics). On success the
+   *  `outDir` is what `publishDir` publishes. Compilation throws for a non-
+   *  compilable manifest (e.g. an architecture) or an unresolvable dependency;
+   *  a failing compile (source errors) returns `ok: false` with diagnostics. */
+  async compileDir(dir: string): Promise<CompileResultView> {
+    const outDir = join(dir, "dist");
+    const result = await this.deps.createCompiler().compile(dir, { outDir });
+    const pkg = result.package;
+    return {
+      ok: result.ok,
+      outDir,
+      files: result.files !== undefined ? [...result.files] : [],
+      diagnostics: result.diagnostics.map((d) => ({ severity: String(d.severity), message: d.message })),
+      name: pkg !== undefined ? (pkg.name ?? pkg.id) : undefined,
+      version: pkg?.version,
+      sourceCount: pkg?.sources.length,
+    };
   }
 
   getSources(ref: PackageRef): Promise<PackageSource[]> {

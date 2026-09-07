@@ -17,7 +17,7 @@ import type {
   ResolvedClosure,
   PackageSource,
 } from "@pragmatic-tech-ai/todl/package-manager";
-import type { ConfigView } from "../../../main/registry/registry-bridge.js";
+import type { ConfigView, CompileResultView } from "../../../main/registry/registry-bridge.js";
 import type { TodlBridge } from "../../env.js";
 
 // A plain class (NOT ServiceBase): it only wraps the window bridge and never
@@ -52,6 +52,9 @@ export class RegistryClient {
   }
   publishDir(dir: string): Promise<void> {
     return this.bridge().registry.publishDir(dir);
+  }
+  compileDir(dir: string): Promise<CompileResultView> {
+    return this.bridge().registry.compileDir(dir);
   }
   resolveClosure(rootDeps: string[]): Promise<ResolvedClosure> {
     return this.bridge().registry.resolveClosure(rootDeps);

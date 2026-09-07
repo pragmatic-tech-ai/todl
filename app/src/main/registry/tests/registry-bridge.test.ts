@@ -31,12 +31,16 @@ function makeBridge(
   over: Partial<PackageManagerLike> = {},
   env: Record<string, string | undefined> = {},
   onConfig?: (config: any) => void,
+  compile?: (directory: string, options?: { scope?: string; outDir?: string }) => Promise<any>,
 ) {
   const dir = freshDir();
   return new RegistryBridge({
     tokenStore: new TokenStore(dir, new PlainEncryptor()),
     settingsStore: new SettingsStore(dir),
     createManager: (config) => { onConfig?.(config); return new FakeManager(over); },
+    createCompiler: () => ({
+      compile: compile ?? (() => Promise.resolve({ ok: true, diagnostics: [], errors: [] } as any)),
+    }),
     env,
   });
 }
@@ -44,6 +48,28 @@ function makeBridge(
 test("list delegates to the manager", async () => {
   const bridge = makeBridge({ list: () => Promise.resolve(["aws", "microsoft"]) });
   assert.deepEqual((await bridge.list()).sort(), ["aws", "microsoft"]);
+});
+
+test("compileDir compiles under <dir>/dist and returns a serializable view", async () => {
+  const bridge = makeBridge({}, {}, undefined, (directory, options) =>
+    Promise.resolve({
+      ok: true,
+      diagnostics: [{ severity: "warning", message: "heads up" }],
+      errors: [],
+      files: ["package.json", "model.json"],
+      package: { id: "demo", name: "@scope/demo", version: "0.1.0", sources: [{ uri: "a.todl", text: "" }] },
+      _outDir: options?.outDir,
+      _dir: directory,
+    } as any),
+  );
+  const view = await bridge.compileDir("C:/proj/demo");
+  assert.equal(view.ok, true);
+  assert.equal(view.outDir, join("C:/proj/demo", "dist"));
+  assert.deepEqual(view.files, ["package.json", "model.json"]);
+  assert.equal(view.name, "@scope/demo");
+  assert.equal(view.version, "0.1.0");
+  assert.equal(view.sourceCount, 1);
+  assert.deepEqual(view.diagnostics, [{ severity: "warning", message: "heads up" }]);
 });
 
 test("getMeta returns the package kind via manifestKind", async () => {

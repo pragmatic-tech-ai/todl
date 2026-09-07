@@ -15,6 +15,7 @@ export class RegistryIpc {
     ipcMain.handle("registry:getMeta", (_e, name: string) => bridge.getMeta(name));
     ipcMain.handle("registry:resolveClosure", (_e, rootDeps: string[]) => bridge.resolveClosure(rootDeps));
     ipcMain.handle("registry:publishDir", (_e, dir: string) => bridge.publishDir(dir));
+    ipcMain.handle("registry:compileDir", (_e, dir: string) => bridge.compileDir(dir));
     ipcMain.handle("registry:getSources", (_e, ref) => bridge.getSources(ref));
     ipcMain.handle("config:get", () => bridge.getConfig());
     ipcMain.handle("config:setToken", (_e, token: string) => bridge.setStoredToken(token));

@@ -14,6 +14,7 @@ const bridge = {
     getMeta: (name: string) => ipcRenderer.invoke("registry:getMeta", name),
     resolveClosure: (rootDeps: string[]) => ipcRenderer.invoke("registry:resolveClosure", rootDeps),
     publishDir: (dir: string) => ipcRenderer.invoke("registry:publishDir", dir),
+    compileDir: (dir: string) => ipcRenderer.invoke("registry:compileDir", dir),
     getSources: (ref: unknown) => ipcRenderer.invoke("registry:getSources", ref),
   },
   config: {

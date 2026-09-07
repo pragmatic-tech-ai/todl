@@ -18,6 +18,7 @@ import RegistryClient from "./services/registry/registry-client.ts"
 // Modules — each a `module NAME { … }` const contributing a rail capability.
 import HomeModule from "./modules/home/home.module.mu"
 import PackageManagerModule from "./modules/package-manager/package-manager.module.mu"
+import PackageCompilerModule from "./modules/package-compiler/package-compiler.module.mu"
 
 // Shell chrome (custom ViewerShell template) + shared icon dictionary + per-
 // module view resources.
@@ -25,6 +26,7 @@ import AppShell from "./shell.resources.mu"
 import AppIcons from "./app-icons.mu"
 import HomeResources from "./modules/home/home.resources.mu"
 import PackageManagerResources from "./modules/package-manager/package-manager.resources.mu"
+import PackageCompilerResources from "./modules/package-compiler/package-compiler.resources.mu"
 
 Application [ Theme = Material, Scheme = MaterialDark ] {
     .services: {
@@ -34,6 +36,7 @@ Application [ Theme = Material, Scheme = MaterialDark ] {
     .modules: {
         HomeModule
         PackageManagerModule
+        PackageCompilerModule
     }
 
     resources: {
@@ -41,6 +44,7 @@ Application [ Theme = Material, Scheme = MaterialDark ] {
         merge AppIcons
         merge HomeResources
         merge PackageManagerResources
+        merge PackageCompilerResources
 
         // Local Template value wins over the framework's default ViewerShell
         // style, so the shell renders the rail + side-panel layout above.
