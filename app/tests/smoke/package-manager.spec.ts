@@ -15,6 +15,13 @@ function installFakeRegistry(window: Page): Promise<void> {
       registry: {
         list: () =>
           Promise.resolve((window as unknown as { __pkgNames: string[] }).__pkgNames),
+        // Selecting a package fetches its detail — deps (getPackage) + files
+        // (getSources). Distinctive per-name payloads let the test assert the
+        // central view reflects the clicked package.
+        getPackage: (ref: { name: string }) =>
+          Promise.resolve({ name: ref.name, meta: {}, dependencies: ["@scope/base-" + ref.name], document: {} }),
+        getSources: (ref: { name: string }) =>
+          Promise.resolve([{ name: ref.name + ".todl", text: "concept " + ref.name + "Root;" }]),
       },
     };
   });
@@ -47,6 +54,31 @@ function hasText(window: Page, text: string): Promise<boolean> {
   );
 }
 
+// All rendered SVG text joined — for substring checks that survive wrapping
+// (a wrapped line splits across tspans, so exact-node matching is brittle).
+function allText(window: Page): Promise<string> {
+  return window.evaluate(() =>
+    Array.from(document.querySelectorAll("#app text, #app tspan"))
+      .map((n) => n.textContent ?? "")
+      .join(" "),
+  );
+}
+
+// Click a package row in the side panel (left 300px) by its name text.
+async function clickPackageRow(window: Page, name: string): Promise<void> {
+  const box = await window.evaluate((n) => {
+    for (const el of Array.from(document.querySelectorAll("#app text, #app tspan"))) {
+      if ((el.textContent ?? "").trim() === n) {
+        const r = (el as Element).getBoundingClientRect();
+        if (r.left < 300) return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+      }
+    }
+    return null;
+  }, name);
+  if (box === null) throw new Error(`package row "${name}" not found`);
+  await window.mouse.click(box.x, box.y);
+}
+
 test("Packages capability lists registry packages; Refresh re-fetches", async () => {
   const env = { ...process.env };
   delete env["ELECTRON_RUN_AS_NODE"];
@@ -68,6 +100,27 @@ test("Packages capability lists registry packages; Refresh re-fetches", async ()
   });
   await window.getByText("Refresh", { exact: true }).click();
   await expect.poll(() => hasText(window, "gcp"), { timeout: 10_000 }).toBe(true);
+
+  await app.close();
+});
+
+test("selecting a package shows its content in the central content host", async () => {
+  const env = { ...process.env };
+  delete env["ELECTRON_RUN_AS_NODE"];
+  const app = await electron.launch({ args: [mainEntry], env });
+  const window = await app.firstWindow();
+  await window.waitForSelector("#app svg", { timeout: 30_000 });
+
+  await installFakeRegistry(window);
+  await clickRailCapability(window, 1);
+  await expect.poll(() => hasText(window, "aws"), { timeout: 10_000 }).toBe(true);
+
+  // Select a package → the central content host shows its PackageView: the
+  // dependency header + its source files (fetched via getPackage + getSources).
+  await clickPackageRow(window, "aws");
+  await expect.poll(async () => (await allText(window)).includes("base-aws"), { timeout: 10_000 }).toBe(true);
+  await expect.poll(async () => (await allText(window)).includes("aws.todl"), { timeout: 10_000 }).toBe(true);
+  await expect.poll(async () => (await allText(window)).includes("awsRoot"), { timeout: 10_000 }).toBe(true);
 
   await app.close();
 });

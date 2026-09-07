@@ -4,7 +4,7 @@
 // @ts-expect-error compiled by vitePluginMural
 import { app } from "./app.mu";
 import { HtmlTarget } from "@pragmatic-tech-ai/mural/visual-engine";
-import { NavigationService } from "@pragmatic-tech-ai/mural/framework";
+import { NavigationService, ContentHostService } from "@pragmatic-tech-ai/mural/framework";
 
 // ViewerShell (unlike EditorShell) does not register a NavigationService, so
 // the app supplies one at the root. Registered under NavigationService.Key so
@@ -18,6 +18,11 @@ app.Services.register(NavigationService.Key, (p) => {
   nav.PopulateFromModules();
   return nav;
 });
+
+// The shell's central content host — the region a capability drives via
+// View(x). Registered at the root under ContentHostService.Key so the shell's
+// `$service(ContentHostService)` and the capabilities resolve the same instance.
+app.Services.register(ContentHostService.Key, (p) => new ContentHostService(p));
 
 await document.fonts.ready;
 app.initialize(new HtmlTarget(document.getElementById("app")!));

@@ -1,4 +1,5 @@
-import { Observable } from "@pragmatic-tech-ai/mural/runtime";
+import { Observable, type IServiceProvider } from "@pragmatic-tech-ai/mural/runtime";
+import { ContentHostService, type IActivatable } from "@pragmatic-tech-ai/mural/framework";
 
 // The Home capability's backing service — a placeholder view model for the
 // bare shell scaffold. It carries only display strings for the side panel;
@@ -6,11 +7,19 @@ import { Observable } from "@pragmatic-tech-ai/mural/runtime";
 //
 // A lightweight Observable (the app's VM root), not MuralBase: it holds no
 // dependency properties, just read-only display state the side-panel template
-// binds to. Constructed by the service container with the provider, which a
-// dependency-free placeholder accepts and ignores.
-export class HomeVM extends Observable {
-  constructor(_provider?: unknown) {
+// binds to. Implements IActivatable to clear the shared central content host on
+// activation (Home has no central view, so it shouldn't show a lingering one
+// from another capability).
+export class HomeVM extends Observable implements IActivatable {
+  private readonly contentHost: ContentHostService;
+
+  constructor(provider: IServiceProvider) {
     super();
+    this.contentHost = provider.getRequired(ContentHostService.Key);
+  }
+
+  OnActivated(): void {
+    this.contentHost.View(undefined);
   }
 
   get Title(): string { return "Home"; }
