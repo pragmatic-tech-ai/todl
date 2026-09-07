@@ -7,11 +7,9 @@ import HomeVM from "./home-vm.ts"
 module HomeModule [ Name = "Home" ] {
     .services: { HomeVM }
 
-    // No Icon yet — the rail cell (a fixed 48×48 hit target) still renders and
-    // shows the selection accent. A capability icon needs an SVG `include`,
-    // which requires a file resolver wired into the app's build; deferred.
     Capability [
         Name       = "Home",
+        Icon       = @Home,
         ServiceKey = HomeVM
     ]
 }

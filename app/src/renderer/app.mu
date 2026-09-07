@@ -19,8 +19,10 @@ import RegistryClient from "./services/registry/registry-client.ts"
 import HomeModule from "./modules/home/home.module.mu"
 import PackageManagerModule from "./modules/package-manager/package-manager.module.mu"
 
-// Shell chrome (custom ViewerShell template) + per-module view resources.
+// Shell chrome (custom ViewerShell template) + shared icon dictionary + per-
+// module view resources.
 import AppShell from "./shell.resources.mu"
+import AppIcons from "./app-icons.mu"
 import HomeResources from "./modules/home/home.resources.mu"
 import PackageManagerResources from "./modules/package-manager/package-manager.resources.mu"
 
@@ -36,6 +38,7 @@ Application [ Theme = Material, Scheme = MaterialDark ] {
 
     resources: {
         merge AppShell
+        merge AppIcons
         merge HomeResources
         merge PackageManagerResources
 

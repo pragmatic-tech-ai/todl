@@ -9,9 +9,9 @@ import PackageManagerService from "./package-manager-service.ts"
 module PackageManagerModule [ Name = "Package Manager" ] {
     .services: { PackageManagerService }
 
-    // No Icon yet — the rail cell still renders (see home.module.mu).
     Capability [
         Name       = "Packages",
+        Icon       = @Packages,
         ServiceKey = PackageManagerService
     ]
 }
