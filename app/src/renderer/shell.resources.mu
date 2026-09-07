@@ -31,12 +31,15 @@ resources AppShell {
                       Content        = $service(NavigationService) ]
 
                 // Side panel (fill) — a titled pane hosting the active
-                // capability. Header = the selected capability's label; Content
-                // = the active service, rendered by its DataTemplate. Hidden
-                // when SidePaneVisible is false (the header ✕ toggles it).
+                // capability. Header = the selected capability's label; Commands
+                // = the active service's header actions (a button row rendered by
+                // its DataTemplate); Content = the active service, rendered by its
+                // DataTemplate. Hidden when SidePaneVisible is false (the header ✕
+                // toggles it).
                 ShellSideContentPane x:name="PART_SidePane"
                     [ Visibility   = $service(NavigationService).SidePaneVisible << ToVisibility,
                       Header       = $service(NavigationService).SelectedItem.Label,
+                      Commands     = $service(NavigationService).ActiveService.HeaderCommands,
                       CloseCommand = $service(NavigationService).ToggleSidePaneCommand,
                       Content      = $service(NavigationService).ActiveService ]
             }
