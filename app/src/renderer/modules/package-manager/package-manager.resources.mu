@@ -28,9 +28,10 @@ resources PackageManagerResources {
     }
 
     // The central content-host view for the selected package — a dependency
-    // header over the scrollable source text. The sources are one text block
-    // ($SourcesText, a single-level binding) rather than a per-item template:
-    // type-dispatched item templates don't resolve at this nesting depth.
+    // header over an editable TODL source editor. The editor ($Editor, a
+    // MonacoEditorHost the VM owns) fills the pane and honours the newlines
+    // between files (a NoWrap TextBlock collapsed them onto one line) and
+    // colours the TODL grammar; it is presented directly via ContentControl.
     DataTemplate [DataType = PackageViewVM] {
         DockPanel [ LastChildFill = true ] {
             StackPanel [ DockPanel.Dock = Top, Margin = (16,16,16,8) ] {
@@ -38,9 +39,7 @@ resources PackageManagerResources {
                 TextBlock [ Text = $Dependencies, Margin = (0,4,0,0) ]
                 TextBlock [ Text = $Status, Margin = (0,4,0,0) ]
             }
-            ScrollViewer {
-                TextBlock [ Text = $SourcesText, Margin = (16,0,16,16) ]
-            }
+            ContentControl [ Content = $Editor, Margin = (16,0,16,16) ]
         }
     }
 }

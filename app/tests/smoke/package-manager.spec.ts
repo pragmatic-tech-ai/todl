@@ -64,6 +64,15 @@ function allText(window: Page): Promise<string> {
   );
 }
 
+// The source files render in a Monaco editor (HTML in a <foreignObject>), not
+// SVG <text> — read its rendered lines for content assertions.
+function editorText(window: Page): Promise<string> {
+  return window.evaluate(() => {
+    const lines = document.querySelector("#app .monaco-editor .view-lines");
+    return lines ? (lines.textContent ?? "") : "";
+  });
+}
+
 // Click a package row in the side panel (left 300px) by its name text.
 async function clickPackageRow(window: Page, name: string): Promise<void> {
   const box = await window.evaluate((n) => {
@@ -116,11 +125,11 @@ test("selecting a package shows its content in the central content host", async 
   await expect.poll(() => hasText(window, "aws"), { timeout: 10_000 }).toBe(true);
 
   // Select a package → the central content host shows its PackageView: the
-  // dependency header + its source files (fetched via getPackage + getSources).
+  // dependency header (SVG TextBlock) + its source files in the Monaco editor.
   await clickPackageRow(window, "aws");
   await expect.poll(async () => (await allText(window)).includes("base-aws"), { timeout: 10_000 }).toBe(true);
-  await expect.poll(async () => (await allText(window)).includes("aws.todl"), { timeout: 10_000 }).toBe(true);
-  await expect.poll(async () => (await allText(window)).includes("awsRoot"), { timeout: 10_000 }).toBe(true);
+  await expect.poll(async () => (await editorText(window)).includes("aws.todl"), { timeout: 10_000 }).toBe(true);
+  await expect.poll(async () => (await editorText(window)).includes("awsRoot"), { timeout: 10_000 }).toBe(true);
 
   await app.close();
 });

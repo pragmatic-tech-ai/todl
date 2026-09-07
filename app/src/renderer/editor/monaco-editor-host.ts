@@ -1,4 +1,5 @@
 import { registerTodlDarkTheme, TODL_DARK_THEME } from "./monaco-setup.js";
+import { registerTodlLanguage } from "./todl-monarch.js";
 import * as monaco from "monaco-editor";
 import { DomHost } from "@pragmatic-tech-ai/mural/basic";
 import { MuralBase, MetaData, Size } from "@pragmatic-tech-ai/mural/runtime";
@@ -65,6 +66,10 @@ export class MonacoEditorHost extends DomHost {
   protected override CreateHostElement(document: Document): HTMLElement {
     const el = super.CreateHostElement(document);
     registerTodlDarkTheme();
+    // Register the TODL Monarch grammar so `todl` documents get syntax colours.
+    // (The example bootstrap that once did this app-wide is gone; the host now
+    // registers on demand — idempotent, so repeated mounts are cheap.)
+    if (this.language === "todl") registerTodlLanguage();
     const model = this.modelUri
       ? monaco.editor.createModel(this.Text, this.language, monaco.Uri.parse(this.modelUri))
       : monaco.editor.createModel(this.Text, this.language);

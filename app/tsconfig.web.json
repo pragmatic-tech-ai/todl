@@ -8,7 +8,8 @@
       "@shared/*": ["../shared/*"],
       "@examples/*": ["../examples/*"],
       "@pragmatic-tech-ai/todl": ["../dist/index.js"],
-      "@pragmatic-tech-ai/todl/package-manager": ["../src/package-manager/index.ts"]
+      "@pragmatic-tech-ai/todl/package-manager": ["../src/package-manager/index.ts"],
+      "@pragmatic-tech-ai/todl/language-service": ["../src/language-service/index.ts"]
     }
   }
 }
