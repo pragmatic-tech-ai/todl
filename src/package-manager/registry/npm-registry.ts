@@ -71,12 +71,6 @@ function encodeName(name: string): string {
   return name.replace("/", "%2F");
 }
 
-/** The unscoped tail of a (possibly scoped) package name. */
-function unscopedName(name: string): string {
-  const slash = name.indexOf("/");
-  return slash < 0 ? name : name.slice(slash + 1);
-}
-
 export class NpmRegistry {
   private readonly registry: string;
   private readonly scope: string;
@@ -150,7 +144,11 @@ export class NpmRegistry {
    *  `PUT`. Computes integrity/shasum and embeds the tarball as an attachment. */
   async publish(manifest: PackageManifestJson, tarball: Uint8Array): Promise<void> {
     const { name, version } = manifest;
-    const tarballFile = `${unscopedName(name)}-${version}.tgz`;
+    // Key by the FULL (scoped) name, exactly as npm's libnpmpublish does:
+    // `${manifest.name}-${version}.tgz`. GitHub Packages resolves the attachment
+    // by this scoped key and rejects with "no attachments present in packument"
+    // if it is unscoped (Verdaccio is lax and takes the first key regardless).
+    const tarballFile = `${name}-${version}.tgz`;
     const tarballUrl = `${this.registry}/${name}/-/${tarballFile}`;
 
     const body = {

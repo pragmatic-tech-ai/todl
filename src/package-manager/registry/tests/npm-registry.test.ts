@@ -135,6 +135,28 @@ test("getManifest returns the published version manifest incl. the todl block", 
   assert.deepEqual((manifest as { todl?: unknown }).todl, { kind: "library", id: "aws" });
 });
 
+test("publish keys the attachment + tarball by the full scoped name (GitHub Packages)", async () => {
+  // GitHub Packages looks the tarball up by `${manifest.name}-${version}.tgz`
+  // (scope included) and rejects the publish with "no attachments present in
+  // packument" when the `_attachments` key is unscoped. Match npm exactly.
+  let captured: HttpRequest | undefined;
+  const spy: HttpTransport = {
+    request(req) {
+      if (req.method === "PUT") captured = req;
+      return Promise.resolve({ status: 201, headers: {}, body: enc.encode("{}") });
+    },
+  };
+  await client(spy).publish(manifest("aws", "0.1.0"), createTgz([{ path: "package/a", bytes: enc.encode("a") }]));
+
+  const body = JSON.parse(captured!.body as string) as {
+    versions: Record<string, { dist: { tarball: string } }>;
+    _attachments: Record<string, unknown>;
+  };
+  const expectedFile = `${SCOPE}/aws-0.1.0.tgz`; // "@pragmatic-tech-ai/aws-0.1.0.tgz"
+  assert.deepEqual(Object.keys(body._attachments), [expectedFile]);
+  assert.equal(body.versions["0.1.0"]!.dist.tarball, `${REGISTRY}/${SCOPE}/aws/-/${expectedFile}`);
+});
+
 test("publishDir tars a packed directory and publishes it", async () => {
   const dir = join(mkdtempSync(join(tmpdir(), "todl-reg-")), "dist");
   mkdirSync(join(dir, "src"), { recursive: true });
