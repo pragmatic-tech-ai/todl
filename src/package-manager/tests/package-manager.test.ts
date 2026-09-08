@@ -132,6 +132,25 @@ test("getSources returns only package/src files, stripped to their uri", async (
   ]);
 });
 
+test("getContents bundles sources, manifest, meta, model, deps + versions in one fetch", async () => {
+  const fake = new FakeRegistry();
+  const seed = seeder(fake);
+  await publishPackage(seed, "aws", "0.1.0", { kind: "library", id: "aws" }, { "@pragmatic-tech-ai/base": "^1.0.0" }, {
+    "aws.todl": "concept EC2;\n",
+  });
+  await publishPackage(seed, "aws", "0.2.0", { kind: "library", id: "aws" });
+
+  const contents = await manager(fake).getContents({ name: "aws", version: "0.1.0" });
+  assert.deepEqual(contents.files, [{ name: "aws.todl", text: "concept EC2;\n" }]);
+  assert.deepEqual(contents.dependencies, ["@pragmatic-tech-ai/base"]);
+  assert.equal(JSON.parse(contents.metadata).kind, "library");
+  assert.deepEqual(JSON.parse(contents.compiled), { nodes: [] });
+  assert.deepEqual(JSON.parse(contents.rawModel), { nodes: [] });
+  assert.equal(JSON.parse(contents.packageJson).name, `${SCOPE}/aws`);
+  assert.deepEqual(contents.versions.sort(), ["0.1.0", "0.2.0"]);
+  assert.equal(contents.latest, "0.2.0");
+});
+
 test("resolveClosure BFS-fetches transitive deps then orders deps-first", async () => {
   const fake = new FakeRegistry();
   const seed = seeder(fake);

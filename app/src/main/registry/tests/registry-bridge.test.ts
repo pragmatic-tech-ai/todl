@@ -23,6 +23,7 @@ class FakeManager implements PackageManagerLike {
   getContent(ref: any) { return this.over.getContent?.(ref) ?? Promise.resolve(new Uint8Array()); }
   getPackage(ref: any) { return this.over.getPackage?.(ref) ?? Promise.reject(new Error("no")); }
   getSources(ref: any) { return this.over.getSources?.(ref) ?? Promise.resolve([]); }
+  getContents(ref: any) { return this.over.getContents?.(ref) ?? Promise.resolve({ files: [], packageJson: "", metadata: "", compiled: "", rawModel: "", dependencies: [], versions: [], latest: "" }); }
   resolveClosure(deps: readonly string[]) { return this.over.resolveClosure?.(deps) ?? Promise.resolve({ metaModels: [], libraries: [], order: [] }); }
   publish(dir: string) { return this.over.publish?.(dir) ?? Promise.resolve(); }
 }
@@ -70,6 +71,18 @@ test("compileDir compiles under <dir>/dist and returns a serializable view", asy
   assert.equal(view.version, "0.1.0");
   assert.equal(view.sourceCount, 1);
   assert.deepEqual(view.diagnostics, [{ severity: "warning", message: "heads up" }]);
+});
+
+test("getPackageContents delegates to the manager (name → ref)", async () => {
+  let seenRef: any;
+  const bridge = makeBridge({
+    getContents: (ref) => { seenRef = ref; return Promise.resolve({ files: [{ name: "a.todl", text: "concept A;" }], packageJson: "{}", metadata: "{}", compiled: "{}", rawModel: "{}", dependencies: ["@scope/base"], versions: ["0.1.0"], latest: "0.1.0" }); },
+  });
+  const contents = await bridge.getPackageContents("@pragmatic-tech-ai/aws");
+  assert.deepEqual(seenRef, { name: "@pragmatic-tech-ai/aws" });
+  assert.deepEqual(contents.files, [{ name: "a.todl", text: "concept A;" }]);
+  assert.deepEqual(contents.dependencies, ["@scope/base"]);
+  assert.deepEqual(contents.versions, ["0.1.0"]);
 });
 
 test("getMeta returns the package kind via manifestKind", async () => {

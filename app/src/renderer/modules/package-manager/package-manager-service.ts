@@ -7,37 +7,38 @@ import {
 } from "@pragmatic-tech-ai/mural/runtime";
 import { ContentHostService, type IActivatable } from "@pragmatic-tech-ai/mural/framework";
 import { RegistryClient } from "../../services/registry/registry-client.js";
-import { PackageItemVM } from "./package-item-vm.js";
 import { PackageManagerHeaderVM } from "./package-manager-header-vm.js";
-import { PackageViewVM } from "./package-view-vm.js";
+import { EditorPaneVM } from "./editor-pane-vm.js";
+import { TreeNodeVM } from "./tree-node-vm.js";
+import { EditorLanguage } from "../../editor/monaco-editor-host.js";
 
 // The Package Manager capability's backing service. Connects to the registry
-// (via the shared RegistryClient) and exposes the package list as bindable
-// state the side panel renders in a ListBox.
+// (via the shared RegistryClient) and drives two regions: the side panel shows a
+// per-package content TreeView ($Roots, data-driven), and the central content
+// host shows the shared editor pane. Selecting a content leaf routes its text +
+// language into the editor.
 //
-// A ServiceBase (bindable, MuralBase-backed) so the view binds $Packages /
-// $Status / $SelectedPackage directly. Fetches lazily: OnActivated (the
-// IActivatable hook the NavigationService calls when the capability becomes
-// active) loads the list on first open; the header Refresh command reloads.
+// A ServiceBase (bindable, MuralBase-backed) so the side-panel template binds
+// $Status / $Roots / $SelectedNode directly. Fetches lazily: OnActivated loads
+// the package name list on first open; each package's tarball contents are
+// fetched the first time its node is expanded (TreeNodeVM.OnExpand). The header
+// Refresh command reloads the list.
 export class PackageManagerService extends ServiceBase implements IActivatable {
-  static readonly PackagesKey = MuralBase.RegisterProperty<ObservableCollection<PackageItemVM>>(
-    PackageManagerService, "Packages", undefined as unknown as ObservableCollection<PackageItemVM>, MetaData.None);
-  static readonly SelectedPackageKey = MuralBase.RegisterProperty<PackageItemVM | undefined>(
-    PackageManagerService, "SelectedPackage", undefined, MetaData.None);
   static readonly StatusKey = MuralBase.RegisterProperty<string>(
     PackageManagerService, "Status", "", MetaData.None);
+  static readonly RootsKey = MuralBase.RegisterProperty<ObservableCollection<TreeNodeVM>>(
+    PackageManagerService, "Roots", undefined as unknown as ObservableCollection<TreeNodeVM>, MetaData.None);
+  static readonly SelectedNodeKey = MuralBase.RegisterProperty<TreeNodeVM | undefined>(
+    PackageManagerService, "SelectedNode", undefined, MetaData.None);
 
-  get Packages(): ObservableCollection<PackageItemVM> { return this.get_property_value(PackageManagerService.PackagesKey); }
-  get SelectedPackage(): PackageItemVM | undefined { return this.get_property_value(PackageManagerService.SelectedPackageKey); }
-  set SelectedPackage(v: PackageItemVM | undefined) { this.set_property_value(PackageManagerService.SelectedPackageKey, v); }
   get Status(): string { return this.get_property_value(PackageManagerService.StatusKey); }
+  get Roots(): ObservableCollection<TreeNodeVM> { return this.get_property_value(PackageManagerService.RootsKey); }
+  get SelectedNode(): TreeNodeVM | undefined { return this.get_property_value(PackageManagerService.SelectedNodeKey); }
+  set SelectedNode(v: TreeNodeVM | undefined) { this.set_property_value(PackageManagerService.SelectedNodeKey, v); }
 
   private readonly registry: RegistryClient;
-  // The shell's central content host — View(x) swaps what the content region
-  // shows (via the framework's reactive DataTemplate[ContentHostService]).
   private readonly contentHost: ContentHostService;
-  // The current selection's central view; re-presented on re-activation.
-  private currentView: PackageViewVM | undefined;
+  private readonly editorPane = new EditorPaneVM();
   // Guards the lazy first load so re-selecting the capability doesn't refetch;
   // the Refresh command bypasses it (it always reloads).
   private loaded = false;
@@ -46,28 +47,23 @@ export class PackageManagerService extends ServiceBase implements IActivatable {
     super(provider);
     this.registry = provider.getRequired(RegistryClient);
     this.contentHost = provider.getRequired(ContentHostService.Key);
-    this.set_property_value(PackageManagerService.PackagesKey, new ObservableCollection<PackageItemVM>());
+    this.set_property_value(PackageManagerService.RootsKey, new ObservableCollection<TreeNodeVM>());
     // The pane header's Refresh affordance (rendered via DataTemplate).
     this.HeaderCommands = new PackageManagerHeaderVM(() => this.refresh());
-    // Selecting a package (listbox SelectedItem binds two-way) swaps the central
-    // content-host view to that package's PackageView.
-    this.AddPropertyChangedListener(PackageManagerService.SelectedPackageKey, () => this.showSelected());
-  }
-
-  // Build the central view for the current selection (or clear it) and present
-  // it in the shell's content host.
-  private showSelected(): void {
-    const sel = this.SelectedPackage;
-    this.currentView = sel !== undefined ? new PackageViewVM(sel.Name, this.registry) : undefined;
-    this.contentHost.View(this.currentView);
+    // Selecting a tree node (SelectedDataItem binds two-way) shows a leaf's
+    // content in the editor; branch/package rows carry none, so they no-op.
+    this.AddPropertyChangedListener(PackageManagerService.SelectedNodeKey, () => {
+      const content = this.SelectedNode?.Content;
+      if (content !== undefined) this.editorPane.show(content.text, content.language);
+    });
   }
 
   // IActivatable — the capability became active. Load the list once on first
-  // open, and re-present this capability's current selection into the shared
-  // content host (which may hold another capability's content after a switch).
+  // open, and (re-)present the shared editor pane into the content host, which
+  // may hold another capability's content after a switch.
   OnActivated(): void {
     if (!this.loaded) void this.load();
-    this.contentHost.View(this.currentView);
+    this.contentHost.View(this.editorPane);
   }
 
   // Reload on demand (the header Refresh command).
@@ -79,9 +75,9 @@ export class PackageManagerService extends ServiceBase implements IActivatable {
     this.set_property_value(PackageManagerService.StatusKey, "Loading…");
     try {
       const names = await this.registry.list();
-      const items = this.Packages;
-      items.Clear();
-      for (const name of names) items.Add(new PackageItemVM(name));
+      const roots = this.Roots;
+      roots.Clear();
+      for (const name of names) roots.Add(TreeNodeVM.lazy(name, () => this.loadCategories(name)));
       this.loaded = true;
       this.set_property_value(
         PackageManagerService.StatusKey,
@@ -93,5 +89,24 @@ export class PackageManagerService extends ServiceBase implements IActivatable {
         "Could not reach the registry: " + (e as Error).message,
       );
     }
+  }
+
+  // Fetch a package's tarball contents (one round-trip) and build its category
+  // nodes: Files (each .todl), Metadata, package.json, Compiled code, Raw
+  // model.json, Dependencies, Published versions.
+  private async loadCategories(name: string): Promise<TreeNodeVM[]> {
+    const c = await this.registry.getPackageContents(name);
+    const nodes: TreeNodeVM[] = [];
+    if (c.files.length > 0) {
+      nodes.push(TreeNodeVM.branch("Files", c.files.map((f) => TreeNodeVM.leaf(f.name, f.text, EditorLanguage.Todl))));
+    }
+    nodes.push(TreeNodeVM.leaf("Metadata", c.metadata, EditorLanguage.Json));
+    nodes.push(TreeNodeVM.leaf("package.json", c.packageJson, EditorLanguage.Json));
+    nodes.push(TreeNodeVM.leaf("Compiled code", c.compiled, EditorLanguage.Json));
+    nodes.push(TreeNodeVM.leaf("Raw model.json", c.rawModel, EditorLanguage.Json));
+    nodes.push(TreeNodeVM.branch("Dependencies", c.dependencies.map((d) => TreeNodeVM.leaf(d, d, EditorLanguage.PlainText))));
+    nodes.push(TreeNodeVM.branch("Published versions",
+      c.versions.map((v) => TreeNodeVM.leaf(v, v === c.latest ? `${v}  (latest)` : v, EditorLanguage.PlainText))));
+    return nodes;
   }
 }

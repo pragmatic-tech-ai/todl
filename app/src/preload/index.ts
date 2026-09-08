@@ -16,6 +16,7 @@ const bridge = {
     publishDir: (dir: string) => ipcRenderer.invoke("registry:publishDir", dir),
     compileDir: (dir: string) => ipcRenderer.invoke("registry:compileDir", dir),
     getSources: (ref: unknown) => ipcRenderer.invoke("registry:getSources", ref),
+    getPackageContents: (name: string) => ipcRenderer.invoke("registry:getPackageContents", name),
   },
   config: {
     get: () => ipcRenderer.invoke("config:get"),

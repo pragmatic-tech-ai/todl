@@ -16,6 +16,7 @@ import type {
   InstalledPackage,
   ResolvedClosure,
   PackageSource,
+  PackageContents,
 } from "@pragmatic-tech-ai/todl/package-manager";
 import type { ConfigView, CompileResultView } from "../../../main/registry/registry-bridge.js";
 import type { TodlBridge } from "../../env.js";
@@ -46,6 +47,9 @@ export class RegistryClient {
   }
   getSources(ref: PackageRef): Promise<PackageSource[]> {
     return this.bridge().registry.getSources(ref);
+  }
+  getPackageContents(name: string): Promise<PackageContents> {
+    return this.bridge().registry.getPackageContents(name);
   }
   getMeta(name: string): Promise<string> {
     return this.bridge().registry.getMeta(name);

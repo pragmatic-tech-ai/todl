@@ -18,6 +18,7 @@ import type {
   InstalledPackage,
   ResolvedClosure,
   PackageSource,
+  PackageContents,
   CompileResult,
 } from "@pragmatic-tech-ai/todl/package-manager";
 
@@ -29,6 +30,7 @@ export interface PackageManagerLike {
   getContent(ref: PackageRef): Promise<Uint8Array>;
   getPackage(ref: PackageRef): Promise<InstalledPackage>;
   getSources(ref: PackageRef): Promise<PackageSource[]>;
+  getContents(ref: PackageRef): Promise<PackageContents>;
   resolveClosure(rootDeps: readonly string[]): Promise<ResolvedClosure>;
   publish(compiledDir: string): Promise<void>;
 }
@@ -127,6 +129,12 @@ export class RegistryBridge {
 
   getSources(ref: PackageRef): Promise<PackageSource[]> {
     return this.manager().getSources(ref);
+  }
+
+  /** Everything a package's tarball carries (sources, manifest, meta, compiled +
+   *  raw model, deps, versions) from one fetch — backs the content tree. */
+  getPackageContents(name: string): Promise<PackageContents> {
+    return this.manager().getContents({ name });
   }
 
   async getConfig(): Promise<ConfigView> {

@@ -8,6 +8,7 @@ const mainEntry = resolve(here, "../../out/main/index.js");
 // The registry package names the fake bridge returns; mutated to prove Refresh
 // re-fetches. `window.todl` is frozen by contextBridge, so RegistryClient reads
 // the mutable `__todlBridge` override first (the production injection seam).
+// getPackageContents backs the per-package content tree (one fetch per expand).
 function installFakeRegistry(window: Page): Promise<void> {
   return window.evaluate(() => {
     (window as unknown as { __pkgNames: string[] }).__pkgNames = ["aws", "azure"];
@@ -15,13 +16,17 @@ function installFakeRegistry(window: Page): Promise<void> {
       registry: {
         list: () =>
           Promise.resolve((window as unknown as { __pkgNames: string[] }).__pkgNames),
-        // Selecting a package fetches its detail — deps (getPackage) + files
-        // (getSources). Distinctive per-name payloads let the test assert the
-        // central view reflects the clicked package.
-        getPackage: (ref: { name: string }) =>
-          Promise.resolve({ name: ref.name, meta: {}, dependencies: ["@scope/base-" + ref.name], document: {} }),
-        getSources: (ref: { name: string }) =>
-          Promise.resolve([{ name: ref.name + ".todl", text: "concept " + ref.name + "Root;" }]),
+        getPackageContents: (name: string) =>
+          Promise.resolve({
+            files: [{ name: name + ".todl", text: "concept " + name + "Root;" }],
+            packageJson: '{\n  "name": "@scope/' + name + '"\n}',
+            metadata: '{\n  "kind": "library"\n}',
+            compiled: '{\n  "nodes": []\n}',
+            rawModel: '{"nodes":[]}',
+            dependencies: ["@scope/base-" + name],
+            versions: ["0.1.0"],
+            latest: "0.1.0",
+          }),
       },
     };
   });
@@ -54,17 +59,34 @@ function hasText(window: Page, text: string): Promise<boolean> {
   );
 }
 
-// All rendered SVG text joined — for substring checks that survive wrapping
-// (a wrapped line splits across tspans, so exact-node matching is brittle).
-function allText(window: Page): Promise<string> {
-  return window.evaluate(() =>
-    Array.from(document.querySelectorAll("#app text, #app tspan"))
-      .map((n) => n.textContent ?? "")
-      .join(" "),
-  );
+// The bounding box of an SVG tree-row label (first match, in the side panel).
+function labelBox(window: Page, label: string): Promise<{ x: number; y: number; w: number; h: number } | null> {
+  return window.evaluate((t) => {
+    for (const el of Array.from(document.querySelectorAll("#app text, #app tspan"))) {
+      if ((el.textContent ?? "").trim() === t) {
+        const r = (el as Element).getBoundingClientRect();
+        if (r.left < 360) return { x: r.x, y: r.y, w: r.width, h: r.height };
+      }
+    }
+    return null;
+  }, label);
 }
 
-// The source files render in a Monaco editor (HTML in a <foreignObject>), not
+// Expand a tree row by clicking its chevron — just left of the label text.
+async function expandRow(window: Page, label: string): Promise<void> {
+  const b = await labelBox(window, label);
+  if (b === null) throw new Error(`tree row "${label}" not found`);
+  await window.mouse.click(b.x - 14, b.y + b.h / 2);
+}
+
+// Select a tree row by clicking its label.
+async function selectRow(window: Page, label: string): Promise<void> {
+  const b = await labelBox(window, label);
+  if (b === null) throw new Error(`tree row "${label}" not found`);
+  await window.mouse.click(b.x + b.w / 2, b.y + b.h / 2);
+}
+
+// The source/JSON renders in a Monaco editor (HTML in a <foreignObject>), not
 // SVG <text> — read its rendered lines for content assertions.
 function editorText(window: Page): Promise<string> {
   return window.evaluate(() => {
@@ -73,22 +95,7 @@ function editorText(window: Page): Promise<string> {
   });
 }
 
-// Click a package row in the side panel (left 300px) by its name text.
-async function clickPackageRow(window: Page, name: string): Promise<void> {
-  const box = await window.evaluate((n) => {
-    for (const el of Array.from(document.querySelectorAll("#app text, #app tspan"))) {
-      if ((el.textContent ?? "").trim() === n) {
-        const r = (el as Element).getBoundingClientRect();
-        if (r.left < 300) return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
-      }
-    }
-    return null;
-  }, name);
-  if (box === null) throw new Error(`package row "${name}" not found`);
-  await window.mouse.click(box.x, box.y);
-}
-
-test("Packages capability lists registry packages; Refresh re-fetches", async () => {
+test("Packages capability lists registry packages as a tree; Refresh re-fetches", async () => {
   const env = { ...process.env };
   delete env["ELECTRON_RUN_AS_NODE"];
   const app = await electron.launch({ args: [mainEntry], env });
@@ -113,7 +120,7 @@ test("Packages capability lists registry packages; Refresh re-fetches", async ()
   await app.close();
 });
 
-test("selecting a package shows its content in the central content host", async () => {
+test("expanding a package reveals category nodes; selecting a leaf shows it in the editor", async () => {
   const env = { ...process.env };
   delete env["ELECTRON_RUN_AS_NODE"];
   const app = await electron.launch({ args: [mainEntry], env });
@@ -124,12 +131,22 @@ test("selecting a package shows its content in the central content host", async 
   await clickRailCapability(window, 1);
   await expect.poll(() => hasText(window, "aws"), { timeout: 10_000 }).toBe(true);
 
-  // Select a package → the central content host shows its PackageView: the
-  // dependency header (SVG TextBlock) + its source files in the Monaco editor.
-  await clickPackageRow(window, "aws");
-  await expect.poll(async () => (await allText(window)).includes("base-aws"), { timeout: 10_000 }).toBe(true);
-  await expect.poll(async () => (await editorText(window)).includes("aws.todl"), { timeout: 10_000 }).toBe(true);
+  // Expand the package node → lazy fetch builds the category nodes.
+  await expandRow(window, "aws");
+  await expect.poll(() => hasText(window, "Metadata"), { timeout: 10_000 }).toBe(true);
+  await expect.poll(() => hasText(window, "package.json"), { timeout: 10_000 }).toBe(true);
+  await expect.poll(() => hasText(window, "Compiled code"), { timeout: 10_000 }).toBe(true);
+  await expect.poll(() => hasText(window, "Published versions"), { timeout: 10_000 }).toBe(true);
+
+  // Expand Files → the .todl file leaf; select it → its source in the editor.
+  await expandRow(window, "Files");
+  await expect.poll(() => hasText(window, "aws.todl"), { timeout: 10_000 }).toBe(true);
+  await selectRow(window, "aws.todl");
   await expect.poll(async () => (await editorText(window)).includes("awsRoot"), { timeout: 10_000 }).toBe(true);
+
+  // Select a JSON category → the editor swaps to that content.
+  await selectRow(window, "Metadata");
+  await expect.poll(async () => (await editorText(window)).includes("library"), { timeout: 10_000 }).toBe(true);
 
   await app.close();
 });

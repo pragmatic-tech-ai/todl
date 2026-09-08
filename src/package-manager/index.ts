@@ -19,7 +19,7 @@ export {
   type PackageCompilerDeps,
 } from "./package-compiler.js";
 export { RegistryBaseResolver, type BaseResolver, type RegistryFactory } from "./base-resolver.js";
-export { PackageManager, type PackageSource } from "./package-manager.js";
+export { PackageManager, type PackageSource, type PackageContents } from "./package-manager.js";
 export { ProjectInstaller, type NpmRunner } from "./project-installer.js";
 export { FileSink, MemorySink } from "./sinks.js";
 export {

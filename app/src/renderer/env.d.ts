@@ -3,6 +3,7 @@ import type {
   VersionList,
   InstalledPackage,
   ResolvedClosure,
+  PackageContents,
 } from "@pragmatic-tech-ai/todl/package-manager";
 import type { ConfigView, PackageSource, CompileResultView } from "../main/registry/registry-bridge.js";
 
@@ -17,6 +18,7 @@ export interface TodlBridge {
     publishDir(dir: string): Promise<void>;
     compileDir(dir: string): Promise<CompileResultView>;
     getSources(ref: PackageRef): Promise<PackageSource[]>;
+    getPackageContents(name: string): Promise<PackageContents>;
   };
   config: {
     get(): Promise<ConfigView>;

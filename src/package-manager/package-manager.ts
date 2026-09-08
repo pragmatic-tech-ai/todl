@@ -18,6 +18,21 @@ export interface PackageSource {
   text: string;
 }
 
+/** Everything a published package's tarball carries, in one round-trip: authored
+ *  sources, the npm manifest, the parsed meta + compiled model, the raw model
+ *  file, and (from the packument) the declared deps + published versions. Every
+ *  field is a plain string / string[] so it crosses the IPC boundary unchanged. */
+export interface PackageContents {
+  files: PackageSource[];   // package/src/**
+  packageJson: string;      // package/package.json (pretty-printed)
+  metadata: string;         // the `todl` meta block (pretty JSON)
+  compiled: string;         // the parsed model document (pretty JSON)
+  rawModel: string;         // package/model.json, exactly as published
+  dependencies: string[];   // declared dependency names
+  versions: string[];       // all published versions
+  latest: string;           // the `latest` dist-tag (or "")
+}
+
 const SRC_PREFIX = "package/src/";
 const decoder = new TextDecoder();
 
@@ -62,6 +77,31 @@ export class PackageManager {
     return TarReader.read(await this.registry.getContent(ref))
       .filter((f) => f.path.startsWith(SRC_PREFIX))
       .map((f) => ({ name: f.path.slice(SRC_PREFIX.length), text: decoder.decode(f.bytes) }));
+  }
+
+  /** Everything a package's tarball carries, from ONE content fetch (+ one
+   *  packument read for the version list): sources, manifest, meta, compiled +
+   *  raw model, deps, versions. Backs the app's per-package content tree. */
+  async getContents(ref: PackageRef): Promise<PackageContents> {
+    const bytes = await this.registry.getContent(ref);
+    const entries = TarReader.read(bytes);
+    const byPath = new Map(entries.map((f) => [f.path, f.bytes] as const));
+    const pkg = TarReader.readPackage(bytes); // undefined for a non-TODL package
+    const packageJson = byPath.get("package/package.json");
+    const rawModel = byPath.get("package/model.json");
+    const vlist = await this.versions(ref.name).catch(() => ({ versions: [], distTags: {} } as VersionList));
+    return {
+      files: entries
+        .filter((f) => f.path.startsWith(SRC_PREFIX))
+        .map((f) => ({ name: f.path.slice(SRC_PREFIX.length), text: decoder.decode(f.bytes) })),
+      packageJson: packageJson !== undefined ? PackageManager.prettyJson(decoder.decode(packageJson)) : "",
+      metadata: pkg !== undefined ? JSON.stringify(pkg.meta, null, 2) : "",
+      compiled: pkg !== undefined ? JSON.stringify(pkg.document, null, 2) : "",
+      rawModel: rawModel !== undefined ? decoder.decode(rawModel) : "",
+      dependencies: pkg !== undefined ? pkg.dependencies : [],
+      versions: vlist.versions,
+      latest: vlist.distTags["latest"] ?? "",
+    };
   }
 
   /** Registry-only BFS over published packages: fetch each root dep and its
@@ -109,5 +149,15 @@ export class PackageManager {
   private static unscoped(name: string): string {
     const slash = name.indexOf("/");
     return slash < 0 ? name : name.slice(slash + 1);
+  }
+
+  /** Re-indent a JSON string for display; passes the text through unchanged if it
+   *  does not parse (so a malformed manifest is still shown rather than swallowed). */
+  private static prettyJson(text: string): string {
+    try {
+      return JSON.stringify(JSON.parse(text), null, 2);
+    } catch {
+      return text;
+    }
   }
 }

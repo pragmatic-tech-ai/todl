@@ -4,22 +4,33 @@ import * as monaco from "monaco-editor";
 import { DomHost } from "@pragmatic-tech-ai/mural/basic";
 import { MuralBase, MetaData, Size } from "@pragmatic-tech-ai/mural/runtime";
 
+/** The Monaco language a document is edited in. `todl` earns the Monarch
+ *  grammar; `json` uses Monaco's built-in language; `plaintext` is unhighlighted. */
+export enum EditorLanguage {
+  Todl = "todl",
+  Json = "json",
+  PlainText = "plaintext",
+}
+
 /** A Mural DomHost that mounts a Monaco editor into the reserved <foreignObject>.
- *  `Text` two-way-syncs with the editor (echo-guarded). Optionally binds the
- *  editor's model to a shared LSP URI so diagnostics land on it. */
+ *  `Text` two-way-syncs with the editor (echo-guarded); `Language` switches the
+ *  model's language in place (e.g. selecting a JSON node after a TODL one).
+ *  Optionally binds the editor's model to a shared LSP URI so diagnostics land. */
 export class MonacoEditorHost extends DomHost {
   static TextKey = MuralBase.RegisterProperty<string>(MonacoEditorHost, "Text", "", MetaData.None);
   static ReadOnlyKey = MuralBase.RegisterProperty<boolean>(MonacoEditorHost, "ReadOnly", false, MetaData.None);
+  static LanguageKey = MuralBase.RegisterProperty<EditorLanguage>(MonacoEditorHost, "Language", EditorLanguage.Todl, MetaData.None);
 
   get Text(): string { return this.get_property_value(MonacoEditorHost.TextKey); }
   set Text(v: string) { this.set_property_value(MonacoEditorHost.TextKey, v); }
   get ReadOnly(): boolean { return this.get_property_value(MonacoEditorHost.ReadOnlyKey); }
   set ReadOnly(v: boolean) { this.set_property_value(MonacoEditorHost.ReadOnlyKey, v); }
+  get Language(): EditorLanguage { return this.get_property_value(MonacoEditorHost.LanguageKey); }
+  set Language(v: EditorLanguage) { this.set_property_value(MonacoEditorHost.LanguageKey, v); }
 
   private editor?: monaco.editor.IStandaloneCodeEditor;
   private updating = false;
   private modelUri?: string;
-  private language = "todl";
   private autoHeight = false;
   private contentHeight = 0;
 
@@ -32,14 +43,17 @@ export class MonacoEditorHost extends DomHost {
     this.AddPropertyChangedListener(MonacoEditorHost.ReadOnlyKey, () => {
       this.editor?.updateOptions({ readOnly: this.ReadOnly });
     });
+    // Language DP → live model language switch (register the TODL grammar first).
+    this.AddPropertyChangedListener(MonacoEditorHost.LanguageKey, () => {
+      const model = this.editor?.getModel();
+      if (model === undefined || model === null) return;
+      if (this.Language === EditorLanguage.Todl) registerTodlLanguage();
+      monaco.editor.setModelLanguage(model, this.Language);
+    });
   }
 
   /** Bind the editor's model to a fixed LSP document URI (call before mount). */
   useModelUri(uri: string): void { this.modelUri = uri; }
-
-  /** Set the editor language (default "todl"; e.g. "json"/"plaintext" for
-   *  read-only viewers). Call before mount. */
-  useLanguage(language: string): void { this.language = language; }
 
   /** Size the host's height to the editor's content (for short read-only
    *  snippets in a stacking layout) instead of filling its container. Call
@@ -69,12 +83,12 @@ export class MonacoEditorHost extends DomHost {
     // Register the TODL Monarch grammar so `todl` documents get syntax colours.
     // (The example bootstrap that once did this app-wide is gone; the host now
     // registers on demand — idempotent, so repeated mounts are cheap.)
-    if (this.language === "todl") registerTodlLanguage();
+    if (this.Language === EditorLanguage.Todl) registerTodlLanguage();
     const model = this.modelUri
-      ? monaco.editor.createModel(this.Text, this.language, monaco.Uri.parse(this.modelUri))
-      : monaco.editor.createModel(this.Text, this.language);
+      ? monaco.editor.createModel(this.Text, this.Language, monaco.Uri.parse(this.modelUri))
+      : monaco.editor.createModel(this.Text, this.Language);
     this.editor = monaco.editor.create(el, {
-      model, language: this.language, theme: TODL_DARK_THEME, automaticLayout: true, minimap: { enabled: false },
+      model, language: this.Language, theme: TODL_DARK_THEME, automaticLayout: true, minimap: { enabled: false },
       fontSize: 13, readOnly: this.ReadOnly, scrollBeyondLastLine: false,
     });
     this.editor.onDidChangeModelContent(() => {
