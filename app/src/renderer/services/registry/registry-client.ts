@@ -51,6 +51,12 @@ export class RegistryClient {
   getPackageContents(name: string): Promise<PackageContents> {
     return this.bridge().registry.getPackageContents(name);
   }
+  deleteVersion(name: string, version: string): Promise<void> {
+    return this.bridge().registry.deleteVersion(name, version);
+  }
+  bumpVersion(dir: string): Promise<string> {
+    return this.bridge().registry.bumpVersion(dir);
+  }
   getMeta(name: string): Promise<string> {
     return this.bridge().registry.getMeta(name);
   }

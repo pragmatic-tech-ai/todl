@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { RegistryBridge, type PackageManagerLike } from "../registry-bridge.js";
@@ -26,6 +26,7 @@ class FakeManager implements PackageManagerLike {
   getContents(ref: any) { return this.over.getContents?.(ref) ?? Promise.resolve({ files: [], resources: [], packageJson: "", metadata: "", compiled: "", rawModel: "", dependencies: [], versions: [], latest: "" }); }
   resolveClosure(deps: readonly string[]) { return this.over.resolveClosure?.(deps) ?? Promise.resolve({ metaModels: [], libraries: [], order: [] }); }
   publish(dir: string) { return this.over.publish?.(dir) ?? Promise.resolve(); }
+  deleteVersion(name: string, version: string) { return this.over.deleteVersion?.(name, version) ?? Promise.resolve(); }
 }
 
 function makeBridge(
@@ -83,6 +84,23 @@ test("getPackageContents delegates to the manager (name → ref)", async () => {
   assert.deepEqual(contents.files, [{ name: "a.todl", text: "concept A;" }]);
   assert.deepEqual(contents.dependencies, ["@scope/base"]);
   assert.deepEqual(contents.versions, ["0.1.0"]);
+});
+
+test("bumpVersion writes the next unused patch to project.plexus (meta-model modelVersion)", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "todl-bump-"));
+  writeFileSync(join(dir, "project.plexus"), JSON.stringify({ type: "meta-model", id: "tech-architecture", version: 1, modelVersion: "0.1.0" }));
+  const bridge = makeBridge({ versions: () => Promise.resolve({ versions: ["0.1.0", "0.1.1"], distTags: { latest: "0.1.1" } }) });
+
+  const next = await bridge.bumpVersion(dir);
+  assert.equal(next, "0.1.2"); // above the highest published (0.1.1)
+  assert.equal(JSON.parse(readFileSync(join(dir, "project.plexus"), "utf8")).modelVersion, "0.1.2");
+});
+
+test("deleteVersion delegates to the manager", async () => {
+  let seen: [string, string] | undefined;
+  const bridge = makeBridge({ deleteVersion: (name, version) => { seen = [name, version]; return Promise.resolve(); } });
+  await bridge.deleteVersion("@pragmatic-tech-ai/aws", "0.1.0");
+  assert.deepEqual(seen, ["@pragmatic-tech-ai/aws", "0.1.0"]);
 });
 
 test("getMeta returns the package kind via manifestKind", async () => {

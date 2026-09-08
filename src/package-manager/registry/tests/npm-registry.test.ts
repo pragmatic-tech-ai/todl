@@ -157,6 +157,31 @@ test("publish keys the attachment + tarball by the full scoped name (GitHub Pack
   assert.equal(body.versions["0.1.0"]!.dist.tarball, `${REGISTRY}/${SCOPE}/aws/-/${expectedFile}`);
 });
 
+test("deleteVersion resolves the version id via the GitHub API and DELETEs it", async () => {
+  const calls: { method: string; url: string }[] = [];
+  const transport: HttpTransport = {
+    request(req) {
+      calls.push({ method: req.method, url: req.url });
+      if (req.method === "GET" && req.url.endsWith("/versions")) {
+        return Promise.resolve({ status: 200, headers: {}, body: enc.encode(JSON.stringify([{ id: 11, name: "0.1.0" }, { id: 12, name: "0.2.0" }])) });
+      }
+      return Promise.resolve({ status: 204, headers: {}, body: new Uint8Array() });
+    },
+  };
+
+  await client(transport).deleteVersion(`${SCOPE}/aws`, "0.1.0");
+  // Addressed by the UNSCOPED name, and the matching version id (0.1.0 → 11).
+  assert.ok(calls.some((c) => c.method === "GET" && c.url.endsWith("/packages/npm/aws/versions")), "lists versions by unscoped name");
+  assert.ok(calls.some((c) => c.method === "DELETE" && c.url.endsWith("/versions/11")), "deletes the matching version id");
+});
+
+test("deleteVersion throws when the version is not published", async () => {
+  const transport: HttpTransport = {
+    request: () => Promise.resolve({ status: 200, headers: {}, body: enc.encode(JSON.stringify([{ id: 12, name: "0.2.0" }])) }),
+  };
+  await assert.rejects(client(transport).deleteVersion(`${SCOPE}/aws`, "0.1.0"), /not a published version/);
+});
+
 test("publishDir tars a packed directory and publishes it", async () => {
   const dir = join(mkdtempSync(join(tmpdir(), "todl-reg-")), "dist");
   mkdirSync(join(dir, "src"), { recursive: true });

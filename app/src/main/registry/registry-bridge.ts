@@ -11,6 +11,7 @@ import type { TokenStore } from "./token-store.js";
 import type { SettingsStore, RegistrySettings } from "./settings-store.js";
 import { TokenSource } from "./settings-store.js";
 import { join } from "node:path";
+import { readFileSync, writeFileSync } from "node:fs";
 import type {
   NpmRegistryConfig,
   PackageRef,
@@ -33,6 +34,7 @@ export interface PackageManagerLike {
   getContents(ref: PackageRef): Promise<PackageContents>;
   resolveClosure(rootDeps: readonly string[]): Promise<ResolvedClosure>;
   publish(compiledDir: string): Promise<void>;
+  deleteVersion(name: string, version: string): Promise<void>;
 }
 
 /** The subset of `PackageCompiler` the bridge uses (structurally satisfied by it).
@@ -105,6 +107,49 @@ export class RegistryBridge {
 
   publishDir(dir: string): Promise<void> {
     return this.manager().publish(dir);
+  }
+
+  /** Delete a published version from the registry (reaction to a 409 conflict). */
+  deleteVersion(name: string, version: string): Promise<void> {
+    return this.manager().deleteVersion(name, version);
+  }
+
+  /** Bump the opened project's version to the next unused patch and persist it to
+   *  `project.plexus`, returning the new version. The caller then recompiles +
+   *  republishes. The publishable version lives in `modelVersion` (a meta-model)
+   *  or `libVersion` (a library); `project.plexus` is plain JSON. */
+  async bumpVersion(dir: string): Promise<string> {
+    const manifestPath = join(dir, "project.plexus");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as
+      { type?: string; id?: string; modelVersion?: string; libVersion?: string };
+    const field = manifest.type === "meta-model" ? "modelVersion" : "libVersion";
+    const current = manifest[field] ?? "0.0.0";
+    const scope = this.deps.settingsStore.get().scope;
+    const name = `${scope}/${manifest.id ?? ""}`;
+    const published = await this.manager().versions(name).then((v) => v.versions).catch(() => [] as string[]);
+    const next = RegistryBridge.nextUnusedPatch(current, published);
+    manifest[field] = next;
+    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    return next;
+  }
+
+  /** The next unused patch: patch+1 above the highest of `current` ∪ `published`,
+   *  skipping any already taken. Non-`major.minor.patch` inputs are ignored. */
+  private static nextUnusedPatch(current: string, published: readonly string[]): string {
+    const parse = (v: string): [number, number, number] | undefined => {
+      const m = /^(\d+)\.(\d+)\.(\d+)$/.exec(v.trim());
+      return m === null ? undefined : [Number(m[1]), Number(m[2]), Number(m[3])];
+    };
+    const cmp = (a: readonly number[], b: readonly number[]): number => a[0]! - b[0]! || a[1]! - b[1]! || a[2]! - b[2]!;
+    let best: [number, number, number] = parse(current) ?? [0, 0, 0];
+    for (const v of published) {
+      const p = parse(v);
+      if (p !== undefined && cmp(p, best) > 0) best = p;
+    }
+    const taken = new Set(published);
+    let candidate: [number, number, number] = [best[0], best[1], best[2] + 1];
+    while (taken.has(candidate.join("."))) candidate = [candidate[0], candidate[1], candidate[2] + 1];
+    return candidate.join(".");
   }
 
   /** Compile a project directory into a package under `<dir>/dist`, returning a

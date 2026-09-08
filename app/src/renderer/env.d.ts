@@ -19,6 +19,8 @@ export interface TodlBridge {
     compileDir(dir: string): Promise<CompileResultView>;
     getSources(ref: PackageRef): Promise<PackageSource[]>;
     getPackageContents(name: string): Promise<PackageContents>;
+    deleteVersion(name: string, version: string): Promise<void>;
+    bumpVersion(dir: string): Promise<string>;
   };
   config: {
     get(): Promise<ConfigView>;

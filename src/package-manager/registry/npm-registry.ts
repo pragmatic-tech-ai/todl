@@ -194,6 +194,25 @@ export class NpmRegistry {
     await this.publish(manifest, createTgz(entries));
   }
 
+  /** Delete a published version via the GitHub Packages REST API: resolve the
+   *  version's numeric id (npm packages are addressed by their UNSCOPED name
+   *  under the org), then `DELETE` it. Requires a token with `delete:packages`.
+   *  Registries other than GitHub Packages don't support this shape. */
+  async deleteVersion(name: string, version: string): Promise<void> {
+    const slash = name.indexOf("/");
+    const pkg = slash < 0 ? name : name.slice(slash + 1);
+    const base = `${this.githubApi}/orgs/${this.org}/packages/npm/${encodeURIComponent(pkg)}/versions`;
+    const listRes = await this.transport.request({ method: "GET", url: base, headers: this.githubHeaders() });
+    if (listRes.status !== 200) throw new Error(`list versions of ${name} failed: HTTP ${listRes.status} ${text(listRes)}`);
+    const versions = JSON.parse(text(listRes)) as Array<{ id: number; name: string }>;
+    const match = versions.find((v) => v.name === version);
+    if (match === undefined) throw new Error(`${name}@${version} is not a published version`);
+    const delRes = await this.transport.request({ method: "DELETE", url: `${base}/${match.id}`, headers: this.githubHeaders() });
+    if (delRes.status < 200 || delRes.status >= 300) {
+      throw new Error(`delete ${name}@${version} failed: HTTP ${delRes.status} ${text(delRes)}`);
+    }
+  }
+
   /** Qualify a ref's name with a scope unless it is already scoped. */
   private qualify(ref: PackageRef): string {
     if (ref.name.startsWith("@")) return ref.name;

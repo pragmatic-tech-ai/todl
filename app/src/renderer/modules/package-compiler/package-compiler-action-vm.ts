@@ -7,6 +7,9 @@ export enum CompilerAction {
   Open,
   Compile,
   Publish,
+  // Offered only after a 409 "existing version" conflict, as the user's choice.
+  BumpRepublish,
+  DeleteRepublish,
 }
 
 // One row in the compiler's action list.

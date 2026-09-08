@@ -101,3 +101,58 @@ test("Compiler capability: open → compile → view → publish (with confirm)"
 
   await app.close();
 });
+
+// A publish that first hits a 409 "existing version" conflict, offering the user
+// a choice; selecting "Bump version & republish" bumps, recompiles, republishes.
+function installConflictBridge(window: Page): Promise<void> {
+  return window.evaluate(() => {
+    let publishCount = 0;
+    (window as unknown as { __todlBridge: unknown }).__todlBridge = {
+      dialog: { pickDirectory: () => Promise.resolve("C:/proj/demo") },
+      registry: {
+        compileDir: (dir: string) =>
+          Promise.resolve({ ok: true, outDir: dir + "/dist", files: ["package.json"], diagnostics: [], name: "@scope/demo", version: "0.1.0", sourceCount: 1 }),
+        publishDir: (dir: string) => {
+          publishCount += 1;
+          if (publishCount === 1) {
+            return Promise.reject(new Error('publish @scope/demo@0.1.0 failed: HTTP 409 {"error":"Cannot publish over existing version"}'));
+          }
+          (window as unknown as { __published: string }).__published = dir;
+          return Promise.resolve();
+        },
+        bumpVersion: () => { (window as unknown as { __bumped: boolean }).__bumped = true; return Promise.resolve("0.1.1"); },
+        deleteVersion: () => Promise.resolve(),
+      },
+    };
+  });
+}
+
+test("Compiler capability: 409 conflict offers a choice; Bump version & republish recovers", async () => {
+  const env = { ...process.env };
+  delete env["ELECTRON_RUN_AS_NODE"];
+  const app = await electron.launch({ args: [mainEntry], env });
+  const window = await app.firstWindow();
+  await window.waitForSelector("#app svg", { timeout: 30_000 });
+
+  await installConflictBridge(window);
+  await clickRailCapability(window, 2);
+
+  await clickText(window, "Open Directory");
+  await clickText(window, "Compile");
+  await expect.poll(async () => (await allText(window)).includes("@scope/demo@0.1.0"), { timeout: 10_000 }).toBe(true);
+
+  // Publish (arm + confirm) → the first attempt 409s and the choice appears.
+  await clickText(window, "Publish");
+  await clickText(window, "Publish");
+  await expect.poll(async () => (await allText(window)).includes("already published"), { timeout: 10_000 }).toBe(true);
+  await expect.poll(async () => (await allText(window)).includes("Bump version & republish"), { timeout: 10_000 }).toBe(true);
+  await expect.poll(async () => (await allText(window)).includes("Delete published version & republish"), { timeout: 10_000 }).toBe(true);
+
+  // Choose bump → bumps, recompiles, republishes successfully.
+  await clickText(window, "Bump version & republish");
+  await expect.poll(async () => (await allText(window)).includes("Published."), { timeout: 10_000 }).toBe(true);
+  const bumped = await window.evaluate(() => (window as unknown as { __bumped?: boolean }).__bumped);
+  expect(bumped).toBe(true);
+
+  await app.close();
+});

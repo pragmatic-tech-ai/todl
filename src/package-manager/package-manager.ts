@@ -133,6 +133,11 @@ export class PackageManager {
     return this.registry.publishDir(compiledDir);
   }
 
+  /** Delete a published version from the registry (GitHub Packages). */
+  deleteVersion(name: string, version: string): Promise<void> {
+    return this.registry.deleteVersion(name, version);
+  }
+
   /** Download a published tarball. Writes to `outFile`, or a default
    *  `<unscoped-name>-<version|latest>.tgz` in the cwd. Returns the path written. */
   async get(refInput: string, outFile?: string): Promise<string> {
