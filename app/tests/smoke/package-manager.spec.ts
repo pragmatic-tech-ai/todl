@@ -19,6 +19,7 @@ function installFakeRegistry(window: Page): Promise<void> {
         getPackageContents: (name: string) =>
           Promise.resolve({
             files: [{ name: name + ".todl", text: "concept " + name + "Root;" }],
+            resources: [{ name: "theme.mu", text: "resources " + name + "Theme {}" }],
             packageJson: '{\n  "name": "@scope/' + name + '"\n}',
             metadata: '{\n  "kind": "library"\n}',
             compiled: '{\n  "nodes": []\n}',
@@ -136,7 +137,14 @@ test("expanding a package reveals category nodes; selecting a leaf shows it in t
   await expect.poll(() => hasText(window, "Metadata"), { timeout: 10_000 }).toBe(true);
   await expect.poll(() => hasText(window, "package.json"), { timeout: 10_000 }).toBe(true);
   await expect.poll(() => hasText(window, "Compiled code"), { timeout: 10_000 }).toBe(true);
+  await expect.poll(() => hasText(window, "Resources"), { timeout: 10_000 }).toBe(true);
   await expect.poll(() => hasText(window, "Published versions"), { timeout: 10_000 }).toBe(true);
+
+  // Expand Resources → the mural resource leaf; select it → its text in the editor.
+  await expandRow(window, "Resources");
+  await expect.poll(() => hasText(window, "theme.mu"), { timeout: 10_000 }).toBe(true);
+  await selectRow(window, "theme.mu");
+  await expect.poll(async () => (await editorText(window)).includes("awsTheme"), { timeout: 10_000 }).toBe(true);
 
   // Expand Files → the .todl file leaf; select it → its source in the editor.
   await expandRow(window, "Files");

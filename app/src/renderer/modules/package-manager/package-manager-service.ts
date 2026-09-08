@@ -104,9 +104,20 @@ export class PackageManagerService extends ServiceBase implements IActivatable {
     nodes.push(TreeNodeVM.leaf("package.json", c.packageJson, EditorLanguage.Json));
     nodes.push(TreeNodeVM.leaf("Compiled code", c.compiled, EditorLanguage.Json));
     nodes.push(TreeNodeVM.leaf("Raw model.json", c.rawModel, EditorLanguage.Json));
+    if (c.resources.length > 0) {
+      nodes.push(TreeNodeVM.branch("Resources",
+        c.resources.map((r) => TreeNodeVM.leaf(r.name, r.text, PackageManagerService.languageFor(r.name)))));
+    }
     nodes.push(TreeNodeVM.branch("Dependencies", c.dependencies.map((d) => TreeNodeVM.leaf(d, d, EditorLanguage.PlainText))));
     nodes.push(TreeNodeVM.branch("Published versions",
       c.versions.map((v) => TreeNodeVM.leaf(v, v === c.latest ? `${v}  (latest)` : v, EditorLanguage.PlainText))));
     return nodes;
+  }
+
+  // The editor language for a resource file, inferred from its extension.
+  private static languageFor(name: string): EditorLanguage {
+    if (name.endsWith(".json")) return EditorLanguage.Json;
+    if (name.endsWith(".todl")) return EditorLanguage.Todl;
+    return EditorLanguage.PlainText;
   }
 }

@@ -62,6 +62,27 @@ test("compiles a library against injected bases + records the dep", async () => 
   assert.deepEqual(pkg.dependencies, { "@pragmatic-tech-ai/todl-test-tech-architecture": "0.1.0" });
 });
 
+test("packs non-.todl resources verbatim under resources/", async () => {
+  const sink = new MemorySink();
+  const enc = new TextEncoder();
+  const project: Project = {
+    directory: "/x",
+    manifest: manifest("meta-models/tech-architecture"),
+    sources: sources("meta-models/tech-architecture"),
+    resources: [
+      { path: "theme.mu", bytes: enc.encode("resources T {}") },
+      { path: "img/logo.svg", bytes: enc.encode("<svg/>") },
+    ],
+  };
+  const compiler = new PackageCompiler({ reader: reader(project), resolver: resolver([]), createSink: () => sink });
+
+  const result = await compiler.compile("/x");
+  assert.ok(result.ok, result.errors.map((e) => e.message).join(", "));
+  assert.equal(new TextDecoder().decode(sink.binaries.get("resources/theme.mu")), "resources T {}");
+  assert.ok(sink.binaries.has("resources/img/logo.svg"), "nested resource path preserved");
+  assert.ok(result.files?.includes("resources/theme.mu"), "resource listed in the written files");
+});
+
 test("a failing compile writes nothing and returns errors", async () => {
   const sink = new MemorySink();
   const bad: Project = { directory: "/x", manifest: manifest("meta-models/tech-architecture"), sources: [{ uri: "bad.todl", text: "element Broken : DoesNotExist;\n" }] };

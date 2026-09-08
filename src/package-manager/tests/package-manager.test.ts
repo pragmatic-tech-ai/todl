@@ -60,11 +60,13 @@ async function publishPackage(
   todl: { kind: string; id: string },
   deps: Record<string, string> = {},
   src: Record<string, string> = {},
+  resources: Record<string, string> = {},
 ): Promise<void> {
   const files = [
     { path: "package/package.json", bytes: enc.encode(JSON.stringify({ name: `${SCOPE}/${id}`, version, todl, dependencies: deps })) },
     { path: "package/model.json", bytes: enc.encode(JSON.stringify({ nodes: [] })) },
     ...Object.entries(src).map(([name, text]) => ({ path: `package/src/${name}`, bytes: enc.encode(text) })),
+    ...Object.entries(resources).map(([name, text]) => ({ path: `package/resources/${name}`, bytes: enc.encode(text) })),
   ];
   // The manifest PUT to the registry carries todl + deps too (as publishDir does),
   // so getManifest/manifestKind can read them without a tarball download.
@@ -137,11 +139,18 @@ test("getContents bundles sources, manifest, meta, model, deps + versions in one
   const seed = seeder(fake);
   await publishPackage(seed, "aws", "0.1.0", { kind: "library", id: "aws" }, { "@pragmatic-tech-ai/base": "^1.0.0" }, {
     "aws.todl": "concept EC2;\n",
+  }, {
+    "theme.mu": "resources AwsTheme {}\n",
+    "docs/readme.md": "# AWS\n",
   });
   await publishPackage(seed, "aws", "0.2.0", { kind: "library", id: "aws" });
 
   const contents = await manager(fake).getContents({ name: "aws", version: "0.1.0" });
   assert.deepEqual(contents.files, [{ name: "aws.todl", text: "concept EC2;\n" }]);
+  assert.deepEqual(contents.resources, [
+    { name: "theme.mu", text: "resources AwsTheme {}\n" },
+    { name: "docs/readme.md", text: "# AWS\n" },
+  ]);
   assert.deepEqual(contents.dependencies, ["@pragmatic-tech-ai/base"]);
   assert.equal(JSON.parse(contents.metadata).kind, "library");
   assert.deepEqual(JSON.parse(contents.compiled), { nodes: [] });

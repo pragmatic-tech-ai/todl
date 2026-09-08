@@ -23,17 +23,19 @@ export interface PackageSource {
  *  file, and (from the packument) the declared deps + published versions. Every
  *  field is a plain string / string[] so it crosses the IPC boundary unchanged. */
 export interface PackageContents {
-  files: PackageSource[];   // package/src/**
-  packageJson: string;      // package/package.json (pretty-printed)
-  metadata: string;         // the `todl` meta block (pretty JSON)
-  compiled: string;         // the parsed model document (pretty JSON)
-  rawModel: string;         // package/model.json, exactly as published
-  dependencies: string[];   // declared dependency names
-  versions: string[];       // all published versions
-  latest: string;           // the `latest` dist-tag (or "")
+  files: PackageSource[];     // package/src/**
+  resources: PackageSource[]; // package/resources/** (mural resources, docs, …)
+  packageJson: string;        // package/package.json (pretty-printed)
+  metadata: string;           // the `todl` meta block (pretty JSON)
+  compiled: string;           // the parsed model document (pretty JSON)
+  rawModel: string;           // package/model.json, exactly as published
+  dependencies: string[];     // declared dependency names
+  versions: string[];         // all published versions
+  latest: string;             // the `latest` dist-tag (or "")
 }
 
 const SRC_PREFIX = "package/src/";
+const RES_PREFIX = "package/resources/";
 const decoder = new TextDecoder();
 
 export class PackageManager {
@@ -94,6 +96,9 @@ export class PackageManager {
       files: entries
         .filter((f) => f.path.startsWith(SRC_PREFIX))
         .map((f) => ({ name: f.path.slice(SRC_PREFIX.length), text: decoder.decode(f.bytes) })),
+      resources: entries
+        .filter((f) => f.path.startsWith(RES_PREFIX))
+        .map((f) => ({ name: f.path.slice(RES_PREFIX.length), text: decoder.decode(f.bytes) })),
       packageJson: packageJson !== undefined ? PackageManager.prettyJson(decoder.decode(packageJson)) : "",
       metadata: pkg !== undefined ? JSON.stringify(pkg.meta, null, 2) : "",
       compiled: pkg !== undefined ? JSON.stringify(pkg.document, null, 2) : "",

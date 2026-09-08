@@ -17,7 +17,7 @@ import {
 } from "../publish/publish.js";
 import type { PackageSink } from "../publish/stores.js";
 import { FileSink } from "./sinks.js";
-import { readProject, type Project } from "./project.js";
+import { readProject, type Project, type ResourceFile } from "./project.js";
 import type { ProjectManifest } from "./manifest.js";
 import { toPackageJson, DEFAULT_SCOPE, type PackageJson, type TodlPackageMeta } from "./package-json.js";
 import { RegistryBaseResolver, type BaseResolver } from "./base-resolver.js";
@@ -86,7 +86,7 @@ export class PackageCompiler {
     }
 
     const sink = this.createSink(options.outDir ?? join(directory, "dist"));
-    const files = await this.emit(sink, outcome.package, packageJson);
+    const files = await this.emit(sink, outcome.package, packageJson, project.resources ?? []);
     return { ok: true, diagnostics: outcome.diagnostics, errors: outcome.errors, files, package: outcome.package };
   }
 
@@ -103,7 +103,7 @@ export class PackageCompiler {
   }
 
   /** Write the npm package layout, returning the package-relative paths written. */
-  private async emit(sink: PackageSink, pkg: CompiledPackage, packageJson: PackageJson): Promise<string[]> {
+  private async emit(sink: PackageSink, pkg: CompiledPackage, packageJson: PackageJson, resources: readonly ResourceFile[]): Promise<string[]> {
     const files: string[] = [];
     const write = async (path: string, content: string): Promise<void> => {
       await sink.writeText(path, content);
@@ -114,6 +114,15 @@ export class PackageCompiler {
     for (const source of pkg.sources) await write(`src/${source.uri}`, source.text);
     await write("index.js", PackageCompiler.handleModule(pkg.document, packageJson.todl));
     await write("index.d.ts", PackageCompiler.handleTypes());
+    // Every non-`.todl` project file, packed verbatim under `resources/` so the
+    // package carries what it needs to work (mural resources, images, docs).
+    // Binary-safe when the sink supports it; falls back to a text write.
+    for (const r of resources) {
+      const path = `resources/${r.path}`;
+      if (sink.writeBytes !== undefined) await sink.writeBytes(path, r.bytes);
+      else await sink.writeText(path, new TextDecoder().decode(r.bytes));
+      files.push(path);
+    }
     return files;
   }
 
