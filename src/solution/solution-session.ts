@@ -2,6 +2,7 @@ import { Observable, type IStorage } from '@pragmatic-tech-ai/todl-runtime'
 import { ObservableCollection } from '@pragmatic-tech-ai/mural/runtime'
 import { SolutionMember } from './solution-member.js'
 import { type SolutionSettingBag } from './solution-setting-bag.js'
+import { type MemberStorageResolver, type ProjectFactoryResolver } from './project-factory.js'
 
 // The live, in-memory solution: a name, the storage it is rooted at, its ordered
 // member projects (opened all-at-once), its cross-project setting bags, and a
@@ -45,6 +46,18 @@ export class SolutionSession extends Observable {
     public RemoveMember(member: SolutionMember): void {
         this.Members.Remove(member)
         this.markDirty()
+    }
+
+    // Open ALL member projects: resolve each member's storage + factory, open it,
+    // and stash the handle on the member. A member whose type has no registered
+    // factory stays unresolved (Project === undefined) — no throw, so one missing
+    // module doesn't break the whole solution.
+    public async OpenMembers(storageFor: MemberStorageResolver, factoryFor: ProjectFactoryResolver): Promise<void> {
+        for (const member of this.Members) {
+            const factory = factoryFor(member.Ref.type)
+            if (factory === undefined) { member.Project = undefined; continue }
+            member.Project = await factory.openProject(storageFor(member.Ref.path))
+        }
     }
 
     // Any member/setting mutation flips dirty; Save clears it.
