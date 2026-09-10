@@ -6,7 +6,7 @@
  * callers mutate through the builder.
  */
 
-import { Signal } from "../core/signal.js";
+import { Signal } from "@pragmatic-tech-ai/todl-runtime";
 import {
   Graph,
   EdgeKind,

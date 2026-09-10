@@ -6,7 +6,7 @@ import { DeclKind, ValueKind, type ModelDecl, type EdgeValue } from "../ast.js";
 
 function firstInstanceAssignments(text: string) {
   const m = parse(text).namespace.declarations.find((d) => d.kind === DeclKind.Model) as ModelDecl;
-  return m.instances[0].assignments;
+  return m.instances[0]!.assignments;
 }
 
 test("an edge on the RHS of = parses as an Edge value", () => {
@@ -24,8 +24,8 @@ test("a list of edges parses as a list of Edge values", () => {
   assert.equal(list.kind, ValueKind.List);
   const items = (list as { items: EdgeValue[] }).items;
   assert.equal(items.length, 2);
-  assert.equal(items[0].kind, ValueKind.Edge);
-  assert.equal(items[1].edge.left, "b");
+  assert.equal(items[0]!.kind, ValueKind.Edge);
+  assert.equal(items[1]!.edge.left, "b");
 });
 
 test("an edge value with a body captures body assignments", () => {

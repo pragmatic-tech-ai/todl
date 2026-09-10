@@ -38,7 +38,7 @@ const metaDoc = toJSON(check(sources("meta-models/tech-architecture")).model);
 
 test("compiles a meta-model into the npm package layout", async () => {
   const sink = new MemorySink();
-  const project: Project = { directory: "/x", manifest: manifest("meta-models/tech-architecture"), sources: sources("meta-models/tech-architecture") };
+  const project: Project = { directory: "/x", manifest: manifest("meta-models/tech-architecture"), sources: sources("meta-models/tech-architecture"), resources: [] };
   const compiler = new PackageCompiler({ reader: reader(project), resolver: resolver([]), createSink: () => sink });
 
   const result = await compiler.compile("/x");
@@ -53,7 +53,7 @@ test("compiles a meta-model into the npm package layout", async () => {
 
 test("compiles a library against injected bases + records the dep", async () => {
   const sink = new MemorySink();
-  const project: Project = { directory: "/x", manifest: manifest("libraries/microsoft"), sources: sources("libraries/microsoft") };
+  const project: Project = { directory: "/x", manifest: manifest("libraries/microsoft"), sources: sources("libraries/microsoft"), resources: [] };
   const compiler = new PackageCompiler({ reader: reader(project), resolver: resolver([metaDoc]), createSink: () => sink });
 
   const result = await compiler.compile("/x");
@@ -85,7 +85,7 @@ test("packs non-.todl resources verbatim under resources/", async () => {
 
 test("a failing compile writes nothing and returns errors", async () => {
   const sink = new MemorySink();
-  const bad: Project = { directory: "/x", manifest: manifest("meta-models/tech-architecture"), sources: [{ uri: "bad.todl", text: "element Broken : DoesNotExist;\n" }] };
+  const bad: Project = { directory: "/x", manifest: manifest("meta-models/tech-architecture"), sources: [{ uri: "bad.todl", text: "element Broken : DoesNotExist;\n" }], resources: [] };
   const compiler = new PackageCompiler({ reader: reader(bad), resolver: resolver([]), createSink: () => sink });
 
   const result = await compiler.compile("/x");
@@ -95,7 +95,7 @@ test("a failing compile writes nothing and returns errors", async () => {
 });
 
 test("refuses to compile an architecture (not published)", async () => {
-  const project: Project = { directory: "/x", manifest: manifest("architectures/test_architecture"), sources: [] };
+  const project: Project = { directory: "/x", manifest: manifest("architectures/test_architecture"), sources: [], resources: [] };
   const compiler = new PackageCompiler({ reader: reader(project), resolver: resolver([]), createSink: () => new MemorySink() });
   await assert.rejects(compiler.compile("/x"), /not published/);
 });

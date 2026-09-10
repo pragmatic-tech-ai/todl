@@ -10,10 +10,12 @@ function fakeSink() {
 }
 
 function pkg(): CompiledPackage {
+  const document = { nodes: [{ id: "ms.a", tier: "Instance", typeOf: "t", attrs: { id: "a" } }], edges: [] };
   return {
     id: "ms",
     version: "1.0.0",
-    document: { nodes: [{ id: "ms.a", tier: "Instance", typeOf: "t", attrs: { id: "a" } }], edges: [] },
+    document,
+    fullDocument: document, // no bases → the closure equals the own document
     sources: [{ uri: "ms.todl", text: "namespace ms {}" }],
     classes: [],
   };

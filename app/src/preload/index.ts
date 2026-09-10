@@ -32,6 +32,16 @@ const bridge = {
   },
   fs: {
     readDir: (path: string) => ipcRenderer.invoke("fs:readDir", path),
+    readText: (path: string) => ipcRenderer.invoke("fs:readText", path),
+    readBytes: (path: string) => ipcRenderer.invoke("fs:readBytes", path),
+    writeText: (path: string, content: string) => ipcRenderer.invoke("fs:writeText", path, content),
+    writeBytes: (path: string, bytes: Uint8Array) => ipcRenderer.invoke("fs:writeBytes", path, bytes),
+    exists: (path: string) => ipcRenderer.invoke("fs:exists", path),
+    delete: (path: string) => ipcRenderer.invoke("fs:delete", path),
+    mkdir: (path: string) => ipcRenderer.invoke("fs:mkdir", path),
+    rename: (from: string, to: string) => ipcRenderer.invoke("fs:rename", from, to),
+    list: (path: string) => ipcRenderer.invoke("fs:list", path),
+    openExternal: (path: string) => ipcRenderer.invoke("fs:openExternal", path),
   },
 };
 

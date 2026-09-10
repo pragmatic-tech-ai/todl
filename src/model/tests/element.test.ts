@@ -45,14 +45,14 @@ test("core: id/concept/fields and resolved refs", () => {
   assert.equal(el.id, "c1");
   assert.equal(el.concept, "component");
   assert.equal(el.fields.name, "C One");
-  assert.equal(el.refs.categorisedAs[0].id, "Cats.ai");
-  assert.equal(el.refs.categorisedAs[0].concept, "category");
+  assert.equal(el.refs.categorisedAs![0]!.id, "Cats.ai");
+  assert.equal(el.refs.categorisedAs![0]!.concept, "category");
 });
 
 test("empty relationship members are omitted from refs", () => {
   const { repo, entity } = setup();
   const el = toElement(repo, entity("c1"));
-  const c2 = el.refs.linkedTo[0];
+  const c2 = el.refs.linkedTo![0]!;
   assert.equal(c2.id, "c2");
   assert.equal(c2.refs.categorisedAs, undefined); // c2 has no categorisedAs
 });
@@ -60,15 +60,15 @@ test("empty relationship members are omitted from refs", () => {
 test("deep nesting resolves aggregates inline", () => {
   const { repo, entity } = setup();
   const el = toElement(repo, entity("c1"));
-  const azure = el.refs.implementedBy[0];
+  const azure = el.refs.implementedBy![0]!;
   assert.equal(azure.id, "Stack.azure");
-  assert.equal(azure.refs.partOf[0].id, "Stack.cloud"); // one level deeper
+  assert.equal(azure.refs.partOf![0]!.id, "Stack.cloud"); // one level deeper
 });
 
 test("cycle guard: a back-reference is truncated with empty refs", () => {
   const { repo, entity } = setup();
   const el = toElement(repo, entity("c1"));
-  const back = el.refs.linkedTo[0].refs.linkedTo[0]; // c2 -> c1 (already expanded)
+  const back = el.refs.linkedTo![0]!.refs.linkedTo![0]!; // c2 -> c1 (already expanded)
   assert.equal(back.id, "c1");
   assert.equal(back.truncated, true);
   assert.equal(Object.keys(back.refs).length, 0);
@@ -77,7 +77,7 @@ test("cycle guard: a back-reference is truncated with empty refs", () => {
 test("maxDepth cuts recursion without marking truncated", () => {
   const { repo, entity } = setup();
   const el = toElement(repo, entity("c1"), { maxDepth: 1 });
-  const azure = el.refs.implementedBy[0]; // depth 1
+  const azure = el.refs.implementedBy![0]!; // depth 1
   assert.equal(Object.keys(azure.refs).length, 0); // partOf not expanded
   assert.equal(azure.truncated, undefined); // depth cut, not a cycle
 });
@@ -102,7 +102,7 @@ test("referredBy is present on the root and absent on nested nodes", () => {
   const { repo, entity } = setup();
   const el = toElement(repo, entity("c1"));
   assert.ok(el.referredBy!.some((r) => r.id === "c2" && r.via === "linkedTo"));
-  assert.equal(el.refs.implementedBy[0].referredBy, undefined); // nested aggregate
+  assert.equal(el.refs.implementedBy![0]!.referredBy, undefined); // nested aggregate
 });
 
 test("presentation: default label, and injected resolver wins", () => {
@@ -116,5 +116,5 @@ test("presentation: default label, and injected resolver wins", () => {
   });
   assert.equal(injected.presentation.label, "C ONE");
   assert.equal(injected.presentation.iconKey, "k_component");
-  assert.equal(injected.refs.implementedBy[0].presentation.iconKey, "k_technology"); // applied deep
+  assert.equal(injected.refs.implementedBy![0]!.presentation.iconKey, "k_technology"); // applied deep
 });

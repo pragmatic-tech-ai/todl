@@ -5,16 +5,18 @@ import type { CompiledPackage } from "../publish.js";
 import { GraphPackageStore } from "../stores.js";
 
 function pkg(): CompiledPackage {
+  const document = {
+    nodes: [
+      { id: "ms.a", tier: "Instance", typeOf: "t", attrs: { id: "a", label: "A" } },
+      { id: "ms.b", tier: "Instance", typeOf: "t", attrs: { id: "b" } },
+    ],
+    edges: [{ kind: "Relationship", via: "rel", from: "ms.a", to: "ms.b" }],
+  };
   return {
     id: "ms",
     version: "1.0.0",
-    document: {
-      nodes: [
-        { id: "ms.a", tier: "Instance", typeOf: "t", attrs: { id: "a", label: "A" } },
-        { id: "ms.b", tier: "Instance", typeOf: "t", attrs: { id: "b" } },
-      ],
-      edges: [{ kind: "Relationship", via: "rel", from: "ms.a", to: "ms.b" }],
-    },
+    document,
+    fullDocument: document, // no bases → the closure equals the own document
     sources: [],
     classes: [],
   };

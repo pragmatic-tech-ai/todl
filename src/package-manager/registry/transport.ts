@@ -29,7 +29,10 @@ export interface HttpTransport {
 export class FetchTransport implements HttpTransport {
   async request(req: HttpRequest): Promise<HttpResponse> {
     const init: RequestInit = { method: req.method, headers: req.headers };
-    if (req.body !== undefined) init.body = req.body;
+    // `string` and `Uint8Array` are both valid fetch bodies at runtime; the cast
+    // bridges the lib.dom `BodyInit` typing (its `Uint8Array<ArrayBuffer>` view
+    // doesn't unify with our `Uint8Array<ArrayBufferLike>`).
+    if (req.body !== undefined) init.body = req.body as BodyInit;
     const res = await fetch(req.url, init);
     const body = new Uint8Array(await res.arrayBuffer());
     const headers: Record<string, string> = {};

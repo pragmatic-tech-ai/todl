@@ -7,6 +7,7 @@ import { TokenStore } from "./registry/token-store.js";
 import { SettingsStore } from "./registry/settings-store.js";
 import { RegistryBridge } from "./registry/registry-bridge.js";
 import { RegistryIpc } from "./registry/register-ipc.js";
+import { FsIpc } from "./fs/fs-ipc.js";
 import { SafeStorageEncryptor } from "./registry/safe-storage-encryptor.js";
 import { Updater } from "./updater.js";
 
@@ -58,6 +59,7 @@ void app.whenReady().then(() => {
         .sort((a, b) => (a.isDirectory === b.isDirectory ? a.name.localeCompare(b.name) : a.isDirectory ? -1 : 1));
     },
   );
+  FsIpc.register(ipcMain);
 
   createWindow();
   app.on("activate", () => {

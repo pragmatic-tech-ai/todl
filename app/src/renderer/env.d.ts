@@ -35,6 +35,16 @@ export interface TodlBridge {
   };
   fs: {
     readDir(path: string): Promise<DirEntry[]>;
+    readText(path: string): Promise<string>;
+    readBytes(path: string): Promise<Uint8Array>;
+    writeText(path: string, content: string): Promise<void>;
+    writeBytes(path: string, bytes: Uint8Array): Promise<void>;
+    exists(path: string): Promise<boolean>;
+    delete(path: string): Promise<void>;
+    mkdir(path: string): Promise<void>;
+    rename(from: string, to: string): Promise<void>;
+    list(path: string): Promise<DirEntry[]>;
+    openExternal(path: string): Promise<void>;
   };
 }
 

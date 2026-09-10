@@ -7,7 +7,7 @@
  * Filtered accessors and closure caching layer on top in a later step.
  */
 
-import { Signal } from "../core/signal.js";
+import { Signal } from "@pragmatic-tech-ai/todl-runtime";
 import { InMemoryGraphStore, type GraphStore } from "./graph-store.js";
 
 export type NodeId = string;

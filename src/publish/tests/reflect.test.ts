@@ -96,11 +96,11 @@ test("deriveClasses resolves inherited icons from an optional annotationsFrom do
   // Own-only: class found, inherited icon lost.
   const ownOnly = deriveClasses(ownDoc);
   assert.equal(ownOnly.length, 1);
-  assert.equal(ownOnly[0].id, "X");
-  assert.equal(ownOnly[0].icon, undefined);
+  assert.equal(ownOnly[0]!.id, "X");
+  assert.equal(ownOnly[0]!.icon, undefined);
 
   // Enriched from the full document: the special→icon chain resolves the icon.
   const enriched = deriveClasses(ownDoc, fullDoc);
   assert.equal(enriched.length, 1, "still enumerates only the own class");
-  assert.equal(enriched[0].icon, "s.svg");
+  assert.equal(enriched[0]!.icon, "s.svg");
 });

@@ -10,7 +10,7 @@
  * entry are treated as single-valued.
  */
 
-import { Signal, type Disposable } from "../core/signal.js";
+import { Signal, type Disposable } from "@pragmatic-tech-ai/todl-runtime";
 import {
   EdgeKind,
   Direction,
