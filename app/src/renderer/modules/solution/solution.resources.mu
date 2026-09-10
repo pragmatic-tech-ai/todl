@@ -8,7 +8,8 @@ resources SolutionResources {
     // only when a solution is open), and the member/folder tree filling the rest.
     DataTemplate [DataType = SolutionExplorerService] {
         DockPanel [ LastChildFill = true ] {
-            ContentControl [ DockPanel.Dock = Top, Content = $Commands, Margin = (8,8,8,4) ]
+            TextBlock [ DockPanel.Dock = Top, Text = $Title, FontWeight = Bold, Margin = (12,10,12,2) ]
+            ContentControl [ DockPanel.Dock = Top, Content = $Commands, Margin = (8,4,8,4) ]
             StackPanel [ DockPanel.Dock = Bottom, Orientation = Vertical, Margin = (8,4,8,8), Visibility = $HasSolution << ToVisibility ] {
                 TextBlock [ Text = "Solution settings", FontWeight = Bold, Margin = (4,4,4,4) ]
                 PropertyGrid [ Descriptors = $SettingsProperties, Target = $SettingsTarget ]
