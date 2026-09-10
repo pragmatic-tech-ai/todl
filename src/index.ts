@@ -1,6 +1,6 @@
 /** Public API for `@pragmatic-tech-ai/todl`. */
 
-export { Signal, type Disposable } from "./core/signal.js";
+export { Signal, type Disposable } from "@pragmatic-tech-ai/todl-runtime";
 
 export {
   Graph,
@@ -135,3 +135,20 @@ export { load, type LoadResult } from "./parse/loader.js";
 export { parse, type ParseResult } from "./parse/parser.js";
 export { parsePredicate } from "./parse/predicate-parser.js";
 export { tokenize, TokenKind, type Token } from "./parse/lexer.js";
+
+// ── Solution (SolutionManager + cross-project settings) ──
+export { SolutionManagerService, type SolutionSeams } from "./solution/solution-manager-service.js";
+export { SolutionSettingsRegistry } from "./solution/solution-settings-registry.js";
+export { SettingBagDefinition } from "./solution/setting-bag-definition.js";
+export { SolutionSettingBag } from "./solution/solution-setting-bag.js";
+export { SolutionSession } from "./solution/solution-session.js";
+export { SolutionMember } from "./solution/solution-member.js";
+export { SolutionManifest } from "./solution/solution-manifest.js";
+export { type SolutionMemberRef, SolutionPath } from "./solution/solution-member-ref.js";
+export { SolutionTreeVM, SolutionNodeVM, SolutionMemberNodeVM, type MemberStorageFor } from "./solution/solution-tree-vm.js";
+export { SettingBagGrid } from "./solution/setting-bag-grid.js";
+export {
+  type IProjectFactory,
+  type MemberStorageResolver,
+  type ProjectFactoryResolver,
+} from "./solution/project-factory.js";
