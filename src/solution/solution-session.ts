@@ -14,6 +14,9 @@ export class SolutionSession extends Observable {
     public readonly Storage: IStorage
     public readonly Members = new ObservableCollection<SolutionMember>()
     public readonly SettingBags = new ObservableCollection<SolutionSettingBag>()
+    // Persisted setting values from the manifest, applied when bags bind (Task 13
+    // enriches this; for now it is a pass-through store for load/collect).
+    private loadedSettings: Record<string, Record<string, string | number | boolean>> = {}
 
     constructor(name: string, storage: IStorage) {
         super()
@@ -58,6 +61,18 @@ export class SolutionSession extends Observable {
             if (factory === undefined) { member.Project = undefined; continue }
             member.Project = await factory.openProject(storageFor(member.Ref.path))
         }
+    }
+
+    // Stash persisted setting values (from the manifest) to overlay when bags
+    // bind. (Task 13 makes binding bag-aware; this keeps the values for round-trip.)
+    public LoadSettings(values: Record<string, Record<string, string | number | boolean>>): void {
+        this.loadedSettings = values ?? {}
+    }
+
+    // The setting values to persist. (Task 13 collects from live touched bags;
+    // for now it round-trips whatever was loaded so no bag values are lost.)
+    public CollectSettings(): Record<string, Record<string, string | number | boolean>> {
+        return this.loadedSettings
     }
 
     // Any member/setting mutation flips dirty; Save clears it.
