@@ -8,7 +8,8 @@
 // rail's Shape with a theme brush (no colour baked into the geometry).
 
 resources AppIcons {
-    include "icons/home.svg"     as Home
-    include "icons/packages.svg" as Packages
-    include "icons/compiler.svg" as Compiler
+    include "icons/home.svg"      as Home
+    include "icons/packages.svg"  as Packages
+    include "icons/compiler.svg"  as Compiler
+    include "icons/solutions.svg" as Solutions
 }
