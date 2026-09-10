@@ -1,7 +1,8 @@
 import { Observable, type IStorage } from '@pragmatic-tech-ai/todl-runtime'
 import { ObservableCollection } from '@pragmatic-tech-ai/mural/runtime'
 import { SolutionMember } from './solution-member.js'
-import { type SolutionSettingBag } from './solution-setting-bag.js'
+import { SolutionSettingBag } from './solution-setting-bag.js'
+import { type SettingBagDefinition } from './setting-bag-definition.js'
 import { type MemberStorageResolver, type ProjectFactoryResolver } from './project-factory.js'
 
 // The live, in-memory solution: a name, the storage it is rooted at, its ordered
@@ -63,16 +64,33 @@ export class SolutionSession extends Observable {
         }
     }
 
-    // Stash persisted setting values (from the manifest) to overlay when bags
-    // bind. (Task 13 makes binding bag-aware; this keeps the values for round-trip.)
+    // Stash persisted setting values (from the manifest) to overlay when bags bind.
     public LoadSettings(values: Record<string, Record<string, string | number | boolean>>): void {
         this.loadedSettings = values ?? {}
     }
 
-    // The setting values to persist. (Task 13 collects from live touched bags;
-    // for now it round-trips whatever was loaded so no bag values are lost.)
+    // Build live setting bags from definitions, overlaying any loaded values; each
+    // bag's write marks the session dirty. Idempotent per Id.
+    public BindBags(defs: Iterable<SettingBagDefinition>): void {
+        for (const def of defs) {
+            if (this.SettingBags.ToArray().some((b) => b.Definition.Id === def.Id)) continue
+            this.SettingBags.Add(new SolutionSettingBag(def, this.loadedSettings[def.Id], () => this.markDirty()))
+        }
+    }
+
+    // The setting values to persist: touched live bags, plus any loaded values for
+    // bags that never bound (a missing module's settings round-trip, not dropped).
     public CollectSettings(): Record<string, Record<string, string | number | boolean>> {
-        return this.loadedSettings
+        const out: Record<string, Record<string, string | number | boolean>> = {}
+        const bound = new Set<string>()
+        for (const bag of this.SettingBags) {
+            bound.add(bag.Definition.Id)
+            if (bag.IsTouched) out[bag.Definition.Id] = bag.ToRecord()
+        }
+        for (const [id, vals] of Object.entries(this.loadedSettings)) {
+            if (!bound.has(id) && !(id in out)) out[id] = vals
+        }
+        return out
     }
 
     // Any member/setting mutation flips dirty; Save clears it.
