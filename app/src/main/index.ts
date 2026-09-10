@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain, dialog } from "electron";
+import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { electronApp, is } from "@electron-toolkit/utils";
 import { PackageManager, PackageCompiler } from "@pragmatic-tech-ai/todl/package-manager";
@@ -43,10 +44,20 @@ void app.whenReady().then(() => {
     createCompiler: () => new PackageCompiler(),
     env: process.env,
   });
-  RegistryIpc.register(ipcMain, bridge, async () => {
-    const result = await dialog.showOpenDialog({ properties: ["openDirectory"] });
-    return result.canceled || result.filePaths.length === 0 ? "" : result.filePaths[0]!;
-  });
+  RegistryIpc.register(
+    ipcMain,
+    bridge,
+    async () => {
+      const result = await dialog.showOpenDialog({ properties: ["openDirectory"] });
+      return result.canceled || result.filePaths.length === 0 ? "" : result.filePaths[0]!;
+    },
+    async (dir) => {
+      const entries = await readdir(dir, { withFileTypes: true });
+      return entries
+        .map((e) => ({ name: e.name, path: join(dir, e.name), isDirectory: e.isDirectory() }))
+        .sort((a, b) => (a.isDirectory === b.isDirectory ? a.name.localeCompare(b.name) : a.isDirectory ? -1 : 1));
+    },
+  );
 
   createWindow();
   app.on("activate", () => {

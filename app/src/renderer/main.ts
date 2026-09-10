@@ -4,7 +4,7 @@
 // @ts-expect-error compiled by vitePluginMural
 import { app } from "./app.mu";
 import { HtmlTarget } from "@pragmatic-tech-ai/mural/visual-engine";
-import { NavigationService, ContentHostService } from "@pragmatic-tech-ai/mural/framework";
+import { NavigationService, ContentHostService, DialogService } from "@pragmatic-tech-ai/mural/framework";
 
 // ViewerShell (unlike EditorShell) does not register a NavigationService, so
 // the app supplies one at the root. Registered under NavigationService.Key so
@@ -24,5 +24,15 @@ app.Services.register(NavigationService.Key, (p) => {
 // `$service(ContentHostService)` and the capabilities resolve the same instance.
 app.Services.register(ContentHostService.Key, (p) => new ContentHostService(p));
 
+// The modal-dialog service — EditorShell auto-registers + hosts this, but this
+// app runs a ViewerShell, so register it at the root (like the services above)
+// and hand it the shell root as its overlay anchor after the tree mounts.
+app.Services.register(DialogService.Key, (p) => new DialogService(p));
+
 await document.fonts.ready;
 app.initialize(new HtmlTarget(document.getElementById("app")!));
+
+// SetHost after initialize so the shell root Visual (the dialog's overlay anchor)
+// exists. DialogService owns no Visual; it reaches the overlay layer through this.
+const shellRoot = app.Resources.Root;
+if (shellRoot !== undefined) app.Services.get(DialogService.Key)?.SetHost(shellRoot);

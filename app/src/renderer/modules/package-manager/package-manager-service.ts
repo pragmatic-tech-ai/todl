@@ -30,11 +30,14 @@ export class PackageManagerService extends ServiceBase implements IActivatable {
     PackageManagerService, "Roots", undefined as unknown as ObservableCollection<TreeNodeVM>, MetaData.None);
   static readonly SelectedNodeKey = MuralBase.RegisterProperty<TreeNodeVM | undefined>(
     PackageManagerService, "SelectedNode", undefined, MetaData.None);
+  static readonly CommandsKey = MuralBase.RegisterProperty<PackageManagerHeaderVM>(
+    PackageManagerService, "Commands", undefined as unknown as PackageManagerHeaderVM, MetaData.None);
 
   get Status(): string { return this.get_property_value(PackageManagerService.StatusKey); }
   get Roots(): ObservableCollection<TreeNodeVM> { return this.get_property_value(PackageManagerService.RootsKey); }
   get SelectedNode(): TreeNodeVM | undefined { return this.get_property_value(PackageManagerService.SelectedNodeKey); }
   set SelectedNode(v: TreeNodeVM | undefined) { this.set_property_value(PackageManagerService.SelectedNodeKey, v); }
+  get Commands(): PackageManagerHeaderVM { return this.get_property_value(PackageManagerService.CommandsKey); }
 
   private readonly registry: RegistryClient;
   private readonly contentHost: ContentHostService;
@@ -48,8 +51,9 @@ export class PackageManagerService extends ServiceBase implements IActivatable {
     this.registry = provider.getRequired(RegistryClient);
     this.contentHost = provider.getRequired(ContentHostService.Key);
     this.set_property_value(PackageManagerService.RootsKey, new ObservableCollection<TreeNodeVM>());
-    // The pane header's Refresh affordance (rendered via DataTemplate).
-    this.HeaderCommands = new PackageManagerHeaderVM(() => this.refresh());
+    // The side-pane command ToolBar's Refresh affordance (rendered via
+    // DataTemplate[PackageManagerHeaderVM] as a ToolBar pinned atop the body).
+    this.set_property_value(PackageManagerService.CommandsKey, new PackageManagerHeaderVM(() => this.refresh()));
     // Selecting a tree node (SelectedDataItem binds two-way) shows a leaf's
     // content in the editor; branch/package rows carry none, so they no-op.
     this.AddPropertyChangedListener(PackageManagerService.SelectedNodeKey, () => {

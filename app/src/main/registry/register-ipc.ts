@@ -6,8 +6,22 @@
 import type { IpcMain } from "electron";
 import type { RegistryBridge } from "./registry-bridge.js";
 
+// One entry in a directory listing (design: the compiler side-pane folder tree).
+// `path` is the absolute child path (joined main-side) so the renderer never
+// composes paths; `isDirectory` drives lazy branch vs. leaf.
+export interface DirEntry {
+  name: string;
+  path: string;
+  isDirectory: boolean;
+}
+
 export class RegistryIpc {
-  static register(ipcMain: IpcMain, bridge: RegistryBridge, pickDirectory: () => Promise<string>): void {
+  static register(
+    ipcMain: IpcMain,
+    bridge: RegistryBridge,
+    pickDirectory: () => Promise<string>,
+    readDir: (path: string) => Promise<DirEntry[]>,
+  ): void {
     ipcMain.handle("registry:list", () => bridge.list());
     ipcMain.handle("registry:versions", (_e, name: string) => bridge.versions(name));
     ipcMain.handle("registry:getContent", (_e, ref) => bridge.getContent(ref));
@@ -26,5 +40,6 @@ export class RegistryIpc {
     ipcMain.handle("config:envVars", () => bridge.listEnvVars());
     ipcMain.handle("config:setSettings", (_e, partial) => bridge.setSettings(partial));
     ipcMain.handle("dialog:pickDirectory", () => pickDirectory());
+    ipcMain.handle("fs:readDir", (_e, path: string) => readDir(path));
   }
 }

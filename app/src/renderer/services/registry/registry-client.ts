@@ -19,6 +19,7 @@ import type {
   PackageContents,
 } from "@pragmatic-tech-ai/todl/package-manager";
 import type { ConfigView, CompileResultView } from "../../../main/registry/registry-bridge.js";
+import type { DirEntry } from "../../../main/registry/register-ipc.js";
 import type { TodlBridge } from "../../env.js";
 
 // A plain class (NOT ServiceBase): it only wraps the window bridge and never
@@ -86,5 +87,8 @@ export class RegistryClient {
   }
   pickDirectory(): Promise<string> {
     return this.bridge().dialog.pickDirectory();
+  }
+  readDir(path: string): Promise<DirEntry[]> {
+    return this.bridge().fs.readDir(path);
   }
 }

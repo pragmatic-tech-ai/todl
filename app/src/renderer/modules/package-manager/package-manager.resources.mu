@@ -11,7 +11,8 @@ resources PackageManagerResources {
     // SelectedDataItem two-way-binds the picked node back to the service.
     DataTemplate [DataType = PackageManagerService] {
         DockPanel [ LastChildFill = true ] {
-            TextBlock [ DockPanel.Dock = Top, Margin = (8,8,8,4), Text = $Status ]
+            ContentControl [ DockPanel.Dock = Top, Content = $Commands, Margin = (8,8,8,4) ]
+            TextBlock [ DockPanel.Dock = Top, Margin = (8,0,8,4), Text = $Status ]
             TreeView [ ItemsSource = $Roots, ItemTemplate = @PackageNodeTemplate, SelectedDataItem = $SelectedNode ]
         }
     }
@@ -24,10 +25,10 @@ resources PackageManagerResources {
         TextBlock [ Text = $Header, Margin = (4,0,4,0) ]
     }
 
-    // Pane-header actions (ShellSideContentPane.Commands) — the Refresh button.
+    // The command ToolBar pinned atop the side-pane body — the Refresh button.
     DataTemplate [DataType = PackageManagerHeaderVM] {
-        Button [ Command = $Refresh ] {
-            TextBlock [ Text = "Refresh" ]
+        ToolBar {
+            ToolBarButton [ Command = $Refresh, Text = "Refresh", ShowText = true ]
         }
     }
 

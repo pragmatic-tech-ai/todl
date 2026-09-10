@@ -30,6 +30,9 @@ const bridge = {
   dialog: {
     pickDirectory: () => ipcRenderer.invoke("dialog:pickDirectory"),
   },
+  fs: {
+    readDir: (path: string) => ipcRenderer.invoke("fs:readDir", path),
+  },
 };
 
 contextBridge.exposeInMainWorld("todl", bridge);

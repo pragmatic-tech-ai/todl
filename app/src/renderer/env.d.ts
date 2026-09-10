@@ -6,6 +6,7 @@ import type {
   PackageContents,
 } from "@pragmatic-tech-ai/todl/package-manager";
 import type { ConfigView, PackageSource, CompileResultView } from "../main/registry/registry-bridge.js";
+import type { DirEntry } from "../main/registry/register-ipc.js";
 
 export interface TodlBridge {
   registry: {
@@ -31,6 +32,9 @@ export interface TodlBridge {
   };
   dialog: {
     pickDirectory(): Promise<string>;
+  };
+  fs: {
+    readDir(path: string): Promise<DirEntry[]>;
   };
 }
 
