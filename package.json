@@ -11,28 +11,32 @@
       "import": {
         "development": "./src/index.ts",
         "default": "./dist/index.js"
-      }
+      },
+      "require": "./dist/index.js"
     },
     "./language-service": {
       "types": "./dist/language-service/index.d.ts",
       "import": {
         "development": "./src/language-service/index.ts",
         "default": "./dist/language-service/index.js"
-      }
+      },
+      "require": "./dist/language-service/index.js"
     },
     "./language-server": {
       "types": "./dist/language-server/index.d.ts",
       "import": {
         "development": "./src/language-server/index.ts",
         "default": "./dist/language-server/index.js"
-      }
+      },
+      "require": "./dist/language-server/index.js"
     },
     "./package-manager": {
       "types": "./dist/package-manager/index.d.ts",
       "import": {
         "development": "./src/package-manager/index.ts",
         "default": "./dist/package-manager/index.js"
-      }
+      },
+      "require": "./dist/package-manager/index.js"
     }
   },
   "bin": {
