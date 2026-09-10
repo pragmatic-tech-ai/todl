@@ -70,7 +70,9 @@
   "dependencies": {
     "vscode-languageserver": "^9.0.1",
     "vscode-languageserver-textdocument": "^1.0.12",
-    "vscode-languageserver-types": "3.17.5"
+    "vscode-languageserver-types": "3.17.5",
+    "@pragmatic-tech-ai/mural": "file:../Mural",
+    "@pragmatic-tech-ai/todl-runtime": "^0.2.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
