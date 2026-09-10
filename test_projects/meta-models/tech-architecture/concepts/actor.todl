@@ -8,6 +8,13 @@ namespace tech_architecture
             sequence — though a sequence's Entry Point may also be a component.
             """;
 
+        // Marks `actor` as a drop concept: dropping one of its taxonomy archetypes
+        // (e.g. `actors.internal`) places an actor node on the diagram, bound to
+        // that archetype (its icon + label). Actors are class-terms, not bare
+        // instances, so the drop resolver's place-leaf branch (not the instance
+        // path) honors this — see Plexus arch-drop-resolver.ts step 0c.
+        annotate materialize {}
+
         id : identifier;
         label : label;
 

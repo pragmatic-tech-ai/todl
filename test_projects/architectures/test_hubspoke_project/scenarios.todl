@@ -1,0 +1,17 @@
+namespace test_waf_architectures.models
+{
+  import libraries.microsoft;
+  import tech_architecture;
+  model test_waf_architecturesModelsModel : libraries.microsoft uses categories, microsoft_tech conforms Scenarios {
+    component component1 {
+      label = "Desktop App";
+      category = categories.desktop_app;
+    }
+    component component2 {
+      label = "SharePoint";
+      implemented_by = microsoft_tech.sharepoint_online;
+      in = microsoft_tech.m365;
+      category = categories.document_store;
+    }
+  }
+}

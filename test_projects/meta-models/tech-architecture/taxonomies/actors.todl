@@ -8,6 +8,8 @@ namespace tech_architecture
             informs scenario validation.
             """;
 
+        annotate toolbox { visible = true; }
+
         term internal
         {
             label = "Internal";
@@ -16,7 +18,7 @@ namespace tech_architecture
                 contractors, operations stakeholders. Authenticates via the
                 enterprise identity provider; sees internal applications.
                 """;
-                annotate icon {path = "resources/ai-agent.svg"; }
+            annotate icon { path = "resources/user.svg"; }
         }
 
         term external
@@ -27,6 +29,52 @@ namespace tech_architecture
                 Reaches the system only through public surfaces (public_api,
                 partner_integration_endpoint, public_mcp_server).
                 """;
+            annotate icon { path = "resources/user.svg"; }
+        }
+
+        term business
+        {
+            label = "Business";
+            description = """
+                Internal party focused on business outcomes — line-of-business
+                users, product managers, business analysts. Consumes internal
+                applications to run day-to-day operations and decisions.
+                """;
+            annotate icon { path = "resources/user.svg"; }
+        }
+
+        term administration
+        {
+            label = "Administration";
+            description = """
+                Internal party responsible for administering business processes
+                and enterprise applications — HR, finance, compliance, records
+                admins. Typically holds elevated app-level privileges.
+                """;
+            annotate icon { path = "resources/user.svg"; }
+        }
+
+        term support
+        {
+            label = "Support";
+            description = """
+                Internal party handling customer or user support — help desk,
+                field support, tier-N escalation. Interacts with case-management
+                and observability surfaces to diagnose and resolve issues.
+                """;
+            annotate icon { path = "resources/user.svg"; }
+        }
+
+        term it_administration
+        {
+            label = "IT Administration";
+            description = """
+                Internal party responsible for the platform itself — SRE,
+                platform engineers, cloud/IT operators. Holds elevated
+                infrastructure privileges and manages tenants, subscriptions,
+                networks, and shared services.
+                """;
+            annotate icon { path = "resources/user.svg"; }
         }
 
         term external_ai
@@ -41,6 +89,7 @@ namespace tech_architecture
                 separate visual treatment so a viewer can tell at a glance which
                 actors are humans vs which are agents.
                 """;
+         annotate icon {path = "resources/ai-agent.svg"; }
         }
     }
 }

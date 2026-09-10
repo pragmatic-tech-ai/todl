@@ -1,0 +1,6 @@
+# Generated exports produced by opening/exporting the test projects in Plexus
+# (diagram/model renders). These are throwaway outputs, not fixtures — the
+# library icon SVGs under libraries/ are unaffected (this is scoped to projects).
+architectures/**/*.svg
+architectures/**/*.pptx
+architectures/**/*.png

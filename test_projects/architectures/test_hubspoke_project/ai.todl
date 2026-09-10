@@ -1,0 +1,440 @@
+namespace test_waf_architectures.models
+{
+  import libraries.microsoft;
+  import tech_architecture;
+  model test_waf_architecturesModelsModel : libraries.microsoft uses categories, ingresses, microsoft_tech conforms Model {
+    technology aiw_azure_openai {
+      label = "Azure OpenAI";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology aiw_ai_search {
+      label = "Azure AI Search";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology aiw_apim {
+      label = "API Management";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.zero_trust_network_access;
+    }
+    technology aiw_cosmos_db_chat {
+      label = "Cosmos DB (chat history)";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology aiw_document_intelligence {
+      label = "Azure AI Document Intelligence";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology aiw_content_safety {
+      label = "Azure AI Content Safety";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology aiw_ai_foundry_hub {
+      label = "Azure AI Foundry Hub";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology aiw_azure_bastion {
+      label = "Azure Bastion";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.zero_trust_network_access;
+    }
+    technology aiw_azure_log_analytics {
+      label = "Log Analytics";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology aiw_azure_application_insights {
+      label = "Application Insights";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    actor aiw_end_user {
+      label = "End User";
+    }
+    actor aiw_data_engineer {
+      label = "Data Engineer";
+    }
+    actor aiw_ai_operator {
+      label = "AI Operator";
+    }
+    tenant aiw_contoso_tenant {
+      label = "Contoso Entra Tenant";
+      region = "eastus";
+      in = microsoft_tech.azure;
+    }
+    subscription aiw_connectivity_sub {
+      label = "Connectivity Subscription";
+      region = "eastus";
+      in = microsoft_tech.azure;
+      in_tenant = aiw_contoso_tenant;
+    }
+    subscription aiw_ai_workload_sub {
+      label = "AI Workload Subscription";
+      region = "eastus";
+      in = microsoft_tech.azure;
+      in_tenant = aiw_contoso_tenant;
+    }
+    resource_group aiw_hub_rg {
+      label = "RG - Hub Connectivity";
+      region = "eastus";
+      in_subscription = aiw_connectivity_sub;
+    }
+    resource_group aiw_platform_rg {
+      label = "RG - Platform Shared";
+      region = "eastus";
+      in_subscription = aiw_connectivity_sub;
+    }
+    resource_group aiw_ai_workload_rg {
+      label = "RG - AI Workload";
+      region = "eastus";
+      in_subscription = aiw_ai_workload_sub;
+    }
+    network aiw_hub_vnet {
+      label = "Hub VNet";
+      region = "eastus";
+      kind = "networks.dedicated_network";
+      cidr = "10.0.0.0/22";
+      in = microsoft_tech.azure;
+      in_subscription = aiw_connectivity_sub;
+    }
+    subnet aiw_fw_subnet {
+      label = "AzureFirewallSubnet";
+      cidr = "10.0.0.0/26";
+      parent = aiw_hub_vnet;
+    }
+    subnet aiw_bastion_subnet {
+      label = "AzureBastionSubnet";
+      cidr = "10.0.0.64/26";
+      parent = aiw_hub_vnet;
+    }
+    subnet aiw_shared_services_subnet {
+      label = "Shared Services Subnet";
+      cidr = "10.0.1.0/24";
+      parent = aiw_hub_vnet;
+    }
+    network aiw_ai_spoke_vnet {
+      label = "AI Workload Spoke VNet";
+      region = "eastus";
+      kind = "networks.dedicated_network";
+      cidr = "10.50.0.0/20";
+      in = microsoft_tech.azure;
+      in_subscription = aiw_ai_workload_sub;
+    }
+    subnet aiw_apim_subnet {
+      label = "APIM Subnet";
+      cidr = "10.50.0.0/24";
+      parent = aiw_ai_spoke_vnet;
+    }
+    subnet aiw_orchestrator_subnet {
+      label = "Orchestrator Subnet";
+      cidr = "10.50.1.0/24";
+      parent = aiw_ai_spoke_vnet;
+    }
+    subnet aiw_pe_subnet {
+      label = "Private Endpoints Subnet";
+      cidr = "10.50.2.0/24";
+      parent = aiw_ai_spoke_vnet;
+    }
+    environment aiw_hub_prod {
+      label = "Hub Production";
+      kind = "environments.azure_subscription_env";
+      lifecycle = "lifecycle_stages.prod";
+      region = "eastus";
+      in_tenant = aiw_contoso_tenant;
+      in_subscription = aiw_connectivity_sub;
+      resource_groups = [aiw_hub_rg, aiw_platform_rg];
+    }
+    environment aiw_ai_workload_prod {
+      label = "AI Workload Production";
+      kind = "environments.azure_subscription_env";
+      lifecycle = "lifecycle_stages.prod";
+      region = "eastus";
+      in_tenant = aiw_contoso_tenant;
+      in_subscription = aiw_ai_workload_sub;
+      resource_groups = aiw_ai_workload_rg;
+    }
+    component aiw_front_door {
+      label = "Azure Front Door (WAF)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_front_door;
+      slots = aiw_front_door_prod;
+    }
+    slot aiw_front_door_prod {
+      label = "Production";
+      environment = aiw_ai_workload_prod;
+      in_resource_group = aiw_ai_workload_rg;
+      public_ingress = ingresses.public_internet;
+    }
+    component aiw_apim_gateway {
+      label = "API Management (token/quota governance)";
+      in = microsoft_tech.azure;
+      implemented_by = aiw_apim;
+      slots = aiw_apim_gateway_prod;
+    }
+    slot aiw_apim_gateway_prod {
+      label = "Production";
+      environment = aiw_ai_workload_prod;
+      in_resource_group = aiw_ai_workload_rg;
+      in_subnet = aiw_apim_subnet;
+    }
+    component aiw_rag_orchestrator {
+      label = "RAG Orchestrator (VMSS)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.virtual_machine_scale_sets;
+      slots = aiw_rag_orchestrator_prod;
+    }
+    slot aiw_rag_orchestrator_prod {
+      label = "Production";
+      environment = aiw_ai_workload_prod;
+      in_resource_group = aiw_ai_workload_rg;
+      in_subnet = aiw_orchestrator_subnet;
+    }
+    component aiw_openai_ptu_comp {
+      label = "Azure OpenAI (Provisioned Throughput)";
+      in = microsoft_tech.azure;
+      implemented_by = aiw_azure_openai;
+      slots = aiw_openai_ptu_prod;
+    }
+    slot aiw_openai_ptu_prod {
+      label = "Production (PTU)";
+      environment = aiw_ai_workload_prod;
+      in_resource_group = aiw_ai_workload_rg;
+    }
+    component aiw_openai_paygo_comp {
+      label = "Azure OpenAI (Pay-as-you-go)";
+      in = microsoft_tech.azure;
+      implemented_by = aiw_azure_openai;
+      slots = aiw_openai_paygo_prod;
+    }
+    slot aiw_openai_paygo_prod {
+      label = "Production (PAYGO)";
+      environment = aiw_ai_workload_prod;
+      in_resource_group = aiw_ai_workload_rg;
+    }
+    component aiw_ai_search_comp {
+      label = "Azure AI Search";
+      in = microsoft_tech.azure;
+      implemented_by = aiw_ai_search;
+      slots = aiw_ai_search_prod;
+    }
+    slot aiw_ai_search_prod {
+      label = "Production";
+      environment = aiw_ai_workload_prod;
+      in_resource_group = aiw_ai_workload_rg;
+    }
+    component aiw_ai_search_pl {
+      label = "AI Search Private Link";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_private_link;
+      slots = aiw_ai_search_pl_prod;
+    }
+    slot aiw_ai_search_pl_prod {
+      label = "Production";
+      environment = aiw_ai_workload_prod;
+      in_resource_group = aiw_ai_workload_rg;
+      in_subnet = aiw_pe_subnet;
+    }
+    component aiw_chat_history_cosmos {
+      label = "Cosmos DB (chat history)";
+      in = microsoft_tech.azure;
+      implemented_by = aiw_cosmos_db_chat;
+      slots = aiw_chat_history_cosmos_prod;
+    }
+    slot aiw_chat_history_cosmos_prod {
+      label = "Production";
+      environment = aiw_ai_workload_prod;
+      in_resource_group = aiw_ai_workload_rg;
+    }
+    component aiw_chat_history_cosmos_pl {
+      label = "Cosmos DB Private Link";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_private_link;
+      slots = aiw_chat_history_cosmos_pl_prod;
+    }
+    slot aiw_chat_history_cosmos_pl_prod {
+      label = "Production";
+      environment = aiw_ai_workload_prod;
+      in_resource_group = aiw_ai_workload_rg;
+      in_subnet = aiw_pe_subnet;
+    }
+    component aiw_document_intelligence_svc {
+      label = "Azure AI Document Intelligence";
+      in = microsoft_tech.azure;
+      implemented_by = aiw_document_intelligence;
+      slots = aiw_document_intelligence_svc_prod;
+    }
+    slot aiw_document_intelligence_svc_prod {
+      label = "Production";
+      environment = aiw_ai_workload_prod;
+      in_resource_group = aiw_ai_workload_rg;
+    }
+    component aiw_document_intelligence_pl {
+      label = "Document Intelligence Private Link";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_private_link;
+      slots = aiw_document_intelligence_pl_prod;
+    }
+    slot aiw_document_intelligence_pl_prod {
+      label = "Production";
+      environment = aiw_ai_workload_prod;
+      in_resource_group = aiw_ai_workload_rg;
+      in_subnet = aiw_pe_subnet;
+    }
+    component aiw_content_safety_svc {
+      label = "Azure AI Content Safety";
+      in = microsoft_tech.azure;
+      implemented_by = aiw_content_safety;
+      slots = aiw_content_safety_svc_prod;
+    }
+    slot aiw_content_safety_svc_prod {
+      label = "Production";
+      environment = aiw_ai_workload_prod;
+      in_resource_group = aiw_ai_workload_rg;
+    }
+    component aiw_ai_foundry_hub_comp {
+      label = "Azure AI Foundry Hub";
+      in = microsoft_tech.azure;
+      implemented_by = aiw_ai_foundry_hub;
+      slots = aiw_ai_foundry_hub_comp_prod;
+    }
+    slot aiw_ai_foundry_hub_comp_prod {
+      label = "Production";
+      environment = aiw_ai_workload_prod;
+      in_resource_group = aiw_ai_workload_rg;
+    }
+    component aiw_grounding_blob {
+      label = "Grounding Blob Storage";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_blob_storage;
+      slots = aiw_grounding_blob_prod;
+    }
+    slot aiw_grounding_blob_prod {
+      label = "Production";
+      environment = aiw_ai_workload_prod;
+      in_resource_group = aiw_ai_workload_rg;
+    }
+    component aiw_grounding_blob_pl {
+      label = "Grounding Blob Private Link";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_private_link;
+      slots = aiw_grounding_blob_pl_prod;
+    }
+    slot aiw_grounding_blob_pl_prod {
+      label = "Production";
+      environment = aiw_ai_workload_prod;
+      in_resource_group = aiw_ai_workload_rg;
+      in_subnet = aiw_pe_subnet;
+    }
+    component aiw_key_vault {
+      label = "Azure Key Vault";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_key_vault;
+      slots = aiw_key_vault_prod;
+    }
+    slot aiw_key_vault_prod {
+      label = "Production";
+      environment = aiw_ai_workload_prod;
+      in_resource_group = aiw_ai_workload_rg;
+    }
+    component aiw_key_vault_pl {
+      label = "Key Vault Private Link";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_private_link;
+      slots = aiw_key_vault_pl_prod;
+    }
+    slot aiw_key_vault_pl_prod {
+      label = "Production";
+      environment = aiw_ai_workload_prod;
+      in_resource_group = aiw_ai_workload_rg;
+      in_subnet = aiw_pe_subnet;
+    }
+    component aiw_azure_firewall_hub {
+      label = "Azure Firewall (hub)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_firewall;
+      slots = aiw_azure_firewall_hub_prod;
+    }
+    slot aiw_azure_firewall_hub_prod {
+      label = "Production";
+      environment = aiw_hub_prod;
+      in_resource_group = aiw_hub_rg;
+      in_subnet = aiw_fw_subnet;
+    }
+    component aiw_bastion {
+      label = "Azure Bastion";
+      in = microsoft_tech.azure;
+      implemented_by = aiw_azure_bastion;
+      slots = aiw_bastion_prod;
+    }
+    slot aiw_bastion_prod {
+      label = "Production";
+      environment = aiw_hub_prod;
+      in_resource_group = aiw_hub_rg;
+      in_subnet = aiw_bastion_subnet;
+    }
+    component aiw_entra_id {
+      label = "Microsoft Entra ID";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.microsoft_entra_id;
+    }
+    component aiw_azure_dns {
+      label = "Azure DNS (private zones)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_dns;
+    }
+    component aiw_app_insights {
+      label = "Application Insights";
+      in = microsoft_tech.azure;
+      implemented_by = aiw_azure_application_insights;
+      slots = aiw_app_insights_prod;
+    }
+    slot aiw_app_insights_prod {
+      label = "Production";
+      environment = aiw_ai_workload_prod;
+      in_resource_group = aiw_platform_rg;
+    }
+    component aiw_log_analytics_ws {
+      label = "Log Analytics Workspace";
+      in = microsoft_tech.azure;
+      implemented_by = aiw_azure_log_analytics;
+      slots = aiw_log_analytics_ws_prod;
+    }
+    slot aiw_log_analytics_ws_prod {
+      label = "Production";
+      environment = aiw_hub_prod;
+      in_resource_group = aiw_platform_rg;
+    }
+    scenario aiw_rag_query {
+      label = "RAG Query";
+      outcome = "End-user prompt is filtered for safety, grounded against the AI Search index via the RAG orchestrator, answered by the PTU OpenAI deployment, and persisted to chat history";
+      sequences = sequence {
+        id = "rag_query";
+        entry_point = aiw_end_user;
+        steps = [aiw_end_user ==> aiw_front_door, aiw_front_door ==> aiw_apim_gateway, aiw_apim_gateway ==> aiw_content_safety_svc, aiw_apim_gateway ==> aiw_rag_orchestrator, aiw_rag_orchestrator ==> aiw_ai_search_pl, aiw_ai_search_pl ==> aiw_ai_search_comp, aiw_rag_orchestrator ==> aiw_openai_ptu_comp, aiw_rag_orchestrator ==> aiw_chat_history_cosmos_pl, aiw_chat_history_cosmos_pl ==> aiw_chat_history_cosmos];
+      };
+    }
+    scenario aiw_ingestion_pipeline {
+      label = "Ingestion Pipeline";
+      outcome = "Data engineer securely accesses the orchestrator via Bastion to run an ingestion job that reads source documents from grounding blob storage, cracks them with Document Intelligence, and indexes them in AI Search";
+      sequences = sequence {
+        id = "ingestion_pipeline";
+        entry_point = aiw_data_engineer;
+        steps = [aiw_data_engineer ==> aiw_bastion, aiw_bastion ==> aiw_rag_orchestrator, aiw_rag_orchestrator ==> aiw_grounding_blob_pl, aiw_grounding_blob_pl ==> aiw_grounding_blob, aiw_rag_orchestrator ==> aiw_document_intelligence_svc, aiw_rag_orchestrator ==> aiw_ai_search_pl];
+      };
+    }
+    scenario aiw_jailbreak_filtered {
+      label = "Jailbreak Filtered";
+      outcome = "A malicious prompt is intercepted by Content Safety at the APIM layer and never reaches the model";
+      sequences = sequence {
+        id = "jailbreak_filtered";
+        entry_point = aiw_end_user;
+        steps = [aiw_end_user ==> aiw_front_door, aiw_front_door ==> aiw_apim_gateway, aiw_apim_gateway ==> aiw_content_safety_svc];
+      };
+    }
+  }
+}

@@ -1,0 +1,498 @@
+namespace test_waf_architectures.models
+{
+  import libraries.microsoft;
+  import tech_architecture;
+  model test_waf_architecturesModelsModel : libraries.microsoft uses categories, ingresses, microsoft_tech conforms Model {
+    technology saas_apim {
+      label = "API Management";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.zero_trust_network_access;
+    }
+    technology saas_cosmos_db_catalog {
+      label = "Cosmos DB (Tenant Catalog)";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology saas_event_grid {
+      label = "Event Grid";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology saas_entra_external_id {
+      label = "Entra External ID (Customer Identity)";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.zero_trust_network_access;
+    }
+    technology saas_azure_bastion {
+      label = "Azure Bastion";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.zero_trust_network_access;
+    }
+    technology saas_azure_log_analytics {
+      label = "Log Analytics";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology saas_azure_application_insights {
+      label = "Application Insights";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    actor saas_tenant_admin {
+      label = "Tenant Administrator";
+    }
+    actor saas_end_user {
+      label = "SaaS End User";
+    }
+    actor saas_operator {
+      label = "SaaS Platform Operator";
+    }
+    tenant saas_contoso_tenant {
+      label = "Contoso Entra Tenant";
+      region = "eastus";
+      in = microsoft_tech.azure;
+    }
+    subscription saas_connectivity_sub {
+      label = "Connectivity Subscription";
+      region = "eastus";
+      in = microsoft_tech.azure;
+      in_tenant = saas_contoso_tenant;
+    }
+    subscription saas_control_plane_sub {
+      label = "Control Plane Subscription";
+      region = "eastus";
+      in = microsoft_tech.azure;
+      in_tenant = saas_contoso_tenant;
+    }
+    subscription saas_shared_stamps_sub {
+      label = "Shared Stamps Subscription";
+      region = "eastus";
+      in = microsoft_tech.azure;
+      in_tenant = saas_contoso_tenant;
+    }
+    subscription saas_dedicated_stamp_sub_premium_a {
+      label = "Premium Tenant A Dedicated Stamp Subscription";
+      region = "eastus";
+      in = microsoft_tech.azure;
+      in_tenant = saas_contoso_tenant;
+    }
+    resource_group saas_hub_rg {
+      label = "RG - Hub Connectivity";
+      region = "eastus";
+      in_subscription = saas_connectivity_sub;
+    }
+    resource_group saas_platform_rg {
+      label = "RG - Platform Shared";
+      region = "eastus";
+      in_subscription = saas_connectivity_sub;
+    }
+    resource_group saas_control_plane_rg {
+      label = "RG - Control Plane";
+      region = "eastus";
+      in_subscription = saas_control_plane_sub;
+    }
+    resource_group saas_shared_stamps_rg {
+      label = "RG - Shared Stamps";
+      region = "eastus";
+      in_subscription = saas_shared_stamps_sub;
+    }
+    resource_group saas_dedicated_stamp_a_rg {
+      label = "RG - Premium Tenant A Dedicated Stamp";
+      region = "eastus";
+      in_subscription = saas_dedicated_stamp_sub_premium_a;
+    }
+    network saas_hub_vnet {
+      label = "Hub VNet";
+      region = "eastus";
+      kind = "networks.dedicated_network";
+      cidr = "10.0.0.0/22";
+      in = microsoft_tech.azure;
+      in_subscription = saas_connectivity_sub;
+    }
+    subnet saas_fw_subnet {
+      label = "AzureFirewallSubnet";
+      cidr = "10.0.0.0/26";
+      parent = saas_hub_vnet;
+    }
+    subnet saas_bastion_subnet {
+      label = "AzureBastionSubnet";
+      cidr = "10.0.0.64/26";
+      parent = saas_hub_vnet;
+    }
+    subnet saas_shared_services_subnet {
+      label = "Shared Services Subnet";
+      cidr = "10.0.1.0/24";
+      parent = saas_hub_vnet;
+    }
+    network saas_control_plane_vnet {
+      label = "Control Plane VNet";
+      region = "eastus";
+      kind = "networks.dedicated_network";
+      cidr = "10.20.0.0/20";
+      in = microsoft_tech.azure;
+      in_subscription = saas_control_plane_sub;
+    }
+    subnet saas_apim_subnet {
+      label = "APIM Subnet";
+      cidr = "10.20.0.0/24";
+      parent = saas_control_plane_vnet;
+    }
+    subnet saas_orchestrator_subnet {
+      label = "Orchestrator Subnet";
+      cidr = "10.20.1.0/24";
+      parent = saas_control_plane_vnet;
+    }
+    subnet saas_pe_subnet_cp {
+      label = "Control Plane Private Endpoints Subnet";
+      cidr = "10.20.2.0/24";
+      parent = saas_control_plane_vnet;
+    }
+    network saas_shared_stamps_vnet {
+      label = "Shared Stamps VNet";
+      region = "eastus";
+      kind = "networks.dedicated_network";
+      cidr = "10.30.0.0/20";
+      in = microsoft_tech.azure;
+      in_subscription = saas_shared_stamps_sub;
+    }
+    subnet saas_appgw_subnet_shared {
+      label = "Shared App Gateway Subnet";
+      cidr = "10.30.0.0/24";
+      parent = saas_shared_stamps_vnet;
+    }
+    subnet saas_app_subnet_shared {
+      label = "Shared App Subnet";
+      cidr = "10.30.1.0/24";
+      parent = saas_shared_stamps_vnet;
+    }
+    subnet saas_pe_subnet_shared {
+      label = "Shared Stamps Private Endpoints Subnet";
+      cidr = "10.30.2.0/24";
+      parent = saas_shared_stamps_vnet;
+    }
+    network saas_dedicated_stamp_a_vnet {
+      label = "Dedicated Stamp A VNet (Premium Tenant A)";
+      region = "eastus";
+      kind = "networks.dedicated_network";
+      cidr = "10.40.0.0/20";
+      in = microsoft_tech.azure;
+      in_subscription = saas_dedicated_stamp_sub_premium_a;
+    }
+    subnet saas_appgw_subnet_a {
+      label = "Dedicated Stamp A App Gateway Subnet";
+      cidr = "10.40.0.0/24";
+      parent = saas_dedicated_stamp_a_vnet;
+    }
+    subnet saas_app_subnet_a {
+      label = "Dedicated Stamp A App Subnet";
+      cidr = "10.40.1.0/24";
+      parent = saas_dedicated_stamp_a_vnet;
+    }
+    subnet saas_pe_subnet_a {
+      label = "Dedicated Stamp A Private Endpoints Subnet";
+      cidr = "10.40.2.0/24";
+      parent = saas_dedicated_stamp_a_vnet;
+    }
+    environment saas_hub_prod {
+      label = "Hub Production";
+      kind = "environments.azure_subscription_env";
+      lifecycle = "lifecycle_stages.prod";
+      region = "eastus";
+      in_tenant = saas_contoso_tenant;
+      in_subscription = saas_connectivity_sub;
+      resource_groups = [saas_hub_rg, saas_platform_rg];
+    }
+    environment saas_control_plane_prod {
+      label = "Control Plane Production";
+      kind = "environments.azure_subscription_env";
+      lifecycle = "lifecycle_stages.prod";
+      region = "eastus";
+      in_tenant = saas_contoso_tenant;
+      in_subscription = saas_control_plane_sub;
+      resource_groups = saas_control_plane_rg;
+    }
+    environment saas_shared_stamps_prod {
+      label = "Shared Stamps Production";
+      kind = "environments.azure_subscription_env";
+      lifecycle = "lifecycle_stages.prod";
+      region = "eastus";
+      in_tenant = saas_contoso_tenant;
+      in_subscription = saas_shared_stamps_sub;
+      resource_groups = saas_shared_stamps_rg;
+    }
+    environment saas_dedicated_stamp_a_prod {
+      label = "Dedicated Stamp A (Premium Tenant A) Production";
+      kind = "environments.azure_subscription_env";
+      lifecycle = "lifecycle_stages.prod";
+      region = "eastus";
+      in_tenant = saas_contoso_tenant;
+      in_subscription = saas_dedicated_stamp_sub_premium_a;
+      resource_groups = saas_dedicated_stamp_a_rg;
+    }
+    component saas_front_door {
+      label = "Azure Front Door (per-tenant routing)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_front_door;
+      slots = saas_front_door_prod;
+    }
+    slot saas_front_door_prod {
+      label = "Production";
+      environment = saas_shared_stamps_prod;
+      in_resource_group = saas_shared_stamps_rg;
+      public_ingress = ingresses.public_internet;
+    }
+    component saas_apim_gateway {
+      label = "API Management (public sign-up + billing)";
+      in = microsoft_tech.azure;
+      implemented_by = saas_apim;
+      slots = saas_apim_gateway_prod;
+    }
+    slot saas_apim_gateway_prod {
+      label = "Production";
+      environment = saas_control_plane_prod;
+      in_resource_group = saas_control_plane_rg;
+      in_subnet = saas_apim_subnet;
+      public_ingress = ingresses.public_internet;
+    }
+    component saas_control_api {
+      label = "SaaS Control API (deployment orchestrator)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.virtual_machine_scale_sets;
+      slots = saas_control_api_prod;
+    }
+    slot saas_control_api_prod {
+      label = "Production";
+      environment = saas_control_plane_prod;
+      in_resource_group = saas_control_plane_rg;
+      in_subnet = saas_orchestrator_subnet;
+    }
+    component saas_tenant_catalog_db {
+      label = "Tenant Catalog DB (Cosmos)";
+      in = microsoft_tech.azure;
+      implemented_by = saas_cosmos_db_catalog;
+      slots = saas_tenant_catalog_db_prod;
+    }
+    slot saas_tenant_catalog_db_prod {
+      label = "Production";
+      environment = saas_control_plane_prod;
+      in_resource_group = saas_control_plane_rg;
+    }
+    component saas_provisioning_event_grid {
+      label = "Provisioning Event Grid";
+      in = microsoft_tech.azure;
+      implemented_by = saas_event_grid;
+      slots = saas_provisioning_event_grid_prod;
+    }
+    slot saas_provisioning_event_grid_prod {
+      label = "Production";
+      environment = saas_control_plane_prod;
+      in_resource_group = saas_control_plane_rg;
+    }
+    component saas_shared_app_gateway {
+      label = "Shared Stamp App Gateway";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.application_gateway;
+      slots = saas_shared_app_gateway_prod;
+    }
+    slot saas_shared_app_gateway_prod {
+      label = "Production";
+      environment = saas_shared_stamps_prod;
+      in_resource_group = saas_shared_stamps_rg;
+      in_subnet = saas_appgw_subnet_shared;
+    }
+    component saas_shared_stamp_app {
+      label = "Shared Stamp App (VMSS)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.virtual_machine_scale_sets;
+      slots = saas_shared_stamp_app_prod;
+    }
+    slot saas_shared_stamp_app_prod {
+      label = "Production";
+      environment = saas_shared_stamps_prod;
+      in_resource_group = saas_shared_stamps_rg;
+      in_subnet = saas_app_subnet_shared;
+    }
+    component saas_shared_stamp_sql {
+      label = "Shared Stamp Azure SQL";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_sql_database;
+      slots = saas_shared_stamp_sql_prod;
+    }
+    slot saas_shared_stamp_sql_prod {
+      label = "Production";
+      environment = saas_shared_stamps_prod;
+      in_resource_group = saas_shared_stamps_rg;
+    }
+    component saas_shared_stamp_sql_pl {
+      label = "Shared Stamp SQL Private Link";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_private_link;
+      slots = saas_shared_stamp_sql_pl_prod;
+    }
+    slot saas_shared_stamp_sql_pl_prod {
+      label = "Production";
+      environment = saas_shared_stamps_prod;
+      in_resource_group = saas_shared_stamps_rg;
+      in_subnet = saas_pe_subnet_shared;
+    }
+    component saas_dedicated_stamp_a_appgw {
+      label = "Dedicated Stamp A App Gateway";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.application_gateway;
+      slots = saas_dedicated_stamp_a_appgw_prod;
+    }
+    slot saas_dedicated_stamp_a_appgw_prod {
+      label = "Production";
+      environment = saas_dedicated_stamp_a_prod;
+      in_resource_group = saas_dedicated_stamp_a_rg;
+      in_subnet = saas_appgw_subnet_a;
+    }
+    component saas_dedicated_stamp_a_app {
+      label = "Dedicated Stamp A App (VMSS)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.virtual_machine_scale_sets;
+      slots = saas_dedicated_stamp_a_app_prod;
+    }
+    slot saas_dedicated_stamp_a_app_prod {
+      label = "Production";
+      environment = saas_dedicated_stamp_a_prod;
+      in_resource_group = saas_dedicated_stamp_a_rg;
+      in_subnet = saas_app_subnet_a;
+    }
+    component saas_dedicated_stamp_a_sql {
+      label = "Dedicated Stamp A Azure SQL";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_sql_database;
+      slots = saas_dedicated_stamp_a_sql_prod;
+    }
+    slot saas_dedicated_stamp_a_sql_prod {
+      label = "Production";
+      environment = saas_dedicated_stamp_a_prod;
+      in_resource_group = saas_dedicated_stamp_a_rg;
+    }
+    component saas_dedicated_stamp_a_sql_pl {
+      label = "Dedicated Stamp A SQL Private Link";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_private_link;
+      slots = saas_dedicated_stamp_a_sql_pl_prod;
+    }
+    slot saas_dedicated_stamp_a_sql_pl_prod {
+      label = "Production";
+      environment = saas_dedicated_stamp_a_prod;
+      in_resource_group = saas_dedicated_stamp_a_rg;
+      in_subnet = saas_pe_subnet_a;
+    }
+    component saas_key_vault {
+      label = "Key Vault (control plane secrets)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_key_vault;
+      slots = saas_key_vault_prod;
+    }
+    slot saas_key_vault_prod {
+      label = "Production";
+      environment = saas_control_plane_prod;
+      in_resource_group = saas_control_plane_rg;
+    }
+    component saas_key_vault_pl {
+      label = "Key Vault Private Link";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_private_link;
+      slots = saas_key_vault_pl_prod;
+    }
+    slot saas_key_vault_pl_prod {
+      label = "Production";
+      environment = saas_control_plane_prod;
+      in_resource_group = saas_control_plane_rg;
+      in_subnet = saas_pe_subnet_cp;
+    }
+    component saas_azure_firewall_hub {
+      label = "Azure Firewall (hub)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_firewall;
+      slots = saas_azure_firewall_hub_prod;
+    }
+    slot saas_azure_firewall_hub_prod {
+      label = "Production";
+      environment = saas_hub_prod;
+      in_resource_group = saas_hub_rg;
+      in_subnet = saas_fw_subnet;
+    }
+    component saas_bastion {
+      label = "Azure Bastion (hub)";
+      in = microsoft_tech.azure;
+      implemented_by = saas_azure_bastion;
+      slots = saas_bastion_prod;
+    }
+    slot saas_bastion_prod {
+      label = "Production";
+      environment = saas_hub_prod;
+      in_resource_group = saas_hub_rg;
+      in_subnet = saas_bastion_subnet;
+      public_ingress = ingresses.public_internet;
+    }
+    component saas_entra_external_id_comp {
+      label = "Entra External ID (customer identity)";
+      in = microsoft_tech.azure;
+      implemented_by = saas_entra_external_id;
+    }
+    component saas_entra_id {
+      label = "Microsoft Entra ID (operator identity)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.microsoft_entra_id;
+    }
+    component saas_azure_dns {
+      label = "Azure DNS (private zones)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_dns;
+    }
+    component saas_app_insights {
+      label = "Application Insights";
+      in = microsoft_tech.azure;
+      implemented_by = saas_azure_application_insights;
+      slots = saas_app_insights_prod;
+    }
+    slot saas_app_insights_prod {
+      label = "Production";
+      environment = saas_control_plane_prod;
+      in_resource_group = saas_platform_rg;
+    }
+    component saas_log_analytics_ws {
+      label = "Log Analytics Workspace";
+      in = microsoft_tech.azure;
+      implemented_by = saas_azure_log_analytics;
+      slots = saas_log_analytics_ws_prod;
+    }
+    slot saas_log_analytics_ws_prod {
+      label = "Production";
+      environment = saas_hub_prod;
+      in_resource_group = saas_platform_rg;
+    }
+    scenario saas_tenant_onboarding {
+      label = "Tenant Onboarding";
+      outcome = "A tenant administrator signs up via the control plane; the orchestrator writes to the catalog and emits a provisioning event that materializes the tenant's stamp";
+      sequences = sequence {
+        id = "tenant_onboarding_flow";
+        entry_point = saas_tenant_admin;
+        steps = [saas_tenant_admin ==> saas_front_door, saas_front_door ==> saas_apim_gateway, saas_apim_gateway ==> saas_control_api, saas_control_api ==> saas_tenant_catalog_db, saas_control_api ==> saas_provisioning_event_grid, saas_provisioning_event_grid ==> saas_shared_stamp_app];
+      };
+    }
+    scenario saas_shared_stamp_request {
+      label = "End-User Request on Shared Stamp";
+      outcome = "An end user hits Front Door, is routed to the shared stamp App Gateway, and served by the shared app tier with private-link data access";
+      sequences = sequence {
+        id = "shared_stamp_flow";
+        entry_point = saas_end_user;
+        steps = [saas_end_user ==> saas_front_door, saas_front_door ==> saas_shared_app_gateway, saas_shared_app_gateway ==> saas_shared_stamp_app, saas_shared_stamp_app ==> saas_shared_stamp_sql_pl, saas_shared_stamp_sql_pl ==> saas_shared_stamp_sql];
+      };
+    }
+    scenario saas_dedicated_stamp_request {
+      label = "Premium Tenant Request on Dedicated Stamp";
+      outcome = "A premium tenant end user is routed to the dedicated stamp for tenant A, providing full isolation from noisy-neighbor tenants on the shared stamp";
+      sequences = sequence {
+        id = "dedicated_stamp_flow";
+        entry_point = saas_end_user;
+        steps = [saas_end_user ==> saas_front_door, saas_front_door ==> saas_dedicated_stamp_a_appgw, saas_dedicated_stamp_a_appgw ==> saas_dedicated_stamp_a_app, saas_dedicated_stamp_a_app ==> saas_dedicated_stamp_a_sql_pl, saas_dedicated_stamp_a_sql_pl ==> saas_dedicated_stamp_a_sql];
+      };
+    }
+  }
+}

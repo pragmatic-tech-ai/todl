@@ -1,0 +1,442 @@
+namespace test_waf_architectures.models
+{
+  import libraries.microsoft;
+  import tech_architecture;
+  model test_waf_architecturesModelsModel : libraries.microsoft uses categories, ingresses, microsoft_tech conforms Model {
+    technology orc_oracle_db_vm {
+      label = "Oracle Database on VM";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology orc_oracle_data_guard {
+      label = "Oracle Data Guard";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology orc_oracle_asm {
+      label = "Oracle Automatic Storage Management";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology orc_oracle_goldengate {
+      label = "Oracle GoldenGate (CDC)";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology orc_oracle_weblogic_vm {
+      label = "Oracle WebLogic Server on VM";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology orc_azure_bastion {
+      label = "Azure Bastion";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.zero_trust_network_access;
+    }
+    technology orc_azure_log_analytics {
+      label = "Log Analytics";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology orc_azure_application_insights {
+      label = "Application Insights";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    actor orc_end_user {
+      label = "End User";
+    }
+    actor orc_dba {
+      label = "Database Administrator";
+    }
+    actor orc_analytics_consumer {
+      label = "Analytics Consumer";
+    }
+    tenant orc_contoso_tenant {
+      label = "Contoso Entra Tenant";
+      region = "eastus";
+      in = microsoft_tech.azure;
+    }
+    subscription orc_connectivity_sub_east {
+      label = "Connectivity Subscription (East)";
+      region = "eastus";
+      in = microsoft_tech.azure;
+      in_tenant = orc_contoso_tenant;
+    }
+    subscription orc_connectivity_sub_west {
+      label = "Connectivity Subscription (West)";
+      region = "westus2";
+      in = microsoft_tech.azure;
+      in_tenant = orc_contoso_tenant;
+    }
+    subscription orc_oracle_workload_sub_east {
+      label = "Oracle Workload Subscription (East)";
+      region = "eastus";
+      in = microsoft_tech.azure;
+      in_tenant = orc_contoso_tenant;
+    }
+    subscription orc_oracle_workload_sub_west {
+      label = "Oracle Workload Subscription (West)";
+      region = "westus2";
+      in = microsoft_tech.azure;
+      in_tenant = orc_contoso_tenant;
+    }
+    resource_group orc_hub_rg_east {
+      label = "RG - Hub Connectivity (East)";
+      region = "eastus";
+      in_subscription = orc_connectivity_sub_east;
+    }
+    resource_group orc_hub_rg_west {
+      label = "RG - Hub Connectivity (West)";
+      region = "westus2";
+      in_subscription = orc_connectivity_sub_west;
+    }
+    resource_group orc_oracle_rg_east {
+      label = "RG - Oracle Workload (East)";
+      region = "eastus";
+      in_subscription = orc_oracle_workload_sub_east;
+    }
+    resource_group orc_oracle_rg_west {
+      label = "RG - Oracle Workload (West)";
+      region = "westus2";
+      in_subscription = orc_oracle_workload_sub_west;
+    }
+    resource_group orc_platform_rg {
+      label = "RG - Platform Shared";
+      region = "eastus";
+      in_subscription = orc_connectivity_sub_east;
+    }
+    network orc_hub_vnet_east {
+      label = "Hub VNet (East)";
+      region = "eastus";
+      kind = "networks.dedicated_network";
+      cidr = "10.0.0.0/22";
+      in = microsoft_tech.azure;
+      in_subscription = orc_connectivity_sub_east;
+    }
+    subnet orc_fw_subnet_east {
+      label = "AzureFirewallSubnet (East)";
+      cidr = "10.0.0.0/26";
+      parent = orc_hub_vnet_east;
+    }
+    subnet orc_bastion_subnet_east {
+      label = "AzureBastionSubnet (East)";
+      cidr = "10.0.0.64/26";
+      parent = orc_hub_vnet_east;
+    }
+    network orc_hub_vnet_west {
+      label = "Hub VNet (West)";
+      region = "westus2";
+      kind = "networks.dedicated_network";
+      cidr = "10.1.0.0/22";
+      in = microsoft_tech.azure;
+      in_subscription = orc_connectivity_sub_west;
+    }
+    subnet orc_fw_subnet_west {
+      label = "AzureFirewallSubnet (West)";
+      cidr = "10.1.0.0/26";
+      parent = orc_hub_vnet_west;
+    }
+    subnet orc_bastion_subnet_west {
+      label = "AzureBastionSubnet (West)";
+      cidr = "10.1.0.64/26";
+      parent = orc_hub_vnet_west;
+    }
+    network orc_oracle_vnet_east {
+      label = "Oracle Spoke VNet (East)";
+      region = "eastus";
+      kind = "networks.dedicated_network";
+      cidr = "10.90.0.0/20";
+      in = microsoft_tech.azure;
+      in_subscription = orc_oracle_workload_sub_east;
+    }
+    subnet orc_appgw_subnet_east {
+      label = "App Gateway Subnet (East)";
+      cidr = "10.90.0.0/24";
+      parent = orc_oracle_vnet_east;
+    }
+    subnet orc_weblogic_subnet_east {
+      label = "WebLogic App Tier Subnet (East)";
+      cidr = "10.90.1.0/24";
+      parent = orc_oracle_vnet_east;
+    }
+    subnet orc_db_subnet_east {
+      label = "Oracle DB Subnet (East)";
+      cidr = "10.90.2.0/24";
+      parent = orc_oracle_vnet_east;
+    }
+    subnet orc_pe_subnet_east {
+      label = "Private Endpoints Subnet (East)";
+      cidr = "10.90.4.0/24";
+      parent = orc_oracle_vnet_east;
+    }
+    network orc_oracle_vnet_west {
+      label = "Oracle Spoke VNet (West)";
+      region = "westus2";
+      kind = "networks.dedicated_network";
+      cidr = "10.91.0.0/20";
+      in = microsoft_tech.azure;
+      in_subscription = orc_oracle_workload_sub_west;
+    }
+    subnet orc_db_subnet_west {
+      label = "Oracle DB Subnet (West)";
+      cidr = "10.91.2.0/24";
+      parent = orc_oracle_vnet_west;
+    }
+    environment orc_hub_prod_east {
+      label = "Hub Production (East)";
+      kind = "environments.azure_subscription_env";
+      lifecycle = "lifecycle_stages.prod";
+      region = "eastus";
+      in_tenant = orc_contoso_tenant;
+      in_subscription = orc_connectivity_sub_east;
+      resource_groups = [orc_hub_rg_east, orc_platform_rg];
+    }
+    environment orc_hub_prod_west {
+      label = "Hub Production (West)";
+      kind = "environments.azure_subscription_env";
+      lifecycle = "lifecycle_stages.prod";
+      region = "westus2";
+      in_tenant = orc_contoso_tenant;
+      in_subscription = orc_connectivity_sub_west;
+      resource_groups = orc_hub_rg_west;
+    }
+    environment orc_oracle_prod_east {
+      label = "Oracle Production (East, primary)";
+      kind = "environments.azure_subscription_env";
+      lifecycle = "lifecycle_stages.prod";
+      region = "eastus";
+      in_tenant = orc_contoso_tenant;
+      in_subscription = orc_oracle_workload_sub_east;
+      resource_groups = orc_oracle_rg_east;
+    }
+    environment orc_oracle_dr_west {
+      label = "Oracle DR (West, standby)";
+      kind = "environments.azure_subscription_env";
+      lifecycle = "lifecycle_stages.dr";
+      region = "westus2";
+      in_tenant = orc_contoso_tenant;
+      in_subscription = orc_oracle_workload_sub_west;
+      resource_groups = orc_oracle_rg_west;
+    }
+    component orc_app_gateway_east {
+      label = "Application Gateway + WAF (East)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.application_gateway;
+      slots = orc_app_gateway_east_prod;
+    }
+    slot orc_app_gateway_east_prod {
+      label = "Production East";
+      environment = orc_oracle_prod_east;
+      in_resource_group = orc_oracle_rg_east;
+      in_subnet = orc_appgw_subnet_east;
+      public_ingress = ingresses.public_internet;
+    }
+    component orc_weblogic_vmss {
+      label = "Oracle WebLogic VMSS";
+      in = microsoft_tech.azure;
+      implemented_by = orc_oracle_weblogic_vm;
+      slots = orc_weblogic_vmss_prod;
+    }
+    slot orc_weblogic_vmss_prod {
+      label = "Production East";
+      environment = orc_oracle_prod_east;
+      in_resource_group = orc_oracle_rg_east;
+      in_subnet = orc_weblogic_subnet_east;
+    }
+    component orc_oracle_primary_db {
+      label = "Oracle DB Primary (on VM, ASM-backed)";
+      in = microsoft_tech.azure;
+      implemented_by = orc_oracle_db_vm;
+      slots = orc_oracle_primary_db_prod;
+    }
+    slot orc_oracle_primary_db_prod {
+      label = "Production East (primary)";
+      environment = orc_oracle_prod_east;
+      in_resource_group = orc_oracle_rg_east;
+      in_subnet = orc_db_subnet_east;
+    }
+    component orc_oracle_standby_db {
+      label = "Oracle DB Standby (on VM)";
+      in = microsoft_tech.azure;
+      implemented_by = orc_oracle_db_vm;
+      slots = orc_oracle_standby_db_dr;
+    }
+    slot orc_oracle_standby_db_dr {
+      label = "DR West (standby)";
+      environment = orc_oracle_dr_west;
+      in_resource_group = orc_oracle_rg_west;
+      in_subnet = orc_db_subnet_west;
+    }
+    component orc_data_guard_comp {
+      label = "Oracle Data Guard (redo apply, physical standby)";
+      in = microsoft_tech.azure;
+      implemented_by = orc_oracle_data_guard;
+    }
+    component orc_goldengate_comp {
+      label = "Oracle GoldenGate (CDC extract/replicat)";
+      in = microsoft_tech.azure;
+      implemented_by = orc_oracle_goldengate;
+      slots = orc_goldengate_comp_prod;
+    }
+    slot orc_goldengate_comp_prod {
+      label = "Production East";
+      environment = orc_oracle_prod_east;
+      in_resource_group = orc_oracle_rg_east;
+      in_subnet = orc_db_subnet_east;
+    }
+    component orc_analytics_sink_blob {
+      label = "Analytics Sink Blob";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_blob_storage;
+      slots = orc_analytics_sink_blob_prod;
+    }
+    slot orc_analytics_sink_blob_prod {
+      label = "Production East";
+      environment = orc_oracle_prod_east;
+      in_resource_group = orc_oracle_rg_east;
+    }
+    component orc_analytics_sink_blob_pl {
+      label = "Analytics Sink Blob Private Link";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_private_link;
+      slots = orc_analytics_sink_blob_pl_prod;
+    }
+    slot orc_analytics_sink_blob_pl_prod {
+      label = "Production East";
+      environment = orc_oracle_prod_east;
+      in_resource_group = orc_oracle_rg_east;
+      in_subnet = orc_pe_subnet_east;
+    }
+    component orc_key_vault {
+      label = "Azure Key Vault (Oracle secrets, wallet)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_key_vault;
+      slots = orc_key_vault_prod;
+    }
+    slot orc_key_vault_prod {
+      label = "Production East";
+      environment = orc_oracle_prod_east;
+      in_resource_group = orc_oracle_rg_east;
+    }
+    component orc_key_vault_pl {
+      label = "Key Vault Private Link";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_private_link;
+      slots = orc_key_vault_pl_prod;
+    }
+    slot orc_key_vault_pl_prod {
+      label = "Production East";
+      environment = orc_oracle_prod_east;
+      in_resource_group = orc_oracle_rg_east;
+      in_subnet = orc_pe_subnet_east;
+    }
+    component orc_azure_firewall_hub_east {
+      label = "Azure Firewall (hub East)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_firewall;
+      slots = orc_azure_firewall_hub_east_prod;
+    }
+    slot orc_azure_firewall_hub_east_prod {
+      label = "Production East";
+      environment = orc_hub_prod_east;
+      in_resource_group = orc_hub_rg_east;
+      in_subnet = orc_fw_subnet_east;
+    }
+    component orc_azure_firewall_hub_west {
+      label = "Azure Firewall (hub West)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_firewall;
+      slots = orc_azure_firewall_hub_west_prod;
+    }
+    slot orc_azure_firewall_hub_west_prod {
+      label = "Production West";
+      environment = orc_hub_prod_west;
+      in_resource_group = orc_hub_rg_west;
+      in_subnet = orc_fw_subnet_west;
+    }
+    component orc_bastion_east {
+      label = "Azure Bastion (East)";
+      in = microsoft_tech.azure;
+      implemented_by = orc_azure_bastion;
+      slots = orc_bastion_east_prod;
+    }
+    slot orc_bastion_east_prod {
+      label = "Production East";
+      environment = orc_hub_prod_east;
+      in_resource_group = orc_hub_rg_east;
+      in_subnet = orc_bastion_subnet_east;
+    }
+    component orc_bastion_west {
+      label = "Azure Bastion (West)";
+      in = microsoft_tech.azure;
+      implemented_by = orc_azure_bastion;
+      slots = orc_bastion_west_prod;
+    }
+    slot orc_bastion_west_prod {
+      label = "Production West";
+      environment = orc_hub_prod_west;
+      in_resource_group = orc_hub_rg_west;
+      in_subnet = orc_bastion_subnet_west;
+    }
+    component orc_entra_id {
+      label = "Microsoft Entra ID";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.microsoft_entra_id;
+    }
+    component orc_azure_dns {
+      label = "Azure DNS (private zones)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_dns;
+    }
+    component orc_app_insights {
+      label = "Application Insights";
+      in = microsoft_tech.azure;
+      implemented_by = orc_azure_application_insights;
+      slots = orc_app_insights_prod;
+    }
+    slot orc_app_insights_prod {
+      label = "Production";
+      environment = orc_oracle_prod_east;
+      in_resource_group = orc_platform_rg;
+    }
+    component orc_log_analytics_ws {
+      label = "Log Analytics Workspace";
+      in = microsoft_tech.azure;
+      implemented_by = orc_azure_log_analytics;
+      slots = orc_log_analytics_ws_prod;
+    }
+    slot orc_log_analytics_ws_prod {
+      label = "Production";
+      environment = orc_hub_prod_east;
+      in_resource_group = orc_platform_rg;
+    }
+    scenario orc_app_read_from_primary {
+      label = "App Read from Primary";
+      outcome = "End user hits the App Gateway, is routed to WebLogic on the app tier, which reads from the Oracle primary DB in the East region";
+      sequences = sequence {
+        id = "app_read_primary";
+        entry_point = orc_end_user;
+        steps = [orc_end_user ==> orc_app_gateway_east, orc_app_gateway_east ==> orc_weblogic_vmss, orc_weblogic_vmss ==> orc_oracle_primary_db];
+      };
+    }
+    scenario orc_dr_failover {
+      label = "DR Failover to Standby";
+      outcome = "DBA triggers Data Guard failover; the standby DB in West is promoted to primary via redo apply managed by Data Guard";
+      sequences = sequence {
+        id = "dr_failover";
+        entry_point = orc_dba;
+        steps = [orc_dba ==> orc_bastion_east, orc_bastion_east ==> orc_data_guard_comp, orc_data_guard_comp ==> orc_oracle_standby_db];
+      };
+    }
+    scenario orc_goldengate_cdc_to_analytics {
+      label = "GoldenGate CDC to Analytics Sink";
+      outcome = "Change data captured from the Oracle primary is replicated by GoldenGate into an analytics blob sink via private link, feeding downstream analytics consumers";
+      sequences = sequence {
+        id = "goldengate_cdc_sink";
+        entry_point = orc_oracle_primary_db;
+        steps = [orc_oracle_primary_db ==> orc_goldengate_comp, orc_goldengate_comp ==> orc_analytics_sink_blob_pl, orc_analytics_sink_blob_pl ==> orc_analytics_sink_blob];
+      };
+    }
+  }
+}

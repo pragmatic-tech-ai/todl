@@ -1,0 +1,382 @@
+namespace test_waf_architectures.models
+{
+  import libraries.microsoft;
+  import tech_architecture;
+  model test_waf_architecturesModelsModel : libraries.microsoft uses categories, ingresses, microsoft_tech conforms Model {
+    technology sap_sap_hana_vm {
+      label = "SAP HANA VM";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology sap_sap_netweaver_vm {
+      label = "SAP NetWeaver Application Server VM";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology sap_sap_web_dispatcher {
+      label = "SAP Web Dispatcher";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology sap_sap_ascs_ers_cluster {
+      label = "SAP ASCS/ERS Cluster";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology sap_azure_netapp_files {
+      label = "Azure NetApp Files";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology sap_pacemaker_cluster {
+      label = "Pacemaker Cluster";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology sap_acss {
+      label = "Azure Center for SAP solutions";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology sap_azure_bastion {
+      label = "Azure Bastion";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology sap_azure_log_analytics {
+      label = "Log Analytics";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology sap_azure_application_insights {
+      label = "Application Insights";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    actor sap_sap_user {
+      label = "SAP User";
+    }
+    actor sap_sap_basis_admin {
+      label = "SAP Basis Admin";
+    }
+    tenant sap_contoso_tenant {
+      label = "Contoso Entra Tenant";
+      region = "eastus";
+      in = microsoft_tech.azure;
+    }
+    subscription sap_connectivity_sub {
+      label = "Connectivity Subscription";
+      region = "eastus";
+      in = microsoft_tech.azure;
+      in_tenant = sap_contoso_tenant;
+    }
+    subscription sap_sap_workload_sub {
+      label = "SAP Workload Subscription";
+      region = "eastus";
+      in = microsoft_tech.azure;
+      in_tenant = sap_contoso_tenant;
+    }
+    resource_group sap_hub_rg {
+      label = "RG - Hub Connectivity";
+      region = "eastus";
+      in_subscription = sap_connectivity_sub;
+    }
+    resource_group sap_platform_rg {
+      label = "RG - Platform Shared";
+      region = "eastus";
+      in_subscription = sap_connectivity_sub;
+    }
+    resource_group sap_sap_rg {
+      label = "RG - SAP Workload";
+      region = "eastus";
+      in_subscription = sap_sap_workload_sub;
+    }
+    network sap_hub_vnet {
+      label = "Hub VNet";
+      region = "eastus";
+      kind = "networks.dedicated_network";
+      cidr = "10.0.0.0/22";
+      in = microsoft_tech.azure;
+      in_subscription = sap_connectivity_sub;
+    }
+    subnet sap_fw_subnet {
+      label = "AzureFirewallSubnet";
+      cidr = "10.0.0.0/26";
+      parent = sap_hub_vnet;
+    }
+    subnet sap_bastion_subnet {
+      label = "AzureBastionSubnet";
+      cidr = "10.0.0.64/26";
+      parent = sap_hub_vnet;
+    }
+    subnet sap_shared_services_subnet {
+      label = "Shared Services Subnet";
+      cidr = "10.0.1.0/24";
+      parent = sap_hub_vnet;
+    }
+    network sap_sap_spoke_vnet {
+      label = "SAP Spoke VNet";
+      region = "eastus";
+      kind = "networks.dedicated_network";
+      cidr = "10.100.0.0/20";
+      in = microsoft_tech.azure;
+      in_subscription = sap_sap_workload_sub;
+    }
+    subnet sap_web_dispatcher_subnet {
+      label = "Web Dispatcher Subnet";
+      cidr = "10.100.0.0/24";
+      parent = sap_sap_spoke_vnet;
+    }
+    subnet sap_app_subnet {
+      label = "SAP App Subnet";
+      cidr = "10.100.1.0/24";
+      parent = sap_sap_spoke_vnet;
+    }
+    subnet sap_db_subnet {
+      label = "HANA DB Subnet";
+      cidr = "10.100.2.0/24";
+      parent = sap_sap_spoke_vnet;
+    }
+    subnet sap_anf_subnet {
+      label = "ANF Delegated Subnet";
+      cidr = "10.100.3.0/24";
+      parent = sap_sap_spoke_vnet;
+    }
+    subnet sap_pe_subnet {
+      label = "Private Endpoints Subnet";
+      cidr = "10.100.4.0/24";
+      parent = sap_sap_spoke_vnet;
+    }
+    environment sap_hub_prod {
+      label = "Hub Production";
+      kind = "environments.azure_subscription_env";
+      lifecycle = "lifecycle_stages.prod";
+      region = "eastus";
+      in_tenant = sap_contoso_tenant;
+      in_subscription = sap_connectivity_sub;
+      resource_groups = [sap_hub_rg, sap_platform_rg];
+    }
+    environment sap_sap_prod {
+      label = "SAP Production (multi-AZ)";
+      kind = "environments.azure_subscription_env";
+      lifecycle = "lifecycle_stages.prod";
+      region = "eastus";
+      in_tenant = sap_contoso_tenant;
+      in_subscription = sap_sap_workload_sub;
+      resource_groups = sap_sap_rg;
+    }
+    component sap_sap_web_dispatcher_comp {
+      label = "SAP Web Dispatcher";
+      in = microsoft_tech.azure;
+      implemented_by = sap_sap_web_dispatcher;
+      slots = sap_sap_web_dispatcher_comp_prod;
+    }
+    slot sap_sap_web_dispatcher_comp_prod {
+      label = "Production";
+      environment = sap_sap_prod;
+      in_resource_group = sap_sap_rg;
+      in_subnet = sap_web_dispatcher_subnet;
+      public_ingress = ingresses.public_internet;
+    }
+    component sap_sap_ascs_cluster {
+      label = "SAP ASCS/ERS Cluster";
+      in = microsoft_tech.azure;
+      implemented_by = sap_sap_ascs_ers_cluster;
+      slots = sap_sap_ascs_cluster_prod;
+    }
+    slot sap_sap_ascs_cluster_prod {
+      label = "Production";
+      environment = sap_sap_prod;
+      in_resource_group = sap_sap_rg;
+      in_subnet = sap_app_subnet;
+    }
+    component sap_sap_app_vmss {
+      label = "SAP NetWeaver App VMSS";
+      in = microsoft_tech.azure;
+      implemented_by = sap_sap_netweaver_vm;
+      slots = sap_sap_app_vmss_prod;
+    }
+    slot sap_sap_app_vmss_prod {
+      label = "Production";
+      environment = sap_sap_prod;
+      in_resource_group = sap_sap_rg;
+      in_subnet = sap_app_subnet;
+    }
+    component sap_hana_primary {
+      label = "HANA Primary (AZ1)";
+      in = microsoft_tech.azure;
+      implemented_by = sap_sap_hana_vm;
+      slots = sap_hana_primary_prod;
+    }
+    slot sap_hana_primary_prod {
+      label = "Production - AZ1";
+      environment = sap_sap_prod;
+      in_resource_group = sap_sap_rg;
+      in_subnet = sap_db_subnet;
+    }
+    component sap_hana_secondary {
+      label = "HANA Secondary (AZ2)";
+      in = microsoft_tech.azure;
+      implemented_by = sap_sap_hana_vm;
+      slots = sap_hana_secondary_prod;
+    }
+    slot sap_hana_secondary_prod {
+      label = "Production - AZ2";
+      environment = sap_sap_prod;
+      in_resource_group = sap_sap_rg;
+      in_subnet = sap_db_subnet;
+    }
+    component sap_pacemaker_hana {
+      label = "Pacemaker Cluster (HANA HA)";
+      in = microsoft_tech.azure;
+      implemented_by = sap_pacemaker_cluster;
+      slots = sap_pacemaker_hana_prod;
+    }
+    slot sap_pacemaker_hana_prod {
+      label = "Production";
+      environment = sap_sap_prod;
+      in_resource_group = sap_sap_rg;
+    }
+    component sap_anf_sapmnt {
+      label = "ANF - sapmnt Share";
+      in = microsoft_tech.azure;
+      implemented_by = sap_azure_netapp_files;
+      slots = sap_anf_sapmnt_prod;
+    }
+    slot sap_anf_sapmnt_prod {
+      label = "Production";
+      environment = sap_sap_prod;
+      in_resource_group = sap_sap_rg;
+      in_subnet = sap_anf_subnet;
+    }
+    component sap_anf_transport {
+      label = "ANF - Transport Share";
+      in = microsoft_tech.azure;
+      implemented_by = sap_azure_netapp_files;
+      slots = sap_anf_transport_prod;
+    }
+    slot sap_anf_transport_prod {
+      label = "Production";
+      environment = sap_sap_prod;
+      in_resource_group = sap_sap_rg;
+      in_subnet = sap_anf_subnet;
+    }
+    component sap_acss_comp {
+      label = "Azure Center for SAP solutions";
+      in = microsoft_tech.azure;
+      implemented_by = sap_acss;
+      slots = sap_acss_comp_prod;
+    }
+    slot sap_acss_comp_prod {
+      label = "Production";
+      environment = sap_sap_prod;
+      in_resource_group = sap_sap_rg;
+    }
+    component sap_key_vault {
+      label = "Key Vault (SAP secrets)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_key_vault;
+      slots = sap_key_vault_prod;
+    }
+    slot sap_key_vault_prod {
+      label = "Production";
+      environment = sap_sap_prod;
+      in_resource_group = sap_sap_rg;
+    }
+    component sap_key_vault_pl {
+      label = "Key Vault Private Link";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_private_link;
+      slots = sap_key_vault_pl_prod;
+    }
+    slot sap_key_vault_pl_prod {
+      label = "Production";
+      environment = sap_sap_prod;
+      in_resource_group = sap_sap_rg;
+      in_subnet = sap_pe_subnet;
+    }
+    component sap_azure_firewall_hub {
+      label = "Azure Firewall (hub)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_firewall;
+      slots = sap_azure_firewall_hub_prod;
+    }
+    slot sap_azure_firewall_hub_prod {
+      label = "Production";
+      environment = sap_hub_prod;
+      in_resource_group = sap_hub_rg;
+      in_subnet = sap_fw_subnet;
+    }
+    component sap_bastion {
+      label = "Azure Bastion";
+      in = microsoft_tech.azure;
+      implemented_by = sap_azure_bastion;
+      slots = sap_bastion_prod;
+    }
+    slot sap_bastion_prod {
+      label = "Production";
+      environment = sap_hub_prod;
+      in_resource_group = sap_hub_rg;
+      in_subnet = sap_bastion_subnet;
+    }
+    component sap_entra_id {
+      label = "Microsoft Entra ID";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.microsoft_entra_id;
+    }
+    component sap_azure_dns {
+      label = "Azure DNS (private zones)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_dns;
+    }
+    component sap_app_insights {
+      label = "Application Insights";
+      in = microsoft_tech.azure;
+      implemented_by = sap_azure_application_insights;
+      slots = sap_app_insights_prod;
+    }
+    slot sap_app_insights_prod {
+      label = "Production";
+      environment = sap_sap_prod;
+      in_resource_group = sap_platform_rg;
+    }
+    component sap_log_analytics_ws {
+      label = "Log Analytics Workspace";
+      in = microsoft_tech.azure;
+      implemented_by = sap_azure_log_analytics;
+      slots = sap_log_analytics_ws_prod;
+    }
+    slot sap_log_analytics_ws_prod {
+      label = "Production";
+      environment = sap_hub_prod;
+      in_resource_group = sap_platform_rg;
+    }
+    scenario sap_sapgui_request {
+      label = "SAPGUI Request";
+      outcome = "A SAP user request enters via the SAP Web Dispatcher, is load-balanced to a NetWeaver application server, which coordinates with ASCS and reads business data from the HANA primary node";
+      sequences = sequence {
+        id = "sapgui_to_hana";
+        entry_point = sap_sap_user;
+        steps = [sap_sap_user ==> sap_sap_web_dispatcher_comp, sap_sap_web_dispatcher_comp ==> sap_sap_app_vmss, sap_sap_app_vmss ==> sap_sap_ascs_cluster, sap_sap_app_vmss ==> sap_hana_primary];
+      };
+    }
+    scenario sap_hana_failover {
+      label = "HANA Failover";
+      outcome = "The Pacemaker cluster detects a failure of the HANA primary node and promotes the secondary node in the paired availability zone, restoring database service";
+      sequences = sequence {
+        id = "hana_failover";
+        entry_point = sap_pacemaker_hana;
+        steps = [sap_pacemaker_hana ==> sap_hana_primary, sap_pacemaker_hana ==> sap_hana_secondary];
+      };
+    }
+    scenario sap_anf_shared_fs_read {
+      label = "ANF-backed Shared FS Read";
+      outcome = "SAP application servers read the shared sapmnt and transport directories from Azure NetApp Files volumes mounted over NFS";
+      sequences = sequence {
+        id = "sap_app_to_anf";
+        entry_point = sap_sap_app_vmss;
+        steps = [sap_sap_app_vmss ==> sap_anf_sapmnt, sap_sap_app_vmss ==> sap_anf_transport];
+      };
+    }
+  }
+}

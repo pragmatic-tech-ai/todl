@@ -1,0 +1,238 @@
+namespace test_waf_project.models
+{
+  import libraries.microsoft;
+  import tech_architecture;
+  model test_waf_projectModelsModel : libraries.microsoft uses categories, ingresses, microsoft_tech conforms Model {
+    actor workload_user {
+      label = "Workload User";
+    }
+    actor operator {
+      label = "Operator";
+    }
+    technology azure_bastion {
+      label = "Azure Bastion";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.zero_trust_network_access;
+    }
+    technology azure_application_insights {
+      label = "Application Insights";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology azure_log_analytics {
+      label = "Log Analytics";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    tenant contoso_tenant {
+      label = "Contoso Entra Tenant";
+      region = "eastus";
+      in = microsoft_tech.azure;
+    }
+    subscription workload_sub {
+      label = "Workload Production Subscription";
+      region = "eastus";
+      in = microsoft_tech.azure;
+      in_tenant = contoso_tenant;
+    }
+    resource_group workload_rg {
+      label = "RG - Workload";
+      region = "eastus";
+      in_subscription = workload_sub;
+    }
+    network workload_vnet {
+      label = "Workload VNet";
+      region = "eastus";
+      kind = "networks.dedicated_network";
+      cidr = "10.240.0.0/21";
+      in = microsoft_tech.azure;
+      in_subscription = workload_sub;
+    }
+    subnet appgw_subnet {
+      label = "App Gateway Subnet";
+      cidr = "10.240.0.0/24";
+      parent = workload_vnet;
+    }
+    subnet frontend_subnet {
+      label = "Frontend Subnet";
+      cidr = "10.240.1.0/24";
+      parent = workload_vnet;
+    }
+    subnet backend_subnet {
+      label = "Backend Subnet";
+      cidr = "10.240.2.0/24";
+      parent = workload_vnet;
+    }
+    subnet ilb_subnet {
+      label = "Internal LB Subnet";
+      cidr = "10.240.3.0/24";
+      parent = workload_vnet;
+    }
+    subnet bastion_subnet {
+      label = "AzureBastionSubnet";
+      cidr = "10.240.4.0/26";
+      parent = workload_vnet;
+    }
+    subnet pe_subnet {
+      label = "Private Endpoints Subnet";
+      cidr = "10.240.5.0/24";
+      parent = workload_vnet;
+    }
+    environment azure_prod {
+      label = "Azure Production";
+      kind = "environments.azure_subscription_env";
+      lifecycle = "lifecycle_stages.prod";
+      region = "eastus";
+      in_tenant = contoso_tenant;
+      in_subscription = workload_sub;
+      resource_groups = workload_rg;
+    }
+    component app_gateway {
+      label = "Application Gateway + WAF";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.application_gateway;
+      slots = app_gateway_prod;
+    }
+    slot app_gateway_prod {
+      label = "Production";
+      environment = azure_prod;
+      in_resource_group = workload_rg;
+      in_subnet = appgw_subnet;
+      public_ingress = ingresses.public_internet;
+    }
+    component public_lb {
+      label = "Public Load Balancer (egress)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.load_balancer;
+      slots = public_lb_prod;
+    }
+    slot public_lb_prod {
+      label = "Production";
+      environment = azure_prod;
+      in_resource_group = workload_rg;
+      public_ingress = ingresses.public_internet;
+    }
+    component internal_lb {
+      label = "Internal Load Balancer";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.load_balancer;
+      slots = internal_lb_prod;
+    }
+    slot internal_lb_prod {
+      label = "Production";
+      environment = azure_prod;
+      in_resource_group = workload_rg;
+      in_subnet = ilb_subnet;
+    }
+    component frontend_vmss {
+      label = "Frontend VM Scale Set";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.virtual_machine_scale_sets;
+      slots = frontend_vmss_prod;
+    }
+    slot frontend_vmss_prod {
+      label = "Production";
+      environment = azure_prod;
+      in_resource_group = workload_rg;
+      in_subnet = frontend_subnet;
+    }
+    component backend_vmss {
+      label = "Backend VM Scale Set";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.virtual_machine_scale_sets;
+      slots = backend_vmss_prod;
+    }
+    slot backend_vmss_prod {
+      label = "Production";
+      environment = azure_prod;
+      in_resource_group = workload_rg;
+      in_subnet = backend_subnet;
+    }
+    component key_vault {
+      label = "Key Vault (TLS certs)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_key_vault;
+      slots = key_vault_prod;
+    }
+    slot key_vault_prod {
+      label = "Production";
+      environment = azure_prod;
+      in_resource_group = workload_rg;
+    }
+    component bastion {
+      label = "Azure Bastion";
+      in = microsoft_tech.azure;
+      implemented_by = azure_bastion;
+      slots = bastion_prod;
+    }
+    slot bastion_prod {
+      label = "Production";
+      environment = azure_prod;
+      in_resource_group = workload_rg;
+      in_subnet = bastion_subnet;
+      public_ingress = ingresses.public_internet;
+    }
+    component app_insights {
+      label = "Application Insights";
+      in = microsoft_tech.azure;
+      implemented_by = azure_application_insights;
+      slots = app_insights_prod;
+    }
+    slot app_insights_prod {
+      label = "Production";
+      environment = azure_prod;
+      in_resource_group = workload_rg;
+    }
+    component log_analytics_ws {
+      label = "Log Analytics Workspace";
+      in = microsoft_tech.azure;
+      implemented_by = azure_log_analytics;
+      slots = log_analytics_ws_prod;
+    }
+    slot log_analytics_ws_prod {
+      label = "Production";
+      environment = azure_prod;
+      in_resource_group = workload_rg;
+    }
+    component entra_id {
+      label = "Microsoft Entra ID";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.microsoft_entra_id;
+    }
+    component azure_dns {
+      label = "Azure DNS";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_dns;
+    }
+    component key_vault_private_link {
+      label = "Key Vault Private Link";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_private_link;
+      slots = key_vault_private_link_prod;
+    }
+    slot key_vault_private_link_prod {
+      label = "Production";
+      environment = azure_prod;
+      in_resource_group = workload_rg;
+      in_subnet = pe_subnet;
+    }
+    scenario workload_user_request {
+      label = "Workload User Request";
+      outcome = "HTTPS response from the internal API is delivered to the workload user";
+      sequences = sequence {
+        id = "user_to_backend";
+        entry_point = workload_user;
+        steps = [workload_user ==> app_gateway, app_gateway ==> key_vault, app_gateway ==> frontend_vmss, frontend_vmss ==> internal_lb, internal_lb ==> backend_vmss, backend_vmss ==> key_vault_private_link, key_vault_private_link ==> key_vault];
+      };
+    }
+    scenario operator_access {
+      label = "Operator Access via Bastion";
+      outcome = "Operator obtains a shell on a workload VM without any VM exposing a public IP";
+      sequences = sequence {
+        id = "operator_via_bastion";
+        entry_point = operator;
+        steps = [operator ==> entra_id, operator ==> bastion, bastion ==> frontend_vmss, bastion ==> backend_vmss];
+      };
+    }
+  }
+}

@@ -1,0 +1,391 @@
+namespace test_waf_architectures.models
+{
+  import libraries.microsoft;
+  import tech_architecture;
+  model test_waf_architecturesModelsModel : libraries.microsoft uses categories, microsoft_tech conforms Model {
+    technology avd_avd_host_pool {
+      label = "AVD Host Pool";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology avd_avd_workspace {
+      label = "AVD Workspace";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology avd_avd_app_group {
+      label = "AVD Application Group";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology avd_fslogix_share {
+      label = "FSLogix Profile Share";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology avd_azure_files_premium {
+      label = "Azure Files Premium";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology avd_msix_app_attach {
+      label = "MSIX App Attach";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology avd_azure_bastion {
+      label = "Azure Bastion";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.zero_trust_network_access;
+    }
+    technology avd_azure_log_analytics {
+      label = "Log Analytics";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology avd_azure_application_insights {
+      label = "Application Insights";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    actor avd_end_user {
+      label = "End User";
+    }
+    actor avd_avd_admin {
+      label = "AVD Administrator";
+    }
+    tenant avd_contoso_tenant {
+      label = "Contoso Entra Tenant";
+      region = "eastus";
+      in = microsoft_tech.azure;
+    }
+    subscription avd_connectivity_sub {
+      label = "Connectivity Subscription";
+      region = "eastus";
+      in = microsoft_tech.azure;
+      in_tenant = avd_contoso_tenant;
+    }
+    subscription avd_avd_workload_sub {
+      label = "AVD Workload Subscription";
+      region = "eastus";
+      in = microsoft_tech.azure;
+      in_tenant = avd_contoso_tenant;
+    }
+    resource_group avd_hub_rg {
+      label = "RG - Hub Connectivity";
+      region = "eastus";
+      in_subscription = avd_connectivity_sub;
+    }
+    resource_group avd_platform_rg {
+      label = "RG - Platform Shared";
+      region = "eastus";
+      in_subscription = avd_connectivity_sub;
+    }
+    resource_group avd_avd_rg {
+      label = "RG - AVD Session Hosts";
+      region = "eastus";
+      in_subscription = avd_avd_workload_sub;
+    }
+    resource_group avd_avd_storage_rg {
+      label = "RG - AVD Storage (FSLogix/MSIX)";
+      region = "eastus";
+      in_subscription = avd_avd_workload_sub;
+    }
+    network avd_hub_vnet {
+      label = "Hub VNet";
+      region = "eastus";
+      kind = "networks.dedicated_network";
+      cidr = "10.0.0.0/22";
+      in = microsoft_tech.azure;
+      in_subscription = avd_connectivity_sub;
+    }
+    subnet avd_fw_subnet {
+      label = "AzureFirewallSubnet";
+      cidr = "10.0.0.0/26";
+      parent = avd_hub_vnet;
+    }
+    subnet avd_bastion_subnet {
+      label = "AzureBastionSubnet";
+      cidr = "10.0.0.64/26";
+      parent = avd_hub_vnet;
+    }
+    subnet avd_shared_services_subnet {
+      label = "Shared Services Subnet";
+      cidr = "10.0.1.0/24";
+      parent = avd_hub_vnet;
+    }
+    network avd_avd_spoke_vnet {
+      label = "AVD Spoke VNet";
+      region = "eastus";
+      kind = "networks.dedicated_network";
+      cidr = "10.60.0.0/20";
+      in = microsoft_tech.azure;
+      in_subscription = avd_avd_workload_sub;
+    }
+    subnet avd_control_plane_subnet {
+      label = "AVD Control Plane Subnet";
+      cidr = "10.60.0.0/24";
+      parent = avd_avd_spoke_vnet;
+    }
+    subnet avd_session_host_subnet {
+      label = "Session Host Subnet";
+      cidr = "10.60.1.0/23";
+      parent = avd_avd_spoke_vnet;
+    }
+    subnet avd_pe_subnet {
+      label = "Private Endpoints Subnet";
+      cidr = "10.60.4.0/24";
+      parent = avd_avd_spoke_vnet;
+    }
+    environment avd_hub_prod {
+      label = "Hub Production";
+      kind = "environments.azure_subscription_env";
+      lifecycle = "lifecycle_stages.prod";
+      region = "eastus";
+      in_tenant = avd_contoso_tenant;
+      in_subscription = avd_connectivity_sub;
+      resource_groups = [avd_hub_rg, avd_platform_rg];
+    }
+    environment avd_avd_prod {
+      label = "AVD Workload Production";
+      kind = "environments.azure_subscription_env";
+      lifecycle = "lifecycle_stages.prod";
+      region = "eastus";
+      in_tenant = avd_contoso_tenant;
+      in_subscription = avd_avd_workload_sub;
+      resource_groups = [avd_avd_rg, avd_avd_storage_rg];
+    }
+    component avd_avd_workspace_comp {
+      label = "AVD Workspace";
+      in = microsoft_tech.azure;
+      implemented_by = avd_avd_workspace;
+      slots = avd_avd_workspace_comp_prod;
+    }
+    slot avd_avd_workspace_comp_prod {
+      label = "Production";
+      environment = avd_avd_prod;
+      in_resource_group = avd_avd_rg;
+    }
+    component avd_avd_pooled_host_pool {
+      label = "AVD Pooled Host Pool";
+      in = microsoft_tech.azure;
+      implemented_by = avd_avd_host_pool;
+      slots = avd_avd_pooled_host_pool_prod;
+    }
+    slot avd_avd_pooled_host_pool_prod {
+      label = "Production";
+      environment = avd_avd_prod;
+      in_resource_group = avd_avd_rg;
+      in_subnet = avd_session_host_subnet;
+    }
+    component avd_avd_personal_host_pool {
+      label = "AVD Personal Host Pool";
+      in = microsoft_tech.azure;
+      implemented_by = avd_avd_host_pool;
+      slots = avd_avd_personal_host_pool_prod;
+    }
+    slot avd_avd_personal_host_pool_prod {
+      label = "Production";
+      environment = avd_avd_prod;
+      in_resource_group = avd_avd_rg;
+      in_subnet = avd_session_host_subnet;
+    }
+    component avd_avd_app_group_desktop {
+      label = "AVD Application Group - Desktop";
+      in = microsoft_tech.azure;
+      implemented_by = avd_avd_app_group;
+      slots = avd_avd_app_group_desktop_prod;
+    }
+    slot avd_avd_app_group_desktop_prod {
+      label = "Production";
+      environment = avd_avd_prod;
+      in_resource_group = avd_avd_rg;
+    }
+    component avd_avd_app_group_remoteapp {
+      label = "AVD Application Group - RemoteApp";
+      in = microsoft_tech.azure;
+      implemented_by = avd_avd_app_group;
+      slots = avd_avd_app_group_remoteapp_prod;
+    }
+    slot avd_avd_app_group_remoteapp_prod {
+      label = "Production";
+      environment = avd_avd_prod;
+      in_resource_group = avd_avd_rg;
+    }
+    component avd_session_hosts_vmss {
+      label = "Session Hosts VMSS";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.virtual_machine_scale_sets;
+      slots = avd_session_hosts_vmss_prod;
+    }
+    slot avd_session_hosts_vmss_prod {
+      label = "Production";
+      environment = avd_avd_prod;
+      in_resource_group = avd_avd_rg;
+      in_subnet = avd_session_host_subnet;
+    }
+    component avd_fslogix_files {
+      label = "FSLogix Profile Share (Azure Files Premium)";
+      in = microsoft_tech.azure;
+      implemented_by = avd_azure_files_premium;
+      slots = avd_fslogix_files_prod;
+    }
+    slot avd_fslogix_files_prod {
+      label = "Production";
+      environment = avd_avd_prod;
+      in_resource_group = avd_avd_storage_rg;
+    }
+    component avd_fslogix_files_pl {
+      label = "FSLogix Files Private Link";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_private_link;
+      slots = avd_fslogix_files_pl_prod;
+    }
+    slot avd_fslogix_files_pl_prod {
+      label = "Production";
+      environment = avd_avd_prod;
+      in_resource_group = avd_avd_storage_rg;
+      in_subnet = avd_pe_subnet;
+    }
+    component avd_msix_files {
+      label = "MSIX App Attach Share (Azure Files Premium)";
+      in = microsoft_tech.azure;
+      implemented_by = avd_azure_files_premium;
+      slots = avd_msix_files_prod;
+    }
+    slot avd_msix_files_prod {
+      label = "Production";
+      environment = avd_avd_prod;
+      in_resource_group = avd_avd_storage_rg;
+    }
+    component avd_msix_files_pl {
+      label = "MSIX Files Private Link";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_private_link;
+      slots = avd_msix_files_pl_prod;
+    }
+    slot avd_msix_files_pl_prod {
+      label = "Production";
+      environment = avd_avd_prod;
+      in_resource_group = avd_avd_storage_rg;
+      in_subnet = avd_pe_subnet;
+    }
+    component avd_msix_app_attach_comp {
+      label = "MSIX App Attach";
+      in = microsoft_tech.azure;
+      implemented_by = avd_msix_app_attach;
+      slots = avd_msix_app_attach_comp_prod;
+    }
+    slot avd_msix_app_attach_comp_prod {
+      label = "Production";
+      environment = avd_avd_prod;
+      in_resource_group = avd_avd_rg;
+    }
+    component avd_key_vault {
+      label = "Key Vault";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_key_vault;
+      slots = avd_key_vault_prod;
+    }
+    slot avd_key_vault_prod {
+      label = "Production";
+      environment = avd_avd_prod;
+      in_resource_group = avd_platform_rg;
+    }
+    component avd_key_vault_pl {
+      label = "Key Vault Private Link";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_private_link;
+      slots = avd_key_vault_pl_prod;
+    }
+    slot avd_key_vault_pl_prod {
+      label = "Production";
+      environment = avd_avd_prod;
+      in_resource_group = avd_platform_rg;
+      in_subnet = avd_pe_subnet;
+    }
+    component avd_azure_firewall_hub {
+      label = "Azure Firewall (hub)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_firewall;
+      slots = avd_azure_firewall_hub_prod;
+    }
+    slot avd_azure_firewall_hub_prod {
+      label = "Production";
+      environment = avd_hub_prod;
+      in_resource_group = avd_hub_rg;
+      in_subnet = avd_fw_subnet;
+    }
+    component avd_bastion {
+      label = "Azure Bastion";
+      in = microsoft_tech.azure;
+      implemented_by = avd_azure_bastion;
+      slots = avd_bastion_prod;
+    }
+    slot avd_bastion_prod {
+      label = "Production";
+      environment = avd_hub_prod;
+      in_resource_group = avd_hub_rg;
+      in_subnet = avd_bastion_subnet;
+    }
+    component avd_entra_id {
+      label = "Microsoft Entra ID";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.microsoft_entra_id;
+    }
+    component avd_azure_dns {
+      label = "Azure DNS (private zones)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_dns;
+    }
+    component avd_app_insights {
+      label = "Application Insights";
+      in = microsoft_tech.azure;
+      implemented_by = avd_azure_application_insights;
+      slots = avd_app_insights_prod;
+    }
+    slot avd_app_insights_prod {
+      label = "Production";
+      environment = avd_avd_prod;
+      in_resource_group = avd_platform_rg;
+    }
+    component avd_log_analytics_ws {
+      label = "Log Analytics Workspace";
+      in = microsoft_tech.azure;
+      implemented_by = avd_azure_log_analytics;
+      slots = avd_log_analytics_ws_prod;
+    }
+    slot avd_log_analytics_ws_prod {
+      label = "Production";
+      environment = avd_hub_prod;
+      in_resource_group = avd_platform_rg;
+    }
+    scenario avd_user_launches_published_app {
+      label = "User Launches Published App";
+      outcome = "An end user connects through the AVD workspace, is directed to a RemoteApp application group backed by a pooled host pool, and lands on a session host VM";
+      sequences = sequence {
+        id = "user_to_session_host";
+        entry_point = avd_end_user;
+        steps = [avd_end_user ==> avd_avd_workspace_comp, avd_avd_workspace_comp ==> avd_avd_app_group_remoteapp, avd_avd_app_group_remoteapp ==> avd_avd_pooled_host_pool, avd_avd_pooled_host_pool ==> avd_session_hosts_vmss];
+      };
+    }
+    scenario avd_fslogix_profile_load {
+      label = "FSLogix Profile Load";
+      outcome = "A session host mounts the user's FSLogix profile container from Azure Files Premium over a private endpoint";
+      sequences = sequence {
+        id = "session_host_to_fslogix";
+        entry_point = avd_session_hosts_vmss;
+        steps = [avd_session_hosts_vmss ==> avd_fslogix_files_pl, avd_fslogix_files_pl ==> avd_fslogix_files];
+      };
+    }
+    scenario avd_scaling_plan_expansion {
+      label = "Scaling Plan Expansion";
+      outcome = "An AVD administrator jumps in via Bastion and scales out the pooled host pool by adding session hosts to the VMSS";
+      sequences = sequence {
+        id = "admin_scales_pool";
+        entry_point = avd_avd_admin;
+        steps = [avd_avd_admin ==> avd_bastion, avd_bastion ==> avd_avd_pooled_host_pool, avd_avd_pooled_host_pool ==> avd_session_hosts_vmss];
+      };
+    }
+  }
+}

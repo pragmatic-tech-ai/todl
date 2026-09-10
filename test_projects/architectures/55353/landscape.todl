@@ -1,0 +1,395 @@
+// Mission-Critical Baseline architecture on Azure (WAF "north star").
+// Two regional stamps (East US, West US 2) fronted by Azure Front Door,
+// backed by globally distributed Cosmos DB. Each stamp is an independent
+// AKS-hosted deployment unit.
+namespace mission_critical_baseline.models
+{
+  import libraries.microsoft;
+  import tech_architecture;
+
+  model missionCriticalBaselineModel : libraries.microsoft uses categories, ingresses, microsoft_tech conforms Model {
+
+    // ── Actors ──────────────────────────────────────────────────────
+    actor end_user {
+      label = "End User";
+    }
+    actor operator {
+      label = "Operator";
+    }
+
+    // ── Identity + billing ─────────────────────────────────────────
+    tenant contoso_tenant {
+      label = "Contoso Entra Tenant";
+      region = "eastus";
+      in = microsoft_tech.azure;
+    }
+    subscription global_sub {
+      label = "Global Resources Subscription";
+      region = "eastus";
+      in = microsoft_tech.azure;
+      in_tenant = contoso_tenant;
+    }
+    subscription stamp_east_sub {
+      label = "Stamp East Subscription";
+      region = "eastus";
+      in = microsoft_tech.azure;
+      in_tenant = contoso_tenant;
+    }
+    subscription stamp_west_sub {
+      label = "Stamp West Subscription";
+      region = "westus2";
+      in = microsoft_tech.azure;
+      in_tenant = contoso_tenant;
+    }
+
+    // ── Resource groups ────────────────────────────────────────────
+    resource_group global_rg {
+      label = "RG - Global";
+      region = "eastus";
+      in_subscription = global_sub;
+    }
+    resource_group stamp_east_rg {
+      label = "RG - Stamp East";
+      region = "eastus";
+      in_subscription = stamp_east_sub;
+    }
+    resource_group stamp_west_rg {
+      label = "RG - Stamp West";
+      region = "westus2";
+      in_subscription = stamp_west_sub;
+    }
+
+    // ── Stamp networking ───────────────────────────────────────────
+    network stamp_east_vnet {
+      label = "Stamp East VNet";
+      region = "eastus";
+      kind = "networks.dedicated_network";
+      cidr = "10.240.0.0/16";
+      in = microsoft_tech.azure;
+      in_subscription = stamp_east_sub;
+    }
+    subnet aks_east_subnet {
+      label = "AKS Subnet (East)";
+      cidr = "10.240.0.0/22";
+      parent = stamp_east_vnet;
+    }
+    subnet ilb_east_subnet {
+      label = "Internal LB Subnet (East)";
+      cidr = "10.240.4.0/24";
+      parent = stamp_east_vnet;
+    }
+    subnet pe_east_subnet {
+      label = "Private Endpoints Subnet (East)";
+      cidr = "10.240.5.0/24";
+      parent = stamp_east_vnet;
+    }
+
+    network stamp_west_vnet {
+      label = "Stamp West VNet";
+      region = "westus2";
+      kind = "networks.dedicated_network";
+      cidr = "10.241.0.0/16";
+      in = microsoft_tech.azure;
+      in_subscription = stamp_west_sub;
+    }
+    subnet aks_west_subnet {
+      label = "AKS Subnet (West)";
+      cidr = "10.241.0.0/22";
+      parent = stamp_west_vnet;
+    }
+    subnet ilb_west_subnet {
+      label = "Internal LB Subnet (West)";
+      cidr = "10.241.4.0/24";
+      parent = stamp_west_vnet;
+    }
+    subnet pe_west_subnet {
+      label = "Private Endpoints Subnet (West)";
+      cidr = "10.241.5.0/24";
+      parent = stamp_west_vnet;
+    }
+
+    // ── Environments ───────────────────────────────────────────────
+    environment global_prod {
+      label = "Global Production";
+      kind = "environments.azure_subscription_env";
+      lifecycle = "lifecycle_stages.prod";
+      region = "eastus";
+      in_tenant = contoso_tenant;
+      in_subscription = global_sub;
+      resource_groups = global_rg;
+    }
+    environment stamp_east_prod {
+      label = "Stamp East Production";
+      kind = "environments.azure_subscription_env";
+      lifecycle = "lifecycle_stages.prod";
+      region = "eastus";
+      in_tenant = contoso_tenant;
+      in_subscription = stamp_east_sub;
+      resource_groups = stamp_east_rg;
+    }
+    environment stamp_west_prod {
+      label = "Stamp West Production";
+      kind = "environments.azure_subscription_env";
+      lifecycle = "lifecycle_stages.prod";
+      region = "westus2";
+      in_tenant = contoso_tenant;
+      in_subscription = stamp_west_sub;
+      resource_groups = stamp_west_rg;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // GLOBAL COMPONENTS
+    // ═══════════════════════════════════════════════════════════════
+
+    component front_door {
+      label = "Azure Front Door + WAF";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_front_door;
+      slots = front_door_prod;
+    }
+    slot front_door_prod {
+      label = "Global";
+      environment = global_prod;
+      in_resource_group = global_rg;
+      public_ingress = ingresses.public_internet;
+    }
+
+    component cosmos_db {
+      label = "Cosmos DB (multi-region write)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_cosmos_db;
+      slots = cosmos_db_prod;
+    }
+    slot cosmos_db_prod {
+      label = "Global";
+      environment = global_prod;
+      in_resource_group = global_rg;
+    }
+
+    component container_registry {
+      label = "Azure Container Registry";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_container_registry;
+      slots = container_registry_prod;
+    }
+    slot container_registry_prod {
+      label = "Global";
+      environment = global_prod;
+      in_resource_group = global_rg;
+    }
+    component global_key_vault {
+      label = "Global Key Vault";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_key_vault;
+      slots = global_key_vault_prod;
+    }
+    slot global_key_vault_prod {
+      label = "Global";
+      environment = global_prod;
+      in_resource_group = global_rg;
+    }
+
+    component log_analytics {
+      label = "Log Analytics (Global)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_monitor;
+      slots = log_analytics_prod;
+    }
+    slot log_analytics_prod {
+      label = "Global";
+      environment = global_prod;
+      in_resource_group = global_rg;
+    }
+
+    component entra_id {
+      label = "Microsoft Entra ID";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.microsoft_entra_id;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // STAMP: EAST US
+    // ═══════════════════════════════════════════════════════════════
+
+    component aks_east {
+      label = "AKS Cluster (East)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_kubernetes_service;
+      slots = aks_east_prod;
+    }
+    slot aks_east_prod {
+      label = "Production";
+      environment = stamp_east_prod;
+      in_resource_group = stamp_east_rg;
+      in_subnet = aks_east_subnet;
+    }
+
+    component ilb_east {
+      label = "Internal Load Balancer (East)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.load_balancer;
+      slots = ilb_east_prod;
+    }
+    slot ilb_east_prod {
+      label = "Production";
+      environment = stamp_east_prod;
+      in_resource_group = stamp_east_rg;
+      in_subnet = ilb_east_subnet;
+    }
+
+    component event_hubs_east {
+      label = "Event Hubs (East)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.event_hubs;
+      slots = event_hubs_east_prod;
+    }
+    slot event_hubs_east_prod {
+      label = "Production";
+      environment = stamp_east_prod;
+      in_resource_group = stamp_east_rg;
+    }
+
+    component blob_storage_east {
+      label = "Blob Storage (East)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_blob_storage;
+      slots = blob_storage_east_prod;
+    }
+    slot blob_storage_east_prod {
+      label = "Production";
+      environment = stamp_east_prod;
+      in_resource_group = stamp_east_rg;
+    }
+
+    component stamp_east_key_vault {
+      label = "Stamp Key Vault (East)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_key_vault;
+      slots = stamp_east_key_vault_prod;
+    }
+    slot stamp_east_key_vault_prod {
+      label = "Production";
+      environment = stamp_east_prod;
+      in_resource_group = stamp_east_rg;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // STAMP: WEST US 2
+    // ═══════════════════════════════════════════════════════════════
+
+    component aks_west {
+      label = "AKS Cluster (West)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_kubernetes_service;
+      slots = aks_west_prod;
+    }
+    slot aks_west_prod {
+      label = "Production";
+      environment = stamp_west_prod;
+      in_resource_group = stamp_west_rg;
+      in_subnet = aks_west_subnet;
+    }
+
+    component ilb_west {
+      label = "Internal Load Balancer (West)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.load_balancer;
+      slots = ilb_west_prod;
+    }
+    slot ilb_west_prod {
+      label = "Production";
+      environment = stamp_west_prod;
+      in_resource_group = stamp_west_rg;
+      in_subnet = ilb_west_subnet;
+    }
+
+    component event_hubs_west {
+      label = "Event Hubs (West)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.event_hubs;
+      slots = event_hubs_west_prod;
+    }
+    slot event_hubs_west_prod {
+      label = "Production";
+      environment = stamp_west_prod;
+      in_resource_group = stamp_west_rg;
+    }
+
+    component blob_storage_west {
+      label = "Blob Storage (West)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_blob_storage;
+      slots = blob_storage_west_prod;
+    }
+    slot blob_storage_west_prod {
+      label = "Production";
+      environment = stamp_west_prod;
+      in_resource_group = stamp_west_rg;
+    }
+
+    component stamp_west_key_vault {
+      label = "Stamp Key Vault (West)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_key_vault;
+      slots = stamp_west_key_vault_prod;
+    }
+    slot stamp_west_key_vault_prod {
+      label = "Production";
+      environment = stamp_west_prod;
+      in_resource_group = stamp_west_rg;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // SCENARIOS
+    // ═══════════════════════════════════════════════════════════════
+
+    scenario user_request_primary {
+      label = "User Request (primary stamp: East)";
+      outcome = "HTTPS response served by East US stamp; Cosmos DB read/write completes";
+      sequences = sequence {
+        id = "user_via_front_door_east";
+        entry_point = end_user;
+        steps = [
+          end_user ==> front_door,
+          front_door ==> ilb_east,
+          ilb_east ==> aks_east,
+          aks_east ==> stamp_east_key_vault,
+          aks_east ==> cosmos_db,
+          aks_east ==> event_hubs_east,
+          aks_east ==> blob_storage_east
+        ];
+      };
+    }
+
+    scenario regional_failover {
+      label = "Regional Failover (East degraded → West)";
+      outcome = "Front Door health probes shift traffic to the West stamp; Cosmos DB continues to serve writes";
+      sequences = sequence {
+        id = "user_via_front_door_west";
+        entry_point = end_user;
+        steps = [
+          end_user ==> front_door,
+          front_door ==> ilb_west,
+          ilb_west ==> aks_west,
+          aks_west ==> stamp_west_key_vault,
+          aks_west ==> cosmos_db
+        ];
+      };
+    }
+
+    scenario operator_deployment {
+      label = "Operator deploys a new container image";
+      outcome = "New image is pushed to ACR and rolled out to both AKS stamps";
+      sequences = sequence {
+        id = "operator_push_and_rollout";
+        entry_point = operator;
+        steps = [
+          operator ==> entra_id,
+          operator ==> container_registry,
+          container_registry ==> aks_east,
+          container_registry ==> aks_west
+        ];
+      };
+    }
+  }
+}

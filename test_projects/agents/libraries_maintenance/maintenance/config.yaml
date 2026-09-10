@@ -1,0 +1,21 @@
+# Per-library agent configuration. Hand-authored. Tracked in git.
+#
+# - seeds:           crawler entry URLs. Used by tech-library-crawler when no
+#                    --seed flag is passed on the command line.
+# - icon-fallback-dir: optional local directory of brand icons consulted first
+#                    in the enricher's icon-resolution ladder. Used by
+#                    tech-library-enricher when no --icon-dir flag is passed.
+#                    Absolute path or repo-relative.
+
+seeds:
+  # Google Cloud Platform — full product catalogue + docs hub
+  - https://cloud.google.com/products
+  - https://cloud.google.com/docs
+  # Google Workspace
+  - https://workspace.google.com/products/
+  # Google AI / Gemini developer surfaces
+  - https://ai.google.dev/
+  # Firebase (developer platform, separate hub from GCP)
+  - https://firebase.google.com/products
+
+icon-fallback-dir: C:/Users/Eugene/Projects/architecture-agent/technology_library/google/maintenance/icons-fallback

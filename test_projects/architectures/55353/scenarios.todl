@@ -1,0 +1,11 @@
+// Scenarios viewpoint stub. The scenarios themselves are authored on
+// `landscape.todl` alongside the components they reference. This file
+// exists so the Scenarios viewpoint has a project-level model to open.
+namespace mission_critical_baseline.models
+{
+  import libraries.microsoft;
+  import tech_architecture;
+
+  model missionCriticalBaselineScenariosModel : libraries.microsoft uses microsoft_tech conforms Scenarios {
+  }
+}

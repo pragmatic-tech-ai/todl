@@ -1,0 +1,284 @@
+namespace test_waf_architectures.models
+{
+  import libraries.microsoft;
+  import tech_architecture;
+  model test_waf_architecturesModelsModel : libraries.microsoft uses categories, ingresses, microsoft_tech conforms Model {
+    technology sus_azure_log_analytics {
+      label = "Log Analytics";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology sus_azure_application_insights {
+      label = "Application Insights";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    actor sus_global_user {
+      label = "Global User";
+    }
+    actor sus_operator {
+      label = "Operator";
+    }
+    tenant sus_contoso_tenant {
+      label = "Contoso Entra Tenant";
+      region = "eastus";
+      in = microsoft_tech.azure;
+    }
+    subscription sus_connectivity_sub {
+      label = "Connectivity Subscription";
+      region = "eastus";
+      in = microsoft_tech.azure;
+      in_tenant = sus_contoso_tenant;
+    }
+    subscription sus_workload_sub {
+      label = "Sustainable Workload Subscription";
+      region = "eastus";
+      in = microsoft_tech.azure;
+      in_tenant = sus_contoso_tenant;
+    }
+    resource_group sus_hub_rg {
+      label = "RG - Hub Connectivity";
+      region = "eastus";
+      in_subscription = sus_connectivity_sub;
+    }
+    resource_group sus_workload_rg {
+      label = "RG - Sustainable Workload";
+      region = "eastus";
+      in_subscription = sus_workload_sub;
+    }
+    resource_group sus_platform_rg {
+      label = "RG - Platform Shared";
+      region = "eastus";
+      in_subscription = sus_connectivity_sub;
+    }
+    network sus_hub_vnet {
+      label = "Hub VNet";
+      region = "eastus";
+      kind = "networks.dedicated_network";
+      cidr = "10.0.0.0/22";
+      in = microsoft_tech.azure;
+      in_subscription = sus_connectivity_sub;
+    }
+    subnet sus_fw_subnet {
+      label = "AzureFirewallSubnet";
+      cidr = "10.0.0.0/26";
+      parent = sus_hub_vnet;
+    }
+    subnet sus_shared_services_subnet {
+      label = "Shared Services Subnet";
+      cidr = "10.0.1.0/24";
+      parent = sus_hub_vnet;
+    }
+    network sus_spoke_vnet {
+      label = "Sustainable Workload Spoke VNet";
+      region = "eastus";
+      kind = "networks.dedicated_network";
+      cidr = "10.10.0.0/20";
+      in = microsoft_tech.azure;
+      in_subscription = sus_workload_sub;
+    }
+    subnet sus_appgw_subnet {
+      label = "App Gateway Subnet";
+      cidr = "10.10.0.0/24";
+      parent = sus_spoke_vnet;
+    }
+    subnet sus_frontend_subnet {
+      label = "Frontend Subnet (autoscale)";
+      cidr = "10.10.1.0/24";
+      parent = sus_spoke_vnet;
+    }
+    subnet sus_backend_subnet {
+      label = "Backend Subnet (spot batch tier)";
+      cidr = "10.10.2.0/24";
+      parent = sus_spoke_vnet;
+    }
+    subnet sus_pe_subnet {
+      label = "Private Endpoints Subnet";
+      cidr = "10.10.3.0/24";
+      parent = sus_spoke_vnet;
+    }
+    environment sus_hub_prod {
+      label = "Hub Production";
+      kind = "environments.azure_subscription_env";
+      lifecycle = "lifecycle_stages.prod";
+      region = "eastus";
+      in_tenant = sus_contoso_tenant;
+      in_subscription = sus_connectivity_sub;
+      resource_groups = [sus_hub_rg, sus_platform_rg];
+    }
+    environment sus_workload_prod {
+      label = "Sustainable Workload Production (low-carbon region)";
+      kind = "environments.azure_subscription_env";
+      lifecycle = "lifecycle_stages.prod";
+      region = "eastus";
+      in_tenant = sus_contoso_tenant;
+      in_subscription = sus_workload_sub;
+      resource_groups = sus_workload_rg;
+    }
+    component sus_front_door {
+      label = "Azure Front Door (WAF, caching enabled)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_front_door;
+      slots = sus_front_door_prod;
+    }
+    slot sus_front_door_prod {
+      label = "Production";
+      environment = sus_workload_prod;
+      in_resource_group = sus_workload_rg;
+      public_ingress = ingresses.public_internet;
+    }
+    component sus_app_gateway {
+      label = "Application Gateway + WAF";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.application_gateway;
+      slots = sus_app_gateway_prod;
+    }
+    slot sus_app_gateway_prod {
+      label = "Production";
+      environment = sus_workload_prod;
+      in_resource_group = sus_workload_rg;
+      in_subnet = sus_appgw_subnet;
+    }
+    component sus_azure_firewall_hub {
+      label = "Azure Firewall (hub)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_firewall;
+      slots = sus_azure_firewall_hub_prod;
+    }
+    slot sus_azure_firewall_hub_prod {
+      label = "Production";
+      environment = sus_hub_prod;
+      in_resource_group = sus_hub_rg;
+      in_subnet = sus_fw_subnet;
+    }
+    component sus_frontend_vmss {
+      label = "Frontend VMSS (autoscale 1-10, right-sized SKU)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.virtual_machine_scale_sets;
+      slots = sus_frontend_vmss_prod;
+    }
+    slot sus_frontend_vmss_prod {
+      label = "Production";
+      environment = sus_workload_prod;
+      in_resource_group = sus_workload_rg;
+      in_subnet = sus_frontend_subnet;
+    }
+    component sus_batch_vmss_spot {
+      label = "Batch VMSS on Spot (interruptible)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.virtual_machine_scale_sets;
+      slots = sus_batch_vmss_spot_prod;
+    }
+    slot sus_batch_vmss_spot_prod {
+      label = "Production";
+      environment = sus_workload_prod;
+      in_resource_group = sus_workload_rg;
+      in_subnet = sus_backend_subnet;
+    }
+    component sus_azure_sql {
+      label = "Azure SQL Database (serverless, auto-pause)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_sql_database;
+      slots = sus_azure_sql_prod;
+    }
+    slot sus_azure_sql_prod {
+      label = "Production";
+      environment = sus_workload_prod;
+      in_resource_group = sus_workload_rg;
+    }
+    component sus_sql_private_link {
+      label = "SQL Private Link";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_private_link;
+      slots = sus_sql_private_link_prod;
+    }
+    slot sus_sql_private_link_prod {
+      label = "Production";
+      environment = sus_workload_prod;
+      in_resource_group = sus_workload_rg;
+      in_subnet = sus_pe_subnet;
+    }
+    component sus_archive_blob {
+      label = "Archive Blob (cool tier)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_blob_storage;
+      slots = sus_archive_blob_prod;
+    }
+    slot sus_archive_blob_prod {
+      label = "Production";
+      environment = sus_workload_prod;
+      in_resource_group = sus_workload_rg;
+    }
+    component sus_blob_private_link {
+      label = "Blob Private Link";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_private_link;
+      slots = sus_blob_private_link_prod;
+    }
+    slot sus_blob_private_link_prod {
+      label = "Production";
+      environment = sus_workload_prod;
+      in_resource_group = sus_workload_rg;
+      in_subnet = sus_pe_subnet;
+    }
+    component sus_entra_id {
+      label = "Microsoft Entra ID";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.microsoft_entra_id;
+    }
+    component sus_azure_dns {
+      label = "Azure DNS (private zones)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_dns;
+    }
+    component sus_app_insights {
+      label = "Application Insights (sampling enabled)";
+      in = microsoft_tech.azure;
+      implemented_by = sus_azure_application_insights;
+      slots = sus_app_insights_prod;
+    }
+    slot sus_app_insights_prod {
+      label = "Production";
+      environment = sus_workload_prod;
+      in_resource_group = sus_platform_rg;
+    }
+    component sus_log_analytics_ws {
+      label = "Log Analytics Workspace (30-day retention)";
+      in = microsoft_tech.azure;
+      implemented_by = sus_azure_log_analytics;
+      slots = sus_log_analytics_ws_prod;
+    }
+    slot sus_log_analytics_ws_prod {
+      label = "Production";
+      environment = sus_hub_prod;
+      in_resource_group = sus_platform_rg;
+    }
+    scenario sus_low_carbon_request {
+      label = "Low-Carbon Region Request";
+      outcome = "HTTPS request served from the frontend VMSS in a region chosen for low grid carbon intensity, with response cached at Front Door to avoid redundant compute";
+      sequences = sequence {
+        id = "user_to_sql_low_carbon";
+        entry_point = sus_global_user;
+        steps = [sus_global_user ==> sus_front_door, sus_front_door ==> sus_app_gateway, sus_app_gateway ==> sus_frontend_vmss, sus_frontend_vmss ==> sus_sql_private_link, sus_sql_private_link ==> sus_azure_sql];
+      };
+    }
+    scenario sus_spot_batch_job {
+      label = "Spot Batch Job";
+      outcome = "A deferrable batch job runs on interruptible spot capacity, writing results to cool-tier archival storage";
+      sequences = sequence {
+        id = "batch_to_archive";
+        entry_point = sus_batch_vmss_spot;
+        steps = [sus_batch_vmss_spot ==> sus_blob_private_link, sus_blob_private_link ==> sus_archive_blob];
+      };
+    }
+    scenario sus_sampled_telemetry {
+      label = "Sampled Telemetry";
+      outcome = "Application telemetry is sampled at ingest to reduce log volume, then routed to a workspace with a short retention policy";
+      sequences = sequence {
+        id = "telemetry_sampled";
+        entry_point = sus_frontend_vmss;
+        steps = [sus_frontend_vmss ==> sus_app_insights, sus_app_insights ==> sus_log_analytics_ws];
+      };
+    }
+  }
+}

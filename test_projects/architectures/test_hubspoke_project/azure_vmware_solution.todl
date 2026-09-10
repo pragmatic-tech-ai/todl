@@ -1,0 +1,327 @@
+namespace test_waf_architectures.models
+{
+  import libraries.microsoft;
+  import tech_architecture;
+  model test_waf_architecturesModelsModel : libraries.microsoft uses categories, microsoft_tech conforms Model {
+    technology avs_avs_private_cloud {
+      label = "Azure VMware Solution Private Cloud (SDDC)";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology avs_vsan {
+      label = "vSAN Datastore";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology avs_nsx_t_edge {
+      label = "NSX-T Edge";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology avs_hcx_manager {
+      label = "HCX Manager";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology avs_srm {
+      label = "VMware Site Recovery Manager (SRM)";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology avs_expressroute_global_reach {
+      label = "ExpressRoute Global Reach";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology avs_azure_bastion {
+      label = "Azure Bastion";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology avs_azure_log_analytics {
+      label = "Log Analytics";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology avs_azure_application_insights {
+      label = "Application Insights";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    actor avs_vsphere_admin {
+      label = "vSphere Administrator";
+    }
+    actor avs_on_prem_workload {
+      label = "On-Premises Workload";
+    }
+    tenant avs_contoso_tenant {
+      label = "Contoso Entra Tenant";
+      region = "eastus";
+      in = microsoft_tech.azure;
+    }
+    subscription avs_connectivity_sub {
+      label = "Connectivity Subscription";
+      region = "eastus";
+      in = microsoft_tech.azure;
+      in_tenant = avs_contoso_tenant;
+    }
+    subscription avs_workload_sub {
+      label = "AVS Workload Subscription";
+      region = "eastus";
+      in = microsoft_tech.azure;
+      in_tenant = avs_contoso_tenant;
+    }
+    resource_group avs_hub_rg {
+      label = "RG - Hub Connectivity";
+      region = "eastus";
+      in_subscription = avs_connectivity_sub;
+    }
+    resource_group avs_platform_rg {
+      label = "RG - Platform Shared";
+      region = "eastus";
+      in_subscription = avs_connectivity_sub;
+    }
+    resource_group avs_workload_rg {
+      label = "RG - AVS Workload";
+      region = "eastus";
+      in_subscription = avs_workload_sub;
+    }
+    network avs_hub_vnet {
+      label = "Hub VNet";
+      region = "eastus";
+      kind = "networks.dedicated_network";
+      cidr = "10.0.0.0/22";
+      in = microsoft_tech.azure;
+      in_subscription = avs_connectivity_sub;
+    }
+    subnet avs_fw_subnet {
+      label = "AzureFirewallSubnet";
+      cidr = "10.0.0.0/26";
+      parent = avs_hub_vnet;
+    }
+    subnet avs_bastion_subnet {
+      label = "AzureBastionSubnet";
+      cidr = "10.0.0.64/26";
+      parent = avs_hub_vnet;
+    }
+    subnet avs_shared_services_subnet {
+      label = "Shared Services Subnet";
+      cidr = "10.0.1.0/24";
+      parent = avs_hub_vnet;
+    }
+    subnet avs_ergw_subnet {
+      label = "GatewaySubnet (ExpressRoute)";
+      cidr = "10.0.2.0/27";
+      parent = avs_hub_vnet;
+    }
+    network avs_management_vnet {
+      label = "AVS Management VNet";
+      region = "eastus";
+      kind = "networks.dedicated_network";
+      cidr = "10.110.0.0/22";
+      in = microsoft_tech.azure;
+      in_subscription = avs_workload_sub;
+    }
+    subnet avs_mgmt_subnet {
+      label = "AVS Management Subnet";
+      cidr = "10.110.0.0/24";
+      parent = avs_management_vnet;
+    }
+    subnet avs_pe_subnet {
+      label = "Private Endpoints Subnet";
+      cidr = "10.110.1.0/24";
+      parent = avs_management_vnet;
+    }
+    environment avs_hub_prod {
+      label = "Hub Production";
+      kind = "environments.azure_subscription_env";
+      lifecycle = "lifecycle_stages.prod";
+      region = "eastus";
+      in_tenant = avs_contoso_tenant;
+      in_subscription = avs_connectivity_sub;
+      resource_groups = [avs_hub_rg, avs_platform_rg];
+    }
+    environment avs_prod {
+      label = "AVS Production";
+      kind = "environments.azure_subscription_env";
+      lifecycle = "lifecycle_stages.prod";
+      region = "eastus";
+      in_tenant = avs_contoso_tenant;
+      in_subscription = avs_workload_sub;
+      resource_groups = avs_workload_rg;
+    }
+    component avs_avs_private_cloud_comp {
+      label = "Azure VMware Solution Private Cloud";
+      in = microsoft_tech.azure;
+      implemented_by = avs_avs_private_cloud;
+      slots = avs_avs_private_cloud_comp_prod;
+    }
+    slot avs_avs_private_cloud_comp_prod {
+      label = "Production";
+      environment = avs_prod;
+      in_resource_group = avs_workload_rg;
+    }
+    component avs_vsan_datastore {
+      label = "vSAN Datastore";
+      in = microsoft_tech.azure;
+      implemented_by = avs_vsan;
+      slots = avs_vsan_datastore_prod;
+    }
+    slot avs_vsan_datastore_prod {
+      label = "Production";
+      environment = avs_prod;
+      in_resource_group = avs_workload_rg;
+    }
+    component avs_nsx_t_edge_comp {
+      label = "NSX-T Edge";
+      in = microsoft_tech.azure;
+      implemented_by = avs_nsx_t_edge;
+      slots = avs_nsx_t_edge_comp_prod;
+    }
+    slot avs_nsx_t_edge_comp_prod {
+      label = "Production";
+      environment = avs_prod;
+      in_resource_group = avs_workload_rg;
+    }
+    component avs_hcx_manager_comp {
+      label = "HCX Manager";
+      in = microsoft_tech.azure;
+      implemented_by = avs_hcx_manager;
+      slots = avs_hcx_manager_comp_prod;
+    }
+    slot avs_hcx_manager_comp_prod {
+      label = "Production";
+      environment = avs_prod;
+      in_resource_group = avs_workload_rg;
+      in_subnet = avs_mgmt_subnet;
+    }
+    component avs_srm_comp {
+      label = "Site Recovery Manager (SRM)";
+      in = microsoft_tech.azure;
+      implemented_by = avs_srm;
+      slots = avs_srm_comp_prod;
+    }
+    slot avs_srm_comp_prod {
+      label = "Production";
+      environment = avs_prod;
+      in_resource_group = avs_workload_rg;
+    }
+    component avs_expressroute_global_reach_comp {
+      label = "ExpressRoute Global Reach";
+      in = microsoft_tech.azure;
+      implemented_by = avs_expressroute_global_reach;
+      slots = avs_expressroute_global_reach_comp_prod;
+    }
+    slot avs_expressroute_global_reach_comp_prod {
+      label = "Production";
+      environment = avs_hub_prod;
+      in_resource_group = avs_hub_rg;
+    }
+    component avs_azure_firewall_hub {
+      label = "Azure Firewall (hub)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_firewall;
+      slots = avs_azure_firewall_hub_prod;
+    }
+    slot avs_azure_firewall_hub_prod {
+      label = "Production";
+      environment = avs_hub_prod;
+      in_resource_group = avs_hub_rg;
+      in_subnet = avs_fw_subnet;
+    }
+    component avs_bastion {
+      label = "Azure Bastion";
+      in = microsoft_tech.azure;
+      implemented_by = avs_azure_bastion;
+      slots = avs_bastion_prod;
+    }
+    slot avs_bastion_prod {
+      label = "Production";
+      environment = avs_hub_prod;
+      in_resource_group = avs_hub_rg;
+      in_subnet = avs_bastion_subnet;
+    }
+    component avs_key_vault {
+      label = "Key Vault";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_key_vault;
+      slots = avs_key_vault_prod;
+    }
+    slot avs_key_vault_prod {
+      label = "Production";
+      environment = avs_prod;
+      in_resource_group = avs_workload_rg;
+    }
+    component avs_key_vault_pl {
+      label = "Key Vault Private Link";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_private_link;
+      slots = avs_key_vault_pl_prod;
+    }
+    slot avs_key_vault_pl_prod {
+      label = "Production";
+      environment = avs_prod;
+      in_resource_group = avs_workload_rg;
+      in_subnet = avs_pe_subnet;
+    }
+    component avs_entra_id {
+      label = "Microsoft Entra ID";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.microsoft_entra_id;
+    }
+    component avs_azure_dns {
+      label = "Azure DNS (private zones)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_dns;
+    }
+    component avs_app_insights {
+      label = "Application Insights";
+      in = microsoft_tech.azure;
+      implemented_by = avs_azure_application_insights;
+      slots = avs_app_insights_prod;
+    }
+    slot avs_app_insights_prod {
+      label = "Production";
+      environment = avs_prod;
+      in_resource_group = avs_platform_rg;
+    }
+    component avs_log_analytics_ws {
+      label = "Log Analytics Workspace";
+      in = microsoft_tech.azure;
+      implemented_by = avs_azure_log_analytics;
+      slots = avs_log_analytics_ws_prod;
+    }
+    slot avs_log_analytics_ws_prod {
+      label = "Production";
+      environment = avs_hub_prod;
+      in_resource_group = avs_platform_rg;
+    }
+    scenario avs_hcx_migration {
+      label = "On-Prem to AVS Migration via HCX";
+      outcome = "An on-premises VMware workload is migrated into the AVS private cloud through HCX, landing on vSAN storage";
+      sequences = sequence {
+        id = "hcx_migration";
+        entry_point = avs_on_prem_workload;
+        steps = [avs_on_prem_workload ==> avs_hcx_manager_comp, avs_hcx_manager_comp ==> avs_avs_private_cloud_comp, avs_avs_private_cloud_comp ==> avs_vsan_datastore];
+      };
+    }
+    scenario avs_egress_via_hub_firewall {
+      label = "AVS VM Egress via Hub Firewall";
+      outcome = "An AVS-hosted VM egresses through NSX-T Edge and is inspected by the hub Azure Firewall before leaving the environment";
+      sequences = sequence {
+        id = "avs_egress";
+        entry_point = avs_avs_private_cloud_comp;
+        steps = [avs_avs_private_cloud_comp ==> avs_nsx_t_edge_comp, avs_nsx_t_edge_comp ==> avs_azure_firewall_hub];
+      };
+    }
+    scenario avs_srm_dr {
+      label = "ExpressRoute Global Reach Connectivity + SRM DR";
+      outcome = "An administrator initiates a Site Recovery Manager DR operation against the AVS private cloud, with cross-region connectivity provided by ExpressRoute Global Reach at the tenant scope";
+      sequences = sequence {
+        id = "srm_dr";
+        entry_point = avs_vsphere_admin;
+        steps = [avs_vsphere_admin ==> avs_bastion, avs_bastion ==> avs_srm_comp, avs_srm_comp ==> avs_avs_private_cloud_comp];
+      };
+    }
+  }
+}

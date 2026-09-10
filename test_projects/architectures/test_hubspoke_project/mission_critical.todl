@@ -1,0 +1,562 @@
+namespace test_waf_architectures.models
+{
+  import libraries.microsoft;
+  import tech_architecture;
+  model test_waf_architecturesModelsModel : libraries.microsoft uses categories, ingresses, microsoft_tech conforms Model {
+    technology mc_traffic_manager {
+      label = "Azure Traffic Manager";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology mc_cosmos_db_multi_region {
+      label = "Azure Cosmos DB (multi-region writes)";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology mc_event_hubs {
+      label = "Azure Event Hubs";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology mc_aks {
+      label = "Azure Kubernetes Service";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology mc_chaos_studio {
+      label = "Azure Chaos Studio";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology mc_azure_bastion {
+      label = "Azure Bastion";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology mc_azure_log_analytics {
+      label = "Log Analytics";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology mc_azure_application_insights {
+      label = "Application Insights";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    actor mc_global_user {
+      label = "Global User";
+    }
+    actor mc_operator {
+      label = "Mission-Critical Operator";
+    }
+    tenant mc_contoso_tenant {
+      label = "Contoso Entra Tenant";
+      region = "eastus";
+      in = microsoft_tech.azure;
+    }
+    subscription mc_connectivity_sub_east {
+      label = "Connectivity Subscription (East)";
+      region = "eastus";
+      in = microsoft_tech.azure;
+      in_tenant = mc_contoso_tenant;
+    }
+    subscription mc_connectivity_sub_west {
+      label = "Connectivity Subscription (West)";
+      region = "westus2";
+      in = microsoft_tech.azure;
+      in_tenant = mc_contoso_tenant;
+    }
+    subscription mc_workload_sub_east {
+      label = "Mission-Critical Workload Subscription (East)";
+      region = "eastus";
+      in = microsoft_tech.azure;
+      in_tenant = mc_contoso_tenant;
+    }
+    subscription mc_workload_sub_west {
+      label = "Mission-Critical Workload Subscription (West)";
+      region = "westus2";
+      in = microsoft_tech.azure;
+      in_tenant = mc_contoso_tenant;
+    }
+    resource_group mc_hub_rg_east {
+      label = "RG - Hub Connectivity (East)";
+      region = "eastus";
+      in_subscription = mc_connectivity_sub_east;
+    }
+    resource_group mc_hub_rg_west {
+      label = "RG - Hub Connectivity (West)";
+      region = "westus2";
+      in_subscription = mc_connectivity_sub_west;
+    }
+    resource_group mc_workload_rg_east {
+      label = "RG - Mission-Critical Workload (East)";
+      region = "eastus";
+      in_subscription = mc_workload_sub_east;
+    }
+    resource_group mc_workload_rg_west {
+      label = "RG - Mission-Critical Workload (West)";
+      region = "westus2";
+      in_subscription = mc_workload_sub_west;
+    }
+    resource_group mc_platform_rg {
+      label = "RG - Platform Shared";
+      region = "eastus";
+      in_subscription = mc_connectivity_sub_east;
+    }
+    network mc_hub_vnet_east {
+      label = "Hub VNet (East)";
+      region = "eastus";
+      kind = "networks.dedicated_network";
+      cidr = "10.0.0.0/22";
+      in = microsoft_tech.azure;
+      in_subscription = mc_connectivity_sub_east;
+    }
+    subnet mc_fw_subnet_east {
+      label = "AzureFirewallSubnet (East)";
+      cidr = "10.0.0.0/26";
+      parent = mc_hub_vnet_east;
+    }
+    subnet mc_bastion_subnet_east {
+      label = "AzureBastionSubnet (East)";
+      cidr = "10.0.0.64/26";
+      parent = mc_hub_vnet_east;
+    }
+    subnet mc_shared_services_subnet_east {
+      label = "Shared Services Subnet (East)";
+      cidr = "10.0.1.0/24";
+      parent = mc_hub_vnet_east;
+    }
+    network mc_hub_vnet_west {
+      label = "Hub VNet (West)";
+      region = "westus2";
+      kind = "networks.dedicated_network";
+      cidr = "10.1.0.0/22";
+      in = microsoft_tech.azure;
+      in_subscription = mc_connectivity_sub_west;
+    }
+    subnet mc_fw_subnet_west {
+      label = "AzureFirewallSubnet (West)";
+      cidr = "10.1.0.0/26";
+      parent = mc_hub_vnet_west;
+    }
+    subnet mc_bastion_subnet_west {
+      label = "AzureBastionSubnet (West)";
+      cidr = "10.1.0.64/26";
+      parent = mc_hub_vnet_west;
+    }
+    subnet mc_shared_services_subnet_west {
+      label = "Shared Services Subnet (West)";
+      cidr = "10.1.1.0/24";
+      parent = mc_hub_vnet_west;
+    }
+    network mc_spoke_vnet_east {
+      label = "Mission-Critical Spoke VNet (East)";
+      region = "eastus";
+      kind = "networks.dedicated_network";
+      cidr = "10.10.0.0/20";
+      in = microsoft_tech.azure;
+      in_subscription = mc_workload_sub_east;
+    }
+    subnet mc_appgw_subnet_east {
+      label = "App Gateway Subnet (East)";
+      cidr = "10.10.0.0/24";
+      parent = mc_spoke_vnet_east;
+    }
+    subnet mc_aks_subnet_east {
+      label = "AKS Subnet (East)";
+      cidr = "10.10.1.0/24";
+      parent = mc_spoke_vnet_east;
+    }
+    subnet mc_pe_subnet_east {
+      label = "Private Endpoints Subnet (East)";
+      cidr = "10.10.2.0/24";
+      parent = mc_spoke_vnet_east;
+    }
+    network mc_spoke_vnet_west {
+      label = "Mission-Critical Spoke VNet (West)";
+      region = "westus2";
+      kind = "networks.dedicated_network";
+      cidr = "10.11.0.0/20";
+      in = microsoft_tech.azure;
+      in_subscription = mc_workload_sub_west;
+    }
+    subnet mc_appgw_subnet_west {
+      label = "App Gateway Subnet (West)";
+      cidr = "10.11.0.0/24";
+      parent = mc_spoke_vnet_west;
+    }
+    subnet mc_aks_subnet_west {
+      label = "AKS Subnet (West)";
+      cidr = "10.11.1.0/24";
+      parent = mc_spoke_vnet_west;
+    }
+    subnet mc_pe_subnet_west {
+      label = "Private Endpoints Subnet (West)";
+      cidr = "10.11.2.0/24";
+      parent = mc_spoke_vnet_west;
+    }
+    environment mc_hub_prod_east {
+      label = "Hub Production (East)";
+      kind = "environments.azure_subscription_env";
+      lifecycle = "lifecycle_stages.prod";
+      region = "eastus";
+      in_tenant = mc_contoso_tenant;
+      in_subscription = mc_connectivity_sub_east;
+      resource_groups = [mc_hub_rg_east, mc_platform_rg];
+    }
+    environment mc_hub_prod_west {
+      label = "Hub Production (West)";
+      kind = "environments.azure_subscription_env";
+      lifecycle = "lifecycle_stages.prod";
+      region = "westus2";
+      in_tenant = mc_contoso_tenant;
+      in_subscription = mc_connectivity_sub_west;
+      resource_groups = mc_hub_rg_west;
+    }
+    environment mc_workload_prod_east {
+      label = "Mission-Critical Workload Production (East)";
+      kind = "environments.azure_subscription_env";
+      lifecycle = "lifecycle_stages.prod";
+      region = "eastus";
+      in_tenant = mc_contoso_tenant;
+      in_subscription = mc_workload_sub_east;
+      resource_groups = mc_workload_rg_east;
+    }
+    environment mc_workload_prod_west {
+      label = "Mission-Critical Workload Production (West)";
+      kind = "environments.azure_subscription_env";
+      lifecycle = "lifecycle_stages.prod";
+      region = "westus2";
+      in_tenant = mc_contoso_tenant;
+      in_subscription = mc_workload_sub_west;
+      resource_groups = mc_workload_rg_west;
+    }
+    component mc_front_door {
+      label = "Azure Front Door (WAF, global)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_front_door;
+      slots = mc_front_door_prod;
+    }
+    slot mc_front_door_prod {
+      label = "Production";
+      environment = mc_workload_prod_east;
+      in_resource_group = mc_workload_rg_east;
+      public_ingress = ingresses.public_internet;
+    }
+    component mc_traffic_manager_comp {
+      label = "Azure Traffic Manager (performance routing)";
+      in = microsoft_tech.azure;
+      implemented_by = mc_traffic_manager;
+      slots = mc_traffic_manager_comp_prod;
+    }
+    slot mc_traffic_manager_comp_prod {
+      label = "Production";
+      environment = mc_workload_prod_east;
+      in_resource_group = mc_workload_rg_east;
+    }
+    component mc_app_gateway_east {
+      label = "Application Gateway + WAF (East)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.application_gateway;
+      slots = mc_app_gateway_east_prod;
+    }
+    slot mc_app_gateway_east_prod {
+      label = "Production";
+      environment = mc_workload_prod_east;
+      in_resource_group = mc_workload_rg_east;
+      in_subnet = mc_appgw_subnet_east;
+    }
+    component mc_app_gateway_west {
+      label = "Application Gateway + WAF (West)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.application_gateway;
+      slots = mc_app_gateway_west_prod;
+    }
+    slot mc_app_gateway_west_prod {
+      label = "Production";
+      environment = mc_workload_prod_west;
+      in_resource_group = mc_workload_rg_west;
+      in_subnet = mc_appgw_subnet_west;
+    }
+    component mc_aks_east {
+      label = "AKS Cluster (East, active)";
+      in = microsoft_tech.azure;
+      implemented_by = mc_aks;
+      slots = mc_aks_east_prod;
+    }
+    slot mc_aks_east_prod {
+      label = "Production";
+      environment = mc_workload_prod_east;
+      in_resource_group = mc_workload_rg_east;
+      in_subnet = mc_aks_subnet_east;
+    }
+    component mc_aks_west {
+      label = "AKS Cluster (West, active)";
+      in = microsoft_tech.azure;
+      implemented_by = mc_aks;
+      slots = mc_aks_west_prod;
+    }
+    slot mc_aks_west_prod {
+      label = "Production";
+      environment = mc_workload_prod_west;
+      in_resource_group = mc_workload_rg_west;
+      in_subnet = mc_aks_subnet_west;
+    }
+    component mc_cosmos_db_east {
+      label = "Cosmos DB (multi-region writes, East)";
+      in = microsoft_tech.azure;
+      implemented_by = mc_cosmos_db_multi_region;
+      slots = mc_cosmos_db_east_prod;
+    }
+    slot mc_cosmos_db_east_prod {
+      label = "Production";
+      environment = mc_workload_prod_east;
+      in_resource_group = mc_workload_rg_east;
+    }
+    component mc_cosmos_db_east_pl {
+      label = "Cosmos DB Private Link (East)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_private_link;
+      slots = mc_cosmos_db_east_pl_prod;
+    }
+    slot mc_cosmos_db_east_pl_prod {
+      label = "Production";
+      environment = mc_workload_prod_east;
+      in_resource_group = mc_workload_rg_east;
+      in_subnet = mc_pe_subnet_east;
+    }
+    component mc_cosmos_db_west {
+      label = "Cosmos DB (multi-region writes, West)";
+      in = microsoft_tech.azure;
+      implemented_by = mc_cosmos_db_multi_region;
+      slots = mc_cosmos_db_west_prod;
+    }
+    slot mc_cosmos_db_west_prod {
+      label = "Production";
+      environment = mc_workload_prod_west;
+      in_resource_group = mc_workload_rg_west;
+    }
+    component mc_cosmos_db_west_pl {
+      label = "Cosmos DB Private Link (West)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_private_link;
+      slots = mc_cosmos_db_west_pl_prod;
+    }
+    slot mc_cosmos_db_west_pl_prod {
+      label = "Production";
+      environment = mc_workload_prod_west;
+      in_resource_group = mc_workload_rg_west;
+      in_subnet = mc_pe_subnet_west;
+    }
+    component mc_event_hubs_east {
+      label = "Event Hubs (East)";
+      in = microsoft_tech.azure;
+      implemented_by = mc_event_hubs;
+      slots = mc_event_hubs_east_prod;
+    }
+    slot mc_event_hubs_east_prod {
+      label = "Production";
+      environment = mc_workload_prod_east;
+      in_resource_group = mc_workload_rg_east;
+    }
+    component mc_event_hubs_east_pl {
+      label = "Event Hubs Private Link (East)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_private_link;
+      slots = mc_event_hubs_east_pl_prod;
+    }
+    slot mc_event_hubs_east_pl_prod {
+      label = "Production";
+      environment = mc_workload_prod_east;
+      in_resource_group = mc_workload_rg_east;
+      in_subnet = mc_pe_subnet_east;
+    }
+    component mc_event_hubs_west {
+      label = "Event Hubs (West)";
+      in = microsoft_tech.azure;
+      implemented_by = mc_event_hubs;
+      slots = mc_event_hubs_west_prod;
+    }
+    slot mc_event_hubs_west_prod {
+      label = "Production";
+      environment = mc_workload_prod_west;
+      in_resource_group = mc_workload_rg_west;
+    }
+    component mc_event_hubs_west_pl {
+      label = "Event Hubs Private Link (West)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_private_link;
+      slots = mc_event_hubs_west_pl_prod;
+    }
+    slot mc_event_hubs_west_pl_prod {
+      label = "Production";
+      environment = mc_workload_prod_west;
+      in_resource_group = mc_workload_rg_west;
+      in_subnet = mc_pe_subnet_west;
+    }
+    component mc_key_vault_east {
+      label = "Key Vault (East)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_key_vault;
+      slots = mc_key_vault_east_prod;
+    }
+    slot mc_key_vault_east_prod {
+      label = "Production";
+      environment = mc_workload_prod_east;
+      in_resource_group = mc_workload_rg_east;
+    }
+    component mc_key_vault_east_pl {
+      label = "Key Vault Private Link (East)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_private_link;
+      slots = mc_key_vault_east_pl_prod;
+    }
+    slot mc_key_vault_east_pl_prod {
+      label = "Production";
+      environment = mc_workload_prod_east;
+      in_resource_group = mc_workload_rg_east;
+      in_subnet = mc_pe_subnet_east;
+    }
+    component mc_key_vault_west {
+      label = "Key Vault (West)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_key_vault;
+      slots = mc_key_vault_west_prod;
+    }
+    slot mc_key_vault_west_prod {
+      label = "Production";
+      environment = mc_workload_prod_west;
+      in_resource_group = mc_workload_rg_west;
+    }
+    component mc_key_vault_west_pl {
+      label = "Key Vault Private Link (West)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_private_link;
+      slots = mc_key_vault_west_pl_prod;
+    }
+    slot mc_key_vault_west_pl_prod {
+      label = "Production";
+      environment = mc_workload_prod_west;
+      in_resource_group = mc_workload_rg_west;
+      in_subnet = mc_pe_subnet_west;
+    }
+    component mc_azure_firewall_hub_east {
+      label = "Azure Firewall (hub, East)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_firewall;
+      slots = mc_azure_firewall_hub_east_prod;
+    }
+    slot mc_azure_firewall_hub_east_prod {
+      label = "Production";
+      environment = mc_hub_prod_east;
+      in_resource_group = mc_hub_rg_east;
+      in_subnet = mc_fw_subnet_east;
+    }
+    component mc_azure_firewall_hub_west {
+      label = "Azure Firewall (hub, West)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_firewall;
+      slots = mc_azure_firewall_hub_west_prod;
+    }
+    slot mc_azure_firewall_hub_west_prod {
+      label = "Production";
+      environment = mc_hub_prod_west;
+      in_resource_group = mc_hub_rg_west;
+      in_subnet = mc_fw_subnet_west;
+    }
+    component mc_bastion_east {
+      label = "Azure Bastion (East)";
+      in = microsoft_tech.azure;
+      implemented_by = mc_azure_bastion;
+      slots = mc_bastion_east_prod;
+    }
+    slot mc_bastion_east_prod {
+      label = "Production";
+      environment = mc_hub_prod_east;
+      in_resource_group = mc_hub_rg_east;
+      in_subnet = mc_bastion_subnet_east;
+    }
+    component mc_bastion_west {
+      label = "Azure Bastion (West)";
+      in = microsoft_tech.azure;
+      implemented_by = mc_azure_bastion;
+      slots = mc_bastion_west_prod;
+    }
+    slot mc_bastion_west_prod {
+      label = "Production";
+      environment = mc_hub_prod_west;
+      in_resource_group = mc_hub_rg_west;
+      in_subnet = mc_bastion_subnet_west;
+    }
+    component mc_chaos_studio_comp {
+      label = "Azure Chaos Studio";
+      in = microsoft_tech.azure;
+      implemented_by = mc_chaos_studio;
+      slots = mc_chaos_studio_comp_prod;
+    }
+    slot mc_chaos_studio_comp_prod {
+      label = "Production";
+      environment = mc_workload_prod_east;
+      in_resource_group = mc_platform_rg;
+    }
+    component mc_entra_id {
+      label = "Microsoft Entra ID";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.microsoft_entra_id;
+    }
+    component mc_azure_dns {
+      label = "Azure DNS (private zones)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_dns;
+    }
+    component mc_app_insights {
+      label = "Application Insights";
+      in = microsoft_tech.azure;
+      implemented_by = mc_azure_application_insights;
+      slots = mc_app_insights_prod;
+    }
+    slot mc_app_insights_prod {
+      label = "Production";
+      environment = mc_hub_prod_east;
+      in_resource_group = mc_platform_rg;
+    }
+    component mc_log_analytics_ws {
+      label = "Log Analytics Workspace";
+      in = microsoft_tech.azure;
+      implemented_by = mc_azure_log_analytics;
+      slots = mc_log_analytics_ws_prod;
+    }
+    slot mc_log_analytics_ws_prod {
+      label = "Production";
+      environment = mc_hub_prod_east;
+      in_resource_group = mc_platform_rg;
+    }
+    scenario mc_normal_request {
+      label = "Normal Request (East Active)";
+      outcome = "HTTPS request enters via Front Door, is routed by Traffic Manager to the East regional stamp, terminates at Application Gateway, is served by AKS, which reads/writes through the regional Cosmos DB private link";
+      sequences = sequence {
+        id = "normal_east_active";
+        entry_point = mc_global_user;
+        steps = [mc_global_user ==> mc_front_door, mc_front_door ==> mc_traffic_manager_comp, mc_traffic_manager_comp ==> mc_app_gateway_east, mc_app_gateway_east ==> mc_aks_east, mc_aks_east ==> mc_cosmos_db_east_pl, mc_cosmos_db_east_pl ==> mc_cosmos_db_east];
+      };
+    }
+    scenario mc_regional_failover_west {
+      label = "Regional Failover to West";
+      outcome = "When East is unhealthy, Traffic Manager fails over to the West stamp; requests are served end-to-end from West with Cosmos DB multi-region writes providing local write capability";
+      sequences = sequence {
+        id = "failover_to_west";
+        entry_point = mc_global_user;
+        steps = [mc_global_user ==> mc_front_door, mc_front_door ==> mc_traffic_manager_comp, mc_traffic_manager_comp ==> mc_app_gateway_west, mc_app_gateway_west ==> mc_aks_west, mc_aks_west ==> mc_cosmos_db_west_pl, mc_cosmos_db_west_pl ==> mc_cosmos_db_west];
+      };
+    }
+    scenario mc_chaos_experiment {
+      label = "Chaos Experiment";
+      outcome = "An operator uses Chaos Studio to inject a targeted fault against the East AKS cluster to validate the workload's resilience posture";
+      sequences = sequence {
+        id = "chaos_east";
+        entry_point = mc_operator;
+        steps = [mc_operator ==> mc_chaos_studio_comp, mc_chaos_studio_comp ==> mc_aks_east];
+      };
+    }
+  }
+}

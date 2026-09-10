@@ -1,0 +1,376 @@
+namespace test_waf_architectures.models
+{
+  import libraries.microsoft;
+  import tech_architecture;
+  model test_waf_architecturesModelsModel : libraries.microsoft uses categories, microsoft_tech conforms Model {
+    technology hpc_cyclecloud {
+      label = "Azure CycleCloud";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology hpc_hb_series_vm {
+      label = "HB-series VM (CPU-heavy)";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology hpc_hc_series_vm {
+      label = "HC-series VM (CFD-tuned)";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology hpc_azure_batch {
+      label = "Azure Batch";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology hpc_managed_lustre {
+      label = "Azure Managed Lustre";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology hpc_slurm_scheduler {
+      label = "Slurm Workload Manager";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology hpc_spot_vmss {
+      label = "Spot VMSS (interruptible)";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology hpc_azure_bastion {
+      label = "Azure Bastion";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.zero_trust_network_access;
+    }
+    technology hpc_azure_log_analytics {
+      label = "Log Analytics";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    technology hpc_azure_application_insights {
+      label = "Application Insights";
+      available_in = microsoft_tech.azure;
+      applicable_to = categories.observability_platform;
+    }
+    actor hpc_researcher {
+      label = "Researcher";
+    }
+    actor hpc_operator {
+      label = "HPC Operator";
+    }
+    tenant hpc_contoso_tenant {
+      label = "Contoso Entra Tenant";
+      region = "eastus";
+      in = microsoft_tech.azure;
+    }
+    subscription hpc_connectivity_sub {
+      label = "Connectivity Subscription";
+      region = "eastus";
+      in = microsoft_tech.azure;
+      in_tenant = hpc_contoso_tenant;
+    }
+    subscription hpc_workload_sub {
+      label = "HPC Workload Subscription";
+      region = "eastus";
+      in = microsoft_tech.azure;
+      in_tenant = hpc_contoso_tenant;
+    }
+    resource_group hpc_hub_rg {
+      label = "RG - Hub Connectivity";
+      region = "eastus";
+      in_subscription = hpc_connectivity_sub;
+    }
+    resource_group hpc_platform_rg {
+      label = "RG - Platform Shared";
+      region = "eastus";
+      in_subscription = hpc_connectivity_sub;
+    }
+    resource_group hpc_workload_rg {
+      label = "RG - HPC Workload";
+      region = "eastus";
+      in_subscription = hpc_workload_sub;
+    }
+    network hpc_hub_vnet {
+      label = "Hub VNet";
+      region = "eastus";
+      kind = "networks.dedicated_network";
+      cidr = "10.0.0.0/22";
+      in = microsoft_tech.azure;
+      in_subscription = hpc_connectivity_sub;
+    }
+    subnet hpc_fw_subnet {
+      label = "AzureFirewallSubnet";
+      cidr = "10.0.0.0/26";
+      parent = hpc_hub_vnet;
+    }
+    subnet hpc_bastion_subnet {
+      label = "AzureBastionSubnet";
+      cidr = "10.0.0.64/26";
+      parent = hpc_hub_vnet;
+    }
+    subnet hpc_shared_services_subnet {
+      label = "Shared Services Subnet";
+      cidr = "10.0.1.0/24";
+      parent = hpc_hub_vnet;
+    }
+    network hpc_spoke_vnet {
+      label = "HPC Spoke VNet";
+      region = "eastus";
+      kind = "networks.dedicated_network";
+      cidr = "10.80.0.0/16";
+      in = microsoft_tech.azure;
+      in_subscription = hpc_workload_sub;
+    }
+    subnet hpc_head_node_subnet {
+      label = "Head Node Subnet";
+      cidr = "10.80.0.0/24";
+      parent = hpc_spoke_vnet;
+    }
+    subnet hpc_compute_subnet {
+      label = "Compute Subnet";
+      cidr = "10.80.1.0/22";
+      parent = hpc_spoke_vnet;
+    }
+    subnet hpc_scratch_subnet {
+      label = "Scratch (Lustre) Subnet";
+      cidr = "10.80.5.0/24";
+      parent = hpc_spoke_vnet;
+    }
+    subnet hpc_pe_subnet {
+      label = "Private Endpoints Subnet";
+      cidr = "10.80.6.0/24";
+      parent = hpc_spoke_vnet;
+    }
+    environment hpc_hub_prod {
+      label = "Hub Production";
+      kind = "environments.azure_subscription_env";
+      lifecycle = "lifecycle_stages.prod";
+      region = "eastus";
+      in_tenant = hpc_contoso_tenant;
+      in_subscription = hpc_connectivity_sub;
+      resource_groups = [hpc_hub_rg, hpc_platform_rg];
+    }
+    environment hpc_prod {
+      label = "HPC Workload Production";
+      kind = "environments.azure_subscription_env";
+      lifecycle = "lifecycle_stages.prod";
+      region = "eastus";
+      in_tenant = hpc_contoso_tenant;
+      in_subscription = hpc_workload_sub;
+      resource_groups = hpc_workload_rg;
+    }
+    component hpc_cyclecloud_head {
+      label = "Azure CycleCloud Head Node";
+      in = microsoft_tech.azure;
+      implemented_by = hpc_cyclecloud;
+      slots = hpc_cyclecloud_head_prod;
+    }
+    slot hpc_cyclecloud_head_prod {
+      label = "Production";
+      environment = hpc_prod;
+      in_resource_group = hpc_workload_rg;
+      in_subnet = hpc_head_node_subnet;
+    }
+    component hpc_slurm_scheduler_comp {
+      label = "Slurm Scheduler";
+      in = microsoft_tech.azure;
+      implemented_by = hpc_slurm_scheduler;
+      slots = hpc_slurm_scheduler_prod;
+    }
+    slot hpc_slurm_scheduler_prod {
+      label = "Production";
+      environment = hpc_prod;
+      in_resource_group = hpc_workload_rg;
+      in_subnet = hpc_head_node_subnet;
+    }
+    component hpc_hb_pool {
+      label = "HB-series Compute Pool (CPU-heavy)";
+      in = microsoft_tech.azure;
+      implemented_by = hpc_hb_series_vm;
+      slots = hpc_hb_pool_prod;
+    }
+    slot hpc_hb_pool_prod {
+      label = "Production";
+      environment = hpc_prod;
+      in_resource_group = hpc_workload_rg;
+      in_subnet = hpc_compute_subnet;
+    }
+    component hpc_hc_pool {
+      label = "HC-series Compute Pool (CFD-tuned)";
+      in = microsoft_tech.azure;
+      implemented_by = hpc_hc_series_vm;
+      slots = hpc_hc_pool_prod;
+    }
+    slot hpc_hc_pool_prod {
+      label = "Production";
+      environment = hpc_prod;
+      in_resource_group = hpc_workload_rg;
+      in_subnet = hpc_compute_subnet;
+    }
+    component hpc_spot_burst_pool {
+      label = "Spot Burst Pool (interruptible)";
+      in = microsoft_tech.azure;
+      implemented_by = hpc_spot_vmss;
+      slots = hpc_spot_burst_pool_prod;
+    }
+    slot hpc_spot_burst_pool_prod {
+      label = "Production";
+      environment = hpc_prod;
+      in_resource_group = hpc_workload_rg;
+      in_subnet = hpc_compute_subnet;
+    }
+    component hpc_azure_batch_pool {
+      label = "Azure Batch Pool";
+      in = microsoft_tech.azure;
+      implemented_by = hpc_azure_batch;
+      slots = hpc_azure_batch_pool_prod;
+    }
+    slot hpc_azure_batch_pool_prod {
+      label = "Production";
+      environment = hpc_prod;
+      in_resource_group = hpc_workload_rg;
+    }
+    component hpc_lustre_scratch {
+      label = "Azure Managed Lustre (scratch)";
+      in = microsoft_tech.azure;
+      implemented_by = hpc_managed_lustre;
+      slots = hpc_lustre_scratch_prod;
+    }
+    slot hpc_lustre_scratch_prod {
+      label = "Production";
+      environment = hpc_prod;
+      in_resource_group = hpc_workload_rg;
+      in_subnet = hpc_scratch_subnet;
+    }
+    component hpc_archive_blob {
+      label = "Archive Blob (cool tier)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_blob_storage;
+      slots = hpc_archive_blob_prod;
+    }
+    slot hpc_archive_blob_prod {
+      label = "Production";
+      environment = hpc_prod;
+      in_resource_group = hpc_workload_rg;
+    }
+    component hpc_archive_blob_pl {
+      label = "Archive Blob Private Link";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_private_link;
+      slots = hpc_archive_blob_pl_prod;
+    }
+    slot hpc_archive_blob_pl_prod {
+      label = "Production";
+      environment = hpc_prod;
+      in_resource_group = hpc_workload_rg;
+      in_subnet = hpc_pe_subnet;
+    }
+    component hpc_key_vault {
+      label = "Key Vault";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_key_vault;
+      slots = hpc_key_vault_prod;
+    }
+    slot hpc_key_vault_prod {
+      label = "Production";
+      environment = hpc_prod;
+      in_resource_group = hpc_workload_rg;
+    }
+    component hpc_key_vault_pl {
+      label = "Key Vault Private Link";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_private_link;
+      slots = hpc_key_vault_pl_prod;
+    }
+    slot hpc_key_vault_pl_prod {
+      label = "Production";
+      environment = hpc_prod;
+      in_resource_group = hpc_workload_rg;
+      in_subnet = hpc_pe_subnet;
+    }
+    component hpc_azure_firewall_hub {
+      label = "Azure Firewall (hub)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_firewall;
+      slots = hpc_azure_firewall_hub_prod;
+    }
+    slot hpc_azure_firewall_hub_prod {
+      label = "Production";
+      environment = hpc_hub_prod;
+      in_resource_group = hpc_hub_rg;
+      in_subnet = hpc_fw_subnet;
+    }
+    component hpc_bastion {
+      label = "Azure Bastion";
+      in = microsoft_tech.azure;
+      implemented_by = hpc_azure_bastion;
+      slots = hpc_bastion_prod;
+    }
+    slot hpc_bastion_prod {
+      label = "Production";
+      environment = hpc_hub_prod;
+      in_resource_group = hpc_hub_rg;
+      in_subnet = hpc_bastion_subnet;
+    }
+    component hpc_entra_id {
+      label = "Microsoft Entra ID";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.microsoft_entra_id;
+    }
+    component hpc_azure_dns {
+      label = "Azure DNS (private zones)";
+      in = microsoft_tech.azure;
+      implemented_by = microsoft_tech.azure_dns;
+    }
+    component hpc_app_insights {
+      label = "Application Insights";
+      in = microsoft_tech.azure;
+      implemented_by = hpc_azure_application_insights;
+      slots = hpc_app_insights_prod;
+    }
+    slot hpc_app_insights_prod {
+      label = "Production";
+      environment = hpc_prod;
+      in_resource_group = hpc_platform_rg;
+    }
+    component hpc_log_analytics_ws {
+      label = "Log Analytics Workspace";
+      in = microsoft_tech.azure;
+      implemented_by = hpc_azure_log_analytics;
+      slots = hpc_log_analytics_ws_prod;
+    }
+    slot hpc_log_analytics_ws_prod {
+      label = "Production";
+      environment = hpc_hub_prod;
+      in_resource_group = hpc_platform_rg;
+    }
+    scenario hpc_job_submission {
+      label = "Job Submission + Scale-Out";
+      outcome = "A researcher connects via Bastion to CycleCloud, submits a job to Slurm, which schedules across HB and HC compute pools";
+      sequences = sequence {
+        id = "job_submit_scale_out";
+        entry_point = hpc_researcher;
+        steps = [hpc_researcher ==> hpc_bastion, hpc_bastion ==> hpc_cyclecloud_head, hpc_cyclecloud_head ==> hpc_slurm_scheduler_comp, hpc_slurm_scheduler_comp ==> hpc_hb_pool, hpc_slurm_scheduler_comp ==> hpc_hc_pool];
+      };
+    }
+    scenario hpc_scratch_io {
+      label = "Scratch Read/Write During Job";
+      outcome = "Compute pools read and write intermediate results to the Managed Lustre scratch filesystem during job execution";
+      sequences = sequence {
+        id = "scratch_io";
+        entry_point = hpc_hb_pool;
+        steps = [hpc_hb_pool ==> hpc_lustre_scratch, hpc_hc_pool ==> hpc_lustre_scratch];
+      };
+    }
+    scenario hpc_archive_results {
+      label = "Archive Results";
+      outcome = "On job completion the scheduler pushes final artifacts through a private endpoint to cool-tier archival blob storage";
+      sequences = sequence {
+        id = "archive_results";
+        entry_point = hpc_slurm_scheduler_comp;
+        steps = [hpc_slurm_scheduler_comp ==> hpc_archive_blob_pl, hpc_archive_blob_pl ==> hpc_archive_blob];
+      };
+    }
+  }
+}
