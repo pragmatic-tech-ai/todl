@@ -112,6 +112,27 @@ test("Solutions capability: New → settings pane renders → Save writes soluti
   await app.close();
 });
 
+test("Home welcome is the startup landing; New Solution navigates to the Solutions view", async () => {
+  const env = { ...process.env };
+  delete env["ELECTRON_RUN_AS_NODE"];
+  const app = await electron.launch({ args: [mainEntry], env });
+  const window = await app.firstWindow();
+  await window.waitForSelector("#app svg", { timeout: 30_000 });
+
+  // Startup lands on Home — now a welcome page, not the empty scaffold placeholder.
+  await expect.poll(async () => (await allText(window)).includes("Welcome to TODL"), { timeout: 10_000 }).toBe(true);
+  await expect.poll(async () => (await allText(window)).includes("New Solution"), { timeout: 10_000 }).toBe(true);
+
+  // Clicking New Solution creates one AND switches to the Solutions capability,
+  // so its settings pane (npm-registry fields) is now visible.
+  await installFakeBridge(window, {}, "/work/sol");
+  await window.getByText("New Solution", { exact: true }).first().click();
+  await expect.poll(async () => (await allText(window)).includes("Untitled Solution"), { timeout: 10_000 }).toBe(true);
+  await expect.poll(async () => (await allText(window)).includes("Registry URL"), { timeout: 10_000 }).toBe(true);
+
+  await app.close();
+});
+
 test("Solutions capability: Open a solution with a todl-package member shows the member row", async () => {
   const env = { ...process.env };
   delete env["ELECTRON_RUN_AS_NODE"];

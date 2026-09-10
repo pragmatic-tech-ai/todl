@@ -17,7 +17,7 @@ test("app launches and the shell renders the rail + side panel", async () => {
   await expect(window.locator("#app svg").first()).toBeVisible();
 
   // The shell auto-selects the first rail capability (Home); its service fills
-  // the side panel. Assert the Home panel's content rendered — proof the rail →
+  // the side panel. Assert the Home welcome landing rendered — proof the rail →
   // NavigationService → side-panel path works end to end.
   await expect
     .poll(
@@ -25,7 +25,7 @@ test("app launches and the shell renders the rail + side panel", async () => {
         window.evaluate(() =>
           Array.from(document.querySelectorAll("#app text, #app tspan"))
             .map((t) => (t.textContent ?? "").trim())
-            .some((s) => s.startsWith("The shell is up")),
+            .some((s) => s.startsWith("Welcome to TODL")),
         ),
       { timeout: 10_000 },
     )

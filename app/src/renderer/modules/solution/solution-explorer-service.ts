@@ -71,8 +71,8 @@ export class SolutionExplorerService extends ServiceBase implements IActivatable
     this.set_property_value(
       SolutionExplorerService.CommandsKey,
       new SolutionCommandsVM({
-        newSolution: () => void this.newSolution(),
-        openSolution: () => void this.openSolution(),
+        newSolution: () => void this.NewSolution(),
+        openSolution: () => void this.OpenSolution(),
         save: () => void this.save(),
       }),
     );
@@ -98,7 +98,9 @@ export class SolutionExplorerService extends ServiceBase implements IActivatable
 
   OnActivated(): void { this.refresh(); }
 
-  private async newSolution(): Promise<void> {
+  // Public so the Home welcome page can drive the same flows (New/Open) and then
+  // navigate the user to this capability.
+  public async NewSolution(): Promise<void> {
     const dir = await this.registry.pickDirectory();
     if (dir.length === 0) return; // canceled
     await this.manager.NewSolution(dir);
@@ -106,9 +108,14 @@ export class SolutionExplorerService extends ServiceBase implements IActivatable
     this.refresh();
   }
 
-  private async openSolution(): Promise<void> {
+  public async OpenSolution(): Promise<void> {
     const dir = await this.registry.pickDirectory();
     if (dir.length === 0) return;
+    await this.OpenSolutionAt(dir);
+  }
+
+  // Open a solution at a known folder (no picker) — used by the recent list.
+  public async OpenSolutionAt(dir: string): Promise<void> {
     await this.manager.OpenSolution(dir);
     this.bindBags();
     this.refresh();
