@@ -56,7 +56,7 @@ export class PackageManagerService extends ServiceBase implements IActivatable {
     this.set_property_value(PackageManagerService.CommandsKey, new PackageManagerHeaderVM(() => this.refresh()));
     // Selecting a tree node (SelectedDataItem binds two-way) shows a leaf's
     // content in the editor; branch/package rows carry none, so they no-op.
-    this.AddPropertyChangedListener(PackageManagerService.SelectedNodeKey, () => {
+    this.PropertyChanged(PackageManagerService.SelectedNodeKey).subscribe(() => {
       const content = this.SelectedNode?.Content;
       if (content !== undefined) this.editorPane.show(content.text, content.language);
     });

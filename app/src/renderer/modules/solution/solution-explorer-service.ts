@@ -14,7 +14,6 @@ import {
   SolutionMemberNodeVM,
   SettingBagGrid,
 } from "@pragmatic-tech-ai/todl";
-import type { IStorage } from "@pragmatic-tech-ai/todl-runtime";
 import { RegistryClient } from "../../services/registry/registry-client.js";
 import { AppStorageProviderRegistry } from "../../services/storage/storage-provider-registry.js";
 import { ConfirmDialog } from "../../services/dialogs/confirm-dialog.js";
@@ -93,7 +92,7 @@ export class SolutionExplorerService extends ServiceBase implements IActivatable
     });
 
     // Re-project whenever the active solution changes.
-    this.manager.AddPropertyChangedListener("ActiveSolution", () => this.refresh());
+    this.manager.PropertyChanged("ActiveSolution").subscribe(() => this.refresh());
   }
 
   OnActivated(): void { this.refresh(); }

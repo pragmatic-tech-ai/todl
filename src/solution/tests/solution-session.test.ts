@@ -25,7 +25,7 @@ test('RemoveMember drops it and marks dirty', () => {
 test('setting Name raises PropertyChanged and marks dirty', () => {
     const s = new SolutionSession('S', new FakeStorage())
     let fired = false
-    s.AddPropertyChangedListener('Name', () => { fired = true })
+    s.PropertyChanged('Name').subscribe(() => { fired = true })
     s.Name = 'Renamed'
     assert.equal(fired, true)
     assert.equal(s.Name, 'Renamed')

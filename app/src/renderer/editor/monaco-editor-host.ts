@@ -37,14 +37,14 @@ export class MonacoEditorHost extends DomHost {
   constructor() {
     super();
     // DP → editor (external Source changes, e.g. loading an example / permalink).
-    this.AddPropertyChangedListener(MonacoEditorHost.TextKey, () => {
+    this.PropertyChanged(MonacoEditorHost.TextKey).subscribe(() => {
       if (this.editor && !this.updating && this.Text !== this.editor.getValue()) this.editor.setValue(this.Text);
     });
-    this.AddPropertyChangedListener(MonacoEditorHost.ReadOnlyKey, () => {
+    this.PropertyChanged(MonacoEditorHost.ReadOnlyKey).subscribe(() => {
       this.editor?.updateOptions({ readOnly: this.ReadOnly });
     });
     // Language DP → live model language switch (register the TODL grammar first).
-    this.AddPropertyChangedListener(MonacoEditorHost.LanguageKey, () => {
+    this.PropertyChanged(MonacoEditorHost.LanguageKey).subscribe(() => {
       const model = this.editor?.getModel();
       if (model === undefined || model === null) return;
       if (this.Language === EditorLanguage.Todl) registerTodlLanguage();

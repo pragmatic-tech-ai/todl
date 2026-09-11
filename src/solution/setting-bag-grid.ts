@@ -38,6 +38,8 @@ export class SettingBagGrid {
         const accessors = new Map<string, PropertyAccessor>()
         for (const f of bag.Definition.Fields) {
             accessors.set(f.Key, {
+                id: () => f.Key,
+                displayName: () => f.Label || f.Key,
                 get: () => bag.Get(f.Key),
                 set: (v: unknown) => bag.Set(f.Key, v as string | number | boolean),
             })
