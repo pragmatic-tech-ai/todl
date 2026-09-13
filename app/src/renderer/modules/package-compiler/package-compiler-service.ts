@@ -1,7 +1,5 @@
 import {
   ServiceBase,
-  MuralBase,
-  MetaData,
   ObservableCollection,
   type IServiceProvider,
 } from "@pragmatic-tech-ai/mural/runtime";
@@ -23,17 +21,14 @@ import { PackageCompilerHeaderVM } from "./package-compiler-header-vm.js";
 // (via the header's ConflictVisible) only after a 409. Publish is
 // outward-facing, so it prompts a modal Mural confirmation dialog first.
 export class PackageCompilerService extends ServiceBase implements IActivatable {
-  static readonly StatusKey = MuralBase.RegisterProperty<string>(
-    PackageCompilerService, "Status", "Click “Open” to begin.", MetaData.None);
-  static readonly CommandsKey = MuralBase.RegisterProperty<PackageCompilerHeaderVM>(
-    PackageCompilerService, "Commands", undefined as unknown as PackageCompilerHeaderVM, MetaData.None);
+  private _status = "Click “Open” to begin.";
+  private _commands: PackageCompilerHeaderVM = undefined as unknown as PackageCompilerHeaderVM;
   // The opened folder's contents, as a lazy tree shown in the side pane.
-  static readonly TreeKey = MuralBase.RegisterProperty<ObservableCollection<FolderNodeVM>>(
-    PackageCompilerService, "Tree", undefined as unknown as ObservableCollection<FolderNodeVM>, MetaData.None);
+  private readonly _tree = new ObservableCollection<FolderNodeVM>();
 
-  get Status(): string { return this.get_property_value(PackageCompilerService.StatusKey); }
-  get Commands(): PackageCompilerHeaderVM { return this.get_property_value(PackageCompilerService.CommandsKey); }
-  get Tree(): ObservableCollection<FolderNodeVM> { return this.get_property_value(PackageCompilerService.TreeKey); }
+  get Status(): string { return this._status; }
+  get Commands(): PackageCompilerHeaderVM { return this._commands; }
+  get Tree(): ObservableCollection<FolderNodeVM> { return this._tree; }
 
   private readonly registry: RegistryClient;
   private readonly contentHost: ContentHostService;
@@ -57,8 +52,9 @@ export class PackageCompilerService extends ServiceBase implements IActivatable 
       bump: () => void this.bumpAndRepublish(),
       delete: () => void this.deleteAndRepublish(),
     });
-    this.set_property_value(PackageCompilerService.CommandsKey, this.header);
-    this.set_property_value(PackageCompilerService.TreeKey, new ObservableCollection<FolderNodeVM>());
+    const old = this._commands;
+    this._commands = this.header;
+    this.RaisePropertyChanged("Commands", old, this._commands);
   }
 
   // IActivatable — re-present this capability's last compile result into the
@@ -67,7 +63,11 @@ export class PackageCompilerService extends ServiceBase implements IActivatable 
     this.contentHost.View(this.resultView);
   }
 
-  private setStatus(v: string): void { this.set_property_value(PackageCompilerService.StatusKey, v); }
+  private setStatus(v: string): void {
+    const old = this._status;
+    this._status = v;
+    this.RaisePropertyChanged("Status", old, v);
+  }
 
   private async openDirectory(): Promise<void> {
     const dir = await this.registry.pickDirectory();

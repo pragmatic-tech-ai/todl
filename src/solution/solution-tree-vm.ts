@@ -12,7 +12,7 @@ export type MemberStorageFor = (member: SolutionMember) => IStorage
 export class SolutionNodeVM extends Observable {
     public readonly Title: string
     public readonly IsDirectory: boolean
-    public Children: ObservableCollection<SolutionNodeVM> | undefined
+    public readonly Children: ObservableCollection<SolutionNodeVM> | undefined
     private readonly storage: IStorage
     private readonly path: string
     private loaded = false
@@ -48,7 +48,7 @@ export class SolutionNodeVM extends Observable {
 // a leaf with IsResolved === false and never expands.
 export class SolutionMemberNodeVM extends Observable {
     public readonly Member: SolutionMember
-    public Children: ObservableCollection<SolutionNodeVM> | undefined
+    public readonly Children: ObservableCollection<SolutionNodeVM> | undefined
     private readonly storage: IStorage | undefined
     private loaded = false
 

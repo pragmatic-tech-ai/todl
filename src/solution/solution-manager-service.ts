@@ -1,5 +1,5 @@
 import {
-    ServiceBase, ServiceKey, MuralBase, MetaData, ObservableCollection,
+    ServiceBase, ServiceKey,
     type IServiceProvider,
 } from '@pragmatic-tech-ai/mural/runtime'
 import { type IActivatable } from '@pragmatic-tech-ai/mural/framework'
@@ -26,44 +26,32 @@ export interface SolutionSeams {
 export class SolutionManagerService extends ServiceBase implements IActivatable {
     public static readonly Key = new ServiceKey<SolutionManagerService>('SolutionManager')
 
-    public static readonly ActiveSolutionKey = MuralBase.RegisterProperty<SolutionSession | undefined>(
-        SolutionManagerService, 'ActiveSolution', undefined, MetaData.None)
+    // The host seams are resolved from the container under this key — the app
+    // registers a concrete SolutionSeams (storage backend, project factories,
+    // discard dialog); a test registers fakes. Resolving through DI keeps the
+    // manager free of any public post-construction setter.
+    public static readonly SeamsKey = new ServiceKey<SolutionSeams>('SolutionSeams')
 
-    public static readonly RecentSolutionsKey = MuralBase.RegisterProperty<ObservableCollection<string>>(
-        SolutionManagerService, 'RecentSolutions',
-        undefined as unknown as ObservableCollection<string>, MetaData.None)
-
-    private seams: SolutionSeams
+    private activeSolution: SolutionSession | undefined
+    private readonly recentSolutions: string[] = []
+    private readonly seams: SolutionSeams
 
     constructor(provider: IServiceProvider) {
         super(provider)
-        this.set_property_value(SolutionManagerService.RecentSolutionsKey, new ObservableCollection<string>())
-        this.seams = SolutionManagerService.throwingSeams()
+        this.seams = provider.get(SolutionManagerService.SeamsKey) ?? SolutionManagerService.throwingSeams()
     }
-
-    // Test seam: build the service without a container, installing fakes directly.
-    public static createForTest(seams: SolutionSeams): SolutionManagerService {
-        const noProvider = {
-            get: () => undefined,
-            getRequired: () => { throw new Error('no container in test') },
-        } as unknown as IServiceProvider
-        const svc = new SolutionManagerService(noProvider)
-        svc.seams = seams
-        return svc
-    }
-
-    // Installed by the module wiring once the shell + registries exist.
-    public Configure(seams: SolutionSeams): void { this.seams = seams }
 
     public get ActiveSolution(): SolutionSession | undefined {
-        return this.get_property_value(SolutionManagerService.ActiveSolutionKey)
+        return this.activeSolution
     }
     private setActive(s: SolutionSession | undefined): void {
-        this.set_property_value(SolutionManagerService.ActiveSolutionKey, s)
+        const old = this.activeSolution
+        this.activeSolution = s
+        this.RaisePropertyChanged('ActiveSolution', old, s)
     }
 
-    public get RecentSolutions(): ObservableCollection<string> {
-        return this.get_property_value(SolutionManagerService.RecentSolutionsKey)
+    public get RecentSolutions(): readonly string[] {
+        return this.recentSolutions
     }
 
     public async NewSolution(location: string): Promise<void> {
@@ -125,10 +113,10 @@ export class SolutionManagerService extends ServiceBase implements IActivatable 
     }
 
     private pushRecent(location: string): void {
-        const recent = this.RecentSolutions
-        const existing = recent.ToArray().indexOf(location)
-        if (existing >= 0) recent.RemoveAt(existing)
-        recent.Insert(0, location)
+        const existing = this.recentSolutions.indexOf(location)
+        if (existing >= 0) this.recentSolutions.splice(existing, 1)
+        this.recentSolutions.unshift(location)
+        this.RaisePropertyChanged('RecentSolutions', undefined, this.recentSolutions)
     }
 
     // POSIX-join a solution folder with a member's relative path, collapsing

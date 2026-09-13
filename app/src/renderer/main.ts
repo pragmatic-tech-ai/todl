@@ -5,6 +5,7 @@
 import { app } from "./app.mu";
 import { HtmlTarget } from "@pragmatic-tech-ai/mural/visual-engine";
 import { NavigationService, ContentHostService, DialogService } from "@pragmatic-tech-ai/mural/framework";
+import { SolutionSeamsRegistration } from "./modules/solution/solution-seams.js";
 
 // ViewerShell (unlike EditorShell) does not register a NavigationService, so
 // the app supplies one at the root. Registered under NavigationService.Key so
@@ -28,6 +29,12 @@ app.Services.register(ContentHostService.Key, (p) => new ContentHostService(p));
 // app runs a ViewerShell, so register it at the root (like the services above)
 // and hand it the shell root as its overlay anchor after the tree mounts.
 app.Services.register(DialogService.Key, (p) => new DialogService(p));
+
+// The host seams the package's SolutionManagerService resolves from the
+// container (SeamsKey) — registered here, before initialize, so the manager
+// finds them whenever it is first constructed. The solution module owns the
+// concrete wiring; this only installs it at the composition root.
+SolutionSeamsRegistration.Register(app.Services);
 
 await document.fonts.ready;
 app.initialize(new HtmlTarget(document.getElementById("app")!));

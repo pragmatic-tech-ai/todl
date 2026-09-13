@@ -70,9 +70,9 @@ export class HomeVM extends Observable implements IActivatable {
     }
   }
 
-  // Resolving the explorer constructs it (configuring the manager's seams +
-  // contributing the setting bag), so New/Open work even before the Solutions
-  // rail item has been visited.
+  // Resolving the explorer constructs it (contributing the setting bag), so
+  // New/Open work even before the Solutions rail item has been visited. The
+  // manager's host seams are installed at the bootstrap, independent of this.
   private explorer(): SolutionExplorerService {
     return this.provider.getRequired(SolutionExplorerService);
   }

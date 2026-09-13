@@ -1,7 +1,5 @@
 import {
   ServiceBase,
-  MuralBase,
-  MetaData,
   ObservableCollection,
   type IServiceProvider,
 } from "@pragmatic-tech-ai/mural/runtime";
@@ -24,20 +22,26 @@ import { EditorLanguage } from "../../editor/monaco-editor-host.js";
 // fetched the first time its node is expanded (TreeNodeVM.OnExpand). The header
 // Refresh command reloads the list.
 export class PackageManagerService extends ServiceBase implements IActivatable {
-  static readonly StatusKey = MuralBase.RegisterProperty<string>(
-    PackageManagerService, "Status", "", MetaData.None);
-  static readonly RootsKey = MuralBase.RegisterProperty<ObservableCollection<TreeNodeVM>>(
-    PackageManagerService, "Roots", undefined as unknown as ObservableCollection<TreeNodeVM>, MetaData.None);
-  static readonly SelectedNodeKey = MuralBase.RegisterProperty<TreeNodeVM | undefined>(
-    PackageManagerService, "SelectedNode", undefined, MetaData.None);
-  static readonly CommandsKey = MuralBase.RegisterProperty<PackageManagerHeaderVM>(
-    PackageManagerService, "Commands", undefined as unknown as PackageManagerHeaderVM, MetaData.None);
+  private _status = "";
+  private readonly _roots = new ObservableCollection<TreeNodeVM>();
+  private _selectedNode: TreeNodeVM | undefined = undefined;
+  private _commands: PackageManagerHeaderVM = undefined as unknown as PackageManagerHeaderVM;
 
-  get Status(): string { return this.get_property_value(PackageManagerService.StatusKey); }
-  get Roots(): ObservableCollection<TreeNodeVM> { return this.get_property_value(PackageManagerService.RootsKey); }
-  get SelectedNode(): TreeNodeVM | undefined { return this.get_property_value(PackageManagerService.SelectedNodeKey); }
-  set SelectedNode(v: TreeNodeVM | undefined) { this.set_property_value(PackageManagerService.SelectedNodeKey, v); }
-  get Commands(): PackageManagerHeaderVM { return this.get_property_value(PackageManagerService.CommandsKey); }
+  get Status(): string { return this._status; }
+  get Roots(): ObservableCollection<TreeNodeVM> { return this._roots; }
+  get SelectedNode(): TreeNodeVM | undefined { return this._selectedNode; }
+  set SelectedNode(v: TreeNodeVM | undefined) {
+    const old = this._selectedNode;
+    this._selectedNode = v;
+    this.RaisePropertyChanged("SelectedNode", old, v);
+  }
+  get Commands(): PackageManagerHeaderVM { return this._commands; }
+
+  private setStatus(v: string): void {
+    const old = this._status;
+    this._status = v;
+    this.RaisePropertyChanged("Status", old, v);
+  }
 
   private readonly registry: RegistryClient;
   private readonly contentHost: ContentHostService;
@@ -50,13 +54,14 @@ export class PackageManagerService extends ServiceBase implements IActivatable {
     super(provider);
     this.registry = provider.getRequired(RegistryClient);
     this.contentHost = provider.getRequired(ContentHostService.Key);
-    this.set_property_value(PackageManagerService.RootsKey, new ObservableCollection<TreeNodeVM>());
     // The side-pane command ToolBar's Refresh affordance (rendered via
     // DataTemplate[PackageManagerHeaderVM] as a ToolBar pinned atop the body).
-    this.set_property_value(PackageManagerService.CommandsKey, new PackageManagerHeaderVM(() => this.refresh()));
+    const oldCommands = this._commands;
+    this._commands = new PackageManagerHeaderVM(() => this.refresh());
+    this.RaisePropertyChanged("Commands", oldCommands, this._commands);
     // Selecting a tree node (SelectedDataItem binds two-way) shows a leaf's
     // content in the editor; branch/package rows carry none, so they no-op.
-    this.PropertyChanged(PackageManagerService.SelectedNodeKey).subscribe(() => {
+    this.PropertyChanged("SelectedNode").subscribe(() => {
       const content = this.SelectedNode?.Content;
       if (content !== undefined) this.editorPane.show(content.text, content.language);
     });
@@ -76,22 +81,16 @@ export class PackageManagerService extends ServiceBase implements IActivatable {
   }
 
   private async load(): Promise<void> {
-    this.set_property_value(PackageManagerService.StatusKey, "Loading…");
+    this.setStatus("Loading…");
     try {
       const names = await this.registry.list();
       const roots = this.Roots;
       roots.Clear();
       for (const name of names) roots.Add(TreeNodeVM.lazy(name, () => this.loadCategories(name)));
       this.loaded = true;
-      this.set_property_value(
-        PackageManagerService.StatusKey,
-        names.length === 0 ? "No packages in the registry." : "",
-      );
+      this.setStatus(names.length === 0 ? "No packages in the registry." : "");
     } catch (e) {
-      this.set_property_value(
-        PackageManagerService.StatusKey,
-        "Could not reach the registry: " + (e as Error).message,
-      );
+      this.setStatus("Could not reach the registry: " + (e as Error).message);
     }
   }
 

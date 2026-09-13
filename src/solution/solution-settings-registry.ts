@@ -1,5 +1,5 @@
 import {
-    ServiceBase, ServiceKey, MuralBase, MetaData, ObservableCollection,
+    ServiceBase, ServiceKey, ObservableCollection,
     type IServiceProvider,
 } from '@pragmatic-tech-ai/mural/runtime'
 import { SettingBagDefinition } from './setting-bag-definition.js'
@@ -11,15 +11,11 @@ import { SettingBagDefinition } from './setting-bag-definition.js'
 export class SolutionSettingsRegistry extends ServiceBase {
     public static readonly Key = new ServiceKey<SolutionSettingsRegistry>('SolutionSettingsRegistry')
 
-    public static readonly DefinitionsKey = MuralBase.RegisterProperty<ObservableCollection<SettingBagDefinition>>(
-        SolutionSettingsRegistry, 'Definitions',
-        undefined as unknown as ObservableCollection<SettingBagDefinition>, MetaData.None)
-
+    private readonly _definitions = new ObservableCollection<SettingBagDefinition>()
     private readonly byId = new Map<string, SettingBagDefinition>()
 
     constructor(provider: IServiceProvider) {
         super(provider)
-        this.set_property_value(SolutionSettingsRegistry.DefinitionsKey, new ObservableCollection<SettingBagDefinition>())
     }
 
     public static createForTest(): SolutionSettingsRegistry {
@@ -31,7 +27,7 @@ export class SolutionSettingsRegistry extends ServiceBase {
     }
 
     public get Definitions(): ObservableCollection<SettingBagDefinition> {
-        return this.get_property_value(SolutionSettingsRegistry.DefinitionsKey)
+        return this._definitions
     }
 
     // Register a bag definition; idempotent by Id (a re-contribute is ignored).

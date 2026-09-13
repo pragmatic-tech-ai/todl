@@ -1,20 +1,29 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { type IServiceProvider } from '@pragmatic-tech-ai/mural/runtime'
 import { FakeStorage } from '@pragmatic-tech-ai/todl-runtime'
-import { SolutionManagerService } from '../solution-manager-service.js'
+import { SolutionManagerService, type SolutionSeams } from '../solution-manager-service.js'
 import { FakeProjectFactory } from './fake-project-factory.js'
 
-function makeService() {
+// Build the service the way the container does — through the constructor — with
+// a fake provider that serves the test seams under SolutionManagerService.SeamsKey.
+function makeService(opts?: { confirmDiscard?: () => Promise<boolean> }) {
     const roots = new Map<string, FakeStorage>()
-    const svc = SolutionManagerService.createForTest({
+    const seams: SolutionSeams = {
         storageForFolder: (folder) => {
             const s = roots.get(folder) ?? new FakeStorage(folder)
             roots.set(folder, s)
             return s
         },
         factoryFor: (type) => (type === 'architecture' ? new FakeProjectFactory() : undefined),
-        confirmDiscard: async () => true,
-    })
+        confirmDiscard: opts?.confirmDiscard ?? (async () => true),
+    }
+    const provider = {
+        get: (token: unknown) => (token === SolutionManagerService.SeamsKey ? seams : undefined),
+        getRequired: () => { throw new Error('no container in test') },
+        has: (token: unknown) => token === SolutionManagerService.SeamsKey,
+    } as unknown as IServiceProvider
+    const svc = new SolutionManagerService(provider)
     return { svc, roots }
 }
 
@@ -44,20 +53,15 @@ test('Save clears dirty; opening adds to RecentSolutions (move-to-front, deduped
     assert.equal(svc.ActiveSolution!.IsDirty, true)
     await svc.Save()
     assert.equal(svc.ActiveSolution!.IsDirty, false)
-    assert.ok(svc.RecentSolutions.ToArray().includes('/work/sol'))
+    assert.ok(svc.RecentSolutions.includes('/work/sol'))
 
     // Save again should not duplicate the recent entry.
     await svc.Save()
-    assert.equal(svc.RecentSolutions.ToArray().filter((p) => p === '/work/sol').length, 1)
+    assert.equal(svc.RecentSolutions.filter((p) => p === '/work/sol').length, 1)
 })
 
 test('a dirty solution blocks replace when the user declines', async () => {
-    const roots = new Map<string, FakeStorage>()
-    const svc = SolutionManagerService.createForTest({
-        storageForFolder: (f) => { const s = roots.get(f) ?? new FakeStorage(f); roots.set(f, s); return s },
-        factoryFor: () => undefined,
-        confirmDiscard: async () => false,   // user says "don't discard"
-    })
+    const { svc } = makeService({ confirmDiscard: async () => false })   // user says "don't discard"
     await svc.NewSolution('/work/a')
     svc.ActiveSolution!.AddMember('./x', 'architecture')   // now dirty
     const first = svc.ActiveSolution

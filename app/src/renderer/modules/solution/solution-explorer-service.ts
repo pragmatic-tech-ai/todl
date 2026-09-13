@@ -1,11 +1,9 @@
 import {
   ServiceBase,
-  MuralBase,
-  MetaData,
   ObservableCollection,
   type IServiceProvider,
 } from "@pragmatic-tech-ai/mural/runtime";
-import { DialogService, type IActivatable } from "@pragmatic-tech-ai/mural/framework";
+import { type IActivatable } from "@pragmatic-tech-ai/mural/framework";
 import type { GridProperty, IPropertyBag } from "@pragmatic-tech-ai/mural/framework";
 import {
   SolutionManagerService,
@@ -16,46 +14,35 @@ import {
 } from "@pragmatic-tech-ai/todl";
 import { RegistryClient } from "../../services/registry/registry-client.js";
 import { AppStorageProviderRegistry } from "../../services/storage/storage-provider-registry.js";
-import { ConfirmDialog } from "../../services/dialogs/confirm-dialog.js";
-import { TodlPackageProjectFactory, TODL_PACKAGE_TYPE } from "./todl-package-project-factory.js";
 import { NpmRegistryBag } from "./npm-registry-bag.js";
 import { SolutionCommandsVM } from "./solution-commands-vm.js";
 
 // The Solution Explorer capability's backing service (app-side presentation over
 // the package's UI-agnostic SolutionManagerService). It:
-//   • configures the manager's host seams (local storage backend, project
-//     factory map, discard-confirm dialog) — done here, where the peers resolve,
-//     so the renderer bootstrap (main.ts) stays thin;
 //   • contributes the npm-registry cross-project setting bag;
 //   • projects the active solution into bindable view state — a New/Open/Save
 //     toolbar, the member/folder tree, and the setting-bag PropertyGrid.
+// The manager's host seams are registered separately (SolutionSeamsRegistration,
+// installed from the bootstrap) and resolved by the manager from the container.
 export class SolutionExplorerService extends ServiceBase implements IActivatable {
-  static readonly TitleKey = MuralBase.RegisterProperty<string>(
-    SolutionExplorerService, "Title", "No solution open", MetaData.None);
-  static readonly HasSolutionKey = MuralBase.RegisterProperty<boolean>(
-    SolutionExplorerService, "HasSolution", false, MetaData.None);
-  static readonly CommandsKey = MuralBase.RegisterProperty<SolutionCommandsVM>(
-    SolutionExplorerService, "Commands", undefined as unknown as SolutionCommandsVM, MetaData.None);
-  static readonly TreeRootsKey = MuralBase.RegisterProperty<ObservableCollection<SolutionMemberNodeVM>>(
-    SolutionExplorerService, "TreeRoots", undefined as unknown as ObservableCollection<SolutionMemberNodeVM>, MetaData.None);
-  static readonly SettingsPropertiesKey = MuralBase.RegisterProperty<readonly GridProperty[] | undefined>(
-    SolutionExplorerService, "SettingsProperties", undefined, MetaData.None);
-  static readonly SettingsTargetKey = MuralBase.RegisterProperty<IPropertyBag | undefined>(
-    SolutionExplorerService, "SettingsTarget", undefined, MetaData.None);
+  private _title = "No solution open";
+  private _hasSolution = false;
+  private _commands: SolutionCommandsVM = undefined as unknown as SolutionCommandsVM;
+  private readonly _treeRoots = new ObservableCollection<SolutionMemberNodeVM>();
+  private _settingsProperties: readonly GridProperty[] | undefined = undefined;
+  private _settingsTarget: IPropertyBag | undefined = undefined;
 
-  get Title(): string { return this.get_property_value(SolutionExplorerService.TitleKey); }
-  get HasSolution(): boolean { return this.get_property_value(SolutionExplorerService.HasSolutionKey); }
-  get Commands(): SolutionCommandsVM { return this.get_property_value(SolutionExplorerService.CommandsKey); }
-  get TreeRoots(): ObservableCollection<SolutionMemberNodeVM> { return this.get_property_value(SolutionExplorerService.TreeRootsKey); }
-  get SettingsProperties(): readonly GridProperty[] | undefined { return this.get_property_value(SolutionExplorerService.SettingsPropertiesKey); }
-  get SettingsTarget(): IPropertyBag | undefined { return this.get_property_value(SolutionExplorerService.SettingsTargetKey); }
+  get Title(): string { return this._title; }
+  get HasSolution(): boolean { return this._hasSolution; }
+  get Commands(): SolutionCommandsVM { return this._commands; }
+  get TreeRoots(): ObservableCollection<SolutionMemberNodeVM> { return this._treeRoots; }
+  get SettingsProperties(): readonly GridProperty[] | undefined { return this._settingsProperties; }
+  get SettingsTarget(): IPropertyBag | undefined { return this._settingsTarget; }
 
   private readonly manager: SolutionManagerService;
   private readonly settings: SolutionSettingsRegistry;
   private readonly storageRegistry: AppStorageProviderRegistry;
   private readonly registry: RegistryClient;
-  private readonly dialogs: DialogService;
-  private readonly factory = new TodlPackageProjectFactory();
   private tree: SolutionTreeVM | undefined; // hold a ref so its VMs aren't GC'd
 
   constructor(provider: IServiceProvider) {
@@ -64,32 +51,17 @@ export class SolutionExplorerService extends ServiceBase implements IActivatable
     this.settings = provider.getRequired(SolutionSettingsRegistry.Key);
     this.storageRegistry = provider.getRequired(AppStorageProviderRegistry.Key);
     this.registry = provider.getRequired(RegistryClient);
-    this.dialogs = provider.getRequired(DialogService.Key);
 
-    this.set_property_value(SolutionExplorerService.TreeRootsKey, new ObservableCollection<SolutionMemberNodeVM>());
-    this.set_property_value(
-      SolutionExplorerService.CommandsKey,
-      new SolutionCommandsVM({
-        newSolution: () => void this.NewSolution(),
-        openSolution: () => void this.OpenSolution(),
-        save: () => void this.save(),
-      }),
-    );
+    const old = this._commands;
+    this._commands = new SolutionCommandsVM({
+      newSolution: () => void this.NewSolution(),
+      openSolution: () => void this.OpenSolution(),
+      save: () => void this.save(),
+    });
+    this.RaisePropertyChanged("Commands", old, this._commands);
 
     // The cross-project setting bags this app offers (npm-registry today).
     NpmRegistryBag.contribute(this.settings);
-
-    // Install the host seams the manager needs.
-    this.manager.Configure({
-      storageForFolder: (folder) => this.storageRegistry.Create(AppStorageProviderRegistry.DefaultBackendId, folder),
-      factoryFor: (type) => (type === TODL_PACKAGE_TYPE ? this.factory : undefined),
-      confirmDiscard: () =>
-        ConfirmDialog.show(this.dialogs, {
-          title: "Discard changes?",
-          message: "The current solution has unsaved changes. Discard them?",
-          confirmLabel: "Discard",
-        }),
-    });
 
     // Re-project whenever the active solution changes.
     this.manager.PropertyChanged("ActiveSolution").subscribe(() => this.refresh());
@@ -133,14 +105,14 @@ export class SolutionExplorerService extends ServiceBase implements IActivatable
   // Project the active solution into the bindable view state.
   private refresh(): void {
     const session = this.manager.ActiveSolution;
-    this.set_property_value(SolutionExplorerService.HasSolutionKey, session !== undefined);
-    this.set_property_value(SolutionExplorerService.TitleKey, session === undefined ? "No solution open" : session.Name);
+    this.setHasSolution(session !== undefined);
+    this.setTitle(session === undefined ? "No solution open" : session.Name);
 
     const roots = this.TreeRoots;
     roots.Clear();
     this.tree = undefined;
-    this.set_property_value(SolutionExplorerService.SettingsPropertiesKey, undefined);
-    this.set_property_value(SolutionExplorerService.SettingsTargetKey, undefined);
+    this.setSettingsProperties(undefined);
+    this.setSettingsTarget(undefined);
     if (session === undefined) return;
 
     this.tree = new SolutionTreeVM(session, (member) =>
@@ -154,9 +126,33 @@ export class SolutionExplorerService extends ServiceBase implements IActivatable
     // The settings pane edits the first contributed bag (npm-registry today).
     const bag = session.SettingBags.ToArray()[0];
     if (bag !== undefined) {
-      this.set_property_value(SolutionExplorerService.SettingsPropertiesKey, SettingBagGrid.describe(bag));
-      this.set_property_value(SolutionExplorerService.SettingsTargetKey, SettingBagGrid.bagOf(bag));
+      this.setSettingsProperties(SettingBagGrid.describe(bag));
+      this.setSettingsTarget(SettingBagGrid.bagOf(bag));
     }
+  }
+
+  private setTitle(v: string): void {
+    const old = this._title;
+    this._title = v;
+    this.RaisePropertyChanged("Title", old, v);
+  }
+
+  private setHasSolution(v: boolean): void {
+    const old = this._hasSolution;
+    this._hasSolution = v;
+    this.RaisePropertyChanged("HasSolution", old, v);
+  }
+
+  private setSettingsProperties(v: readonly GridProperty[] | undefined): void {
+    const old = this._settingsProperties;
+    this._settingsProperties = v;
+    this.RaisePropertyChanged("SettingsProperties", old, v);
+  }
+
+  private setSettingsTarget(v: IPropertyBag | undefined): void {
+    const old = this._settingsTarget;
+    this._settingsTarget = v;
+    this.RaisePropertyChanged("SettingsTarget", old, v);
   }
 
   // Join a (possibly Windows) root folder with a relative POSIX member path
