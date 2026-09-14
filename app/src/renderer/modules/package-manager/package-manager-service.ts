@@ -7,6 +7,7 @@ import { ContentHostService, type IActivatable } from "@pragmatic-tech-ai/mural/
 import { RegistryClient } from "../../services/registry/registry-client.js";
 import { PackageManagerHeaderVM } from "./package-manager-header-vm.js";
 import { EditorPaneVM } from "./editor-pane-vm.js";
+import { GraphPaneVM } from "./graph/graph-pane-vm.js";
 import { TreeNodeVM } from "./tree-node-vm.js";
 import { EditorLanguage } from "../../editor/monaco-editor-host.js";
 
@@ -46,6 +47,9 @@ export class PackageManagerService extends ServiceBase implements IActivatable {
   private readonly registry: RegistryClient;
   private readonly contentHost: ContentHostService;
   private readonly editorPane = new EditorPaneVM();
+  // A compiled model.json leaf (e.g. "Raw model.json" / "Compiled code") routes
+  // to this tabbed Visual+Text pane instead of the plain editor.
+  private readonly graphPane = new GraphPaneVM();
   // Guards the lazy first load so re-selecting the capability doesn't refetch;
   // the Refresh command bypasses it (it always reloads).
   private loaded = false;
@@ -60,10 +64,19 @@ export class PackageManagerService extends ServiceBase implements IActivatable {
     this._commands = new PackageManagerHeaderVM(() => this.refresh());
     this.RaisePropertyChanged("Commands", oldCommands, this._commands);
     // Selecting a tree node (SelectedDataItem binds two-way) shows a leaf's
-    // content in the editor; branch/package rows carry none, so they no-op.
+    // content; branch/package rows carry none, so they no-op. A JSON leaf that
+    // parses as a compiled TodlDocument graph (Raw model.json / Compiled code)
+    // routes to the tabbed Visual+Text pane; everything else to the plain editor.
     this.PropertyChanged("SelectedNode").subscribe(() => {
       const content = this.SelectedNode?.Content;
-      if (content !== undefined) this.editorPane.show(content.text, content.language);
+      if (content === undefined) return;
+      if (content.language === EditorLanguage.Json && GraphPaneVM.looksLikeGraph(content.text)) {
+        this.graphPane.show(content.text);
+        this.contentHost.View(this.graphPane);
+      } else {
+        this.editorPane.show(content.text, content.language);
+        this.contentHost.View(this.editorPane);
+      }
     });
   }
 

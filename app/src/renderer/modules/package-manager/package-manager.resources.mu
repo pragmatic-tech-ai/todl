@@ -2,6 +2,7 @@ import PackageManagerService from "./package-manager-service.ts"
 import PackageManagerHeaderVM from "./package-manager-header-vm.ts"
 import EditorPaneVM from "./editor-pane-vm.ts"
 import TreeNodeVM from "./tree-node-vm.ts"
+import GraphPaneVM from "./graph/graph-pane-vm.ts"
 
 resources PackageManagerResources {
     // The Packages capability — rendered in the shell side panel by the
@@ -39,5 +40,55 @@ resources PackageManagerResources {
         DockPanel [ LastChildFill = true ] {
             ContentControl [ Content = $Editor ]
         }
+    }
+
+    // The Diagram's canvas panel — a paginated canvas the Diagram's ScrollViewer
+    // tracks as the laid-out nodes extend past the initial page.
+    ItemsPanelTemplate x:key="GraphCanvasPanel" {
+        PaginatedCanvas [ PageWidth = 2000, PageHeight = 2000 ]
+    }
+
+    // The central content-host view for a compiled model.json graph: a header row
+    // of two toggle "tabs" (Visual / Text) over a body that visibility-swaps the
+    // graph Diagram and the read-only Monaco. A composed mural TabControl mounts
+    // unselected AND doesn't paint composed TabItem headers in this content host,
+    // so this uses ToggleButtons (whose content DOES render) as a radio pair bound
+    // to the VM's mutually-exclusive ShowVisual/ShowText.
+    DataTemplate [DataType = GraphPaneVM] {
+      DockPanel [ LastChildFill = true, ClipToBounds = true ] {
+        // Tab strip.
+        StackPanel [ DockPanel.Dock = Top, Orientation = Horizontal, Margin = (8,6,8,4) ] {
+            ToggleButton [ IsChecked = $ShowVisual, Margin = (0,0,6,0) ] {
+                TextBlock [ Text = "Visual", Foreground = @OnSurface ]
+            }
+            ToggleButton [ IsChecked = $ShowText ] {
+                TextBlock [ Text = "Text", Foreground = @OnSurface ]
+            }
+        }
+        // Body — both panes stacked; exactly one is visible.
+        Grid {
+            // Visual: tier-filter toggles over the graph Diagram.
+            DockPanel [ LastChildFill = true, Visibility = $ShowVisual << ToVisibility ] {
+                StackPanel [ DockPanel.Dock = Top, Orientation = Horizontal, Margin = (8,4,8,6) ] {
+                    TextBlock [ Text = "Tiers:", Foreground = @OnSurface, VerticalAlignment = Center, Margin = (0,0,8,0) ]
+                    ToggleButton [ IsChecked = $ShowMeta, Margin = (0,0,8,0) ] { TextBlock [ Text = "Meta", Foreground = @OnSurface ] }
+                    ToggleButton [ IsChecked = $ShowOntology, Margin = (0,0,8,0) ] { TextBlock [ Text = "Ontology", Foreground = @OnSurface ] }
+                    ToggleButton [ IsChecked = $ShowInstance ] { TextBlock [ Text = "Instance", Foreground = @OnSurface ] }
+                }
+                Diagram
+                    [ ItemsSource                  = $Nodes,
+                      Connectors                   = $Connectors,
+                      ItemsPanel                   = @GraphCanvasPanel,
+                      SelectionMode                = Extended,
+                      ConnectorInteractionsEnabled = false,
+                      CameraEnabled                = true,
+                      Focusable                    = true ]
+            }
+            // Text: the raw JSON in a read-only Monaco.
+            DockPanel [ LastChildFill = true, Visibility = $ShowText << ToVisibility ] {
+                ContentControl [ Content = $TextEditor ]
+            }
+        }
+      }
     }
 }
