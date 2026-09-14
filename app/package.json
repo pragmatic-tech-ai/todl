@@ -16,15 +16,15 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@pragmatic-tech-ai/mural": "file:../../Mural",
+    "@pragmatic-tech-ai/mural": "^0.55.8",
+    "@pragmatic-tech-ai/todl": "file:..",
     "electron-updater": "^6.3.9",
     "monaco-editor": "^0.52.0",
     "opentype.js": "^2.0.0",
     "vscode-jsonrpc": "^8.2.0",
     "vscode-languageserver": "^9.0.1",
     "vscode-languageserver-textdocument": "^1.0.12",
-    "vscode-languageserver-types": "^3.17.5",
-    "@pragmatic-tech-ai/todl": "file:.."
+    "vscode-languageserver-types": "^3.17.5"
   },
   "devDependencies": {
     "@electron-toolkit/preload": "^3.0.2",

@@ -4,17 +4,20 @@ import { fileURLToPath } from "node:url";
 import { resolve, dirname } from "node:path";
 
 // The filesystem-backed `include` resolver (SVG → Geometry resource) isn't on
-// the tooling barrel, so pull it from Mural's compiled dist. Imported at RUNTIME
-// via a computed URL (not a string literal) so esbuild leaves it external when
-// it bundles this config — otherwise its transitive visual-engine/runtime graph
-// gets hoisted into the app context and a bare `todl-runtime` import fails to
-// resolve. As a real runtime import, Node resolves the resolver's deps from
-// Mural's own node_modules. Passing it to the plugin makes `include "…svg" as
-// Key` work at compile time; the app authors capability icons under
-// src/renderer/icons.
+// the tooling barrel, so pull it from the published mural package's compiled
+// dist (node_modules). Imported at RUNTIME via a computed URL (not a string
+// literal) so esbuild leaves it external when it bundles this config —
+// otherwise its transitive visual-engine/runtime graph gets hoisted into the
+// app context and a bare `todl-runtime` import fails to resolve. As a real
+// runtime import, Node resolves the resolver's deps from mural's own
+// node_modules. Passing it to the plugin makes `include "…svg" as Key` work at
+// compile time; the app authors capability icons under src/renderer/icons.
 type IncludeOpt = NonNullable<Parameters<typeof vitePluginMural>[0]>["include"];
 const { makeIncludeResolver } = (await import(
-  new URL("../../Mural/dist/tooling/include-resolver.js", import.meta.url).href
+  new URL(
+    "./node_modules/@pragmatic-tech-ai/mural/dist/tooling/include-resolver.js",
+    import.meta.url,
+  ).href
 )) as { makeIncludeResolver: (baseDir: string) => IncludeOpt };
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -48,6 +51,6 @@ export default defineConfig({
         { find: /^opentype\.js$/, replacement: resolve(rendererSrc, "opentype-shim.mjs") },
       ],
     },
-    server: { fs: { allow: [repoRoot, resolve(repoRoot, "..", "Mural")] } },
+    server: { fs: { allow: [repoRoot] } },
   },
 });
