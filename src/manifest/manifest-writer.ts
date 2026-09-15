@@ -10,8 +10,10 @@
 import { StringsHeap } from "./strings-heap.js";
 import { ConstHeap, type ConstValue } from "./const-heap.js";
 import { Base64 } from "./bytes.js";
-import { TableId } from "./enums.js";
+import { TableId, MetaKind } from "./enums.js";
+import { TypeDefOrRef } from "./token.js";
 import { BinarySerializer } from "./binary-codec.js";
+import { CardinalityGlyph, ManifestModel, type LogicalManifest } from "./logical.js";
 import type {
     TypeInfoRec,
     FieldRec,
@@ -218,5 +220,141 @@ export class ManifestWriter
             this.model, this.version, this.rootRow,
             this.strings, this.consts, (table) => this.rowsOf(table),
         );
+    }
+
+    /**
+     * Lower a SPEC-03 logical manifest into binary tables (SPEC-04 §9.2). The
+     * bridge MAPS names → interned indices and coded tokens — it never casts.
+     * Concepts become `TypeInfo` rows (kind Concept); any referenced type id
+     * that is not a declared concept (a primitive like `string`, or an external
+     * name in single-manifest v1) is synthesized as a local `Primitive`
+     * `TypeInfo` row, so every coded reference resolves within this manifest.
+     * Cross-manifest `Imports`/`TypeRef` lowering is a SPEC-06/Domain concern.
+     */
+    static fromLogical(m: LogicalManifest): ManifestWriter
+    {
+        const w = new ManifestWriter(m.model, m.version);
+        const model = new ManifestModel(m);
+        const conceptIds = Object.keys(m.concepts);
+
+        // Every type id referenced by a coded column, in first-encounter order.
+        const referenced: string[] = [];
+        const see = (id: string): void => { if (!referenced.includes(id)) referenced.push(id); };
+        for (const cid of conceptIds)
+        {
+            const c = m.concepts[cid]!;
+            if (c.extends !== null) see(c.extends);
+            for (const f of Object.values(c.fields)) see(f.type);
+            for (const r of Object.values(c.relationships)) for (const t of r.targets) see(t);
+        }
+        for (const cls of Object.values(m.classes)) see(cls.concept);
+        for (const tax of Object.values(m.taxonomies)) for (const t of tax.represents) see(t);
+        const primitiveIds = referenced.filter((id) => !(id in m.concepts));
+
+        // Precompute rows so coded references can point forward.
+        const typeRow = new Map<string, number>();
+        let ti = 0;
+        for (const cid of conceptIds) typeRow.set(cid, ++ti);
+        for (const pid of primitiveIds) typeRow.set(pid, ++ti);
+        const taxRow = new Map<string, number>();
+        let tx = 0;
+        for (const tid of Object.keys(m.taxonomies)) taxRow.set(tid, ++tx);
+        const classRow = new Map<string, number>();
+        let cx = 0;
+        for (const clsId of Object.keys(m.classes)) classRow.set(clsId, ++cx);
+
+        const coded = (id: string): number => {
+            const r = typeRow.get(id);
+            return r === undefined ? 0 : new TypeDefOrRef(false, r).encode();
+        };
+        const fieldRowOf = new Map<string, number>(); // "concept.field" -> Field row
+
+        // Pass 1: concept TypeInfo rows (+ Field / Rel / Target slices), in order.
+        for (const cid of conceptIds)
+        {
+            const c = m.concepts[cid]!;
+            const fieldEntries = Object.entries(c.fields);
+            const fieldStart = fieldEntries.length > 0 ? w.rowCount(TableId.Field) + 1 : 0;
+            for (const [fname, fdef] of fieldEntries)
+            {
+                const frow = w.addField({
+                    name: w.internString(fname),
+                    type: coded(fdef.type),
+                    card: CardinalityGlyph.fromGlyph(fdef.card),
+                });
+                fieldRowOf.set(`${cid}.${fname}`, frow);
+            }
+            const relEntries = Object.entries(c.relationships);
+            const relStart = relEntries.length > 0 ? w.rowCount(TableId.Rel) + 1 : 0;
+            for (const [rname, rdef] of relEntries)
+            {
+                const targetStart = rdef.targets.length > 0 ? w.rowCount(TableId.Target) + 1 : 0;
+                for (const t of rdef.targets) w.addTarget({ type: coded(t) });
+                w.addRel({
+                    name: w.internString(rname),
+                    targetStart,
+                    targetCount: rdef.targets.length,
+                    card: CardinalityGlyph.fromGlyph(rdef.card),
+                    inverse: rdef.inverse !== undefined ? w.internString(rdef.inverse) : 0,
+                });
+            }
+            w.addTypeInfo({
+                name: w.internString(cid),
+                ns: 0,
+                kind: MetaKind.Concept,
+                extends: c.extends !== null ? coded(c.extends) : 0,
+                fieldStart,
+                fieldCount: fieldEntries.length,
+                relStart,
+                relCount: relEntries.length,
+            });
+        }
+        // Synthesized primitive TypeInfo rows (kind Primitive, no members).
+        for (const pid of primitiveIds)
+        {
+            w.addTypeInfo({
+                name: w.internString(pid), ns: 0, kind: MetaKind.Primitive,
+                extends: 0, fieldStart: 0, fieldCount: 0, relStart: 0, relCount: 0,
+            });
+        }
+
+        // Pass 2: Taxonomy rows (+ represents Target slices), in order.
+        for (const tid of Object.keys(m.taxonomies))
+        {
+            const tax = m.taxonomies[tid]!;
+            const representsStart = tax.represents.length > 0 ? w.rowCount(TableId.Target) + 1 : 0;
+            for (const t of tax.represents) w.addTarget({ type: coded(t) });
+            w.addTaxonomy({
+                name: w.internString(tid),
+                representsStart,
+                representsCount: tax.represents.length,
+            });
+        }
+
+        // Pass 3: Class rows (+ Fixed slices), in order.
+        for (const clsId of Object.keys(m.classes))
+        {
+            const cls = m.classes[clsId]!;
+            const fixedEntries = Object.entries(cls.fixed);
+            const fixedStart = fixedEntries.length > 0 ? w.rowCount(TableId.Fixed) + 1 : 0;
+            for (const [fname, value] of fixedEntries)
+            {
+                const declaring = model.typeOriginOf(cls.concept, fname);
+                const fieldRow = declaring !== undefined ? fieldRowOf.get(`${declaring}.${fname}`) ?? 0 : 0;
+                w.addFixed({ field: fieldRow, value: w.internConst(value) });
+            }
+            w.addClass({
+                name: w.internString(clsId),
+                type: coded(cls.concept),
+                taxonomy: cls.taxonomy !== undefined ? taxRow.get(cls.taxonomy) ?? 0 : 0,
+                broader: cls.broader !== undefined ? classRow.get(cls.broader) ?? 0 : 0,
+                fixedStart,
+                fixedCount: fixedEntries.length,
+            });
+        }
+
+        const rootRow = typeRow.get(m.root);
+        if (rootRow !== undefined) w.setRoot(rootRow);
+        return w;
     }
 }

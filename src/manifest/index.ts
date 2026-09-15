@@ -22,6 +22,20 @@ export { BinarySerializer } from "./binary-codec.js";
 export { ManifestWriter } from "./manifest-writer.js";
 export { ManifestReader } from "./manifest-reader.js";
 export { ManifestValidator, ValidationIssue, IssueSeverity } from "./manifest-validator.js";
+export {
+    CardinalityGlyph,
+    ManifestModel,
+    SELF_ORIGIN,
+    type LogicalManifest,
+    type ConceptDef,
+    type ClassDef,
+    type RelationshipDef,
+    type FieldDef,
+    type TaxonomyDef,
+    type FlatNode,
+    type CardGlyph,
+    type Scalar,
+} from "./logical.js";
 export type {
     TypeInfoRec,
     FieldRec,

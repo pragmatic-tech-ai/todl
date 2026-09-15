@@ -4,6 +4,10 @@ import { Repository } from "../../model/model.js";
 import { Cardinality } from "../../model/graph.js";
 import { ManifestEmitter } from "../manifest.js";
 import { ManifestModel, SELF_ORIGIN } from "../../manifest/logical.js";
+import { ManifestWriter } from "../../manifest/manifest-writer.js";
+import { ManifestReader } from "../../manifest/manifest-reader.js";
+import { ManifestValidator } from "../../manifest/manifest-validator.js";
+import { TableId } from "../../manifest/enums.js";
 
 // Fixture: Element <- Component <- Surface; Component declares name + color and
 // a dependsOn relationship; Surface overrides color (subtype wins). A taxonomy
@@ -132,5 +136,21 @@ describe("ManifestEmitter — debug-JSON round-trip (SPEC-03 task 8)", () => {
   test("logical manifest → JSON → logical manifest is identity", () => {
     const manifest = emit().manifest;
     assert.deepEqual(JSON.parse(JSON.stringify(manifest)), manifest);
+  });
+});
+
+describe("end-to-end: Repository → emitter → fromLogical → binary", () => {
+  test("the emitted manifest lowers to a valid binary manifest", () => {
+    const manifest = emit().manifest;
+    const reader = ManifestReader.fromBinary(ManifestWriter.fromLogical(manifest).toBinary());
+    assert.equal(new ManifestValidator(reader).isValid, true);
+    assert.equal(reader.model, "shop");
+    // Element / Component / Surface concepts survive the round trip
+    const names = new Set<string>();
+    for (let i = 1; i <= reader.rowCount(TableId.TypeInfo); i++)
+      names.add(reader.getString(reader.typeInfo(i).name));
+    for (const c of ["Element", "Component", "Surface"]) assert.equal(names.has(c), true);
+    // the pinned class value made it into #Const
+    assert.equal(reader.getConst(reader.fixed(1).value), "red");
   });
 });
