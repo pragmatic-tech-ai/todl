@@ -10,6 +10,7 @@ import { TableId, HeapId } from "./enums.js";
 import { Token, TypeDefOrRef } from "./token.js";
 import { IndexWidths } from "./index-widths.js";
 import { ManifestSchema, ColKind } from "./schema.js";
+import { BinarySerializer } from "./binary-codec.js";
 import type {
     TypeInfoRec, FieldRec, RelRec, TargetRec, ClassRec,
     FixedRec, TaxonomyRec, ImportsRec, TypeRefRec, ManifestJson,
@@ -99,6 +100,25 @@ export class ManifestReader
             strings.get(modelIdx), strings.get(modelVerIdx),
             formatVersion, rootRow, strings, consts, tables,
         );
+    }
+
+    /** Rebuild a reader from the JSON debug view (§8) — the round-trip seam. */
+    static fromJSON(json: ManifestJson): ManifestReader
+    {
+        const strings = StringsHeap.fromArray(json.strings);
+        const consts = ConstHeap.fromBlobs(json.const.map((b) => Base64.decode(b)));
+        const tables = new Map<TableId, number[][]>();
+        tables.set(TableId.TypeInfo, json.tables.TypeInfo.map((r) => r.slice()));
+        tables.set(TableId.Field, json.tables.Field.map((r) => r.slice()));
+        tables.set(TableId.Rel, json.tables.Rel.map((r) => r.slice()));
+        tables.set(TableId.Target, json.tables.Target.map((r) => r.slice()));
+        tables.set(TableId.Class, json.tables.Class.map((r) => r.slice()));
+        tables.set(TableId.Fixed, json.tables.Fixed.map((r) => r.slice()));
+        tables.set(TableId.Taxonomy, json.tables.Taxonomy.map((r) => r.slice()));
+        tables.set(TableId.Imports, json.tables.Imports.map((r) => r.slice()));
+        tables.set(TableId.TypeRef, json.tables.TypeRef.map((r) => r.slice()));
+        const formatVersion = Number(json.format.split("/")[1] ?? ManifestSchema.FORMAT_VERSION);
+        return new ManifestReader(json.model, json.version, formatVersion, json.root, strings, consts, tables);
     }
 
     /** Number of real rows in `table`. */
@@ -196,6 +216,15 @@ export class ManifestReader
     {
         const v = this.row(TableId.TypeRef, row);
         return { import: v[0]!, name: v[1]! };
+    }
+
+    /** Re-serialise this loaded manifest to the binary container (§7). */
+    toBinary(): Uint8Array
+    {
+        return BinarySerializer.serialize(
+            this.model, this.version, this.rootRow,
+            this.strings, this.consts, (table) => this.tables.get(table)!.map((r) => r.slice()),
+        );
     }
 
     /** Re-emit the JSON debug view (§8) — the round-trip seam. */

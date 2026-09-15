@@ -75,6 +75,21 @@ export class ConstHeap
         return writer.toUint8Array();
     }
 
+    /** Rebuild a heap from in-order raw blobs (blob 0 must be empty). */
+    static fromBlobs(blobs: readonly Uint8Array[]): ConstHeap
+    {
+        const heap = new ConstHeap();
+        heap.blobs.length = 0;
+        heap.index.clear();
+        for (const blob of blobs)
+        {
+            const copy = blob.slice();
+            heap.index.set(ConstHeap.keyOf(copy), heap.blobs.length);
+            heap.blobs.push(copy);
+        }
+        return heap;
+    }
+
     /** Rebuild a heap from its serialised bytes. */
     static fromBytes(bytes: Uint8Array): ConstHeap
     {

@@ -59,6 +59,20 @@ export class StringsHeap
         return writer.toUint8Array();
     }
 
+    /** Rebuild a heap from an in-order entry array (entry 0 must be ""). */
+    static fromArray(entries: readonly string[]): StringsHeap
+    {
+        const heap = new StringsHeap();
+        heap.entries.length = 0;
+        heap.index.clear();
+        for (const s of entries)
+        {
+            heap.index.set(s, heap.entries.length);
+            heap.entries.push(s);
+        }
+        return heap;
+    }
+
     /** Rebuild a heap from its serialised bytes. */
     static fromBytes(bytes: Uint8Array): StringsHeap
     {
