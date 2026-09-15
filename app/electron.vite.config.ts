@@ -40,8 +40,35 @@ export default defineConfig({
     plugins: [vitePluginMural({ include: makeIncludeResolver(rendererSrc) })],
     // Mural resolves themes/DataTemplates by runtime Class.name — do not rename.
     esbuild: { keepNames: true },
+    // Do NOT pre-bundle mural: its esbuild optimizeDeps bundle mis-orders the
+    // theme/scheme modules (Material builds before its dark scheme is ready) →
+    // ThemeManager.ActivateTheme fails and the shell renders empty in dev. Served
+    // as real ESM, live bindings + URL dedup keep a single, correctly-ordered
+    // mural. The condition set below still routes it to dist, not src.
+    optimizeDeps: {
+      exclude: [
+        "@pragmatic-tech-ai/mural",
+        "@pragmatic-tech-ai/mural/runtime",
+        "@pragmatic-tech-ai/mural/basic",
+        "@pragmatic-tech-ai/mural/framework",
+        "@pragmatic-tech-ai/mural/visual-engine",
+        "@pragmatic-tech-ai/mural/tooling",
+        "@pragmatic-tech-ai/mural/resources/material",
+      ],
+      esbuildOptions: { conditions: ["module", "browser"] },
+    },
     build: { target: "esnext" }, // top-level await in the renderer bootstrap
     resolve: {
+      // Consume published mural via its compiled `dist` (the tested artifact),
+      // NOT its `src`. Dropping the "development" condition means the mural
+      // exports map resolves to `default` (dist) even in `electron-vite dev`.
+      // Its `development` → `./src` path relies on a src/build theme-registration
+      // seam that only holds when bundled (build), so under native-ESM dev it
+      // left the Material dark scheme unregistered → ThemeManager.ActivateTheme
+      // threw and the shell rendered empty. We no longer live-edit mural source
+      // here (it's a published dep), so dist-in-dev is both correct and matches
+      // the build.
+      conditions: ["module", "browser"],
       alias: [
         { find: /^@shared\//, replacement: `${resolve(repoRoot, "shared")}/` },
         { find: /^@examples\//, replacement: `${resolve(repoRoot, "examples")}/` },
