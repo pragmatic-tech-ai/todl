@@ -3,8 +3,19 @@ import assert from "node:assert/strict";
 import { Tier, EdgeKind, type Node, type Edge, type NodeId } from "../graph.js";
 import type { GraphStore } from "../graph-store.js";
 
-function node(id: NodeId, typeOf = "thing"): Node {
-  return { id, tier: Tier.Instance, typeOf, attrs: new Map() };
+function node(id: NodeId, type = "thing"): Node {
+  return {
+    id,
+    tier: Tier.Instance,
+    type,
+    metaKind: null,
+    namespace: null,
+    localId: null,
+    isClass: false,
+    class: null,
+    storageId: null,
+    attrs: new Map(),
+  };
 }
 function edge(from: NodeId, to: NodeId, via: NodeId | null = "rel"): Edge {
   return { kind: EdgeKind.Relationship, via, from, to };

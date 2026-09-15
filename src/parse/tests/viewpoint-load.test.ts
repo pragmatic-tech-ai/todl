@@ -15,7 +15,7 @@ function repo(text: string) {
 test("a viewpoint loads as an ontology node with Frames edges", () => {
   const m = repo(`concept Component {} concept Interface {}
     viewpoint ComponentView : frames Component, Interface`);
-  assert.equal(m.resolve("ComponentView")?.typeOf, MetaKind.Viewpoint);
+  assert.equal(m.resolve("ComponentView")?.metaKind, MetaKind.Viewpoint);
   assert.deepEqual(m.related("ComponentView", EdgeKind.Frames, Direction.Out).sort(), ["Component", "Interface"]);
   assert.deepEqual(m.frames("ComponentView").sort(), ["Component", "Interface"]);
 });

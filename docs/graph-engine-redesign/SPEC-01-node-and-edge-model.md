@@ -7,6 +7,30 @@
 > Names in this spec are taken **verbatim** from the JOURNAL "Shared naming
 > contract". Where this spec and later specs touch the same name, the JOURNAL wins.
 
+> **Implementation status (2026-09-16, `todl_20`) — IMPLEMENTED.** The `typeOf`
+> split (`type` + `metaKind`), all root fields, `attrs`-user-only + blocklist
+> deletion (#1/#5), `MetaKind.Term` with the dual-term node (#6), the
+> `storageId` reserved slot (#3), and the enforceable **Contains-target-must-be-Term**
+> validation are all done; full suite 835 green, typecheck-clean. Two decisions of
+> record:
+> - **Record identity moved to `localId`, and the `id` attr was DELETED (not
+>   retained).** The loader no longer stages an `id` attr; `assertInstance` /
+>   `assertModel` set the root `localId`. The prelude's `Element` declares only
+>   `label?`/`description?` — there is **no** `id` schema field — so `id` was only
+>   ever identity surfaced into `attrs`. Deleting it (vs. leaving it as a "user
+>   attr") is what makes the deleted blocklist correct: with `id` gone from
+>   `attrs`, `checkOverride` no longer false-positives a `ClassOverride` on the
+>   per-instance identity (leaf.id ≠ class.id by nature).
+> - **#4 (scalar→attr / ref→edge, drop scalar `HasField`) and #2 (operator
+>   endpoint edges) are DEFERRED with evidence** (see Open questions). `schemaOf`
+>   (which walks `HasField`) is the *sole* schema source for validation, the
+>   loader's reference-resolution, and the manifest emitter — with no
+>   manifest-backed replacement wired — so dropping scalar `HasField` would
+>   silently disable scalar validation and strip scalar fields from emitted
+>   manifests (the spec's own Open Questions couples #4 to SPEC-02/03). #2's
+>   `from`/`to` are member-name strings, not concept references, so there are no
+>   separate endpoints to edge-ify beyond the existing `Targets` edge.
+
 ## Goal
 
 Reshape the runtime `Node` and `Edge` so that **`attrs` holds user-defined scalar

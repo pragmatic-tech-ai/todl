@@ -48,7 +48,7 @@ describe('toJSONOwn', () => {
     assert.ok(!ids.has('element'), 'prelude node excluded');
     // Every emitted edge originates from an own node.
     for (const e of own.edges) assert.ok(ownIds.has(e.from), `edge from own node: ${e.from}`);
-    // The typeOf reference to the base concept id is preserved (dangling).
-    assert.equal(own.nodes.find((n) => n.id === 'Microsoft.azure')?.typeOf, 'Location');
+    // The type reference to the base concept id is preserved (dangling).
+    assert.equal(own.nodes.find((n) => n.id === 'Microsoft.azure')?.type, 'Location');
   });
 });

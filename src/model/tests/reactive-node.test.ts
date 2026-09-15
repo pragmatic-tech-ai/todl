@@ -10,8 +10,19 @@ import {
   type CollectionChangedArgs,
 } from "../reactive.js";
 
-function instance(id: string, typeOf: string): Node {
-  return { id, tier: Tier.Instance, typeOf, attrs: new Map() };
+function instance(id: string, type: string): Node {
+  return {
+    id,
+    tier: Tier.Instance,
+    type,
+    metaKind: null,
+    namespace: null,
+    localId: null,
+    isClass: false,
+    class: null,
+    storageId: null,
+    attrs: new Map(),
+  };
 }
 
 test("raises propertyChanged when a scalar attr is set", () => {

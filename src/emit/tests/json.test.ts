@@ -27,7 +27,7 @@ test("toJSON produces a plain, stringifiable document with enums serialized by n
   assert.ok(json.includes('"Instance"'), "tier serialized by name");
   const react = doc.nodes.find((node) => node.id === "react");
   assert.equal(react?.tier, "Instance");
-  assert.equal(react?.typeOf, "technology");
+  assert.equal(react?.type, "technology");
   assert.equal(react?.attrs["label"], "React");
 });
 

@@ -10,7 +10,7 @@ function fakeSink() {
 }
 
 function pkg(): CompiledPackage {
-  const document = { nodes: [{ id: "ms.a", tier: "Instance", typeOf: "t", attrs: { id: "a" } }], edges: [] };
+  const document = { nodes: [{ id: "ms.a", tier: "Instance", type: "t", metaKind: null, namespace: null, localId: "a", isClass: false, class: null, storageId: null, attrs: {} }], edges: [] };
   return {
     id: "ms",
     version: "1.0.0",

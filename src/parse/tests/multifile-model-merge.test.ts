@@ -17,9 +17,9 @@ const fileB = { uri: "b.todl", text: `namespace acme {
 test("two same-id model blocks across files compose into one model (no crash)", () => {
   const { model } = checkAgainst([], [fileA, fileB]);
   // One merged model node containing both files' entities.
-  assert.equal(model.resolve("Arch")?.typeOf, "model");
-  assert.equal(model.resolve("web")?.typeOf, "Component");
-  assert.equal(model.resolve("host")?.typeOf, "Node");
+  assert.equal(model.resolve("Arch")?.metaKind, "model");
+  assert.equal(model.resolve("web")?.type, "Component");
+  assert.equal(model.resolve("host")?.type, "Node");
 });
 
 test("each entity carries its own file's conforms viewpoint", () => {

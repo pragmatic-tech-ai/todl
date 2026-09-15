@@ -268,11 +268,11 @@ export function loadInto(
   // before Pass 1 has staged anything.
   const isTaxonomy = (id: string): boolean => {
     for (const decl of declarations) if (decl.kind === DeclKind.Taxonomy && decl.name === id) return true;
-    return model.resolve(id)?.typeOf === MetaKind.Taxonomy;
+    return model.resolve(id)?.metaKind === MetaKind.Taxonomy;
   };
   const isViewpoint = (id: string): boolean => {
     for (const decl of declarations) if (decl.kind === DeclKind.Viewpoint && decl.name === id) return true;
-    return model.resolve(id)?.typeOf === MetaKind.Viewpoint;
+    return model.resolve(id)?.metaKind === MetaKind.Viewpoint;
   };
   for (const { ns, imports, decl } of units) {
     if (decl.kind !== DeclKind.Taxonomy) continue;
@@ -750,7 +750,7 @@ function recordInstanceSpans(model: Repository, decl: InstanceDecl): void {
  * primitives and unresolved ids are value-like. */
 function isReferenceType(model: Repository, type: string | undefined): boolean {
   if (type === undefined) return false;
-  const kind = model.resolve(type)?.typeOf;
+  const kind = model.resolve(type)?.metaKind;
   return kind === MetaKind.Concept || kind === MetaKind.Taxonomy;
 }
 
@@ -923,7 +923,6 @@ function applyModel(
   if (!asserted.has(decl.id)) {
     builder.assertModel(decl.id);
     recordHome(rec, decl.id);
-    builder.setField(decl.id, "id", decl.id);
     builder.setField(decl.id, "MetaModel", decl.metaModel);
     builder.setField(decl.id, "uses.count", decl.libraries.length);
     decl.libraries.forEach((lib, i) => builder.setField(decl.id, `uses.${i}`, lib));
@@ -972,8 +971,8 @@ function applyInstance(
     asserted.add(decl.id);
     builder.assertInstance(decl.concept, decl.id, decl.isClass);
     recordHome(rec, decl.id);
-    // The record name is its `id`; surface it as the field the schema declares.
-    builder.setField(decl.id, "id", decl.id);
+    // The record name is its identity — carried as the root `localId` (set by
+    // assertInstance), no longer surfaced as an `id` attr (SPEC-01: attrs are user-only).
     if (decl.binds !== null) builder.setField(decl.id, "MetaModel", decl.binds);
     if (decl.instanceOf !== null) builder.addInstanceOf(decl.id, decl.instanceOf);
     if (parent !== null) {
@@ -1214,7 +1213,7 @@ type OperatorTable = Map<string, ResolvedOperator>;
 function operatorTable(model: Repository): OperatorTable {
   const table: OperatorTable = new Map();
   for (const node of model.allNodes()) {
-    if (node.typeOf !== MetaKind.Operator) continue;
+    if (node.metaKind !== MetaKind.Operator) continue;
     const concept = model.related(node.id, EdgeKind.Targets, Direction.Out)[0];
     if (concept === undefined) continue; // dangling concept ref already diagnosed
     table.set(node.id, {

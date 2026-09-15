@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { TodlDocument } from "../../emit/json.js";
+import { MetaKind } from "../../model/kinds.js";
 import { deriveClasses, projectAnnotations } from "../reflect.js";
 
 // A compiled doc with one clabject `az` (class=true) carrying a label and an
@@ -8,9 +9,9 @@ import { deriveClasses, projectAnnotations } from "../reflect.js";
 function doc(): TodlDocument {
   return {
     nodes: [
-      { id: "ms.az", tier: "Instance", typeOf: "location", attrs: { id: "az", class: true, label: "Azure" } },
-      { id: "ms.az@icon", tier: "Instance", typeOf: "icon", attrs: { path: "resources/az.svg", namespace: "ms" } },
-      { id: "ms.Other", tier: "Ontology", typeOf: "concept", attrs: { id: "other" } },
+      { id: "ms.az", tier: "Instance", type: "location", metaKind: null, namespace: null, localId: "az", isClass: true, class: null, storageId: null, attrs: { label: "Azure" } },
+      { id: "ms.az@icon", tier: "Instance", type: "icon", metaKind: null, namespace: "ms", localId: null, isClass: false, class: null, storageId: null, attrs: { path: "resources/az.svg" } },
+      { id: "ms.Other", tier: "Ontology", type: null, metaKind: MetaKind.Concept, namespace: null, localId: "other", isClass: false, class: null, storageId: null, attrs: {} },
     ],
     edges: [{ kind: "Annotated", via: null, from: "ms.az", to: "ms.az@icon" }],
   };
@@ -27,10 +28,10 @@ test("projectAnnotations keys applications by annotation name, strips namespace"
 test("projectAnnotations: multi-annotation, dangling edge skipped, non-annotation edge ignored", () => {
   const doc2: TodlDocument = {
     nodes: [
-      { id: "actor", tier: "Ontology", typeOf: "concept", attrs: { label: "Human Actor" } },
-      { id: "actor@icon", tier: "Ontology", typeOf: "icon", attrs: { path: "icons/actor.svg", namespace: "acme" } },
-      { id: "actor@category", tier: "Ontology", typeOf: "category", attrs: { name: "actors", order: 1, namespace: "acme" } },
-      { id: "bare", tier: "Ontology", typeOf: "concept", attrs: {} },
+      { id: "actor", tier: "Ontology", type: null, metaKind: MetaKind.Concept, namespace: null, localId: null, isClass: false, class: null, storageId: null, attrs: { label: "Human Actor" } },
+      { id: "actor@icon", tier: "Ontology", type: "icon", metaKind: null, namespace: "acme", localId: null, isClass: false, class: null, storageId: null, attrs: { path: "icons/actor.svg" } },
+      { id: "actor@category", tier: "Ontology", type: "category", metaKind: null, namespace: "acme", localId: null, isClass: false, class: null, storageId: null, attrs: { name: "actors", order: 1 } },
+      { id: "bare", tier: "Ontology", type: null, metaKind: MetaKind.Concept, namespace: null, localId: null, isClass: false, class: null, storageId: null, attrs: {} },
     ],
     edges: [
       { kind: "Annotated", via: null, from: "actor", to: "actor@icon" },
@@ -50,10 +51,10 @@ test("projectAnnotations indexes an application under its annotation's ancestors
   // detailed : visual ; X carries @detailed → queryable as detailed AND visual.
   const doc2: TodlDocument = {
     nodes: [
-      { id: "visual", tier: "Ontology", typeOf: "annotation", attrs: {} },
-      { id: "detailed", tier: "Ontology", typeOf: "annotation", attrs: {} },
-      { id: "X", tier: "Ontology", typeOf: "concept", attrs: {} },
-      { id: "X@detailed", tier: "Ontology", typeOf: "detailed", attrs: { icon: "a.svg", badge: "new", namespace: "n" } },
+      { id: "visual", tier: "Ontology", type: null, metaKind: MetaKind.Annotation, namespace: null, localId: null, isClass: false, class: null, storageId: null, attrs: {} },
+      { id: "detailed", tier: "Ontology", type: null, metaKind: MetaKind.Annotation, namespace: null, localId: null, isClass: false, class: null, storageId: null, attrs: {} },
+      { id: "X", tier: "Ontology", type: null, metaKind: MetaKind.Concept, namespace: null, localId: null, isClass: false, class: null, storageId: null, attrs: {} },
+      { id: "X@detailed", tier: "Ontology", type: "detailed", metaKind: null, namespace: "n", localId: null, isClass: false, class: null, storageId: null, attrs: { icon: "a.svg", badge: "new" } },
     ],
     edges: [
       { kind: "Extends", via: null, from: "detailed", to: "visual" },
@@ -78,17 +79,17 @@ test("deriveClasses returns only class=true Instance clabjects with label + anno
 test("deriveClasses resolves inherited icons from an optional annotationsFrom document", () => {
   const ownDoc: TodlDocument = {
     nodes: [
-      { id: "X", tier: "Instance", typeOf: "widget", attrs: { id: "x", class: true, label: "X" } },
-      { id: "X@special", tier: "Instance", typeOf: "special", attrs: { path: "s.svg", namespace: "lib" } },
+      { id: "X", tier: "Instance", type: "widget", metaKind: null, namespace: null, localId: "x", isClass: true, class: null, storageId: null, attrs: { label: "X" } },
+      { id: "X@special", tier: "Instance", type: "special", metaKind: null, namespace: "lib", localId: null, isClass: false, class: null, storageId: null, attrs: { path: "s.svg" } },
     ],
     edges: [{ kind: "Annotated", via: null, from: "X", to: "X@special" }],
   };
   const fullDoc: TodlDocument = {
     nodes: [
       ...ownDoc.nodes,
-      { id: "widget", tier: "Ontology", typeOf: "concept", attrs: {} },
-      { id: "special", tier: "Ontology", typeOf: "annotation", attrs: {} },
-      { id: "icon", tier: "Ontology", typeOf: "annotation", attrs: {} },
+      { id: "widget", tier: "Ontology", type: null, metaKind: MetaKind.Concept, namespace: null, localId: null, isClass: false, class: null, storageId: null, attrs: {} },
+      { id: "special", tier: "Ontology", type: null, metaKind: MetaKind.Annotation, namespace: null, localId: null, isClass: false, class: null, storageId: null, attrs: {} },
+      { id: "icon", tier: "Ontology", type: null, metaKind: MetaKind.Annotation, namespace: null, localId: null, isClass: false, class: null, storageId: null, attrs: {} },
     ],
     edges: [...ownDoc.edges, { kind: "Extends", via: null, from: "special", to: "icon" }],
   };

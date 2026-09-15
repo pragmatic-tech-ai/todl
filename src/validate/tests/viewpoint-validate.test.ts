@@ -10,7 +10,18 @@ test("a viewpoint that frames nothing is flagged (graph-built backstop)", () => 
   // The parser requires >=1 frames target, so this state is only reachable
   // for a graph-built / base-composed viewpoint node with no Frames edges.
   const g = new Graph();
-  g.addNode({ id: "Empty", tier: Tier.Ontology, typeOf: MetaKind.Viewpoint, attrs: new Map() });
+  g.addNode({
+    id: "Empty",
+    tier: Tier.Ontology,
+    type: null,
+    metaKind: MetaKind.Viewpoint,
+    namespace: null,
+    localId: null,
+    isClass: false,
+    class: null,
+    storageId: null,
+    attrs: new Map(),
+  });
   const codes = new Repository(g).validate().map((d) => d.code);
   assert.ok(codes.includes(DiagnosticCode.ViewpointNoFramedConcept));
 });

@@ -26,6 +26,7 @@ export enum DiagnosticCode {
   TaxonomyValueUnresolved = "taxonomy.value-unresolved",
   TermConceptNotRepresented = "taxonomy.term-concept-not-represented",
   TaxonomyTermConceptAmbiguous = "taxonomy.term-concept-ambiguous",
+  ContainsTargetNotTerm = "taxonomy.contains-target-not-term",
   ViewpointNoFramedConcept = "viewpoint.no-framed-concept",
   ViewpointFramesNotConcept = "viewpoint.frames-not-concept",
   // Instance-loading phase.

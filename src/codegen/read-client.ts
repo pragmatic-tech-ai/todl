@@ -20,7 +20,7 @@ export interface ReadClientOptions {
 
 /** True when `typeId` names a concept or taxonomy (→ reference); false for a primitive. */
 export function isReferenceType(repo: Repository, typeId: string): boolean {
-  const kind = repo.resolve(typeId)?.typeOf;
+  const kind = repo.resolve(typeId)?.metaKind;
   return kind === MetaKind.Concept || kind === MetaKind.Taxonomy;
 }
 
@@ -42,7 +42,7 @@ function isMany(cardinality: Cardinality): boolean {
 
 /** The PascalCase entity type a reference member resolves to. */
 function targetPascal(repo: Repository, typeId: string): string {
-  if (repo.resolve(typeId)?.typeOf === MetaKind.Taxonomy) {
+  if (repo.resolve(typeId)?.metaKind === MetaKind.Taxonomy) {
     return pascalCase(repo.represents(typeId)[0] ?? typeId);
   }
   return pascalCase(typeId);
@@ -53,12 +53,12 @@ export function generateReadClient(repo: Repository, options: ReadClientOptions)
 
   const concepts = repo
     .allNodes()
-    .filter((n) => n.typeOf === MetaKind.Concept)
+    .filter((n) => n.metaKind === MetaKind.Concept)
     .map((n) => n.id)
     .sort();
   const taxonomies = repo
     .allNodes()
-    .filter((n) => n.typeOf === MetaKind.Taxonomy)
+    .filter((n) => n.metaKind === MetaKind.Taxonomy)
     .map((n) => n.id)
     .sort();
 
@@ -85,7 +85,7 @@ function emitPackageClass(
   const cases = concepts.map((c) => `      case "${c}": return new ${pascalCase(c)}(this, id);`).join("\n");
   const createEntity =
     `  protected override createEntity(id: string): EntityBase {\n` +
-    `    switch (this.resolve(id)?.typeOf) {\n` +
+    `    switch (this.resolve(id)?.type) {\n` +
     `${cases}\n` +
     `      default: return super.createEntity(id);\n` +
     `    }\n` +

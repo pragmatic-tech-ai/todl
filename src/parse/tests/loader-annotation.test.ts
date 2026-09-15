@@ -19,23 +19,23 @@ test("an annotation loads as an Ontology-tier node with HasField params", () => 
   const { model } = load([{ uri: "a.todl", text: SRC }]);
   const n = model.resolve("Icon");
   assert.equal(n!.tier, Tier.Ontology);
-  assert.equal(n!.typeOf, MetaKind.Annotation);
-  assert.equal(model.resolve("Icon.path")!.typeOf, MetaKind.Field);
+  assert.equal(n!.metaKind, MetaKind.Annotation);
+  assert.equal(model.resolve("Icon.path")!.metaKind, MetaKind.Field);
 });
 
 test("an application loads as an Annotated node typed by the annotation", () => {
   const { model } = load([{ uri: "a.todl", text: SRC }]);
   const app = model.resolve("Actor@Icon");
   assert.equal(app!.tier, Tier.Ontology);
-  assert.equal(app!.typeOf, "Icon");
+  assert.equal(app!.type, "Icon");
   assert.equal(app!.attrs.get("path"), "icons/actor.svg");
-  assert.equal(app!.attrs.get("namespace"), "acme");
+  assert.equal(app!.namespace, "acme");
   assert.deepEqual(model.related("Actor", EdgeKind.Annotated, Direction.Out), ["Actor@Icon"]);
 });
 
 test("package annotations attach to the singleton package node", () => {
   const { model } = load([{ uri: "a.todl", text: SRC }]);
-  assert.equal(model.resolve(PACKAGE_NODE_ID)!.typeOf, MetaKind.Package);
+  assert.equal(model.resolve(PACKAGE_NODE_ID)!.metaKind, MetaKind.Package);
   assert.deepEqual(model.related(PACKAGE_NODE_ID, EdgeKind.Annotated, Direction.Out), ["package@Author"]);
 });
 

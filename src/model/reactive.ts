@@ -96,8 +96,8 @@ export class ReactiveNode implements INotifyPropertyChanged, INotifyCollectionCh
   }
 
   private isCollection(name: string): boolean {
-    const concept = this.model.resolve(this.id)?.typeOf;
-    if (concept === undefined) return false;
+    const concept = this.model.resolve(this.id)?.type;
+    if (concept === undefined || concept === null) return false;
     const schema = this.model.effectiveSchema(concept);
     const member =
       schema.fields.find((field) => field.name === name) ??

@@ -37,13 +37,13 @@ test("loads concept schemas from the corpus", () => {
 test("loads taxonomy terms as class members of the represented concept", () => {
   const model = corpus();
   assert.ok(model.termsOf("TaskType").includes("TaskType.Service"));
-  assert.equal(model.resolve("TaskType.Service")?.typeOf, "Task");
+  assert.equal(model.resolve("TaskType.Service")?.type, "Task");
   assert.ok(model.termsOf("EventType").includes("EventType.Start"));
 });
 
 test("loads instances with scalar attrs and relationship edges", () => {
   const model = corpus();
-  assert.equal(model.resolve("validatePayment")?.typeOf, "Task");
+  assert.equal(model.resolve("validatePayment")?.type, "Task");
   assert.equal(model.resolve("validatePayment")?.attrs.get("label"), "Validate Payment");
   assert.deepEqual(
     model.related("validatePayment", EdgeKind.Relationship, Direction.Out, "type"),
@@ -89,7 +89,7 @@ test("nested instances load with contains edges and a meta-model binding", () =>
       }
     }`,
   ]);
-  assert.equal(model.resolve("saas3p")?.typeOf, "Location");
+  assert.equal(model.resolve("saas3p")?.type, "Location");
   assert.deepEqual(model.related("m", EdgeKind.Contains, Direction.Out), ["saas3p"]);
   assert.equal(model.resolve("m")?.attrs.get("MetaModel"), "EnterpriseArchitecture");
 });

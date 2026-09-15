@@ -41,7 +41,7 @@ export class Graph {
   get Models(): Model[] {
     return this.repository
       .allNodes()
-      .filter((node) => node.typeOf === MetaKind.Model)
+      .filter((node) => node.metaKind === MetaKind.Model)
       .map((node) => new Model(this.repository, node.id));
   }
 
@@ -49,7 +49,7 @@ export class Graph {
    *  (`tech_architecture.Location`). Returns undefined when no such concept exists. */
   GetDefinition(name: string): TodlDefinition | undefined {
     const asConcept = (id: NodeId): TodlDefinition | undefined =>
-      this.repository.resolve(id)?.typeOf === MetaKind.Concept ? new TodlDefinition(this.repository, id) : undefined;
+      this.repository.resolve(id)?.metaKind === MetaKind.Concept ? new TodlDefinition(this.repository, id) : undefined;
 
     if (this.repository.has(name)) {
       const direct = asConcept(name);
@@ -60,7 +60,7 @@ export class Graph {
       const namespace = name.slice(0, dot);
       const local = name.slice(dot + 1);
       for (const node of this.repository.allNodes()) {
-        if (node.id === local && node.typeOf === MetaKind.Concept && node.attrs.get("namespace") === namespace) {
+        if (node.id === local && node.metaKind === MetaKind.Concept && node.namespace === namespace) {
           return new TodlDefinition(this.repository, node.id);
         }
       }

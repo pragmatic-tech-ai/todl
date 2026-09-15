@@ -4,7 +4,7 @@ import type { InstanceDescriptor, NodeId, Scalar } from "../../../index.js";
 
 export class TechCatalog extends FrozenRepository {
   protected override createEntity(id: string): EntityBase {
-    switch (this.resolve(id)?.typeOf) {
+    switch (this.resolve(id)?.type) {
       case "billing": return new Billing(this, id);
       case "location": return new Location(this, id);
       case "technology": return new Technology(this, id);

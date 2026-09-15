@@ -15,12 +15,12 @@ function loadResult(text: string) {
 
 test("a flat taxonomy loads terms as Instance-tier classes of the represented concept", () => {
   const m = repo(`concept Hue {} taxonomy Color : represents Hue { term Red { label = "Red"; } term Blue {} }`);
-  assert.equal(m.resolve("Color")?.typeOf, MetaKind.Taxonomy);
+  assert.equal(m.resolve("Color")?.metaKind, MetaKind.Taxonomy);
   assert.deepEqual(m.related("Color", EdgeKind.Represents, Direction.Out), ["Hue"]);
   const red = m.resolve("Color.Red");
   assert.equal(red?.tier, Tier.Instance);
-  assert.equal(red?.typeOf, "Hue");
-  assert.equal(red?.attrs.get("class"), true);
+  assert.equal(red?.type, "Hue");
+  assert.equal(red?.isClass, true);
   assert.equal(red?.attrs.get("label"), "Red");
   assert.deepEqual(m.narrowerOf("Color.Red"), []);
 });
@@ -39,10 +39,10 @@ test("a multi-representation taxonomy types each term by its own concept", () =>
   assert.deepEqual(m.represents("Microsoft").sort(), ["Location", "Technology"]);
   // Each term is a qualified, Instance-tier class of its own concept.
   const azure = m.resolve("Microsoft.azure");
-  assert.equal(azure?.typeOf, "Location");
-  assert.equal(azure?.attrs.get("class"), true);
-  assert.equal(azure?.attrs.get("id"), "azure");
-  assert.equal(m.resolve("Microsoft.azureOpenai")?.typeOf, "Technology");
+  assert.equal(azure?.type, "Location");
+  assert.equal(azure?.isClass, true);
+  assert.equal(azure?.localId, "azure");
+  assert.equal(m.resolve("Microsoft.azureOpenai")?.type, "Technology");
   // Both are Contains-members of the taxonomy.
   assert.deepEqual(m.termsOf("Microsoft").sort(), ["Microsoft.azure", "Microsoft.azureOpenai"]);
 });
@@ -73,8 +73,8 @@ test("a term composes a represented-concept record, bound to its field (not a te
      }`,
   );
   assert.equal(diagnostics.filter((d) => d.code === DiagnosticCode.TermConceptNotRepresented).length, 0);
-  assert.equal(m.resolve("Microsoft.azureOpenaiBilling")?.typeOf, "Billing");
-  assert.equal(m.resolve("Microsoft.azureOpenaiBilling")?.attrs.get("class"), true);
+  assert.equal(m.resolve("Microsoft.azureOpenaiBilling")?.type, "Billing");
+  assert.equal(m.resolve("Microsoft.azureOpenaiBilling")?.isClass, true);
   assert.deepEqual(
     m.related("Microsoft.azureOpenai", EdgeKind.Relationship, Direction.Out, "billing"),
     ["Microsoft.azureOpenaiBilling"],
@@ -110,7 +110,7 @@ test("a nested taxonomy loads Narrower edges and answers branch queries", () => 
 
 test("a class and its instanceof leaf load with InstanceOf wiring", () => {
   const m = repo(`concept Component {} class Component teamsChat {} Component chatHq instanceof teamsChat {}`);
-  assert.equal(m.resolve("teamsChat")?.attrs.get("class"), true);
-  assert.equal(m.resolve("chatHq")?.attrs.get("class"), undefined);
+  assert.equal(m.resolve("teamsChat")?.isClass, true);
+  assert.equal(m.resolve("chatHq")?.isClass, false);
   assert.deepEqual(m.related("chatHq", EdgeKind.InstanceOf, Direction.Out), ["teamsChat"]);
 });

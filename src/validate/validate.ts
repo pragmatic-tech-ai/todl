@@ -38,26 +38,26 @@ function spanFor(model: Repository, node: NodeId, member: string | null): Source
 export function validate(model: Repository): Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
   for (const node of model.allNodes()) {
-    if (node.tier === Tier.Ontology && node.typeOf === MetaKind.Taxonomy) {
+    if (node.tier === Tier.Ontology && node.metaKind === MetaKind.Taxonomy) {
       checkRepresents(diagnostics, model, node);
       checkTermConcepts(diagnostics, model, node);
       continue;
     }
-    if (node.tier === Tier.Ontology && node.typeOf === MetaKind.Viewpoint) {
+    if (node.tier === Tier.Ontology && node.metaKind === MetaKind.Viewpoint) {
       checkFrames(diagnostics, model, node);
       continue;
     }
-    if (node.tier === Tier.Instance && node.typeOf === MetaKind.Model) {
+    if (node.tier === Tier.Instance && node.metaKind === MetaKind.Model) {
       validateModel(diagnostics, model, node);
       continue;
     }
     if (node.tier === Tier.Ontology) {
-      if (node.typeOf === MetaKind.Annotation) {
+      if (node.metaKind === MetaKind.Annotation) {
         validateAnnotationDecl(diagnostics, model, node);
         continue;
       }
-      const def = model.resolve(node.typeOf);
-      if (def !== undefined && def.typeOf === MetaKind.Annotation) {
+      const def = model.resolve(node.type ?? "");
+      if (def !== undefined && def.metaKind === MetaKind.Annotation) {
         validateAnnotationApplication(diagnostics, model, node);
       }
       continue;
@@ -93,8 +93,7 @@ function validateModel(out: Diagnostic[], model: Repository, node: Node): void {
 
   const present = new Set<string>();
   for (const n of model.allNodes()) {
-    const ns = n.attrs.get("namespace");
-    if (typeof ns === "string") present.add(ns);
+    if (n.namespace !== null) present.add(n.namespace);
   }
 
   if (metaModel !== undefined && !present.has(metaModel)) {
@@ -121,7 +120,7 @@ function validateModel(out: Diagnostic[], model: Repository, node: Node): void {
   for (const objId of model.closure(node.id, EdgeKind.Contains, Direction.Out, false)) {
     const obj = model.resolve(objId);
     if (obj === undefined) continue;
-    checkConstructor(out, model, obj, obj.typeOf, bound);    // the concept
+    checkConstructor(out, model, obj, obj.type ?? "", bound);    // the concept
     const cls = model.classOf(objId);
     if (cls !== null) checkConstructor(out, model, obj, cls, bound); // the instanceof class/term
   }
@@ -132,14 +131,14 @@ function validateModel(out: Diagnostic[], model: Repository, node: Node): void {
   // concept must be framed by its viewpoint (subtype-aware via viewpointsFraming).
   for (const objId of model.closure(node.id, EdgeKind.Contains, Direction.Out, false)) {
     const obj = model.resolve(objId);
-    if (obj === undefined || obj.attrs.get("class") === true) continue;
+    if (obj === undefined || obj.isClass) continue;
     const vp = obj.attrs.get("conforms");
-    if (typeof vp !== "string" || model.resolve(vp)?.typeOf !== MetaKind.Viewpoint) continue;
-    if (!model.viewpointsFraming(obj.typeOf).includes(vp)) {
+    if (typeof vp !== "string" || model.resolve(vp)?.metaKind !== MetaKind.Viewpoint) continue;
+    if (!model.viewpointsFraming(obj.type ?? "").includes(vp)) {
       out.push({
         code: DiagnosticCode.ModelEntityNotFramed,
         severity: Severity.Error,
-        message: `entity "${objId}" is a ${obj.typeOf}, not framed by viewpoint "${vp}"`,
+        message: `entity "${objId}" is a ${obj.type}, not framed by viewpoint "${vp}"`,
         span: model.spanOf(objId) ?? model.spanOf(node.id),
         node: objId,
         path: null,
@@ -176,7 +175,7 @@ function checkConstructor(
 function validateAnnotationDecl(out: Diagnostic[], model: Repository, node: Node): void {
   for (const baseId of model.related(node.id, EdgeKind.Extends, Direction.Out)) {
     const base = model.resolve(baseId);
-    if (base !== undefined && base.typeOf !== MetaKind.Annotation) {
+    if (base !== undefined && base.metaKind !== MetaKind.Annotation) {
       out.push({
         code: DiagnosticCode.AnnotationBaseNotAnnotation,
         severity: Severity.Error,
@@ -206,7 +205,7 @@ function validateAnnotationDecl(out: Diagnostic[], model: Repository, node: Node
 
 /** Validate an annotation application against its annotation's declared params. */
 function validateAnnotationApplication(out: Diagnostic[], model: Repository, node: Node): void {
-  const schema = model.effectiveSchema(node.typeOf);
+  const schema = model.effectiveSchema(node.type ?? "");
   const declared = new Set(schema.fields.map((f) => f.name));
 
   for (const key of node.attrs.keys()) {
@@ -215,7 +214,7 @@ function validateAnnotationApplication(out: Diagnostic[], model: Repository, nod
       out.push({
         code: DiagnosticCode.AnnotationUnknownParam,
         severity: Severity.Error,
-        message: `annotation "${node.typeOf}" has no parameter "${key}"`,
+        message: `annotation "${node.type}" has no parameter "${key}"`,
         span: model.spanOf(node.id),
         node: node.id,
         path: null,
@@ -229,7 +228,7 @@ function validateAnnotationApplication(out: Diagnostic[], model: Repository, nod
       out.push({
         code: DiagnosticCode.RequiredMissing,
         severity: Severity.Error,
-        message: `annotation "${node.typeOf}" requires parameter "${f.name}"`,
+        message: `annotation "${node.type}" requires parameter "${f.name}"`,
         span: model.spanOf(node.id),
         node: node.id,
         path: null,
@@ -250,7 +249,7 @@ function validateInstance(out: Diagnostic[], model: Repository, node: Node): voi
       ? effRels.get(name) ?? []
       : model.related(node.id, EdgeKind.Relationship, Direction.Out, name);
 
-  const schema = model.effectiveSchema(node.typeOf);
+  const schema = model.effectiveSchema(node.type ?? "");
   for (const field of schema.fields) {
     const targets = targetsFor(field.name);
     const count = (effAttrs.has(field.name) ? 1 : 0) + targets.length;
@@ -303,7 +302,7 @@ function checkFrames(out: Diagnostic[], model: Repository, node: Node): void {
   }
   for (const framedId of framed) {
     const target = model.resolve(framedId);
-    if (target === undefined || target.typeOf !== MetaKind.Concept) {
+    if (target === undefined || target.metaKind !== MetaKind.Concept) {
       out.push(
         error(
           DiagnosticCode.ViewpointFramesNotConcept,
@@ -317,19 +316,35 @@ function checkFrames(out: Diagnostic[], model: Repository, node: Node): void {
   }
 }
 
-/** Every term of a taxonomy must be a class of one of the concepts it represents. */
+/** Every term of a taxonomy must be a class of one of the concepts it represents,
+ *  and every `Contains` member must be a genuine term (`metaKind === Term`) — the
+ *  reshape makes term-membership an enforceable invariant, not a derived signal (#6). */
 function checkTermConcepts(out: Diagnostic[], model: Repository, node: Node): void {
   const represented = new Set(model.represents(node.id));
+  for (const termId of model.termsOf(node.id)) {
+    const term = model.resolve(termId);
+    if (term !== undefined && term.metaKind !== MetaKind.Term) {
+      out.push(
+        error(
+          DiagnosticCode.ContainsTargetNotTerm,
+          termId,
+          node.id,
+          `taxonomy "${node.id}" contains "${termId}", which is not a term`,
+          spanFor(model, termId, null),
+        ),
+      );
+    }
+  }
   if (represented.size === 0) return; // already reported by checkRepresents
   for (const termId of model.termsOf(node.id)) {
     const term = model.resolve(termId);
-    if (term !== undefined && !represented.has(term.typeOf)) {
+    if (term !== undefined && !represented.has(term.type ?? "")) {
       out.push(
         error(
           DiagnosticCode.TermConceptNotRepresented,
           termId,
           node.id,
-          `term "${termId}" is a ${term.typeOf} but taxonomy "${node.id}" represents ${[...represented].join(", ")}`,
+          `term "${termId}" is a ${term.type} but taxonomy "${node.id}" represents ${[...represented].join(", ")}`,
           spanFor(model, termId, null),
         ),
       );
@@ -346,9 +361,9 @@ function checkTaxonomyValue(
   targets: NodeId[],
 ): void {
   const typeNode = model.resolve(field.type);
-  if (typeNode === undefined || typeNode.typeOf !== MetaKind.Taxonomy) return;
+  if (typeNode === undefined || typeNode.metaKind !== MetaKind.Taxonomy) return;
   const terms = new Set(model.termsOf(field.type));
-  const path = `${node.typeOf}.${field.name}`;
+  const path = `${node.type}.${field.name}`;
   for (const target of targets) {
     if (!terms.has(target)) {
       out.push(
@@ -376,7 +391,7 @@ function checkBooleanValue(
   if (field.type !== "boolean") return;
   const v = attrs.get(field.name);
   if (v === undefined || typeof v === "boolean") return;
-  const path = `${node.typeOf}.${field.name}`;
+  const path = `${node.type}.${field.name}`;
   out.push(
     error(
       DiagnosticCode.BooleanValueInvalid,
@@ -391,21 +406,21 @@ function checkBooleanValue(
 /** `instanceof X` requires X to exist, be a class, and share the leaf's concept. */
 function checkBinding(out: Diagnostic[], model: Repository, node: Node, cls: NodeId): void {
   const clsNode = model.resolve(cls);
-  const path = `${node.typeOf}.instanceof`;
+  const path = `${node.type}.instanceof`;
   const span = spanFor(model, node.id, null);
   if (clsNode === undefined) {
     out.push(error(DiagnosticCode.BindingInvalid, node.id, path, `"${node.id}" instantiates unknown class "${cls}"`, span));
     return;
   }
-  if (clsNode.attrs.get("class") !== true) {
+  if (!clsNode.isClass) {
     out.push(error(DiagnosticCode.BindingInvalid, node.id, path, `"${node.id}" instantiates "${cls}" which is not a class`, span));
-  } else if (clsNode.typeOf !== node.typeOf) {
+  } else if (clsNode.type !== node.type) {
     out.push(
       error(
         DiagnosticCode.BindingInvalid,
         node.id,
         path,
-        `"${node.id}" (${node.typeOf}) cannot instantiate "${cls}" (${clsNode.typeOf})`,
+        `"${node.id}" (${node.type}) cannot instantiate "${cls}" (${clsNode.type})`,
         span,
       ),
     );
@@ -417,14 +432,14 @@ function checkOverride(out: Diagnostic[], model: Repository, node: Node, cls: No
   const clsNode = model.resolve(cls);
   if (clsNode === undefined) return;
   for (const [name, value] of node.attrs) {
-    if (name === "id" || name === "class") continue;
+    // `attrs` is user-data-only now (SPEC-01) — no markers to skip.
     const fixed = clsNode.attrs.get(name);
     if (fixed !== undefined && fixed !== value) {
       out.push(
         error(
           DiagnosticCode.ClassOverride,
           node.id,
-          `${node.typeOf}.${name}`,
+          `${node.type}.${name}`,
           `"${node.id}" overrides class-fixed "${name}" ("${String(fixed)}") with "${String(value)}"`,
           spanFor(model, node.id, name),
         ),
@@ -446,17 +461,17 @@ function checkTargetTypes(
     allowed.add(t);
     for (const sub of model.subtypesOf(t)) allowed.add(sub);
   }
-  const path = `${node.typeOf}.${relationship.name}`;
+  const path = `${node.type}.${relationship.name}`;
   const expected = relationship.targets.join(" | ");
   for (const target of targets) {
     const targetNode = model.resolve(target);
-    if (targetNode !== undefined && !allowed.has(targetNode.typeOf)) {
+    if (targetNode !== undefined && !allowed.has(targetNode.type ?? "")) {
       out.push({
         code: DiagnosticCode.TargetTypeMismatch,
         severity: Severity.Error,
         node: node.id,
         path,
-        message: `"${path}" expects ${expected} but "${target}" is a ${targetNode.typeOf}`,
+        message: `"${path}" expects ${expected} but "${target}" is a ${targetNode.type}`,
         span: spanFor(model, node.id, relationship.name),
       });
     }
@@ -464,7 +479,7 @@ function checkTargetTypes(
 }
 
 function checkInvariants(out: Diagnostic[], model: Repository, node: Node): void {
-  for (const concept of [node.typeOf, ...model.supertypesOf(node.typeOf)]) {
+  for (const concept of [node.type ?? "", ...model.supertypesOf(node.type ?? "")]) {
     for (const invariant of model.invariantsFor(concept)) {
       if (!satisfies(model, invariant.expr, node.id)) {
         out.push({
@@ -489,7 +504,7 @@ function checkCardinality(
   count: number,
   partial: boolean,
 ): void {
-  const path = `${node.typeOf}.${member}`;
+  const path = `${node.type}.${member}`;
   const span = spanFor(model, node.id, member);
   switch (cardinality) {
     case Cardinality.One:

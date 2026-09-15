@@ -35,8 +35,7 @@ export type Resolved =
  * (prelude / namespace-less / old base). The single reader of a node's
  * namespace — shared by the resolver and validate.ts. */
 export function namespaceOf(model: Repository, id: string): string | null {
-  const attr = model.resolve(id)?.attrs.get("namespace");
-  return typeof attr === "string" ? attr : null;
+  return model.resolve(id)?.namespace ?? null;
 }
 
 export interface Resolver {

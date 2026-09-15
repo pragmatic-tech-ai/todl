@@ -2,9 +2,21 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { Graph, Tier, EdgeKind, Direction, type Node, type Edge } from "../graph.js";
+import { MetaKind } from "../kinds.js";
 
-function instance(id: string, typeOf: string): Node {
-  return { id, tier: Tier.Instance, typeOf, attrs: new Map() };
+function instance(id: string, type: string): Node {
+  return {
+    id,
+    tier: Tier.Instance,
+    type,
+    metaKind: null,
+    namespace: null,
+    localId: null,
+    isClass: false,
+    class: null,
+    storageId: null,
+    attrs: new Map(),
+  };
 }
 
 test("addNode registers a node retrievable by id", () => {
@@ -12,7 +24,7 @@ test("addNode registers a node retrievable by id", () => {
   graph.addNode(instance("react", "technology"));
 
   assert.equal(graph.hasNode("react"), true);
-  assert.equal(graph.getNode("react")?.typeOf, "technology");
+  assert.equal(graph.getNode("react")?.type, "technology");
   assert.equal(graph.nodeCount, 1);
 });
 
@@ -88,8 +100,8 @@ test("related traverses InstanceOf and Represents edges", () => {
   const graph = new Graph();
   graph.addNode(instance("teamsChat", "component"));
   graph.addNode(instance("chat-hq", "component"));
-  graph.addNode({ id: "ComponentCategory", tier: Tier.Ontology, typeOf: "taxonomy", attrs: new Map() });
-  graph.addNode({ id: "category", tier: Tier.Ontology, typeOf: "concept", attrs: new Map() });
+  graph.addNode({ id: "ComponentCategory", tier: Tier.Ontology, type: null, metaKind: MetaKind.Taxonomy, namespace: null, localId: null, isClass: false, class: null, storageId: null, attrs: new Map() });
+  graph.addNode({ id: "category", tier: Tier.Ontology, type: null, metaKind: MetaKind.Concept, namespace: null, localId: null, isClass: false, class: null, storageId: null, attrs: new Map() });
   graph.addEdge({ kind: EdgeKind.InstanceOf, via: null, from: "chat-hq", to: "teamsChat" });
   graph.addEdge({ kind: EdgeKind.Represents, via: null, from: "ComponentCategory", to: "category" });
 

@@ -115,7 +115,13 @@ export function mergeBases(bases: TodlDocument[]): Graph {
       graph.addNode({
         id: node.id,
         tier: Tier[node.tier as keyof typeof Tier],
-        typeOf: node.typeOf,
+        type: node.type ?? null,
+        metaKind: node.metaKind ?? null,
+        namespace: node.namespace ?? null,
+        localId: node.localId ?? null,
+        isClass: node.isClass ?? false,
+        class: node.class ?? null,
+        storageId: node.storageId ?? null,
         attrs: new Map(Object.entries(node.attrs)),
       });
     }

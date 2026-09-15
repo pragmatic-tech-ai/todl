@@ -12,7 +12,18 @@ function codes(text: string): DiagnosticCode[] {
 
 test("a taxonomy with no represented concept is flagged", () => {
   const g = new Graph();
-  g.addNode({ id: "orphan", tier: Tier.Ontology, typeOf: MetaKind.Taxonomy, attrs: new Map() });
+  g.addNode({
+    id: "orphan",
+    tier: Tier.Ontology,
+    type: null,
+    metaKind: MetaKind.Taxonomy,
+    namespace: null,
+    localId: null,
+    isClass: false,
+    class: null,
+    storageId: null,
+    attrs: new Map(),
+  });
   const c = new Repository(g).validate().map((d) => d.code);
   assert.ok(c.includes(DiagnosticCode.TaxonomyNoRepresentedConcept));
 });

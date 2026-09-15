@@ -6,13 +6,15 @@
  */
 
 import { type Node, type Edge, type NodeId, type Scalar } from "./graph.js";
+import { type MetaKind } from "./kinds.js";
 
 export interface GraphStore {
   getNode(id: NodeId): Node | undefined;
   hasNode(id: NodeId): boolean;
   readonly nodeCount: number;
   allNodes(): Node[];
-  instancesOf(typeOf: NodeId): NodeId[];
+  instancesOf(type: NodeId): NodeId[];
+  nodesOfMetaKind(kind: MetaKind): NodeId[];
   outEdges(id: NodeId): Edge[];
   inEdges(id: NodeId): Edge[];
   addNode(node: Node): void;
@@ -27,6 +29,7 @@ export class InMemoryGraphStore implements GraphStore {
   private readonly _out = new Map<NodeId, Edge[]>();
   private readonly _in = new Map<NodeId, Edge[]>();
   private readonly _byType = new Map<NodeId, Set<NodeId>>();
+  private readonly _byMetaKind = new Map<MetaKind, Set<NodeId>>();
 
   getNode(id: NodeId): Node | undefined {
     return this._nodes.get(id);
@@ -44,8 +47,13 @@ export class InMemoryGraphStore implements GraphStore {
     return [...this._nodes.values()];
   }
 
-  instancesOf(typeOf: NodeId): NodeId[] {
-    const bucket = this._byType.get(typeOf);
+  instancesOf(type: NodeId): NodeId[] {
+    const bucket = this._byType.get(type);
+    return bucket === undefined ? [] : [...bucket];
+  }
+
+  nodesOfMetaKind(kind: MetaKind): NodeId[] {
+    const bucket = this._byMetaKind.get(kind);
     return bucket === undefined ? [] : [...bucket];
   }
 
@@ -62,12 +70,22 @@ export class InMemoryGraphStore implements GraphStore {
       throw new Error(`node "${node.id}" already exists`);
     }
     this._nodes.set(node.id, node);
-    let bucket = this._byType.get(node.typeOf);
-    if (bucket === undefined) {
-      bucket = new Set<NodeId>();
-      this._byType.set(node.typeOf, bucket);
+    if (node.type !== null) {
+      let bucket = this._byType.get(node.type);
+      if (bucket === undefined) {
+        bucket = new Set<NodeId>();
+        this._byType.set(node.type, bucket);
+      }
+      bucket.add(node.id);
     }
-    bucket.add(node.id);
+    if (node.metaKind !== null) {
+      let bucket = this._byMetaKind.get(node.metaKind);
+      if (bucket === undefined) {
+        bucket = new Set<NodeId>();
+        this._byMetaKind.set(node.metaKind, bucket);
+      }
+      bucket.add(node.id);
+    }
   }
 
   addEdge(edge: Edge): void {
@@ -104,10 +122,19 @@ export class InMemoryGraphStore implements GraphStore {
     }
     this._out.delete(id);
     this._in.delete(id);
-    const bucket = this._byType.get(node.typeOf);
-    if (bucket !== undefined) {
-      bucket.delete(id);
-      if (bucket.size === 0) this._byType.delete(node.typeOf);
+    if (node.type !== null) {
+      const bucket = this._byType.get(node.type);
+      if (bucket !== undefined) {
+        bucket.delete(id);
+        if (bucket.size === 0) this._byType.delete(node.type);
+      }
+    }
+    if (node.metaKind !== null) {
+      const bucket = this._byMetaKind.get(node.metaKind);
+      if (bucket !== undefined) {
+        bucket.delete(id);
+        if (bucket.size === 0) this._byMetaKind.delete(node.metaKind);
+      }
     }
     this._nodes.delete(id);
   }

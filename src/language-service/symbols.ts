@@ -14,7 +14,7 @@ export function symbolKindOf(model: Repository, id: NodeId): SymbolKind {
   const node = model.resolve(id);
   if (node === undefined) return SymbolKind.Unknown;
   if (node.tier === Tier.Ontology) {
-    switch (node.typeOf) {
+    switch (node.metaKind) {
       case MetaKind.Concept:      return SymbolKind.Concept;
       case MetaKind.Primitive:    return SymbolKind.Primitive;
       case MetaKind.Taxonomy:     return SymbolKind.Taxonomy;

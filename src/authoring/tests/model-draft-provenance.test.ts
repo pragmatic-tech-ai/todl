@@ -26,7 +26,7 @@ const flow = { uri: "flow.todl", text: `namespace acme {
 
 // The typeOf of an own instance (Entity exposes id; typeOf lives on the resolved node).
 function ownOfType(draft: ModelDraft, typeOf: string): string | undefined {
-  return draft.ownInstances().map((e) => e.id).find((id) => draft.resolve(id)?.typeOf === typeOf);
+  return draft.ownInstances().map((e) => e.id).find((id) => draft.resolve(id)?.type === typeOf);
 }
 
 test("a minted reified edge is homed to the file that authored it", () => {

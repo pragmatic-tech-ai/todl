@@ -33,7 +33,7 @@ export interface PublishedClass {
  */
 export function projectAnnotations(model: TodlDocument, targetId: string): Record<string, Record<string, unknown>> {
   // Annotation-declaration nodes and their direct base, to walk the is-a chain.
-  const annIds = new Set(model.nodes.filter((n) => n.typeOf === MetaKind.Annotation).map((n) => n.id));
+  const annIds = new Set(model.nodes.filter((n) => n.metaKind === MetaKind.Annotation).map((n) => n.id));
   const baseOf = new Map<string, string>();
   for (const e of model.edges) {
     if (e.kind === EXTENDS && annIds.has(String(e.from))) baseOf.set(String(e.from), String(e.to));
@@ -60,7 +60,7 @@ export function projectAnnotations(model: TodlDocument, targetId: string): Recor
       if (k === NAMESPACE_ATTR) continue;
       params[k] = v;
     }
-    for (const name of chain(appNode.typeOf)) out[name] = params;
+    for (const name of chain(appNode.type ?? "")) out[name] = params;
   }
   return out;
 }
@@ -80,9 +80,10 @@ export function deriveClasses(model: TodlDocument, annotationsFrom?: TodlDocumen
   const out: PublishedClass[] = [];
   for (const n of model.nodes) {
     const attrs = n.attrs as Record<string, unknown>;
-    if (n.tier !== "Instance" || attrs.class !== true) continue;
-    const cls: PublishedClass = { id: n.id, concept: n.typeOf };
-    if (typeof attrs.id === "string") cls.localId = attrs.id;
+    if (n.tier !== "Instance" || !n.isClass) continue;
+    const cls: PublishedClass = { id: n.id, concept: n.type ?? "" };
+    if (n.localId !== null) cls.localId = n.localId;
+    else if (typeof attrs.id === "string") cls.localId = attrs.id;
     if (typeof attrs.label === "string") cls.label = attrs.label;
     const iconAnn = projectAnnotations(annModel, n.id).icon;
     const iconPath = iconAnn === undefined ? undefined : iconAnn.path;

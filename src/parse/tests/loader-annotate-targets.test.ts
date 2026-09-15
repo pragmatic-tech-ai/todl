@@ -23,7 +23,7 @@ test("a term annotation stages an Annotated edge and an app node", () => {
   );
   const app = model.resolve("Actors.Internal@Icon");
   assert.equal(app!.tier, Tier.Ontology);
-  assert.equal(app!.typeOf, "Icon");
+  assert.equal(app!.type, "Icon");
   assert.equal(app!.attrs.get("path"), "resources/ai_agent.svg");
 });
 
@@ -43,7 +43,7 @@ test("a taxonomy-level annotation stages an Annotated edge from the taxonomy nod
   );
   const app = model.resolve("Actors@Icon");
   assert.equal(app!.tier, Tier.Ontology);
-  assert.equal(app!.typeOf, "Icon");
+  assert.equal(app!.type, "Icon");
   assert.equal(app!.attrs.get("path"), "resources/actors.svg");
 });
 

@@ -39,8 +39,8 @@ export function toMetaModule(model: Repository, options: MetaModuleOptions): str
   const runtimeImport = options.runtimeImport ?? DEFAULT_RUNTIME_IMPORT;
   const registryName = options.registryName ?? camelCase(options.slug);
 
-  const concepts = [...model.instancesOf(MetaKind.Concept)].sort();
-  const taxonomies = [...model.instancesOf(MetaKind.Taxonomy)].sort();
+  const concepts = [...model.nodesOfMetaKind(MetaKind.Concept)].sort();
+  const taxonomies = [...model.nodesOfMetaKind(MetaKind.Taxonomy)].sort();
 
   const lines: string[] = [
     "// AUTO-GENERATED — do not edit.",
@@ -181,8 +181,7 @@ function emitTaxonomy(model: Repository, taxonomyId: string): string {
   const i = "    ";
   const bare = (qualified: string): string => {
     const node = model.resolve(qualified);
-    const id = node?.attrs.get("id");
-    return typeof id === "string" ? id : qualified.slice(taxonomyId.length + 1);
+    return node?.localId ?? qualified.slice(taxonomyId.length + 1);
   };
   const lines: string[] = [`export const ${name} = {`];
   lines.push(`${i}slug: ${jsStr(taxonomyId)},`);
@@ -190,8 +189,8 @@ function emitTaxonomy(model: Repository, taxonomyId: string): string {
   lines.push(`${i}terms: {`);
   for (const termId of model.termsOf(taxonomyId)) {
     const node = model.resolve(termId);
-    // Term node ids are taxonomy-qualified; the bare member id is an attr.
-    const id = typeof node?.attrs.get("id") === "string" ? (node.attrs.get("id") as string) : termId;
+    // Term node ids are taxonomy-qualified; the bare member id is the localId root field.
+    const id = node?.localId ?? termId;
     const parts = [`id: ${jsStr(id)}`];
     const label = node?.attrs.get("label");
     if (typeof label === "string") parts.push(`label: ${jsStr(label)}`);

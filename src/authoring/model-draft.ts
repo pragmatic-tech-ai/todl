@@ -60,7 +60,7 @@ export class ModelDraft {
     const compiled = toJSON(checkAgainst([...draft.baseDocs], [{ uri: `${opts.namespace}.todl`, text: source }]).model);
     // Drop the synthesized `model`-container node (typeOf "model") + its Contains
     // edges — it is a serialization artifact, not an editable instance.
-    const modelIds = new Set(compiled.nodes.filter((n) => n.typeOf === MODEL_TYPEOF).map((n) => n.id));
+    const modelIds = new Set(compiled.nodes.filter((n) => n.metaKind === MODEL_TYPEOF).map((n) => n.id));
     draft.own = {
       nodes: compiled.nodes.filter((n) => !draft.baseIds.has(n.id) && !modelIds.has(n.id)),
       edges: compiled.edges.filter((e) => !draft.baseIds.has(String(e.from)) && !modelIds.has(String(e.from))),
@@ -79,7 +79,7 @@ export class ModelDraft {
     const draft = new ModelDraft([preludeDocument(), ...bases.map((b) => toJSON(b))], opts.namespace);
     const result = checkAgainst([...draft.baseDocs], sources.map((s) => ({ uri: s.uri, text: s.text })));
     const compiled = toJSON(result.model);
-    const modelIds = new Set(compiled.nodes.filter((n) => n.typeOf === MODEL_TYPEOF).map((n) => n.id));
+    const modelIds = new Set(compiled.nodes.filter((n) => n.metaKind === MODEL_TYPEOF).map((n) => n.id));
     draft.own = {
       nodes: compiled.nodes.filter((n) => !draft.baseIds.has(n.id) && !modelIds.has(n.id)),
       edges: compiled.edges.filter((e) => !draft.baseIds.has(String(e.from)) && !modelIds.has(String(e.from))),
@@ -140,7 +140,18 @@ export class ModelDraft {
   /** Append a fresh own instance of `concept` with the given id; return its
    *  handle. `home` records the file it round-trips to (see toTodlByFile). */
   create(concept: string, id: NodeId, home?: string): Entity {
-    this.own.nodes.push({ id, tier: INSTANCE_TIER, typeOf: concept, attrs: { id } });
+    this.own.nodes.push({
+      id,
+      tier: INSTANCE_TIER,
+      type: concept,
+      metaKind: null,
+      namespace: null,
+      localId: id,
+      isClass: false,
+      class: null,
+      storageId: null,
+      attrs: {},
+    });
     if (home !== undefined) this.home.set(id, home);
     this.invalidate();
     return this.model.entity(id)!;
@@ -182,8 +193,8 @@ export class ModelDraft {
   /** The reference members of `fromId`'s concept that `toId` could fill — the
    *  concept-typed fields whose type `toId` is (or is a subtype of). */
   referenceMembers(fromId: NodeId, toId: NodeId): FieldSchema[] {
-    const fromConcept = this.model.resolve(fromId)?.typeOf;
-    const toConcept = this.model.resolve(toId)?.typeOf;
+    const fromConcept = this.model.resolve(fromId)?.type ?? undefined;
+    const toConcept = this.model.resolve(toId)?.type ?? undefined;
     if (fromConcept === undefined || toConcept === undefined) return [];
     const compatible = new Set([toConcept, ...this.model.supertypesOf(toConcept)]);
     return this.model.effectiveSchema(fromConcept).fields.filter((f) => compatible.has(f.type));

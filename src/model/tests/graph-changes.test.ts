@@ -9,9 +9,21 @@ import {
   type Node,
   type GraphChangeArgs,
 } from "../graph.js";
+import { MetaKind } from "../kinds.js";
 
-function instance(id: string, typeOf: string): Node {
-  return { id, tier: Tier.Instance, typeOf, attrs: new Map() };
+function instance(id: string, type: string): Node {
+  return {
+    id,
+    tier: Tier.Instance,
+    type,
+    metaKind: null,
+    namespace: null,
+    localId: null,
+    isClass: false,
+    class: null,
+    storageId: null,
+    attrs: new Map(),
+  };
 }
 
 function record(graph: Graph): GraphChangeArgs[] {
@@ -46,8 +58,8 @@ test("addEdge for a domain relationship emits EdgeAdded carrying the relationshi
 
 test("addEdge for a structural edge emits EdgeAdded with a null property", () => {
   const graph = new Graph();
-  graph.addNode({ id: "frontend", tier: Tier.Ontology, typeOf: "concept", attrs: new Map() });
-  graph.addNode({ id: "component", tier: Tier.Ontology, typeOf: "concept", attrs: new Map() });
+  graph.addNode({ id: "frontend", tier: Tier.Ontology, type: null, metaKind: MetaKind.Concept, namespace: null, localId: null, isClass: false, class: null, storageId: null, attrs: new Map() });
+  graph.addNode({ id: "component", tier: Tier.Ontology, type: null, metaKind: MetaKind.Concept, namespace: null, localId: null, isClass: false, class: null, storageId: null, attrs: new Map() });
   const changes = record(graph);
 
   graph.addEdge({ kind: EdgeKind.Extends, via: null, from: "frontend", to: "component" });

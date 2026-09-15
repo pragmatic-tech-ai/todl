@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import { Repository } from "../model.js";
 import { Graph, Tier, EdgeKind } from "../graph.js";
+import { MetaKind } from "../kinds.js";
 
 test("builder builds instances resolvable through the model", () => {
   const model = new Repository();
@@ -29,7 +30,7 @@ test("view returns a reactive facade wired to the model", () => {
 test("subtypesOf and supertypesOf walk the extends lattice", () => {
   const graph = new Graph();
   for (const id of ["component", "frontend", "spa"]) {
-    graph.addNode({ id, tier: Tier.Ontology, typeOf: "concept", attrs: new Map() });
+    graph.addNode({ id, tier: Tier.Ontology, type: null, metaKind: MetaKind.Concept, namespace: null, localId: null, isClass: false, class: null, storageId: null, attrs: new Map() });
   }
   graph.addEdge({ kind: EdgeKind.Extends, via: null, from: "frontend", to: "component" });
   graph.addEdge({ kind: EdgeKind.Extends, via: null, from: "spa", to: "frontend" });

@@ -131,6 +131,12 @@ export class Repository {
     return this.graph.instancesOf(concept);
   }
 
+  /** Every node whose `metaKind` is `kind` (concept declarations, taxonomies,
+   *  viewpoints, …). Replaces the old `instancesOf(<meta-kind sentinel>)`. */
+  nodesOfMetaKind(kind: MetaKind): NodeId[] {
+    return this.graph.nodesOfMetaKind(kind);
+  }
+
   /** Every node in the model. */
   allNodes(): Node[] {
     return this.graph.allNodes();
@@ -175,7 +181,7 @@ export class Repository {
   private rootsAtElement(id: NodeId): boolean {
     return (
       id !== ELEMENT_ID &&
-      this.graph.getNode(id)?.typeOf === MetaKind.Concept &&
+      this.graph.getNode(id)?.metaKind === MetaKind.Concept &&
       this.graph.hasNode(ELEMENT_ID)
     );
   }
@@ -204,7 +210,7 @@ export class Repository {
 
   /** True when a node is a class — a partial, fixed-value definition. */
   isClass(id: NodeId): boolean {
-    return this.graph.getNode(id)?.attrs.get("class") === true;
+    return this.graph.getNode(id)?.isClass === true;
   }
 
   /** The class a leaf instantiates (`instanceof`), or null. */
@@ -239,7 +245,7 @@ export class Repository {
 
   /** Every viewpoint in the model. */
   viewpoints(): NodeId[] {
-    return this.instancesOf(MetaKind.Viewpoint);
+    return this.nodesOfMetaKind(MetaKind.Viewpoint);
   }
 
   /** Every viewpoint that frames `concept` OR any of its supertypes
@@ -259,7 +265,8 @@ export class Repository {
 
   /**
    * A leaf's effective scalar fields: its own attrs overlaid with its class's
-   * fixed values (class wins; the `class` / `id` markers are not inherited).
+   * fixed values (class wins). `attrs` is user-data-only now (markers moved to
+   * root fields in SPEC-01), so the overlay is a clean merge with no blocklist.
    */
   effectiveFields(leaf: NodeId): Map<string, Scalar> {
     const result = new Map<string, Scalar>(this.graph.getNode(leaf)?.attrs ?? []);
@@ -267,9 +274,7 @@ export class Repository {
     if (cls !== null) {
       const clsAttrs = this.graph.getNode(cls)?.attrs;
       if (clsAttrs !== undefined) {
-        for (const [key, value] of clsAttrs) {
-          if (key !== "class" && key !== "id") result.set(key, value);
-        }
+        for (const [key, value] of clsAttrs) result.set(key, value);
       }
     }
     return result;

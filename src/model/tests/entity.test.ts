@@ -81,10 +81,15 @@ test("is() is subtype- and instanceOf-aware", () => {
   assert.equal(repo.entity("portal")!.is("webApp"), true); // via instanceof
 });
 
-test("fields excludes structural markers but field() reads them by name", () => {
+test("fields holds user data only; structural markers are root fields, not fields", () => {
   const repo = fixture();
   const webApp = repo.entity("webApp")!;
+  // `class`/`id` are no longer attrs (SPEC-01: they moved to root isClass/localId),
+  // so they never appear in `fields` and are not readable as a field by name.
   assert.equal(webApp.fields.has("class"), false);
+  assert.equal(webApp.field("class"), undefined);
+  assert.equal(webApp.field("id"), undefined);
   assert.equal(webApp.fields.get("label"), "Web App default");
-  assert.equal(webApp.field("class"), true); // by name, unfiltered
+  // Class-ness is exposed through the repository's root-field accessor.
+  assert.equal(repo.isClass("webApp"), true);
 });

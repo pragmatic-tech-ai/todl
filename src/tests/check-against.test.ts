@@ -48,8 +48,8 @@ test("a library validates clean against a base meta-model", () => {
   assert.deepEqual(errorCodes(diagnostics), []);
   // The merged model carries both the base concept and the library term.
   assert.ok(model.has("Location"));
-  assert.equal(model.resolve("Microsoft.azure")?.typeOf, "Location");
-  assert.equal(model.resolve("Microsoft.azureOpenai")?.typeOf, "Technology");
+  assert.equal(model.resolve("Microsoft.azure")?.type, "Location");
+  assert.equal(model.resolve("Microsoft.azureOpenai")?.type, "Technology");
 });
 
 test("a reference resolvable in neither base nor source is still flagged", () => {

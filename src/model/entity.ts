@@ -9,13 +9,10 @@
 import { Tier, type NodeId, type Scalar } from "./graph.js";
 import type { Repository, ConceptSchema } from "./model.js";
 
-/** Structural attrs that are markers, not authored fields (hidden from `fields`). */
-const MARKER_ATTRS = new Set(["class", "id", "namespace"]);
-
 /** The untyped base every (future) generated concept class extends. */
 export interface Entity {
   readonly id: string;
-  readonly concept: string; // the node's typeOf
+  readonly concept: string; // the node's `type` (the concept it instantiates)
   readonly tier: Tier;
   field(name: string): Scalar | undefined;
   readonly fields: ReadonlyMap<string, Scalar>;
@@ -36,7 +33,7 @@ export class EntityBase implements Entity {
   ) {}
 
   get concept(): string {
-    return this.repo.resolve(this.id)?.typeOf ?? "";
+    return this.repo.resolve(this.id)?.type ?? "";
   }
 
   get tier(): Tier {
@@ -48,11 +45,9 @@ export class EntityBase implements Entity {
   }
 
   get fields(): ReadonlyMap<string, Scalar> {
-    const out = new Map<string, Scalar>();
-    for (const [key, value] of this.repo.effectiveFields(this.id)) {
-      if (!MARKER_ATTRS.has(key)) out.set(key, value);
-    }
-    return out;
+    // `attrs` (hence effectiveFields) is user-data-only now (SPEC-01) — structural
+    // markers moved to root fields — so there is nothing to filter out.
+    return this.repo.effectiveFields(this.id);
   }
 
   ref(member: string): Entity | undefined {

@@ -18,7 +18,7 @@ export interface EmitOperator { glyph: string; from: string; to: string; }
 export function collectOperators(model: Repository): Map<string, EmitOperator> {
   const byConcept = new Map<string, EmitOperator>();
   for (const node of model.allNodes()) {
-    if (node.typeOf !== MetaKind.Operator) continue;
+    if (node.metaKind !== MetaKind.Operator) continue;
     const from = node.attrs.get("from");
     const to = node.attrs.get("to");
     if (typeof from !== "string" || typeof to !== "string") continue; // relationship form: no shorthand here
@@ -51,9 +51,9 @@ export function deriveBindings(
   const taxIds = new Set<string>();
   for (const node of model.allNodes()) {
     if (!baseIds.has(node.id)) continue;
-    const ns = node.attrs.get("namespace");
-    if (typeof ns === "string" && ns.length > 0 && ns !== PRELUDE_NAMESPACE) baseNs.add(ns);
-    if (node.typeOf === MetaKind.Taxonomy) taxIds.add(node.id);
+    const ns = node.namespace;
+    if (ns !== null && ns.length > 0 && ns !== PRELUDE_NAMESPACE) baseNs.add(ns);
+    if (node.metaKind === MetaKind.Taxonomy) taxIds.add(node.id);
   }
   const taxonomyOf = (id: string): string | undefined => {
     const dot = id.indexOf(".");
@@ -94,7 +94,7 @@ interface EmitCtx {
 }
 
 function isClassNode(n: JsonNode): boolean {
-  return (n.attrs as Record<string, unknown>).class === true;
+  return n.isClass === true;
 }
 
 export function emitModelTodl(own: TodlDocument, namespace: string, bindings: ModelBindings, conforms?: string, operators?: Map<string, EmitOperator>): string {
@@ -150,7 +150,7 @@ export function emitModelTodl(own: TodlDocument, namespace: string, bindings: Mo
  * endpoint members are bound, return `left <glyph> right` plus any non-endpoint
  * body lines; else null. Shared by emitOne (statement) and emitInline (value). */
 function edgeShorthand(node: JsonNode, ctx: EmitCtx, indent: number): { head: string; rest: string[] } | null {
-  const op = ctx.operators.get(node.typeOf);
+  const op = ctx.operators.get(node.type ?? "");
   if (op === undefined || isClassNode(node) || ctx.instanceOf.get(node.id) !== undefined) return null;
   const rels = ctx.rels.get(node.id) ?? [];
   const from = rels.find((r) => r.via === op.from)?.to;
@@ -162,7 +162,7 @@ function edgeShorthand(node: JsonNode, ctx: EmitCtx, indent: number): { head: st
   // save fails loudly and the author fixes the bad reference instead of losing it.
   if (from === undefined || to === undefined)
     throw new Error(
-      `cannot emit reified "${node.typeOf}" "${node.id}" as "${op.glyph}": ` +
+      `cannot emit reified "${node.type}" "${node.id}" as "${op.glyph}": ` +
         `endpoint(s) unresolved (${op.from}=${from ?? "MISSING"}, ${op.to}=${to ?? "MISSING"}). ` +
         `A reference to an undefined entity was dropped on load; define the missing ` +
         `endpoint before saving so the "${op.glyph}" edge round-trips.`,
@@ -183,7 +183,7 @@ function emitOne(node: JsonNode, ctx: EmitCtx, indent: number): string[] {
     if (sh.rest.length === 0) return [`${pad}${sh.head};`];
     return [`${pad}${sh.head} {`, ...sh.rest, `${pad}};`];
   }
-  const concept = localName(node.typeOf);
+  const concept = localName(node.type ?? "");
   const cls = ctx.instanceOf.get(node.id);
   const head = isClassNode(node)
     ? `class ${concept} ${localName(node.id)}`
@@ -200,8 +200,10 @@ function emitOne(node: JsonNode, ctx: EmitCtx, indent: number): string[] {
 function emitBody(node: JsonNode, ctx: EmitCtx, indent: number, inlineChild: boolean): string[] {
   const pad = "  ".repeat(indent);
   const lines: string[] = [];
+  // Identity is the root `localId` now (SPEC-01); re-emit it for inline children,
+  // which persist their own id inside the parent's braces.
+  if (inlineChild && node.localId !== null) lines.push(`${pad}id = ${literal(node.localId)};`);
   for (const [name, value] of Object.entries(node.attrs)) {
-    if (name === "id") { if (inlineChild) lines.push(`${pad}id = ${literal(value as Scalar)};`); continue; }
     if (MARKER_ATTRS.has(name)) continue;
     lines.push(`${pad}${name} = ${literal(value as Scalar)};`);
   }
@@ -230,7 +232,7 @@ function emitInline(node: JsonNode, ctx: EmitCtx, indent: number): string {
     if (sh.rest.length === 0) return sh.head;
     return `${sh.head} {\n${sh.rest.join("\n")}\n${"  ".repeat(indent)}}`;
   }
-  const concept = localName(node.typeOf);
+  const concept = localName(node.type ?? "");
   const body = emitBody(node, ctx, indent + 1, true);
   if (body.length === 0) return `${concept} {}`;
   return `${concept} {\n${body.join("\n")}\n${"  ".repeat(indent)}}`;

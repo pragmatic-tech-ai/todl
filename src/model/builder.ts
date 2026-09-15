@@ -58,22 +58,22 @@ export class Builder {
 
   // ── Instance tier ───────────────────────────────────────────────────────
 
-  /** Stage a new instance node typed by `typeOf`; `asClass` marks it a class. */
-  assertInstance(typeOf: NodeId, id: NodeId, asClass = false): this {
-    this.stageNode(id, Tier.Instance, typeOf);
-    if (asClass) this.stagedAttrs.push({ id, name: "class", value: true });
+  /** Stage a new instance node typed by `type`; `asClass` marks it a class. The
+   *  flat node id is also its `localId` (record identity — was the `id` attr). */
+  assertInstance(type: NodeId, id: NodeId, asClass = false): this {
+    this.stagedNodes.push(this.makeNode(id, Tier.Instance, { type, isClass: asClass, localId: id }));
     return this;
   }
 
-  /** Stage a model container node (Instance-tier, typed by the Model sentinel). */
+  /** Stage a model container node (Instance-tier, the Model language construct). */
   assertModel(id: NodeId): this {
-    this.stageNode(id, Tier.Instance, MetaKind.Model);
+    this.stagedNodes.push(this.makeNode(id, Tier.Instance, { metaKind: MetaKind.Model, localId: id }));
     return this;
   }
 
   /** Stage an annotation-type declaration node (Ontology-tier). */
   defineAnnotation(id: NodeId, extendsId: NodeId | null = null): this {
-    this.stageNode(id, Tier.Ontology, MetaKind.Annotation);
+    this.stagedNodes.push(this.makeNode(id, Tier.Ontology, { metaKind: MetaKind.Annotation }));
     if (extendsId !== null) {
       this.stagedEdges.push({ kind: EdgeKind.Extends, via: null, from: id, to: extendsId });
     }
@@ -82,7 +82,7 @@ export class Builder {
 
   /** Stage the singleton package node (Ontology-tier), host of package annotations. */
   definePackageNode(id: NodeId): this {
-    this.stageNode(id, Tier.Ontology, MetaKind.Package);
+    this.stagedNodes.push(this.makeNode(id, Tier.Ontology, { metaKind: MetaKind.Package }));
     return this;
   }
 
@@ -90,7 +90,7 @@ export class Builder {
    *  the annotation) plus the `Annotated` edge target -> application. Returns the app id. */
   annotate(target: NodeId, annotationId: NodeId): NodeId {
     const appId = `${target}@${annotationId}`;
-    this.stageNode(appId, Tier.Ontology, annotationId);
+    this.stagedNodes.push(this.makeNode(appId, Tier.Ontology, { type: annotationId }));
     this.stagedEdges.push({ kind: EdgeKind.Annotated, via: null, from: target, to: appId });
     return appId;
   }
@@ -123,13 +123,13 @@ export class Builder {
 
   /** Stage a primitive declaration node. */
   definePrimitive(id: NodeId): this {
-    this.stageNode(id, Tier.Ontology, MetaKind.Primitive);
+    this.stagedNodes.push(this.makeNode(id, Tier.Ontology, { metaKind: MetaKind.Primitive }));
     return this;
   }
 
   /** Stage a concept declaration, optionally extending `extendsId`. */
   defineConcept(id: NodeId, extendsId: NodeId | null = null): this {
-    this.stageNode(id, Tier.Ontology, MetaKind.Concept);
+    this.stagedNodes.push(this.makeNode(id, Tier.Ontology, { metaKind: MetaKind.Concept }));
     if (extendsId !== null) {
       this.stagedEdges.push({ kind: EdgeKind.Extends, via: null, from: id, to: extendsId });
     }
@@ -139,13 +139,11 @@ export class Builder {
   /** Stage a field member on `concept`: a scalar/enum/ref-typed property. */
   addField(concept: NodeId, name: string, type: NodeId, cardinality: Cardinality = Cardinality.One): this {
     const memberId = `${concept}.${name}`;
-    const attrs = new Map<string, Scalar>([
-      ["name", name],
-      ["cardinality", cardinality],
-      ["type", type],
-    ]);
-    if (this.currentNamespace !== null) attrs.set("namespace", this.currentNamespace);
-    this.stagedNodes.push({ id: memberId, tier: Tier.Ontology, typeOf: MetaKind.Field, attrs });
+    const node = this.makeNode(memberId, Tier.Ontology, { metaKind: MetaKind.Field });
+    node.attrs.set("name", name);
+    node.attrs.set("cardinality", cardinality);
+    node.attrs.set("type", type);
+    this.stagedNodes.push(node);
     this.stagedEdges.push({ kind: EdgeKind.HasField, via: null, from: concept, to: memberId });
     return this;
   }
@@ -159,15 +157,11 @@ export class Builder {
     inverse: string | null = null,
   ): this {
     const memberId = `${concept}.${name}`;
-    const attrs = new Map<string, Scalar>([
-      ["name", name],
-      ["cardinality", cardinality],
-    ]);
-    if (inverse !== null) {
-      attrs.set("inverse", inverse);
-    }
-    if (this.currentNamespace !== null) attrs.set("namespace", this.currentNamespace);
-    this.stagedNodes.push({ id: memberId, tier: Tier.Ontology, typeOf: MetaKind.Relationship, attrs });
+    const node = this.makeNode(memberId, Tier.Ontology, { metaKind: MetaKind.Relationship });
+    node.attrs.set("name", name);
+    node.attrs.set("cardinality", cardinality);
+    if (inverse !== null) node.attrs.set("inverse", inverse);
+    this.stagedNodes.push(node);
     this.stagedEdges.push({ kind: EdgeKind.HasRelationship, via: null, from: concept, to: memberId });
     for (const target of targets) {
       this.stagedEdges.push({ kind: EdgeKind.Targets, via: null, from: memberId, to: target });
@@ -185,17 +179,23 @@ export class Builder {
    * arbitrarily.
    */
   defineTaxonomy(name: NodeId, represents: readonly NodeId[], terms: readonly TermInput[]): this {
-    this.stageNode(name, Tier.Ontology, MetaKind.Taxonomy);
+    this.stagedNodes.push(this.makeNode(name, Tier.Ontology, { metaKind: MetaKind.Taxonomy }));
     for (const concept of represents) {
       this.stagedEdges.push({ kind: EdgeKind.Represents, via: null, from: name, to: concept });
     }
     const fallback = represents[0] ?? "";
     const stageTerm = (term: TermInput, parentId: NodeId | null): void => {
       const id = `${name}.${term.id}`;
-      const attrs = new Map<string, Scalar>([["class", true], ["id", term.id]]);
-      if (term.attrs !== undefined) for (const [key, value] of term.attrs) attrs.set(key, value);
-      if (this.currentNamespace !== null) attrs.set("namespace", this.currentNamespace);
-      this.stagedNodes.push({ id, tier: Tier.Instance, typeOf: term.concept ?? fallback, attrs });
+      // A term is BOTH a language construct (`Term`) AND a class of its concept:
+      // its concept lives in `type`, term-ness in `metaKind`, short id in `localId`.
+      const node = this.makeNode(id, Tier.Instance, {
+        type: term.concept ?? fallback,
+        metaKind: MetaKind.Term,
+        isClass: true,
+        localId: term.id,
+      });
+      if (term.attrs !== undefined) for (const [key, value] of term.attrs) node.attrs.set(key, value);
+      this.stagedNodes.push(node);
       this.stagedEdges.push({ kind: EdgeKind.Contains, via: null, from: name, to: id });
       for (const rel of term.relationships ?? []) {
         this.stagedEdges.push({ kind: EdgeKind.Relationship, via: rel.name, from: id, to: rel.target });
@@ -219,7 +219,7 @@ export class Builder {
     toMember: string | null,
     relationship: string | null,
   ): this {
-    this.stageNode(glyph, Tier.Ontology, MetaKind.Operator);
+    this.stagedNodes.push(this.makeNode(glyph, Tier.Ontology, { metaKind: MetaKind.Operator }));
     if (fromMember !== null) this.stagedAttrs.push({ id: glyph, name: "from", value: fromMember });
     if (toMember !== null) this.stagedAttrs.push({ id: glyph, name: "to", value: toMember });
     if (relationship !== null) this.stagedAttrs.push({ id: glyph, name: "relationship", value: relationship });
@@ -229,7 +229,7 @@ export class Builder {
 
   /** Define a viewpoint node framing the given concepts (one Frames edge each). */
   defineViewpoint(name: NodeId, frames: readonly NodeId[]): this {
-    this.stageNode(name, Tier.Ontology, MetaKind.Viewpoint);
+    this.stagedNodes.push(this.makeNode(name, Tier.Ontology, { metaKind: MetaKind.Viewpoint }));
     for (const concept of frames) {
       this.stagedEdges.push({ kind: EdgeKind.Frames, via: null, from: name, to: concept });
     }
@@ -282,9 +282,30 @@ export class Builder {
     this.stagedEdges.length = 0;
   }
 
-  private stageNode(id: NodeId, tier: Tier, typeOf: NodeId): void {
-    const attrs = new Map<string, Scalar>();
-    if (this.currentNamespace !== null) attrs.set("namespace", this.currentNamespace);
-    this.stagedNodes.push({ id, tier, typeOf, attrs });
+  /** Build a fresh {@link Node} with the current namespace and all root fields
+   *  defaulted; `opts` fills the structural fields the caller cares about. */
+  private makeNode(
+    id: NodeId,
+    tier: Tier,
+    opts: {
+      type?: NodeId | null;
+      metaKind?: MetaKind | null;
+      isClass?: boolean;
+      localId?: string | null;
+      class?: NodeId | null;
+    } = {},
+  ): Node {
+    return {
+      id,
+      tier,
+      type: opts.type ?? null,
+      metaKind: opts.metaKind ?? null,
+      namespace: this.currentNamespace,
+      localId: opts.localId ?? null,
+      isClass: opts.isClass ?? false,
+      class: opts.class ?? null,
+      storageId: null,
+      attrs: new Map<string, Scalar>(),
+    };
   }
 }

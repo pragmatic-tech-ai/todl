@@ -9,7 +9,7 @@ test("assertInstance + commit creates a typed node", () => {
   new Builder(graph).assertInstance("technology", "react").commit();
 
   assert.equal(graph.hasNode("react"), true);
-  assert.equal(graph.getNode("react")?.typeOf, "technology");
+  assert.equal(graph.getNode("react")?.type, "technology");
 });
 
 test("setField + commit writes a scalar attr", () => {
@@ -79,7 +79,7 @@ test("committed mutations flow through the change bus in order", () => {
 test("assertInstance asClass marks the node with class = true", () => {
   const graph = new Graph();
   new Builder(graph).assertInstance("component", "teamsChat", true).commit();
-  assert.equal(graph.getNode("teamsChat")?.attrs.get("class"), true);
+  assert.equal(graph.getNode("teamsChat")?.isClass, true);
 });
 
 test("addInstanceOf links a leaf to its class", () => {
@@ -104,8 +104,8 @@ test("defineTaxonomy stages the represented concept plus class terms", () => {
 
   const term = graph.getNode("ComponentCategory.ConversationalInterface");
   assert.equal(term?.tier, Tier.Instance);
-  assert.equal(term?.typeOf, "category");
-  assert.equal(term?.attrs.get("class"), true);
+  assert.equal(term?.type, "category");
+  assert.equal(term?.isClass, true);
   assert.equal(term?.attrs.get("icon"), "Chat.svg");
 
   assert.deepEqual(graph.related("ComponentCategory", EdgeKind.Represents, Direction.Out), ["category"]);

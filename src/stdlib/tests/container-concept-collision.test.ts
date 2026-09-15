@@ -27,5 +27,5 @@ test("a meta-model may declare `concept container` without colliding with the pr
   );
   const node = model.resolve("mm.container") ?? model.resolve("container");
   assert.ok(node, "`container` resolves");
-  assert.equal(node.typeOf, MetaKind.Concept, "`container` resolves as a concept");
+  assert.equal(node.metaKind, MetaKind.Concept, "`container` resolves as a concept");
 });

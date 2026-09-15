@@ -106,7 +106,7 @@ export class ManifestEmitter
     private emitConcepts(): Record<string, ConceptDef>
     {
         const out: Record<string, ConceptDef> = {};
-        for (const id of this.repo.instancesOf(MetaKind.Concept))
+        for (const id of this.repo.nodesOfMetaKind(MetaKind.Concept))
         {
             const schema = this.repo.schemaOf(id);
             const fields: Record<string, FieldDef> = {};
@@ -137,7 +137,7 @@ export class ManifestEmitter
             const fixed: Record<string, Scalar> = {};
             for (const [key, value] of node.attrs)
                 if (!ManifestEmitter.MARKERS.has(key)) fixed[key] = value;
-            const def: ClassDef = { concept: node.typeOf, narrower: this.repo.narrowerOf(node.id), fixed };
+            const def: ClassDef = { concept: node.type ?? "", narrower: this.repo.narrowerOf(node.id), fixed };
             const taxonomy = this.repo.related(node.id, EdgeKind.Contains, Direction.In)[0];
             if (taxonomy !== undefined) def.taxonomy = taxonomy;
             const broader = this.repo.broaderOf(node.id)[0];
@@ -150,7 +150,7 @@ export class ManifestEmitter
     private emitTaxonomies(): Record<string, TaxonomyDef>
     {
         const out: Record<string, TaxonomyDef> = {};
-        for (const id of this.repo.instancesOf(MetaKind.Taxonomy))
+        for (const id of this.repo.nodesOfMetaKind(MetaKind.Taxonomy))
         {
             const roots = this.repo.termsOf(id).filter((t) => this.repo.broaderOf(t).length === 0);
             out[id] = { represents: this.repo.represents(id), roots };
@@ -165,11 +165,11 @@ export class ManifestEmitter
         const nodes: DataNode[] = [];
         for (const node of this.repo.allNodes())
         {
-            if (!this.isDataNode(node.id, node.tier, node.typeOf)) continue;
+            if (!this.isDataNode(node.tier, node.metaKind, node.id)) continue;
             const dn: DataNode = {
                 id: node.id,
-                type: node.typeOf,
-                namespace: ManifestEmitter.asString(node.attrs.get("namespace")),
+                type: node.type ?? "",
+                namespace: node.namespace ?? "",
                 attrs: this.flattenedAttrs(node.id),
             };
             const cls = this.repo.classOf(node.id);
@@ -184,7 +184,7 @@ export class ManifestEmitter
         const edges: DataEdge[] = [];
         for (const node of this.repo.allNodes())
         {
-            if (!this.isDataNode(node.id, node.tier, node.typeOf)) continue;
+            if (!this.isDataNode(node.tier, node.metaKind, node.id)) continue;
             for (const [rel, targets] of this.repo.effectiveRelationships(node.id))
                 for (const to of targets) edges.push({ from: node.id, rel, to });
         }
@@ -192,9 +192,9 @@ export class ManifestEmitter
     }
 
     /** An instance-tier domain node: not a class/term definition, not a model container. */
-    private isDataNode(id: NodeId, tier: Tier, typeOf: NodeId): boolean
+    private isDataNode(tier: Tier, metaKind: MetaKind | null, id: NodeId): boolean
     {
-        return tier === Tier.Instance && typeOf !== MetaKind.Model && !this.repo.isClass(id);
+        return tier === Tier.Instance && metaKind !== MetaKind.Model && !this.repo.isClass(id);
     }
 
     /**

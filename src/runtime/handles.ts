@@ -44,7 +44,7 @@ export class Instance {
 
   /** The concept this instance is a `typeOf`. */
   get Definition(): TodlDefinition {
-    return new TodlDefinition(this.repo, this.repo.resolve(this.Id)?.typeOf ?? "");
+    return new TodlDefinition(this.repo, this.repo.resolve(this.Id)?.type ?? "");
   }
 
   /** A scalar member value by name. */
@@ -75,9 +75,9 @@ export class Model {
     const seen = new Set<NodeId>();
     const out: TodlDefinition[] = [];
     for (const id of this.instances()) {
-      const concept = this.repo.resolve(id)?.typeOf;
-      if (concept === undefined || seen.has(concept)) continue;
-      if (this.repo.resolve(concept)?.typeOf !== MetaKind.Concept) continue;
+      const concept = this.repo.resolve(id)?.type;
+      if (concept === undefined || concept === null || seen.has(concept)) continue;
+      if (this.repo.resolve(concept)?.metaKind !== MetaKind.Concept) continue;
       seen.add(concept);
       out.push(new TodlDefinition(this.repo, concept));
     }
@@ -89,8 +89,8 @@ export class Model {
   GetInstances(def: TodlDefinition): Instance[] {
     return this.instances()
       .filter((id) => {
-        const concept = this.repo.resolve(id)?.typeOf;
-        return concept !== undefined && (concept === def.Id || this.repo.supertypesOf(concept).includes(def.Id));
+        const concept = this.repo.resolve(id)?.type;
+        return concept !== undefined && concept !== null && (concept === def.Id || this.repo.supertypesOf(concept).includes(def.Id));
       })
       .map((id) => new Instance(this.repo, id));
   }

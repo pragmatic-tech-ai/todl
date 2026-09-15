@@ -7,8 +7,8 @@ import { GraphPackageStore } from "../stores.js";
 function pkg(): CompiledPackage {
   const document = {
     nodes: [
-      { id: "ms.a", tier: "Instance", typeOf: "t", attrs: { id: "a", label: "A" } },
-      { id: "ms.b", tier: "Instance", typeOf: "t", attrs: { id: "b" } },
+      { id: "ms.a", tier: "Instance", type: "t", metaKind: null, namespace: null, localId: "a", isClass: false, class: null, storageId: null, attrs: { label: "A" } },
+      { id: "ms.b", tier: "Instance", type: "t", metaKind: null, namespace: null, localId: "b", isClass: false, class: null, storageId: null, attrs: {} },
     ],
     edges: [{ kind: "Relationship", via: "rel", from: "ms.a", to: "ms.b" }],
   };

@@ -27,8 +27,8 @@ const fileB = { uri: "deployments.todl", text: `namespace acme {
 
 test("fromSources composes many files into one draft", () => {
   const draft = ModelDraft.fromSources([base()], [fileA, fileB], { namespace: "acme" });
-  assert.equal(draft.resolve("web")?.typeOf, "Component");
-  assert.equal(draft.resolve("host")?.typeOf, "Node");
+  assert.equal(draft.resolve("web")?.type, "Component");
+  assert.equal(draft.resolve("host")?.type, "Node");
 });
 
 test("homeOf maps each entity to its source file", () => {
@@ -64,8 +64,8 @@ test("the emitted files round-trip: recompiling reproduces the model, no diagnos
     ...sources,
   ]);
   assert.deepEqual(diagnostics.map((d) => d.code), []);
-  assert.equal(model.resolve("web")?.typeOf, "Component");
-  assert.equal(model.resolve("host")?.typeOf, "Node");
+  assert.equal(model.resolve("web")?.type, "Component");
+  assert.equal(model.resolve("host")?.type, "Node");
 });
 
 test("create with a home hint places a new entity into that file's output", () => {

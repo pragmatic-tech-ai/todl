@@ -2,13 +2,36 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { Graph, Tier, EdgeKind, Direction, type Node } from "../graph.js";
+import { MetaKind } from "../kinds.js";
 
 function ontologyNode(id: string): Node {
-  return { id, tier: Tier.Ontology, typeOf: "concept", attrs: new Map() };
+  return {
+    id,
+    tier: Tier.Ontology,
+    type: null,
+    metaKind: MetaKind.Concept,
+    namespace: null,
+    localId: null,
+    isClass: false,
+    class: null,
+    storageId: null,
+    attrs: new Map(),
+  };
 }
 
-function instanceNode(id: string, typeOf: string): Node {
-  return { id, tier: Tier.Instance, typeOf, attrs: new Map() };
+function instanceNode(id: string, type: string): Node {
+  return {
+    id,
+    tier: Tier.Instance,
+    type,
+    metaKind: null,
+    namespace: null,
+    localId: null,
+    isClass: false,
+    class: null,
+    storageId: null,
+    attrs: new Map(),
+  };
 }
 
 /** component <- frontend <- spa, via Extends edges (subtype -> supertype). */

@@ -13,9 +13,9 @@ test("annotation def, application node, Annotated edge, and params round-trip", 
     }` }]);
   const restored = fromJSON(toJSON(model));
 
-  assert.equal(restored.resolve("Badge")!.typeOf, MetaKind.Annotation);
+  assert.equal(restored.resolve("Badge")!.metaKind, MetaKind.Annotation);
   const app = restored.resolve("Actor@Badge");
-  assert.equal(app!.typeOf, "Badge");
+  assert.equal(app!.type, "Badge");
   assert.equal(app!.attrs.get("path"), "a.svg");
   assert.deepEqual(restored.related("Actor", EdgeKind.Annotated, Direction.Out), ["Actor@Badge"]);
 });
@@ -34,7 +34,7 @@ test("a taxonomy-level annotation round-trips through JSON", () => {
   const restored = fromJSON(toJSON(model));
 
   const app = restored.resolve("Actors@Badge");
-  assert.equal(app!.typeOf, "Badge");
+  assert.equal(app!.type, "Badge");
   assert.equal(app!.attrs.get("path"), "actors.svg");
   assert.deepEqual(restored.related("Actors", EdgeKind.Annotated, Direction.Out), ["Actors@Badge"]);
 });

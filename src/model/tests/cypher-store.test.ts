@@ -4,8 +4,19 @@ import { Tier, EdgeKind, type Node, type Edge, type NodeId } from "../graph.js";
 import { CypherGraphStore, type CypherSession, type CypherRow, type CypherOp } from "../cypher-store.js";
 import { describeGraphStore } from "./graph-store-conformance.js";
 
-function node(id: NodeId, typeOf = "thing", attrs: Record<string, string> = {}): Node {
-  return { id, tier: Tier.Instance, typeOf, attrs: new Map(Object.entries(attrs)) };
+function node(id: NodeId, type = "thing", attrs: Record<string, string> = {}): Node {
+  return {
+    id,
+    tier: Tier.Instance,
+    type,
+    metaKind: null,
+    namespace: null,
+    localId: null,
+    isClass: false,
+    class: null,
+    storageId: null,
+    attrs: new Map(Object.entries(attrs)),
+  };
 }
 function edge(from: NodeId, to: NodeId, via: NodeId | null = "rel"): Edge {
   return { kind: EdgeKind.Relationship, via, from, to };
@@ -33,8 +44,22 @@ test("mutations record the mapped Cypher ops (applied to the working copy first)
 
   const ops = s.pendingCypher();
   assert.deepEqual(ops[0], {
-    cypher: "CREATE (n:Node {id: $id}) SET n.tier = $tier, n.typeOf = $typeOf, n += $attrs",
-    params: { id: "copilot", tier: "Instance", typeOf: "technology", attrs: { label: "Copilot" } },
+    cypher:
+      "CREATE (n:Node {id: $id}) SET n.tier = $tier, n.type = $type, n.metaKind = $metaKind, " +
+      "n.namespace = $namespace, n.localId = $localId, n.isClass = $isClass, n.class = $class, " +
+      "n.storageId = $storageId, n += $attrs",
+    params: {
+      id: "copilot",
+      tier: "Instance",
+      type: "technology",
+      metaKind: null,
+      namespace: null,
+      localId: null,
+      isClass: false,
+      class: null,
+      storageId: null,
+      attrs: { label: "Copilot" },
+    },
   });
   assert.deepEqual(ops[2], {
     cypher: "MATCH (a:Node {id: $from}), (b:Node {id: $to}) CREATE (a)-[:REL {kind: $kind, via: $via}]->(b)",
@@ -86,14 +111,14 @@ class DataSession implements CypherSession {
 test("load rebuilds the working copy from DB rows", async () => {
   const session = new DataSession(
     [
-      { id: "copilot", tier: "Instance", typeOf: "technology", props: { id: "copilot", tier: "Instance", typeOf: "technology", label: "Copilot" } },
-      { id: "gw", tier: "Instance", typeOf: "component", props: { id: "gw", tier: "Instance", typeOf: "component" } },
+      { id: "copilot", tier: "Instance", type: "technology", props: { id: "copilot", tier: "Instance", type: "technology", label: "Copilot" } },
+      { id: "gw", tier: "Instance", type: "component", props: { id: "gw", tier: "Instance", type: "component" } },
     ],
     [{ from: "gw", to: "copilot", kind: "Relationship", via: "implementedBy" }],
   );
   const store = await CypherGraphStore.load(session);
   assert.equal(store.getNode("copilot")?.attrs.get("label"), "Copilot");
-  assert.equal(store.getNode("copilot")?.attrs.has("typeOf"), false); // structural props stripped
+  assert.equal(store.getNode("copilot")?.attrs.has("type"), false); // structural props stripped
   assert.deepEqual(store.instancesOf("component"), ["gw"]);
   assert.deepEqual(store.outEdges("gw").map((e) => e.to), ["copilot"]);
   assert.equal(store.pendingCypher().length, 0); // loaded data is not a pending write

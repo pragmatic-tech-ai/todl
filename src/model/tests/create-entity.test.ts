@@ -13,7 +13,7 @@ class Widget extends EntityBase {
 // A Repository whose `component` nodes hydrate as Widgets via the seam.
 class WidgetRepo extends Repository {
   protected override createEntity(id: NodeId): EntityBase {
-    return this.resolve(id)?.typeOf === "component" ? new Widget(this, id) : super.createEntity(id);
+    return this.resolve(id)?.type === "component" ? new Widget(this, id) : super.createEntity(id);
   }
 }
 

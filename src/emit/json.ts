@@ -6,6 +6,7 @@
  */
 
 import { Graph, Tier, EdgeKind, type Node, type Edge, type NodeId, type Scalar } from "../model/graph.js";
+import { type MetaKind } from "../model/kinds.js";
 import { Repository } from "../model/model.js";
 
 /** Human-readable metadata about an entity, added only in debug emit. Opaque
@@ -43,7 +44,13 @@ export interface EmitOptions {
 export interface JsonNode {
   id: NodeId;
   tier: string;
-  typeOf: NodeId;
+  type: NodeId | null;
+  metaKind: MetaKind | null;
+  namespace: string | null;
+  localId: string | null;
+  isClass: boolean;
+  class: NodeId | null;
+  storageId: string | null;
   attrs: Record<string, Scalar>;
   debug?: NodeDebug;
 }
@@ -64,21 +71,20 @@ export interface TodlDocument {
 /** An entity's readable name: its declared `name`, else its instance `id`
  *  attr, else the node id (which for ontology declarations *is* the name). */
 function nodeName(node: Node): string {
-  return String(node.attrs.get("name") ?? node.attrs.get("id") ?? node.id);
+  return String(node.attrs.get("name") ?? node.localId ?? node.id);
 }
 
 function nodeDebug(model: Repository, node: Node, provenance?: ReadonlyMap<string, string>): NodeDebug {
-  // A `typeOf` that resolves to a real node is a concept id ⇒ this is an
-  // instance of it. Otherwise `typeOf` is a meta-kind sentinel ("concept",
-  // "field", "model", …) that has no backing node.
-  const typeNode = model.resolve(node.typeOf);
+  // A `type` that resolves to a real node is a concept/annotation id ⇒ this is
+  // an instance of it. Otherwise the node is an ontology declaration whose
+  // language construct is its `metaKind` sentinel ("concept", "field", …).
+  const typeNode = node.type !== null ? model.resolve(node.type) : undefined;
   const debug: NodeDebug = {
-    kind: typeNode ? "instance" : node.typeOf,
+    kind: typeNode ? "instance" : (node.metaKind ?? node.type ?? ""),
     name: nodeName(node),
-    type: typeNode ? nodeName(typeNode) : node.typeOf,
+    type: typeNode ? nodeName(typeNode) : (node.type ?? node.metaKind ?? ""),
   };
-  const namespace = node.attrs.get("namespace");
-  if (namespace !== undefined) debug.namespace = String(namespace);
+  if (node.namespace !== null) debug.namespace = node.namespace;
   const source = provenance?.get(node.id);
   if (source !== undefined) debug.source = source;
   return debug;
@@ -98,7 +104,13 @@ function emitNode(model: Repository, node: Node, options?: EmitOptions): JsonNod
   const json: JsonNode = {
     id: node.id,
     tier: Tier[node.tier],
-    typeOf: node.typeOf,
+    type: node.type,
+    metaKind: node.metaKind,
+    namespace: node.namespace,
+    localId: node.localId,
+    isClass: node.isClass,
+    class: node.class,
+    storageId: node.storageId,
     attrs: Object.fromEntries(node.attrs),
   };
   if (options?.debug) json.debug = nodeDebug(model, node, options.provenance);
@@ -157,7 +169,13 @@ export function graphFromJSON(doc: TodlDocument): Graph {
     graph.addNode({
       id: node.id,
       tier: Tier[node.tier as keyof typeof Tier],
-      typeOf: node.typeOf,
+      type: node.type ?? null,
+      metaKind: node.metaKind ?? null,
+      namespace: node.namespace ?? null,
+      localId: node.localId ?? null,
+      isClass: node.isClass ?? false,
+      class: node.class ?? null,
+      storageId: node.storageId ?? null,
       attrs: new Map(Object.entries(node.attrs)),
     });
   }

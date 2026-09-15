@@ -8,6 +8,7 @@
  */
 
 import { Tier, EdgeKind, type Node, type Edge, type NodeId, type Scalar } from "./graph.js";
+import { type MetaKind } from "./kinds.js";
 import { InMemoryGraphStore, type GraphStore } from "./graph-store.js";
 
 export type CypherRow = Record<string, unknown>;
@@ -22,12 +23,16 @@ export interface CypherSession {
   run(cypher: string, params?: Record<string, unknown>): Promise<CypherRow[]>;
 }
 
-const ADD_NODE = "CREATE (n:Node {id: $id}) SET n.tier = $tier, n.typeOf = $typeOf, n += $attrs";
+const NODE_COLUMNS = "n.type = $type, n.metaKind = $metaKind, n.namespace = $namespace, " +
+  "n.localId = $localId, n.isClass = $isClass, n.class = $class, n.storageId = $storageId";
+const ADD_NODE = `CREATE (n:Node {id: $id}) SET n.tier = $tier, ${NODE_COLUMNS}, n += $attrs`;
 const ADD_EDGE =
   "MATCH (a:Node {id: $from}), (b:Node {id: $to}) CREATE (a)-[:REL {kind: $kind, via: $via}]->(b)";
 const SET_ATTR = "MATCH (n:Node {id: $id}) SET n += $delta";
 const REMOVE = "MATCH (n:Node {id: $id}) DETACH DELETE n";
-const LOAD_NODES = "MATCH (n:Node) RETURN n.id AS id, n.tier AS tier, n.typeOf AS typeOf, properties(n) AS props";
+const LOAD_NODES = "MATCH (n:Node) RETURN n.id AS id, n.tier AS tier, n.type AS type, " +
+  "n.metaKind AS metaKind, n.namespace AS namespace, n.localId AS localId, n.isClass AS isClass, " +
+  "n.class AS class, n.storageId AS storageId, properties(n) AS props";
 const LOAD_EDGES = "MATCH (a:Node)-[r:REL]->(b:Node) RETURN a.id AS from, b.id AS to, r.kind AS kind, r.via AS via";
 
 export class CypherGraphStore implements GraphStore {
@@ -43,13 +48,18 @@ export class CypherGraphStore implements GraphStore {
     const inner = new InMemoryGraphStore();
     for (const row of await session.run(LOAD_NODES)) {
       const props = { ...(row.props as Record<string, Scalar>) };
-      delete props.id;
-      delete props.tier;
-      delete props.typeOf;
+      for (const col of ["id", "tier", "type", "metaKind", "namespace", "localId", "isClass", "class", "storageId"])
+        delete props[col];
       inner.addNode({
         id: row.id as NodeId,
         tier: Tier[row.tier as keyof typeof Tier],
-        typeOf: row.typeOf as NodeId,
+        type: (row.type as NodeId | null) ?? null,
+        metaKind: (row.metaKind as MetaKind | null) ?? null,
+        namespace: (row.namespace as string | null) ?? null,
+        localId: (row.localId as string | null) ?? null,
+        isClass: (row.isClass as boolean | null) ?? false,
+        class: (row.class as NodeId | null) ?? null,
+        storageId: (row.storageId as string | null) ?? null,
         attrs: new Map(Object.entries(props)),
       });
     }
@@ -77,8 +87,11 @@ export class CypherGraphStore implements GraphStore {
   allNodes(): Node[] {
     return this.inner.allNodes();
   }
-  instancesOf(typeOf: NodeId): NodeId[] {
-    return this.inner.instancesOf(typeOf);
+  instancesOf(type: NodeId): NodeId[] {
+    return this.inner.instancesOf(type);
+  }
+  nodesOfMetaKind(kind: MetaKind): NodeId[] {
+    return this.inner.nodesOfMetaKind(kind);
   }
   outEdges(id: NodeId): Edge[] {
     return this.inner.outEdges(id);
@@ -92,7 +105,18 @@ export class CypherGraphStore implements GraphStore {
     this.inner.addNode(node);
     this.pending.push({
       cypher: ADD_NODE,
-      params: { id: node.id, tier: Tier[node.tier], typeOf: node.typeOf, attrs: Object.fromEntries(node.attrs) },
+      params: {
+        id: node.id,
+        tier: Tier[node.tier],
+        type: node.type,
+        metaKind: node.metaKind,
+        namespace: node.namespace,
+        localId: node.localId,
+        isClass: node.isClass,
+        class: node.class,
+        storageId: node.storageId,
+        attrs: Object.fromEntries(node.attrs),
+      },
     });
   }
 

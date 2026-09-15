@@ -9,7 +9,7 @@ test("defineAnnotation stages an Ontology-tier MetaKind.Annotation node", () => 
   new Builder(g).defineAnnotation("icon").commit();
   const n = g.getNode("icon");
   assert.equal(n!.tier, Tier.Ontology);
-  assert.equal(n!.typeOf, MetaKind.Annotation);
+  assert.equal(n!.metaKind, MetaKind.Annotation);
 });
 
 test("annotate stages an application node typed by the annotation + an Annotated edge", () => {
@@ -22,7 +22,7 @@ test("annotate stages an application node typed by the annotation + an Annotated
   assert.equal(appId, "actor@icon");
   const app = g.getNode("actor@icon");
   assert.equal(app!.tier, Tier.Ontology);
-  assert.equal(app!.typeOf, "icon");
+  assert.equal(app!.type, "icon");
   assert.equal(app!.attrs.get("path"), "a.svg");
   assert.deepEqual(g.related("actor", EdgeKind.Annotated, Direction.Out), ["actor@icon"]);
 });
@@ -31,5 +31,5 @@ test("definePackageNode stages the singleton package node", () => {
   const g = new Graph();
   new Builder(g).definePackageNode(PACKAGE_NODE_ID).commit();
   const n = g.getNode(PACKAGE_NODE_ID);
-  assert.equal(n!.typeOf, MetaKind.Package);
+  assert.equal(n!.metaKind, MetaKind.Package);
 });

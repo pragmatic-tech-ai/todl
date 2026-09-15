@@ -9,6 +9,7 @@
 
 import { Signal } from "@pragmatic-tech-ai/todl-runtime";
 import { InMemoryGraphStore, type GraphStore } from "./graph-store.js";
+import { MetaKind } from "./kinds.js";
 
 export type NodeId = string;
 
@@ -61,9 +62,34 @@ export type Scalar = string | number | boolean;
 export interface Node {
   id: NodeId;
   tier: Tier;
-  /** The concept (for an instance) or meta-kind (for a concept) — the type-of spine. */
-  typeOf: NodeId;
-  /** Scalar field values only. */
+
+  /** The concept the node is typed by (instance tier): the manifest TypeInfo /
+   *  concept id it instantiates. `null` on a pure ontology-construct node.
+   *  Replaces the instance-tier meaning of the old `typeOf` (SPEC-01). */
+  type: NodeId | null;
+
+  /** The language construct this node *is* (ontology tier); `Term` is first-class
+   *  (#6). `null` on a pure instance. Replaces the ontology-tier meaning of the
+   *  old `typeOf` (SPEC-01). */
+  metaKind: MetaKind | null;
+
+  /** Namespace (visibility / provenance). Was `attrs.namespace` (#1). */
+  namespace: string | null;
+
+  /** The node's own short id segment (e.g. `Surface`). Was `attrs.id` (#5). */
+  localId: string | null;
+
+  /** This node is a class — a partial, fixed-value definition. Was `attrs.class` (#5). */
+  isClass: boolean;
+
+  /** For an instance that is-a term/class: the term/Class id it instantiates
+   *  (Axis-2 value-origin hook, SPEC-05). `null` = none. */
+  class: NodeId | null;
+
+  /** Reserved dedicated persistence id (#3). DEFERRED — a typed slot only. */
+  storageId: string | null;
+
+  /** User-defined scalar field values ONLY. */
   attrs: Map<string, Scalar>;
 }
 
@@ -132,9 +158,15 @@ export class Graph {
     return this.store.allNodes();
   }
 
-  /** Node ids whose `typeOf` is `concept`. */
+  /** Node ids whose `type` (instance tier) is `concept`. */
   instancesOf(concept: NodeId): NodeId[] {
     return this.store.instancesOf(concept);
+  }
+
+  /** Node ids whose `metaKind` (ontology tier) is `kind` — e.g. every concept
+   *  declaration, taxonomy, or viewpoint. Replaces the old `instancesOf(<sentinel>)`. */
+  nodesOfMetaKind(kind: MetaKind): NodeId[] {
+    return this.store.nodesOfMetaKind(kind);
   }
 
   addEdge(edge: Edge): void {

@@ -17,7 +17,7 @@ function built() {
 
 test("a viewpoint node is ontology-typed MetaKind.Viewpoint", () => {
   const repo = built();
-  assert.equal(repo.resolve("ComponentView")?.typeOf, MetaKind.Viewpoint);
+  assert.equal(repo.resolve("ComponentView")?.metaKind, MetaKind.Viewpoint);
 });
 
 test("frames() returns the framed concepts; framedBy() is the inverse", () => {
