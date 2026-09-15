@@ -39,6 +39,12 @@ export class StringsHeap
         return this.entries[index]!;
     }
 
+    /** All entries in index order (index 0 = ""); a fresh copy. */
+    toArray(): string[]
+    {
+        return this.entries.slice();
+    }
+
     /** Pack to `varlen(byteLength) + UTF-8 bytes` per entry, in index order. */
     toBytes(): Uint8Array
     {

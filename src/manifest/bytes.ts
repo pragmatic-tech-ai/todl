@@ -178,3 +178,22 @@ export class ByteReader
         if (rem !== 0) this.pos += boundary - rem;
     }
 }
+
+/** Raw-bytes ↔ base64, for the JSON debug view's `const[]` (SPEC-04 §8). */
+export class Base64
+{
+    static encode(bytes: Uint8Array): string
+    {
+        let s = "";
+        for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]!);
+        return btoa(s);
+    }
+
+    static decode(text: string): Uint8Array
+    {
+        const s = atob(text);
+        const out = new Uint8Array(s.length);
+        for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
+        return out;
+    }
+}

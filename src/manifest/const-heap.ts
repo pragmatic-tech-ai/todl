@@ -57,6 +57,12 @@ export class ConstHeap
         return ConstHeap.decode(blob);
     }
 
+    /** Raw blob bytes per entry, in index order (index 0 = empty); copies. */
+    toBlobs(): Uint8Array[]
+    {
+        return this.blobs.map((b) => b.slice());
+    }
+
     /** Pack `varlen(byteLength) + blob` per entry, in index order. */
     toBytes(): Uint8Array
     {

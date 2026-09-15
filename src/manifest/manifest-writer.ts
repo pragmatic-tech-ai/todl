@@ -9,6 +9,7 @@
 
 import { StringsHeap } from "./strings-heap.js";
 import { ConstHeap, type ConstValue } from "./const-heap.js";
+import { Base64 } from "./bytes.js";
 import { TableId } from "./enums.js";
 import type {
     TypeInfoRec,
@@ -20,6 +21,7 @@ import type {
     TaxonomyRec,
     ImportsRec,
     TypeRefRec,
+    ManifestJson,
 } from "./records.js";
 
 export class ManifestWriter
@@ -144,5 +146,41 @@ export class ManifestWriter
             case TableId.TypeRef:
                 return this.typeRefs.length;
         }
+    }
+
+    /**
+     * The JSON debug view (§8): a positional 1:1 mirror — same column order,
+     * same numeric indices as the binary. Never shipped; round-trip only.
+     */
+    toJSON(): ManifestJson
+    {
+        return {
+            format: "todl-manifest/1",
+            model: this.model,
+            version: this.version,
+            root: this.rootRow,
+            strings: this.strings.toArray(),
+            const: this.consts.toBlobs().map((b) => Base64.encode(b)),
+            tables: {
+                TypeInfo: this.typeInfos.map((r) => [
+                    r.name, r.ns, r.kind, r.extends,
+                    r.fieldStart, r.fieldCount, r.relStart, r.relCount,
+                ]),
+                Field: this.fields.map((r) => [r.name, r.type, r.card]),
+                Rel: this.rels.map((r) => [
+                    r.name, r.targetStart, r.targetCount, r.card, r.inverse,
+                ]),
+                Target: this.targets.map((r) => [r.type]),
+                Class: this.classes.map((r) => [
+                    r.name, r.type, r.taxonomy, r.broader, r.fixedStart, r.fixedCount,
+                ]),
+                Fixed: this.fixeds.map((r) => [r.field, r.value]),
+                Taxonomy: this.taxonomies.map((r) => [
+                    r.name, r.representsStart, r.representsCount,
+                ]),
+                Imports: this.imports.map((r) => [r.model, r.version]),
+                TypeRef: this.typeRefs.map((r) => [r.import, r.name]),
+            },
+        };
     }
 }
