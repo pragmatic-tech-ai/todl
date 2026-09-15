@@ -54,6 +54,14 @@ export class ByteWriter
         this.buffer[this.used++] = (value >>> 24) & 0xff;
     }
 
+    /** Write an unsigned integer of `width` bytes (1, 2, or 4), little-endian. */
+    uint(value: number, width: 1 | 2 | 4): void
+    {
+        if (width === 1) this.u8(value);
+        else if (width === 2) this.u16(value);
+        else this.u32(value);
+    }
+
     /** Append raw bytes verbatim. */
     bytes(data: Uint8Array): void
     {
@@ -145,6 +153,14 @@ export class ByteReader
             0;
         this.pos += 4;
         return v;
+    }
+
+    /** Read an unsigned integer of `width` bytes (1, 2, or 4), little-endian. */
+    uint(width: 1 | 2 | 4): number
+    {
+        if (width === 1) return this.u8();
+        if (width === 2) return this.u16();
+        return this.u32();
     }
 
     /** Read `count` raw bytes as a fresh copy. */
