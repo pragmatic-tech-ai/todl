@@ -1,5 +1,6 @@
 import { Observable, ObservableCollection } from "@pragmatic-tech-ai/mural/runtime";
 import type { Figure, Connector } from "@pragmatic-tech-ai/mural/framework";
+import { ConnectorRoutingScheduler } from "@pragmatic-tech-ai/mural/framework";
 import { MonacoEditorHost, EditorLanguage } from "../../../editor/monaco-editor-host.js";
 import { TodlGraphModel, GraphTier } from "./todl-graph-model.js";
 import { GraphProjection } from "./graph-projection.js";
@@ -76,17 +77,25 @@ export class GraphPaneVM extends Observable {
     if (this._showMeta) tiers.add(GraphTier.Meta);
     if (this._showOntology) tiers.add(GraphTier.Ontology);
     if (this._showInstance) tiers.add(GraphTier.Instance);
-    const { figures, connectors } = new GraphProjection(this._model.Slice(tiers)).materialize();
-    // Populate each collection in a single Batch → one 'reset' per collection,
-    // so the Diagram rebuilds figures + connectors in one pass (O(N+M) + one
-    // layout) instead of a notification per Add (the hours-at-scale path).
-    this._nodes.Batch(() => {
-      this._nodes.Clear();
-      for (const f of figures) this._nodes.Add(f);
-    });
-    this._connectors.Batch(() => {
-      this._connectors.Clear();
-      for (const c of connectors) this._connectors.Add(c);
+    // Wrap projection + fill in a routing-suspend scope. GraphProjection sets
+    // each Connector's Source/Target, which eagerly runs the O(k³) per-side
+    // crossing optimizer against every connector already on a shared figure-side
+    // → O(K⁴) at scale (~48s at 500/600). The scope defers routing + optimize to
+    // one settle pass per side on exit (~48s → <1s). Must span materialize(),
+    // where the connector wiring — hence the routing — actually happens.
+    ConnectorRoutingScheduler.Batch(() => {
+      const { figures, connectors } = new GraphProjection(this._model!.Slice(tiers)).materialize();
+      // Populate each collection in a single Batch → one 'reset' per collection,
+      // so the Diagram rebuilds figures + connectors in one pass (O(N+M) + one
+      // layout) instead of a notification per Add (the hours-at-scale path).
+      this._nodes.Batch(() => {
+        this._nodes.Clear();
+        for (const f of figures) this._nodes.Add(f);
+      });
+      this._connectors.Batch(() => {
+        this._connectors.Clear();
+        for (const c of connectors) this._connectors.Add(c);
+      });
     });
   }
 }
