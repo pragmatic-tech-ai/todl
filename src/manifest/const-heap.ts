@@ -52,7 +52,7 @@ export class ConstHeap
     /** Decode the value at `index` (0 = null). */
     get(index: number): ConstValue
     {
-        const blob = this.blobs[index];
+        const blob = this.blobs[index]!;
         if (blob.length === 0) return null;
         return ConstHeap.decode(blob);
     }
@@ -86,7 +86,7 @@ export class ConstHeap
         return heap;
     }
 
-    private static encode(value: ConstValue): Uint8Array
+    private static encode(value: boolean | bigint | number | string): Uint8Array
     {
         if (typeof value === "boolean")
             return new Uint8Array([ConstTag.Bool, value ? 1 : 0]);
@@ -119,7 +119,7 @@ export class ConstHeap
             case ConstTag.Null:
                 return null;
             case ConstTag.Bool:
-                return blob[1] !== 0;
+                return blob[1] === 1;
             case ConstTag.I64:
                 return new DataView(blob.buffer, blob.byteOffset).getBigInt64(1, true);
             case ConstTag.F64:
@@ -135,7 +135,7 @@ export class ConstHeap
     {
         // Latin1 view of the raw bytes — a cheap, collision-free dedup key.
         let s = "";
-        for (let i = 0; i < blob.length; i++) s += String.fromCharCode(blob[i]);
+        for (let i = 0; i < blob.length; i++) s += String.fromCharCode(blob[i]!);
         return s;
     }
 }

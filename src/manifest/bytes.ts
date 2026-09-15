@@ -125,12 +125,12 @@ export class ByteReader
 
     u8(): number
     {
-        return this.data[this.pos++];
+        return this.data[this.pos++]!;
     }
 
     u16(): number
     {
-        const v = this.data[this.pos] | (this.data[this.pos + 1] << 8);
+        const v = this.data[this.pos]! | (this.data[this.pos + 1]! << 8);
         this.pos += 2;
         return v & 0xffff;
     }
@@ -138,10 +138,10 @@ export class ByteReader
     u32(): number
     {
         const v =
-            (this.data[this.pos] |
-                (this.data[this.pos + 1] << 8) |
-                (this.data[this.pos + 2] << 16) |
-                (this.data[this.pos + 3] << 24)) >>>
+            (this.data[this.pos]! |
+                (this.data[this.pos + 1]! << 8) |
+                (this.data[this.pos + 2]! << 16) |
+                (this.data[this.pos + 3]! << 24)) >>>
             0;
         this.pos += 4;
         return v;

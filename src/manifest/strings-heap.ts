@@ -36,7 +36,7 @@ export class StringsHeap
     /** The string at `index` (0 = ""). */
     get(index: number): string
     {
-        return this.entries[index];
+        return this.entries[index]!;
     }
 
     /** Pack to `varlen(byteLength) + UTF-8 bytes` per entry, in index order. */

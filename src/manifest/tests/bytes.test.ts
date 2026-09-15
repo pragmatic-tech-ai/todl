@@ -44,7 +44,7 @@ describe("varlen(u32) — ECMA-335 §II.23.2 compressed unsigned integer", () =>
       const w = new ByteWriter();
       w.varlenU32(v);
       assert.equal(w.length, 2, `len@${v}`);
-      assert.equal((w.toUint8Array()[0] & 0xc0), 0x80, `tag@${v}`);
+      assert.equal((w.toUint8Array()[0]! & 0xc0), 0x80, `tag@${v}`);
       assert.equal(new ByteReader(w.toUint8Array()).varlenU32(), v, `rt@${v}`);
     }
   });
@@ -54,7 +54,7 @@ describe("varlen(u32) — ECMA-335 §II.23.2 compressed unsigned integer", () =>
       const w = new ByteWriter();
       w.varlenU32(v);
       assert.equal(w.length, 4, `len@${v}`);
-      assert.equal((w.toUint8Array()[0] & 0xe0), 0xc0, `tag@${v}`);
+      assert.equal((w.toUint8Array()[0]! & 0xe0), 0xc0, `tag@${v}`);
       assert.equal(new ByteReader(w.toUint8Array()).varlenU32(), v, `rt@${v}`);
     }
   });
