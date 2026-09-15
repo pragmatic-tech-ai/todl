@@ -118,7 +118,7 @@ and reactive façades.
 | `One` | (none) | exactly 1 |
 | `Optional` | `?` | 0..1 |
 | `Many` | `[]` | 0..N |
-| `NonEmpty` | `[+]` | 1..N |
+| `OneOrMore` | `[+]` | 1..N |
 
 ---
 

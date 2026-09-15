@@ -1,8 +1,10 @@
-// Public surface of the manifest module (SPEC-04). Self-contained: it does not
-// re-export at the package root because its numeric `MetaKind` / `Cardinality`
-// enums (§3) intentionally shadow the model-layer names; consumers import from
-// this subpath. Root wiring waits on the SPEC-01 `Cardinality` rename
-// (journal coherence note #1).
+// Public surface of the manifest module (SPEC-04). Consumers import from this
+// subpath. Note: `Cardinality` is now unified — this module is its canonical
+// owner and `src/model/graph.ts` re-exports it (journal coherence note #1,
+// resolved 2026-09-16). `MetaKind` still intentionally shadows the model-layer
+// STRING enum in `src/model/kinds.ts` (they cannot unify; the SPEC-03 bridge
+// maps names → codes), so this module is not blanket-re-exported at the
+// package root to avoid that clash.
 //
 // NOTE: `ManifestWriter.fromLogical(LogicalManifest)` (SPEC-04 §9.2) is NOT
 // here yet — `LogicalManifest` is owned by SPEC-03, whose emitter is sequenced

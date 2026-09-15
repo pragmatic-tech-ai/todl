@@ -18,7 +18,12 @@ export enum MetaKind
     Package = 9,
 }
 
-/** Field / relationship multiplicity. Codes 0..3; wire glyphs "1" "?" "*" "+". */
+/**
+ * Field / relationship multiplicity. Codes 0..3; surface glyphs `T` `T?` `T[]`
+ * `T[+]`. This is the SINGLE canonical cardinality for the whole package — the
+ * model (`src/model/graph.ts`) re-exports it rather than declaring its own, so
+ * the in-memory and on-disk tiers can never disagree. Frozen; append-only.
+ */
 export enum Cardinality
 {
     One = 0,

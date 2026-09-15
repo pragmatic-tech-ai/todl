@@ -265,7 +265,7 @@ function fieldCardinalityText(card: Cardinality): string | null {
       return "0..1";
     case Cardinality.Many:
       return "*";
-    case Cardinality.NonEmpty:
+    case Cardinality.OneOrMore:
       return "1..*";
   }
 }
@@ -278,7 +278,7 @@ function relationshipCardinalityText(card: Cardinality): string {
 /** Coarse resolver classification for name-ref-typed fields. */
 function resolvesHint(type: string, card: Cardinality): string | null {
   if (type !== "identifier" && type !== "slug") return null;
-  return card === Cardinality.Many || card === Cardinality.NonEmpty ? "list-of-name-ref" : "name-ref";
+  return card === Cardinality.Many || card === Cardinality.OneOrMore ? "list-of-name-ref" : "name-ref";
 }
 
 // ── String helpers ────────────────────────────────────────────────────

@@ -5,7 +5,7 @@ import { assignmentContextAt } from "./schema-context.js";
 
 const CARD: Record<number, string> = {
   [Cardinality.One]: "", [Cardinality.Optional]: "?",
-  [Cardinality.Many]: "[]", [Cardinality.NonEmpty]: "[+]",
+  [Cardinality.Many]: "[]", [Cardinality.OneOrMore]: "[+]",
 };
 
 export function signatureHelpAt(a: Analysis, uri: string, pos: Position): SignatureHelp | null {

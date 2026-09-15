@@ -955,14 +955,14 @@ class Parser {
   // ════════════════════════ Small parsers & token utilities ════════════════════
 
   /** Read an optional cardinality suffix on a member type: `?` → Optional, `[]` →
-   * Many, `[+]` → NonEmpty. Nothing → the default One (exactly one). */
+   * Many, `[+]` → OneOrMore. Nothing → the default One (exactly one). */
   private parseCardinality(): Cardinality {
     if (this.match(TokenKind.Question)) return Cardinality.Optional;
     if (this.check(TokenKind.LBracket)) {
       this.advance();
       if (this.match(TokenKind.Plus)) {
         this.expect(TokenKind.RBracket);
-        return Cardinality.NonEmpty;
+        return Cardinality.OneOrMore;
       }
       this.expect(TokenKind.RBracket);
       return Cardinality.Many;

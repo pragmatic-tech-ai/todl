@@ -37,7 +37,7 @@ function scalarTsType(typeId: string): string {
 }
 
 function isMany(cardinality: Cardinality): boolean {
-  return cardinality === Cardinality.Many || cardinality === Cardinality.NonEmpty;
+  return cardinality === Cardinality.Many || cardinality === Cardinality.OneOrMore;
 }
 
 /** The PascalCase entity type a reference member resolves to. */
@@ -135,7 +135,7 @@ function emitAuthoringConstructor(concept: NodeId, repo: Repository): string {
   ].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 
   const required = (card: Cardinality): boolean =>
-    card === Cardinality.One || card === Cardinality.NonEmpty;
+    card === Cardinality.One || card === Cardinality.OneOrMore;
   const cardOf = (name: string): Cardinality => {
     const field = schema.fields.find((f) => f.name === name);
     if (field !== undefined) return field.cardinality;

@@ -224,7 +224,7 @@ function validateAnnotationApplication(out: Diagnostic[], model: Repository, nod
   }
 
   for (const f of schema.fields) {
-    const required = f.cardinality === Cardinality.One || f.cardinality === Cardinality.NonEmpty;
+    const required = f.cardinality === Cardinality.One || f.cardinality === Cardinality.OneOrMore;
     if (required && !node.attrs.has(f.name)) {
       out.push({
         code: DiagnosticCode.RequiredMissing,
@@ -504,7 +504,7 @@ function checkCardinality(
         out.push(error(DiagnosticCode.TooMany, node.id, path, `"${path}" allows at most one value but "${node.id}" has ${count}`, span));
       }
       break;
-    case Cardinality.NonEmpty:
+    case Cardinality.OneOrMore:
       if (count === 0 && !partial) {
         out.push(error(DiagnosticCode.EmptyNotAllowed, node.id, path, `"${path}" requires at least one value on "${node.id}"`, span));
       }

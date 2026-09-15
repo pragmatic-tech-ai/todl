@@ -47,13 +47,13 @@ export enum Direction {
   In,
 }
 
-/** Field / relationship multiplicity — the surface `T` / `T?` / `T[]` / `T[+]`. */
-export enum Cardinality {
-  One, // T        required single
-  Optional, // T?  optional single
-  Many, // T[]     list, zero or more
-  NonEmpty, // T[+] non-empty list
-}
+/**
+ * Field / relationship multiplicity — the surface `T` / `T?` / `T[]` / `T[+]`.
+ * Unified with the manifest's on-disk cardinality (SPEC-04 §3): the manifest
+ * `enums.ts` is the single canonical owner (frozen codes One=0 … OneOrMore=3);
+ * the model re-exports it so both tiers share one enum. `T[+]` = `OneOrMore`.
+ */
+export { Cardinality } from "../manifest/enums.js";
 
 /** A literal field value. Enum selections and references are edges, not attrs. */
 export type Scalar = string | number | boolean;

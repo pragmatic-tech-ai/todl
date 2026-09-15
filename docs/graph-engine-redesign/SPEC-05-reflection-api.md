@@ -547,11 +547,11 @@ model) built as SPEC-04 JSON, plus a couple of loaded-from-binary cases to prove
 - **Annotation defs vs applications** — `AnnotationInfo` models an *application*;
   the *definition* is a `TypeInfo` with `kind === Annotation`. Confirm the
   SPEC-04 application-table split so `getAnnotations()` reads the right rows.
-- **`Cardinality` enum member name** — the JOURNAL contract lists
-  `Cardinality { One, Optional, Many, OneOrMore }` but `src/model/graph.ts`
-  currently defines the fourth member as `NonEmpty`. This spec uses the enum by
-  reference; the rename (`NonEmpty → OneOrMore`) is a SPEC-01/graph cleanup, not
-  owned here. Flagged as a cross-spec risk (§ summary).
+- **`Cardinality` enum member name** — RESOLVED (2026-09-16). `Cardinality` is
+  now unified on the manifest's enum `{ One, Optional, Many, OneOrMore }`
+  (`src/manifest/enums.ts`, the single canonical owner); `src/model/graph.ts`
+  re-exports it. The former `NonEmpty` member is gone. This spec's references
+  resolve directly.
 
 ## 9. Implementation tasks (bite-sized, TDD)
 

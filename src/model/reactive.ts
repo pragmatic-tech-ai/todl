@@ -103,6 +103,6 @@ export class ReactiveNode implements INotifyPropertyChanged, INotifyCollectionCh
       schema.fields.find((field) => field.name === name) ??
       schema.relationships.find((relationship) => relationship.name === name);
     if (member === undefined) return false;
-    return member.cardinality === Cardinality.Many || member.cardinality === Cardinality.NonEmpty;
+    return member.cardinality === Cardinality.Many || member.cardinality === Cardinality.OneOrMore;
   }
 }
