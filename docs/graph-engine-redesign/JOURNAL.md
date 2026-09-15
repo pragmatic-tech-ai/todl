@@ -36,7 +36,7 @@ round-trip all keep working.
 | [SPEC-01](SPEC-01-node-and-edge-model.md) | Node & Edge Model | #1 namespace-root, #2 operator edges, #3 storage-id, #4 scalar→attr/ref→edge, #5 attrs-user-only + isClass + localId, #6 MetaKind.Term | drafted |
 | [SPEC-02](SPEC-02-inheritance-flattening.md) | Inheritance Flattening & Virtual Element | #7 | drafted |
 | [SPEC-03](SPEC-03-manifest-model.md) | Manifest Model (logical) | #8, #9 | drafted |
-| [SPEC-04](SPEC-04-manifest-binary-format.md) | Manifest Binary Format (tables + heaps) | #10, cross-manifest tables from #12 | drafted |
+| [SPEC-04](SPEC-04-manifest-binary-format.md) | Manifest Binary Format (tables + heaps) | #10, cross-manifest tables from #12 | **implemented** (core; fromLogical deferred to SPEC-03) |
 | [SPEC-05](SPEC-05-reflection-api.md) | Reflection API | #11 | drafted |
 | [SPEC-06](SPEC-06-domain.md) | Domain (ApplicationDomain) | #12 | drafted |
 
@@ -117,3 +117,4 @@ Surfaced by the six drafts; these bind implementation so the layers fit.
 _(append newest-last; one line per meaningful step)_
 
 - 2026-09-15 — journal + all six specs drafted (parallel); coverage verified (all #1–#12); coherence reconciliations recorded above. Next: SPEC-04 format core (TDD).
+- 2026-09-16 — **SPEC-04 format core DONE** on branch `todl_20` (TDD, 73 tests, typecheck-clean). Module `src/manifest/`: `enums` (numeric MetaKind/Cardinality/TableId/HeapId), `token` (Token + TypeDefOrRef coded index), `bytes` (ByteWriter/ByteReader + varlen(u32) + Base64), `strings-heap` / `const-heap` (#Strings, #Const with ConstTag i64/f64/bool/str), `records` (`*Rec` + `ManifestJson`), `schema` (shared column order/width — single source of truth), `index-widths` (u16/u32 + reserved flags), `binary-codec` (`BinarySerializer`, one serializer for writer+reader), `manifest-writer` (interning + row appenders + toJSON + toBinary), `manifest-reader` (fromBinary/fromJSON + typed row accessors + slice iterators + toBinary/toJSON), `manifest-validator` (§10 rules 1,3–9), `index` barrel. Golden hex fixture + binary↔JSON parity (both directions) + 65535 width-boundary all round-trip. **Deferred:** `ManifestWriter.fromLogical(LogicalManifest)` → lands with SPEC-03 (owns `LogicalManifest`); root package re-export waits on SPEC-01 `Cardinality` rename (note #1). Next: SPEC-03 emitter (build manifest + flattened graph from the live `Repository`).
