@@ -16,7 +16,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@pragmatic-tech-ai/mural": "^0.55.12",
+    "@pragmatic-tech-ai/mural": "^0.55.13",
     "@pragmatic-tech-ai/todl": "file:..",
     "electron-updater": "^6.3.9",
     "monaco-editor": "^0.52.0",
