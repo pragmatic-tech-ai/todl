@@ -218,6 +218,43 @@ export class ManifestReader
         return { import: v[0]!, name: v[1]! };
     }
 
+    // ---- slice iterators (member ranges captured as [start, count]) ----
+
+    /** Declared fields of a TypeInfo row (its `[fieldStart, fieldCount]`). */
+    *fieldsOf(typeInfoRow: number): IterableIterator<FieldRec>
+    {
+        const ti = this.typeInfo(typeInfoRow);
+        for (let i = 0; i < ti.fieldCount; i++) yield this.field(ti.fieldStart + i);
+    }
+
+    /** Declared relationships of a TypeInfo row. */
+    *relsOf(typeInfoRow: number): IterableIterator<RelRec>
+    {
+        const ti = this.typeInfo(typeInfoRow);
+        for (let i = 0; i < ti.relCount; i++) yield this.rel(ti.relStart + i);
+    }
+
+    /** Allowed targets of a Rel row. */
+    *targetsOf(relRow: number): IterableIterator<TargetRec>
+    {
+        const r = this.rel(relRow);
+        for (let i = 0; i < r.targetCount; i++) yield this.target(r.targetStart + i);
+    }
+
+    /** Pinned values of a Class row. */
+    *fixedOf(classRow: number): IterableIterator<FixedRec>
+    {
+        const c = this.class_(classRow);
+        for (let i = 0; i < c.fixedCount; i++) yield this.fixed(c.fixedStart + i);
+    }
+
+    /** Concepts a Taxonomy represents (reuses the Target table). */
+    *representsOf(taxonomyRow: number): IterableIterator<TargetRec>
+    {
+        const t = this.taxonomy(taxonomyRow);
+        for (let i = 0; i < t.representsCount; i++) yield this.target(t.representsStart + i);
+    }
+
     /** Re-serialise this loaded manifest to the binary container (§7). */
     toBinary(): Uint8Array
     {
