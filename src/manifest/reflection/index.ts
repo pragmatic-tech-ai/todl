@@ -10,6 +10,8 @@ export {
     AnnotationInfo,
     InstanceMirror,
     FieldView,
+    Tokens,
     type Token,
     type ReflectedNode,
+    type ManifestHost,
 } from "./reflection.js";

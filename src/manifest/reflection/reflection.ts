@@ -38,8 +38,18 @@ export interface ReflectedNode
     refs?: Record<string, string[]>;
 }
 
+/**
+ * A multi-manifest host (the SPEC-06 Domain) a Manifest back-links to, so a
+ * cross-manifest `TypeRef` can hop into a dependency manifest. A real interface
+ * the Domain implements — not a lambda seam.
+ */
+export interface ManifestHost
+{
+    getManifest(model: string, version?: string): Manifest | undefined;
+}
+
 /** Numeric token codec: `table * 2^32 + row`. Row 0 of TypeInfo (table 0) = 0 = null. */
-class Tokens
+export class Tokens
 {
     private static readonly STRIDE = 0x100000000; // 2^32; rows are u32
 
@@ -62,6 +72,8 @@ class Tokens
 /** The Assembly analog — the reflection root and handle factory. */
 export class Manifest
 {
+    private host: ManifestHost | undefined;
+
     private constructor(private readonly reader: ManifestReader) {}
 
     /** Load from the SPEC-04 binary container or its JSON debug view. */
@@ -71,6 +83,12 @@ export class Manifest
             ? ManifestReader.fromBinary(source)
             : ManifestReader.fromJSON(source);
         return new Manifest(reader);
+    }
+
+    /** Set (or clear) the Domain back-link used for cross-manifest TypeRef hops. */
+    setHost(host: ManifestHost | undefined): void
+    {
+        this.host = host;
     }
 
     get model(): string
@@ -199,13 +217,25 @@ export class Manifest
         return new TaxonomyInfo(this, row);
     }
 
-    /** @internal Resolve a coded TypeDefOrRef to a TypeInfo (cross-manifest hop = SPEC-06). */
+    /**
+     * @internal Resolve a coded TypeDefOrRef to a TypeInfo. Intra-manifest refs
+     * read the local TypeInfo table; a TypeRef hops into a dependency manifest
+     * via the Domain back-link (Imports → getManifest → getType). Returns
+     * undefined if the hop is needed but no host is set (single-manifest use).
+     */
     resolveTypeRef(coded: number): TypeInfo | undefined
     {
         if (coded === 0) return undefined;
         const ref = TypeDefOrRef.decode(coded);
-        if (ref.toTypeRef) return undefined; // TypeRef hop is a Domain (SPEC-06) concern
-        return this.typeAt(ref.row);
+        if (!ref.toTypeRef) return this.typeAt(ref.row);
+        if (this.host === undefined) return undefined;
+        const typeRef = this.reader.typeRef(ref.row);
+        const imp = this.reader.import_(typeRef.import);
+        const dep = this.host.getManifest(
+            this.reader.getString(imp.model),
+            this.reader.getString(imp.version),
+        );
+        return dep?.getType(this.reader.getString(typeRef.name));
     }
 
     /** @internal The concept whose declared Field slice contains `fieldRow`. */
