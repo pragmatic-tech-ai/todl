@@ -28,6 +28,9 @@ import type { Expr } from "../predicate/ast.js";
 import { validate as runValidation, type Diagnostic } from "../validate/validate.js";
 import type { SourceSpan } from "../diagnostics/span.js";
 
+/** The prelude root concept — the virtual base of every parent-less concept (SPEC-02). */
+const ELEMENT_ID = "Element";
+
 export interface FieldSchema {
   name: string;
   type: NodeId;
@@ -159,7 +162,22 @@ export class Repository {
 
   /** All concepts `concept` transitively extends. */
   supertypesOf(concept: NodeId): NodeId[] {
-    return this.graph.closure(concept, EdgeKind.Extends, Direction.Out, false);
+    const chain = this.graph.closure(concept, EdgeKind.Extends, Direction.Out, false);
+    // Virtual-root rule (SPEC-02 #7): every parent-less concept IS an `Element`,
+    // resolved here rather than via a stored `Extends → Element` super-node edge.
+    // Idempotent: if `Element` is already reached through explicit edges, skip.
+    if (this.rootsAtElement(concept) && !chain.includes(ELEMENT_ID)) chain.push(ELEMENT_ID);
+    return chain;
+  }
+
+  /** True when `id` is a concept (other than Element itself) that the virtual-root
+   *  rule roots at `Element` — scoped to concepts so annotations never gain a base. */
+  private rootsAtElement(id: NodeId): boolean {
+    return (
+      id !== ELEMENT_ID &&
+      this.graph.getNode(id)?.typeOf === MetaKind.Concept &&
+      this.graph.hasNode(ELEMENT_ID)
+    );
   }
 
   /** Direct child terms of a taxonomy term (one level narrower). */
@@ -340,7 +358,10 @@ export class Repository {
       });
     }
 
-    return { concept, extends: parents[0] ?? null, fields, relationships };
+    // Virtual-root rule (SPEC-02): a parent-less concept reports `Element` as its
+    // (rule-derived) base; `Element` itself roots at nothing.
+    const extendsParent = parents[0] ?? (this.rootsAtElement(concept) ? ELEMENT_ID : null);
+    return { concept, extends: extendsParent, fields, relationships };
   }
 
   /** A concept's schema merged with everything it extends (subtype members win). */

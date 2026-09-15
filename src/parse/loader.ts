@@ -517,13 +517,11 @@ export function loadInto(
         break;
       }
       case DeclKind.Concept: {
-        // A parent-less concept implicitly extends the prelude root `element`
-        // (when it is in scope). `element` itself, and a raw `load` with no
-        // prelude base, keep their declared (null) parent. The synthetic parent
-        // is a base node, so it never yields a reference.undefined.
-        const parent = declaration.extends
-          ?? (declaration.name !== "Element" && model.has("Element") ? "Element" : null);
-        first.defineConcept(declaration.name, parent);
+        // Persist ONLY the explicit parent (SPEC-02 #7). "Every parent-less
+        // concept is an `Element`" is now a VIRTUAL root rule applied in
+        // resolution (`Repository.supertypesOf`/`schemaOf`), not a stored
+        // `Extends → Element` edge — killing the `Element` super-node.
+        first.defineConcept(declaration.name, declaration.extends ?? null);
         break;
       }
       case DeclKind.Annotation:

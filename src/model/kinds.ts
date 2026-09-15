@@ -7,6 +7,7 @@ export enum MetaKind {
   Concept = "concept",
   Primitive = "primitive",
   Taxonomy = "taxonomy",
+  Term = "term", // a taxonomy term / class — a first-class construct (SPEC-01 #6)
   Viewpoint = "viewpoint",
   Field = "field",
   Relationship = "relationship",
