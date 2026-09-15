@@ -312,6 +312,18 @@ data graph pins the manifest with `manifestRef: { model, version }`.
 > `schemaOf` (declared-only); `effectiveSchema` / `effectiveFields` are reused
 > for producing the **flattened data graph** (where resolution *is* applied).
 
+> **Implementation reconciliation (2026-09-16).** Scalar flattening for the data
+> graph is **instance-wins**, not `effectiveFields`. `Repository.effectiveFields`
+> is **class-wins** (it overlays class fixed values *over* the leaf's own —
+> `src/model/model.ts:246-258`, "class wins"). Under class-wins a class-fixed
+> field on an instance *always* equals the class value, so Axis-2 `valueOriginOf`
+> could never return `"self"` for it and the axis would be vacuous. The emitter
+> therefore fills class fixed values only into fields the instance leaves unset,
+> then lets the instance's own values override — the SPEC-01 target semantics.
+> Test #4's oracle is the instance-wins overlay accordingly. `effectiveFields`
+> remains the class-wins resolution for validation / typed clients;
+> `effectiveRelationships` (a union) is reused unchanged for edges.
+
 ## JSON strawman
 
 ### `manifest.json` (replicated)
