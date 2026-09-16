@@ -7,9 +7,9 @@ import { Repository } from "../model.js";
 // Build a 3-level taxonomy by hand: root -> mid -> leaf, plus a sibling leaf.
 function taxo(): Repository {
   const g = new Graph();
-  g.addNode({ id: "cc", tier: Tier.Ontology, type: null, metaKind: MetaKind.Taxonomy, namespace: null, localId: null, isClass: false, class: null, storageId: null, attrs: new Map() });
+  g.addNode({ id: "cc", tier: Tier.Ontology, type: null, metaKind: MetaKind.Taxonomy, namespace: null, localId: null, isClass: false, class: null, storageId: null, fields: [], attrs: new Map() });
   for (const id of ["cc.Surface", "cc.ApiService", "cc.WebPortal", "cc.DataStore"])
-    g.addNode({ id, tier: Tier.Ontology, type: "cc", metaKind: null, namespace: null, localId: null, isClass: false, class: null, storageId: null, attrs: new Map() });
+    g.addNode({ id, tier: Tier.Ontology, type: "cc", metaKind: null, namespace: null, localId: null, isClass: false, class: null, storageId: null, fields: [], attrs: new Map() });
   // surface -> {api-service, web-portal}; broader -> narrower
   g.addEdge({ kind: EdgeKind.Narrower, via: null, from: "cc.Surface", to: "cc.ApiService" });
   g.addEdge({ kind: EdgeKind.Narrower, via: null, from: "cc.Surface", to: "cc.WebPortal" });

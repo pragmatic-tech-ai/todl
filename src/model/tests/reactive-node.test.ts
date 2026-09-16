@@ -21,6 +21,7 @@ function instance(id: string, type: string): Node {
     isClass: false,
     class: null,
     storageId: null,
+    fields: [],
     attrs: new Map(),
   };
 }

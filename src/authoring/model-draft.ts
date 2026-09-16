@@ -150,6 +150,7 @@ export class ModelDraft {
       isClass: false,
       class: null,
       storageId: null,
+      fields: [],
       attrs: {},
     });
     if (home !== undefined) this.home.set(id, home);

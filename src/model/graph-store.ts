@@ -5,7 +5,7 @@
  * a graph DB later — leaves the Repository/Graph API unchanged.
  */
 
-import { type Node, type Edge, type NodeId, type Scalar } from "./graph.js";
+import { type Node, type Edge, type NodeId, type Scalar, type FieldDecl } from "./graph.js";
 import { type MetaKind } from "./kinds.js";
 
 export interface GraphStore {
@@ -19,6 +19,7 @@ export interface GraphStore {
   inEdges(id: NodeId): Edge[];
   addNode(node: Node): void;
   addEdge(edge: Edge): void;
+  addFieldDecl(concept: NodeId, decl: FieldDecl): void;
   setAttr(id: NodeId, name: string, value: Scalar): void;
   remove(id: NodeId): void;
   commit(): void;
@@ -97,6 +98,14 @@ export class InMemoryGraphStore implements GraphStore {
     }
     appendEdge(this._out, edge.from, edge);
     appendEdge(this._in, edge.to, edge);
+  }
+
+  addFieldDecl(concept: NodeId, decl: FieldDecl): void {
+    const node = this._nodes.get(concept);
+    if (node === undefined) {
+      throw new Error(`node "${concept}" does not exist`);
+    }
+    node.fields.push(decl);
   }
 
   setAttr(id: NodeId, name: string, value: Scalar): void {

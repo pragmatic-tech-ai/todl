@@ -21,15 +21,19 @@
 >   attr") is what makes the deleted blocklist correct: with `id` gone from
 >   `attrs`, `checkOverride` no longer false-positives a `ClassOverride` on the
 >   per-instance identity (leaf.id ≠ class.id by nature).
-> - **#4 (scalar→attr / ref→edge, drop scalar `HasField`) and #2 (operator
->   endpoint edges) are DEFERRED with evidence** (see Open questions). `schemaOf`
->   (which walks `HasField`) is the *sole* schema source for validation, the
->   loader's reference-resolution, and the manifest emitter — with no
->   manifest-backed replacement wired — so dropping scalar `HasField` would
->   silently disable scalar validation and strip scalar fields from emitted
->   manifests (the spec's own Open Questions couples #4 to SPEC-02/03). #2's
->   `from`/`to` are member-name strings, not concept references, so there are no
->   separate endpoints to edge-ify beyond the existing `Targets` edge.
+> - **#4 (`HasField` removal) is DONE.** A concept's / annotation's declared
+>   field schema now lives on the owner node (`Node.fields: FieldDecl[]`), not as
+>   `HasField` member nodes + edges; `EdgeKind.HasField` is deleted. `schemaOf`
+>   reads `node.fields`, so its *output* is unchanged — validation, the loader's
+>   reference-resolution, the manifest emitter, codegen, and hover are untouched.
+>   (The earlier deferral's blocker was "schemaOf is the sole schema source"; the
+>   fix moved the *source* onto the node while keeping the *shape*, so nothing
+>   downstream had to change.) `HasRelationship` member nodes stay (they carry a
+>   navigable `Targets` edge).
+> - **#2 (operator endpoint edges) is DEFERRED with evidence** (see Open
+>   questions). Its `from`/`to` are member-name strings, not concept references,
+>   so there are no separate endpoints to edge-ify beyond the existing `Targets`
+>   edge.
 
 ## Goal
 

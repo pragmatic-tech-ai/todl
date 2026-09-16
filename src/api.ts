@@ -122,6 +122,7 @@ export function mergeBases(bases: TodlDocument[]): Graph {
         isClass: node.isClass ?? false,
         class: node.class ?? null,
         storageId: node.storageId ?? null,
+        fields: node.fields ?? [],
         attrs: new Map(Object.entries(node.attrs)),
       });
     }

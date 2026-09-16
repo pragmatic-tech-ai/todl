@@ -7,7 +7,7 @@
  * driver (e.g. neo4j-driver) is a thin consumer adapter, so TODL gains no dep.
  */
 
-import { Tier, EdgeKind, type Node, type Edge, type NodeId, type Scalar } from "./graph.js";
+import { Tier, EdgeKind, type Node, type Edge, type NodeId, type Scalar, type FieldDecl } from "./graph.js";
 import { type MetaKind } from "./kinds.js";
 import { InMemoryGraphStore, type GraphStore } from "./graph-store.js";
 
@@ -24,15 +24,16 @@ export interface CypherSession {
 }
 
 const NODE_COLUMNS = "n.type = $type, n.metaKind = $metaKind, n.namespace = $namespace, " +
-  "n.localId = $localId, n.isClass = $isClass, n.class = $class, n.storageId = $storageId";
+  "n.localId = $localId, n.isClass = $isClass, n.class = $class, n.storageId = $storageId, n.fields = $fields";
 const ADD_NODE = `CREATE (n:Node {id: $id}) SET n.tier = $tier, ${NODE_COLUMNS}, n += $attrs`;
 const ADD_EDGE =
   "MATCH (a:Node {id: $from}), (b:Node {id: $to}) CREATE (a)-[:REL {kind: $kind, via: $via}]->(b)";
 const SET_ATTR = "MATCH (n:Node {id: $id}) SET n += $delta";
+const SET_FIELDS = "MATCH (n:Node {id: $id}) SET n.fields = $fields";
 const REMOVE = "MATCH (n:Node {id: $id}) DETACH DELETE n";
 const LOAD_NODES = "MATCH (n:Node) RETURN n.id AS id, n.tier AS tier, n.type AS type, " +
   "n.metaKind AS metaKind, n.namespace AS namespace, n.localId AS localId, n.isClass AS isClass, " +
-  "n.class AS class, n.storageId AS storageId, properties(n) AS props";
+  "n.class AS class, n.storageId AS storageId, n.fields AS fields, properties(n) AS props";
 const LOAD_EDGES = "MATCH (a:Node)-[r:REL]->(b:Node) RETURN a.id AS from, b.id AS to, r.kind AS kind, r.via AS via";
 
 export class CypherGraphStore implements GraphStore {
@@ -48,7 +49,7 @@ export class CypherGraphStore implements GraphStore {
     const inner = new InMemoryGraphStore();
     for (const row of await session.run(LOAD_NODES)) {
       const props = { ...(row.props as Record<string, Scalar>) };
-      for (const col of ["id", "tier", "type", "metaKind", "namespace", "localId", "isClass", "class", "storageId"])
+      for (const col of ["id", "tier", "type", "metaKind", "namespace", "localId", "isClass", "class", "storageId", "fields"])
         delete props[col];
       inner.addNode({
         id: row.id as NodeId,
@@ -60,6 +61,7 @@ export class CypherGraphStore implements GraphStore {
         isClass: (row.isClass as boolean | null) ?? false,
         class: (row.class as NodeId | null) ?? null,
         storageId: (row.storageId as string | null) ?? null,
+        fields: typeof row.fields === "string" ? (JSON.parse(row.fields) as FieldDecl[]) : [],
         attrs: new Map(Object.entries(props)),
       });
     }
@@ -115,6 +117,7 @@ export class CypherGraphStore implements GraphStore {
         isClass: node.isClass,
         class: node.class,
         storageId: node.storageId,
+        fields: JSON.stringify(node.fields),
         attrs: Object.fromEntries(node.attrs),
       },
     });
@@ -126,6 +129,14 @@ export class CypherGraphStore implements GraphStore {
       cypher: ADD_EDGE,
       params: { from: edge.from, to: edge.to, kind: EdgeKind[edge.kind], via: edge.via },
     });
+  }
+
+  addFieldDecl(concept: NodeId, decl: FieldDecl): void {
+    this.inner.addFieldDecl(concept, decl);
+    // Re-persist the whole list (Neo4j properties are primitives, so fields ride
+    // as a JSON string) — the working copy already holds the appended decl.
+    const fields = this.inner.getNode(concept)?.fields ?? [];
+    this.pending.push({ cypher: SET_FIELDS, params: { id: concept, fields: JSON.stringify(fields) } });
   }
 
   setAttr(id: NodeId, name: string, value: Scalar): void {

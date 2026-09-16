@@ -16,6 +16,7 @@ function node(partial: Partial<Node> & Pick<Node, "id" | "tier">): Node {
     isClass: false,
     class: null,
     storageId: null,
+    fields: [],
     attrs: new Map(),
     ...partial,
   };

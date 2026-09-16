@@ -26,7 +26,7 @@ test("debug off (default): nodes/edges carry no debug block — wire form unchan
   assert.ok(doc.edges.every((e) => e.debug === undefined), "no edge.debug");
 });
 
-test("debug on: concept/field/model/instance carry readable kind + name + type + namespace", () => {
+test("debug on: concept/model/instance carry readable kind + name + type + namespace", () => {
   const { model } = compile();
   const doc = toJSON(model, { debug: true });
   const byId = (id: string) => doc.nodes.find((n) => n.id === id);
@@ -34,9 +34,12 @@ test("debug on: concept/field/model/instance carry readable kind + name + type +
   assert.deepEqual(byId("Component")?.debug, {
     kind: "concept", name: "Component", type: "concept", namespace: "app",
   });
-  assert.deepEqual(byId("Component.label")?.debug, {
-    kind: "field", name: "label", type: "field", namespace: "app",
-  });
+  // `label` is a declared field carried on the Component node (SPEC-01 #4), not a
+  // separate `Component.label` member node.
+  assert.equal(byId("Component.label"), undefined);
+  assert.deepEqual(model.resolve("Component")!.fields, [
+    { name: "label", type: "string", cardinality: 0 },
+  ]);
   assert.deepEqual(byId("M")?.debug, {
     kind: "model", name: "M", type: "model", namespace: "app",
   });
@@ -51,8 +54,8 @@ test("debug on: edges carry readable from/to (behind the opaque endpoint ids)", 
   const doc = toJSON(model, { debug: true });
   const contains = doc.edges.find((e) => e.kind === "Contains" && e.from === "M");
   assert.deepEqual(contains?.debug, { from: "M", to: "c" });
-  const hasField = doc.edges.find((e) => e.kind === "HasField" && e.from === "Component");
-  assert.deepEqual(hasField?.debug, { from: "Component", to: "label" });
+  // No `HasField` edge exists — scalar field schema lives on the concept node now.
+  assert.equal(doc.edges.some((e) => e.kind === "HasField"), false);
 });
 
 test("debug on with provenance: node.debug.source is the origin uri", () => {

@@ -20,6 +20,7 @@ test("a viewpoint that frames nothing is flagged (graph-built backstop)", () => 
     isClass: false,
     class: null,
     storageId: null,
+    fields: [],
     attrs: new Map(),
   });
   const codes = new Repository(g).validate().map((d) => d.code);

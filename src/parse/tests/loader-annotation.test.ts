@@ -15,12 +15,14 @@ const SRC = `namespace acme {
   }
 }`;
 
-test("an annotation loads as an Ontology-tier node with HasField params", () => {
+test("an annotation loads as an Ontology-tier node whose params are declared fields", () => {
   const { model } = load([{ uri: "a.todl", text: SRC }]);
   const n = model.resolve("Icon");
   assert.equal(n!.tier, Tier.Ontology);
   assert.equal(n!.metaKind, MetaKind.Annotation);
-  assert.equal(model.resolve("Icon.path")!.metaKind, MetaKind.Field);
+  // Params are declared fields on the annotation node (SPEC-01 #4), not `Icon.path` member nodes.
+  assert.equal(model.resolve("Icon.path"), undefined);
+  assert.deepEqual(model.schemaOf("Icon").fields.map((f) => f.name), ["path"]);
 });
 
 test("an application loads as an Annotated node typed by the annotation", () => {

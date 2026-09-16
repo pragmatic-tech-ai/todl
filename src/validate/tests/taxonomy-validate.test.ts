@@ -22,6 +22,7 @@ test("a taxonomy with no represented concept is flagged", () => {
     isClass: false,
     class: null,
     storageId: null,
+    fields: [],
     attrs: new Map(),
   });
   const c = new Repository(g).validate().map((d) => d.code);

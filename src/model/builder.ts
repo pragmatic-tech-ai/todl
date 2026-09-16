@@ -12,7 +12,7 @@
  * `addField` / `addConceptRelationship`).
  */
 
-import { Graph, EdgeKind, Tier, Cardinality, type Node, type NodeId, type Scalar } from "./graph.js";
+import { Graph, EdgeKind, Tier, Cardinality, type Node, type NodeId, type Scalar, type FieldDecl } from "./graph.js";
 import { MetaKind } from "./kinds.js";
 
 /** A taxonomy term = a class of its concept: its fixed field values (an attr
@@ -42,10 +42,16 @@ interface StagedEdge {
   to: NodeId;
 }
 
+interface StagedField {
+  concept: NodeId;
+  decl: FieldDecl;
+}
+
 export class Builder {
   private readonly stagedNodes: Node[] = [];
   private readonly stagedAttrs: StagedAttr[] = [];
   private readonly stagedEdges: StagedEdge[] = [];
+  private readonly stagedFields: StagedField[] = [];
   private currentNamespace: string | null = null;
 
   constructor(private readonly graph: Graph) {}
@@ -136,15 +142,12 @@ export class Builder {
     return this;
   }
 
-  /** Stage a field member on `concept`: a scalar/enum/ref-typed property. */
+  /** Stage a declared field on `concept`: a scalar/enum/ref-typed property. The
+   *  field's schema is carried on the owner node (SPEC-01 #4) — no member node,
+   *  no `HasField` edge; the value lands in an instance's `attrs` (scalar) or a
+   *  relationship edge (reference) at the instance tier. */
   addField(concept: NodeId, name: string, type: NodeId, cardinality: Cardinality = Cardinality.One): this {
-    const memberId = `${concept}.${name}`;
-    const node = this.makeNode(memberId, Tier.Ontology, { metaKind: MetaKind.Field });
-    node.attrs.set("name", name);
-    node.attrs.set("cardinality", cardinality);
-    node.attrs.set("type", type);
-    this.stagedNodes.push(node);
-    this.stagedEdges.push({ kind: EdgeKind.HasField, via: null, from: concept, to: memberId });
+    this.stagedFields.push({ concept, decl: { name, type, cardinality } });
     return this;
   }
 
@@ -254,6 +257,11 @@ export class Builder {
         throw new Error(`cannot set "${attr.name}" on node "${attr.id}" — it does not exist`);
       }
     }
+    for (const field of this.stagedFields) {
+      if (!exists(field.concept)) {
+        throw new Error(`cannot declare field "${field.decl.name}" on "${field.concept}" — it does not exist`);
+      }
+    }
     for (const edge of this.stagedEdges) {
       if (!exists(edge.from)) {
         throw new Error(`edge source "${edge.from}" does not exist`);
@@ -276,10 +284,14 @@ export class Builder {
       if (skipMissingTargets?.has(edge.to) && !this.graph.hasNode(edge.to)) continue;
       this.graph.addEdge({ kind: edge.kind, via: edge.via, from: edge.from, to: edge.to });
     }
+    for (const field of this.stagedFields) {
+      this.graph.addFieldDecl(field.concept, field.decl);
+    }
 
     this.stagedNodes.length = 0;
     this.stagedAttrs.length = 0;
     this.stagedEdges.length = 0;
+    this.stagedFields.length = 0;
   }
 
   /** Build a fresh {@link Node} with the current namespace and all root fields
@@ -305,6 +317,7 @@ export class Builder {
       isClass: opts.isClass ?? false,
       class: opts.class ?? null,
       storageId: null,
+      fields: [],
       attrs: new Map<string, Scalar>(),
     };
   }

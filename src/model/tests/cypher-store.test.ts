@@ -15,6 +15,7 @@ function node(id: NodeId, type = "thing", attrs: Record<string, string> = {}): N
     isClass: false,
     class: null,
     storageId: null,
+    fields: [],
     attrs: new Map(Object.entries(attrs)),
   };
 }
@@ -47,7 +48,7 @@ test("mutations record the mapped Cypher ops (applied to the working copy first)
     cypher:
       "CREATE (n:Node {id: $id}) SET n.tier = $tier, n.type = $type, n.metaKind = $metaKind, " +
       "n.namespace = $namespace, n.localId = $localId, n.isClass = $isClass, n.class = $class, " +
-      "n.storageId = $storageId, n += $attrs",
+      "n.storageId = $storageId, n.fields = $fields, n += $attrs",
     params: {
       id: "copilot",
       tier: "Instance",
@@ -58,6 +59,7 @@ test("mutations record the mapped Cypher ops (applied to the working copy first)
       isClass: false,
       class: null,
       storageId: null,
+      fields: "[]",
       attrs: { label: "Copilot" },
     },
   });

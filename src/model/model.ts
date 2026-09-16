@@ -339,16 +339,13 @@ export class Repository {
   schemaOf(concept: NodeId): ConceptSchema {
     const parents = this.graph.related(concept, EdgeKind.Extends, Direction.Out);
 
-    const fields: FieldSchema[] = [];
-    for (const memberId of this.graph.related(concept, EdgeKind.HasField, Direction.Out)) {
-      const node = this.graph.getNode(memberId);
-      if (node === undefined) continue;
-      fields.push({
-        name: readString(node.attrs.get("name")),
-        type: readString(node.attrs.get("type")),
-        cardinality: readCardinality(node.attrs.get("cardinality")),
-      });
-    }
+    // Declared fields are carried on the concept node (SPEC-01 #4) — no HasField
+    // member nodes to walk.
+    const fields: FieldSchema[] = (this.graph.getNode(concept)?.fields ?? []).map((f) => ({
+      name: f.name,
+      type: f.type,
+      cardinality: f.cardinality,
+    }));
 
     const relationships: RelationshipSchema[] = [];
     for (const memberId of this.graph.related(concept, EdgeKind.HasRelationship, Direction.Out)) {

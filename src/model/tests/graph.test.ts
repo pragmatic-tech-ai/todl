@@ -15,6 +15,7 @@ function instance(id: string, type: string): Node {
     isClass: false,
     class: null,
     storageId: null,
+    fields: [],
     attrs: new Map(),
   };
 }
@@ -100,8 +101,8 @@ test("related traverses InstanceOf and Represents edges", () => {
   const graph = new Graph();
   graph.addNode(instance("teamsChat", "component"));
   graph.addNode(instance("chat-hq", "component"));
-  graph.addNode({ id: "ComponentCategory", tier: Tier.Ontology, type: null, metaKind: MetaKind.Taxonomy, namespace: null, localId: null, isClass: false, class: null, storageId: null, attrs: new Map() });
-  graph.addNode({ id: "category", tier: Tier.Ontology, type: null, metaKind: MetaKind.Concept, namespace: null, localId: null, isClass: false, class: null, storageId: null, attrs: new Map() });
+  graph.addNode({ id: "ComponentCategory", tier: Tier.Ontology, type: null, metaKind: MetaKind.Taxonomy, namespace: null, localId: null, isClass: false, class: null, storageId: null, fields: [], attrs: new Map() });
+  graph.addNode({ id: "category", tier: Tier.Ontology, type: null, metaKind: MetaKind.Concept, namespace: null, localId: null, isClass: false, class: null, storageId: null, fields: [], attrs: new Map() });
   graph.addEdge({ kind: EdgeKind.InstanceOf, via: null, from: "chat-hq", to: "teamsChat" });
   graph.addEdge({ kind: EdgeKind.Represents, via: null, from: "ComponentCategory", to: "category" });
 

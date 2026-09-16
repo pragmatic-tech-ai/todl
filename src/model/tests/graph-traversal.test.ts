@@ -15,6 +15,7 @@ function ontologyNode(id: string): Node {
     isClass: false,
     class: null,
     storageId: null,
+    fields: [],
     attrs: new Map(),
   };
 }
@@ -30,6 +31,7 @@ function instanceNode(id: string, type: string): Node {
     isClass: false,
     class: null,
     storageId: null,
+    fields: [],
     attrs: new Map(),
   };
 }

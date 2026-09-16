@@ -29,7 +29,6 @@ export enum EdgeKind {
   TypeOf,
   Extends,
   Contains,
-  HasField,
   HasRelationship,
   HasInvariant,
   Relationship,
@@ -54,10 +53,25 @@ export enum Direction {
  * `enums.ts` is the single canonical owner (frozen codes One=0 … OneOrMore=3);
  * the model re-exports it so both tiers share one enum. `T[+]` = `OneOrMore`.
  */
-export { Cardinality } from "../manifest/enums.js";
+import { Cardinality } from "../manifest/enums.js";
+export { Cardinality };
 
 /** A literal field value. Enum selections and references are edges, not attrs. */
 export type Scalar = string | number | boolean;
+
+/**
+ * A concept's (or annotation's) declared field — name, declared type id, and
+ * multiplicity. Carried directly on the owning {@link Node} (SPEC-01 #4): a
+ * scalar field is pure schema with no navigable target, so it lives on the node
+ * rather than as a separate member node reached by a `HasField` edge (which is
+ * gone). Reference/relationship *members* keep their member nodes + `Targets`
+ * edges (they carry a navigable target).
+ */
+export interface FieldDecl {
+  name: string;
+  type: NodeId;
+  cardinality: Cardinality;
+}
 
 export interface Node {
   id: NodeId;
@@ -88,6 +102,10 @@ export interface Node {
 
   /** Reserved dedicated persistence id (#3). DEFERRED — a typed slot only. */
   storageId: string | null;
+
+  /** Declared scalar/field schema of a concept or annotation (SPEC-01 #4). Carried
+   *  here instead of as `HasField` member nodes; empty for non-schema-owning nodes. */
+  fields: FieldDecl[];
 
   /** User-defined scalar field values ONLY. */
   attrs: Map<string, Scalar>;
@@ -174,6 +192,11 @@ export class Graph {
     const property =
       edge.kind === EdgeKind.Relationship || edge.kind === EdgeKind.Derived ? edge.via : null;
     this.changed.emit({ kind: GraphChangeKind.EdgeAdded, node: edge.from, property, target: edge.to });
+  }
+
+  /** Append a declared field to a concept/annotation node's schema (SPEC-01 #4). */
+  addFieldDecl(concept: NodeId, decl: FieldDecl): void {
+    this.store.addFieldDecl(concept, decl);
   }
 
   /** Set a scalar field value on a node and emit {@link GraphChangeKind.AttrSet}. */

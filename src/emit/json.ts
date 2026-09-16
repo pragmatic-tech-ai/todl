@@ -5,7 +5,7 @@
  * a plain object. This is the interchange / storage / hand-off shape.
  */
 
-import { Graph, Tier, EdgeKind, type Node, type Edge, type NodeId, type Scalar } from "../model/graph.js";
+import { Graph, Tier, EdgeKind, type Node, type Edge, type NodeId, type Scalar, type FieldDecl } from "../model/graph.js";
 import { type MetaKind } from "../model/kinds.js";
 import { Repository } from "../model/model.js";
 
@@ -51,6 +51,7 @@ export interface JsonNode {
   isClass: boolean;
   class: NodeId | null;
   storageId: string | null;
+  fields: FieldDecl[];
   attrs: Record<string, Scalar>;
   debug?: NodeDebug;
 }
@@ -111,6 +112,7 @@ function emitNode(model: Repository, node: Node, options?: EmitOptions): JsonNod
     isClass: node.isClass,
     class: node.class,
     storageId: node.storageId,
+    fields: node.fields,
     attrs: Object.fromEntries(node.attrs),
   };
   if (options?.debug) json.debug = nodeDebug(model, node, options.provenance);
@@ -176,6 +178,7 @@ export function graphFromJSON(doc: TodlDocument): Graph {
       isClass: node.isClass ?? false,
       class: node.class ?? null,
       storageId: node.storageId ?? null,
+      fields: node.fields ?? [],
       attrs: new Map(Object.entries(node.attrs)),
     });
   }

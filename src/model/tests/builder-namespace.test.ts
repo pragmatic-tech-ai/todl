@@ -20,10 +20,12 @@ test("setNamespace stamps a namespace attr on every staged node", () => {
   assert.equal(graph.getNode("t1")!.namespace, "acme");
 });
 
-test("a field member node is stamped with the namespace too", () => {
+test("addField carries the field schema on the concept node (no member node)", () => {
   const graph = new Graph();
   const b = new Builder(graph).setNamespace("acme").defineConcept("thing");
   b.addField("thing", "label", "string");
   b.commit();
-  assert.equal(graph.getNode("thing.label")!.namespace, "acme");
+  // SPEC-01 #4: field schema lives on the owner; there is no `thing.label` node.
+  assert.equal(graph.getNode("thing.label"), undefined);
+  assert.deepEqual(graph.getNode("thing")!.fields, [{ name: "label", type: "string", cardinality: 0 }]);
 });
