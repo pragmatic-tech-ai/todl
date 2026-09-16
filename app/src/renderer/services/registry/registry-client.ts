@@ -18,6 +18,7 @@ import type {
   PackageSource,
   PackageContents,
 } from "@pragmatic-tech-ai/todl/package-manager";
+import type { ResolvedPackage, PackageRef as DomainPackageRef } from "@pragmatic-tech-ai/todl/domain";
 import type { ConfigView, CompileResultView } from "../../../main/registry/registry-bridge.js";
 import type { DirEntry } from "../../../main/registry/register-ipc.js";
 import type { TodlBridge } from "../../env.js";
@@ -45,6 +46,12 @@ export class RegistryClient {
   }
   getPackage(ref: PackageRef): Promise<InstalledPackage> {
     return this.bridge().registry.getPackage(ref);
+  }
+  resolvePackage(ref: DomainPackageRef): Promise<ResolvedPackage> {
+    return this.bridge().registry.resolvePackage(ref);
+  }
+  packageVersions(model: string): Promise<string[]> {
+    return this.bridge().registry.packageVersions(model);
   }
   getSources(ref: PackageRef): Promise<PackageSource[]> {
     return this.bridge().registry.getSources(ref);

@@ -37,6 +37,14 @@
         "default": "./dist/package-manager/index.js"
       },
       "require": "./dist/package-manager/index.js"
+    },
+    "./domain": {
+      "types": "./dist/domain/index.d.ts",
+      "import": {
+        "development": "./src/domain/index.ts",
+        "default": "./dist/domain/index.js"
+      },
+      "require": "./dist/domain/index.js"
     }
   },
   "bin": {

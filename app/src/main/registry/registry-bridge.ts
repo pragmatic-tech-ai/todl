@@ -21,7 +21,9 @@ import type {
   PackageSource,
   PackageContents,
   CompileResult,
+  LocalPackageStore,
 } from "@pragmatic-tech-ai/todl/package-manager";
+import type { ResolvedPackage, PackageRef as DomainPackageRef } from "@pragmatic-tech-ai/todl/domain";
 
 /** The subset of `PackageManager` the bridge uses (structurally satisfied by it). */
 export interface PackageManagerLike {
@@ -35,6 +37,8 @@ export interface PackageManagerLike {
   resolveClosure(rootDeps: readonly string[]): Promise<ResolvedClosure>;
   publish(compiledDir: string): Promise<void>;
   deleteVersion(name: string, version: string): Promise<void>;
+  resolveResolved(ref: DomainPackageRef): Promise<ResolvedPackage>;
+  resolvedVersions(id: string): Promise<string[]>;
 }
 
 /** The subset of `PackageCompiler` the bridge uses (structurally satisfied by it).
@@ -74,6 +78,9 @@ export interface RegistryBridgeDeps {
   createManager(config: NpmRegistryConfig): PackageManagerLike;
   /** Build the directory compiler (prod: () => new PackageCompiler()). */
   createCompiler(): PackageCompilerLike;
+  /** The shared local compiled-package store — compileDir registers into it and
+   *  resolvePackage reads from it (local-first). Owned by main/index.ts. */
+  localStore: LocalPackageStore;
   /** The process environment, for env-var tokens (prod: `process.env`). */
   env: Record<string, string | undefined>;
 }
@@ -161,6 +168,9 @@ export class RegistryBridge {
     const outDir = join(dir, "dist");
     const result = await this.deps.createCompiler().compile(dir, { outDir });
     const pkg = result.package;
+    // Register the freshly-compiled package so the solution's Domain can resolve
+    // it locally (before any publish).
+    if (result.ok && pkg !== undefined) this.deps.localStore.register(pkg);
     return {
       ok: result.ok,
       outDir,
@@ -170,6 +180,18 @@ export class RegistryBridge {
       version: pkg?.version,
       sourceCount: pkg?.sources.length,
     };
+  }
+
+  /** Resolve a Domain ref to manifest bytes + deps + seed (local store first,
+   *  network fallback). Backs the renderer's IpcPackageSource for solution
+   *  composition. */
+  resolvePackage(ref: DomainPackageRef): Promise<ResolvedPackage> {
+    return this.manager().resolveResolved(ref);
+  }
+
+  /** Versions for a package id (local store unioned with the registry). */
+  packageVersions(model: string): Promise<string[]> {
+    return this.manager().resolvedVersions(model);
   }
 
   getSources(ref: PackageRef): Promise<PackageSource[]> {

@@ -7,6 +7,7 @@ import type {
 } from "@pragmatic-tech-ai/todl/package-manager";
 import type { ConfigView, PackageSource, CompileResultView } from "../main/registry/registry-bridge.js";
 import type { DirEntry } from "../main/registry/register-ipc.js";
+import type { ResolvedPackage, PackageRef as DomainPackageRef } from "@pragmatic-tech-ai/todl/domain";
 
 export interface TodlBridge {
   registry: {
@@ -18,6 +19,8 @@ export interface TodlBridge {
     resolveClosure(rootDeps: string[]): Promise<ResolvedClosure>;
     publishDir(dir: string): Promise<void>;
     compileDir(dir: string): Promise<CompileResultView>;
+    resolvePackage(ref: DomainPackageRef): Promise<ResolvedPackage>;
+    packageVersions(model: string): Promise<string[]>;
     getSources(ref: PackageRef): Promise<PackageSource[]>;
     getPackageContents(name: string): Promise<PackageContents>;
     deleteVersion(name: string, version: string): Promise<void>;

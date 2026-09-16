@@ -20,6 +20,8 @@ export {
 } from "./package-compiler.js";
 export { RegistryBaseResolver, type BaseResolver, type RegistryFactory } from "./base-resolver.js";
 export { PackageManager, type PackageSource, type PackageContents } from "./package-manager.js";
+export { LocalPackageStore } from "./local-package-store.js";
+export { PackageManifestBridge } from "./package-manifest-bridge.js";
 export { ProjectInstaller, type NpmRunner } from "./project-installer.js";
 export { FileSink, MemorySink } from "./sinks.js";
 export {

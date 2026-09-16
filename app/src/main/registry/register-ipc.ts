@@ -30,6 +30,8 @@ export class RegistryIpc {
     ipcMain.handle("registry:resolveClosure", (_e, rootDeps: string[]) => bridge.resolveClosure(rootDeps));
     ipcMain.handle("registry:publishDir", (_e, dir: string) => bridge.publishDir(dir));
     ipcMain.handle("registry:compileDir", (_e, dir: string) => bridge.compileDir(dir));
+    ipcMain.handle("registry:resolvePackage", (_e, ref) => bridge.resolvePackage(ref));
+    ipcMain.handle("registry:packageVersions", (_e, model: string) => bridge.packageVersions(model));
     ipcMain.handle("registry:getSources", (_e, ref) => bridge.getSources(ref));
     ipcMain.handle("registry:getPackageContents", (_e, name: string) => bridge.getPackageContents(name));
     ipcMain.handle("registry:deleteVersion", (_e, name: string, version: string) => bridge.deleteVersion(name, version));

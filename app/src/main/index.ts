@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, dialog } from "electron";
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { electronApp, is } from "@electron-toolkit/utils";
-import { PackageManager, PackageCompiler } from "@pragmatic-tech-ai/todl/package-manager";
+import { PackageManager, PackageCompiler, LocalPackageStore } from "@pragmatic-tech-ai/todl/package-manager";
 import { TokenStore } from "./registry/token-store.js";
 import { SettingsStore } from "./registry/settings-store.js";
 import { RegistryBridge } from "./registry/registry-bridge.js";
@@ -38,11 +38,15 @@ void app.whenReady().then(() => {
   electronApp.setAppUserModelId("com.pragmatic-tech-ai.todl");
 
   const userData = app.getPath("userData");
+  // One shared local compiled-package store: compileDir registers into it and
+  // every per-call PackageManager resolves against it (local-first).
+  const localStore = new LocalPackageStore();
   const bridge = new RegistryBridge({
     tokenStore: new TokenStore(userData, new SafeStorageEncryptor()),
     settingsStore: new SettingsStore(userData),
-    createManager: (config) => new PackageManager(config),
+    createManager: (config) => new PackageManager(config, localStore),
     createCompiler: () => new PackageCompiler(),
+    localStore,
     env: process.env,
   });
   RegistryIpc.register(

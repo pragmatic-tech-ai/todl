@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { RegistryBridge, type PackageManagerLike } from "../registry-bridge.js";
 import { TokenStore, type Encryptor } from "../token-store.js";
 import { SettingsStore } from "../settings-store.js";
+import { LocalPackageStore } from "@pragmatic-tech-ai/todl/package-manager";
 
 class PlainEncryptor implements Encryptor {
   available() { return true; }
@@ -27,6 +28,8 @@ class FakeManager implements PackageManagerLike {
   resolveClosure(deps: readonly string[]) { return this.over.resolveClosure?.(deps) ?? Promise.resolve({ metaModels: [], libraries: [], order: [] }); }
   publish(dir: string) { return this.over.publish?.(dir) ?? Promise.resolve(); }
   deleteVersion(name: string, version: string) { return this.over.deleteVersion?.(name, version) ?? Promise.resolve(); }
+  resolveResolved(ref: any) { return this.over.resolveResolved?.(ref) ?? Promise.reject(new Error("no")); }
+  resolvedVersions(id: string) { return this.over.resolvedVersions?.(id) ?? Promise.resolve([] as string[]); }
 }
 
 function makeBridge(
@@ -34,6 +37,7 @@ function makeBridge(
   env: Record<string, string | undefined> = {},
   onConfig?: (config: any) => void,
   compile?: (directory: string, options?: { scope?: string; outDir?: string }) => Promise<any>,
+  store: LocalPackageStore = new LocalPackageStore(),
 ) {
   const dir = freshDir();
   return new RegistryBridge({
@@ -43,6 +47,7 @@ function makeBridge(
     createCompiler: () => ({
       compile: compile ?? (() => Promise.resolve({ ok: true, diagnostics: [], errors: [] } as any)),
     }),
+    localStore: store,
     env,
   });
 }
@@ -72,6 +77,29 @@ test("compileDir compiles under <dir>/dist and returns a serializable view", asy
   assert.equal(view.version, "0.1.0");
   assert.equal(view.sourceCount, 1);
   assert.deepEqual(view.diagnostics, [{ severity: "warning", message: "heads up" }]);
+});
+
+test("compileDir registers the compiled package into the local store", async () => {
+  const store = new LocalPackageStore();
+  const bridge = makeBridge({}, {}, undefined, () =>
+    Promise.resolve({ ok: true, diagnostics: [], errors: [], files: [], package: { id: "acme.demo", version: "1.0.0", sources: [] } as any }),
+    store,
+  );
+  assert.equal(store.has("acme.demo", "1.0.0"), false);
+  await bridge.compileDir("/proj/demo");
+  assert.equal(store.has("acme.demo", "1.0.0"), true);
+});
+
+test("resolvePackage / packageVersions delegate to the manager", async () => {
+  const canned = { ref: { model: "acme.demo", version: "1.0.0" }, manifest: new Uint8Array([1, 2, 3]), dependencies: [] };
+  const bridge = makeBridge({
+    resolveResolved: (ref) => Promise.resolve({ ...canned, ref: { model: ref.model, version: ref.version ?? "1.0.0" } } as any),
+    resolvedVersions: (id) => Promise.resolve([`${id}-0.1.0`]),
+  });
+  const resolved = await bridge.resolvePackage({ model: "acme.demo", version: "1.0.0" });
+  assert.deepEqual(resolved.ref, { model: "acme.demo", version: "1.0.0" });
+  assert.deepEqual([...resolved.manifest as Uint8Array], [1, 2, 3]);
+  assert.deepEqual(await bridge.packageVersions("acme.demo"), ["acme.demo-0.1.0"]);
 });
 
 test("getPackageContents delegates to the manager (name → ref)", async () => {
