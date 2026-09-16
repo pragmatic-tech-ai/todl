@@ -55,6 +55,8 @@ export interface CompileResultView {
   outDir: string;
   files: string[];
   diagnostics: { severity: string; message: string }[];
+  /** The TODL package id (the LocalPackageStore / Domain `model` key). */
+  id?: string;
   name?: string;
   version?: string;
   sourceCount?: number;
@@ -176,6 +178,7 @@ export class RegistryBridge {
       outDir,
       files: result.files !== undefined ? [...result.files] : [],
       diagnostics: result.diagnostics.map((d) => ({ severity: String(d.severity), message: d.message })),
+      id: pkg?.id,
       name: pkg !== undefined ? (pkg.name ?? pkg.id) : undefined,
       version: pkg?.version,
       sourceCount: pkg?.sources.length,

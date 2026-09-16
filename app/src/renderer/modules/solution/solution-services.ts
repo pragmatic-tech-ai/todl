@@ -9,6 +9,8 @@ import {
 } from "@pragmatic-tech-ai/todl";
 import { AppStorageProviderRegistry } from "../../services/storage/storage-provider-registry.js";
 import { ConfirmDialog } from "../../services/dialogs/confirm-dialog.js";
+import { RegistryClient } from "../../services/registry/registry-client.js";
+import { IpcPackageSource } from "./ipc-package-source.js";
 import { TodlPackageProjectFactory, TODL_PACKAGE_TYPE } from "./todl-package-project-factory.js";
 
 // Resolves a project type id to the factory that opens it. This app ships one
@@ -55,6 +57,10 @@ export class SolutionServicesRegistration {
     services.register(
       SolutionManagerService.DiscardConfirmerKey,
       (p): IDiscardConfirmer => new DialogDiscardConfirmer(p.getRequired(DialogService.Key)),
+    );
+    services.register(
+      SolutionManagerService.PackageSourceKey,
+      (p) => new IpcPackageSource(p.getRequired(RegistryClient)),
     );
   }
 }

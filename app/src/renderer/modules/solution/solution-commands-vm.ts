@@ -8,6 +8,7 @@ export interface SolutionCommandHandlers {
   newSolution(): void;
   openSolution(): void;
   save(): void;
+  compose(): void;
 }
 
 // Toolbar actions for the Solution Explorer side panel — a button row rendered
@@ -16,6 +17,7 @@ export class SolutionCommandsVM extends Observable {
   readonly New: ICommand;
   readonly Open: ICommand;
   readonly Save: ICommand;
+  readonly Compose: ICommand;
 
   constructor(handlers: SolutionCommandHandlers) {
     super();
@@ -27,6 +29,9 @@ export class SolutionCommandsVM extends Observable {
     });
     this.Save = new RelayCommand(() => handlers.save(), undefined, {
       Text: "Save", Description: "Save the active solution to solution.json.",
+    });
+    this.Compose = new RelayCommand(() => handlers.compose(), undefined, {
+      Text: "Compose", Description: "Compile all members and validate the composed cross-project graph.",
     });
   }
 }

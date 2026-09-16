@@ -12,6 +12,7 @@ import {
   SolutionMemberNodeVM,
   SettingBagGrid,
 } from "@pragmatic-tech-ai/todl";
+import type { PackageRef } from "@pragmatic-tech-ai/todl/domain";
 import { RegistryClient } from "../../services/registry/registry-client.js";
 import { AppStorageProviderRegistry } from "../../services/storage/storage-provider-registry.js";
 import { NpmRegistryBag } from "./npm-registry-bag.js";
@@ -31,6 +32,7 @@ export class SolutionExplorerService extends ServiceBase implements IActivatable
   private readonly _treeRoots = new ObservableCollection<SolutionMemberNodeVM>();
   private _settingsProperties: readonly GridProperty[] | undefined = undefined;
   private _settingsTarget: IPropertyBag | undefined = undefined;
+  private _composeStatus = "";
 
   get Title(): string { return this._title; }
   get HasSolution(): boolean { return this._hasSolution; }
@@ -38,6 +40,8 @@ export class SolutionExplorerService extends ServiceBase implements IActivatable
   get TreeRoots(): ObservableCollection<SolutionMemberNodeVM> { return this._treeRoots; }
   get SettingsProperties(): readonly GridProperty[] | undefined { return this._settingsProperties; }
   get SettingsTarget(): IPropertyBag | undefined { return this._settingsTarget; }
+  // A one-line result of the last Compose (member/dependency diagnostics summary).
+  get ComposeStatus(): string { return this._composeStatus; }
 
   private readonly manager: SolutionManagerService;
   private readonly settings: SolutionSettingsRegistry;
@@ -57,6 +61,7 @@ export class SolutionExplorerService extends ServiceBase implements IActivatable
       newSolution: () => void this.NewSolution(),
       openSolution: () => void this.OpenSolution(),
       save: () => void this.save(),
+      compose: () => void this.ComposeSolution(),
     });
     this.RaisePropertyChanged("Commands", old, this._commands);
 
@@ -96,6 +101,35 @@ export class SolutionExplorerService extends ServiceBase implements IActivatable
     await this.manager.Save();
   }
 
+  // Compile every member (registering each into the main-side local package
+  // store) to obtain its package id + version, then compose those refs into one
+  // Domain and surface the cross-project diagnostics. Public so the Home page or
+  // a command can drive it. A member that fails to COMPILE is reported here; a
+  // member that compiles but fails to LOAD/bind is reported by Compose.
+  public async ComposeSolution(): Promise<void> {
+    const session = this.manager.ActiveSolution;
+    if (session === undefined) { this.setComposeStatus("No solution open."); return; }
+    this.setComposeStatus("Composing…");
+    const members: PackageRef[] = [];
+    const compileErrors: string[] = [];
+    for (const member of session.Members.ToArray()) {
+      const dir = SolutionExplorerService.joinOs(session.Storage.Root, member.Ref.path);
+      const view = await this.registry.compileDir(dir);
+      if (!view.ok || view.id === undefined || view.version === undefined) {
+        compileErrors.push(`${member.Ref.path} failed to compile (${view.diagnostics.length} diagnostic(s))`);
+        continue;
+      }
+      members.push({ model: view.id, version: view.version });
+    }
+    const composed = await this.manager.Compose(members);
+    const total = compileErrors.length + composed.length;
+    this.setComposeStatus(
+      total === 0
+        ? `Composed ${members.length} member(s) — no cross-project problems.`
+        : `${total} problem(s): ${[...compileErrors, ...composed.map((d) => d.message)].join("; ")}`,
+    );
+  }
+
   // Materialize the registered bag definitions onto the active session, so the
   // settings PropertyGrid has live bags to edit.
   private bindBags(): void {
@@ -129,6 +163,12 @@ export class SolutionExplorerService extends ServiceBase implements IActivatable
       this.setSettingsProperties(SettingBagGrid.describe(bag));
       this.setSettingsTarget(SettingBagGrid.bagOf(bag));
     }
+  }
+
+  private setComposeStatus(v: string): void {
+    const old = this._composeStatus;
+    this._composeStatus = v;
+    this.RaisePropertyChanged("ComposeStatus", old, v);
   }
 
   private setTitle(v: string): void {

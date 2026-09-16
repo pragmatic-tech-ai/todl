@@ -5,11 +5,14 @@ import {
 import { type IActivatable } from '@pragmatic-tech-ai/mural/framework'
 import { SolutionViewService } from './solution-view-service.js'
 import { SolutionManifest } from './solution-manifest.js'
+import { SolutionSession } from './solution-session.js'
 import {
     type IStorageProviderRegistry,
     type IProjectFactoryRegistry,
     type IDiscardConfirmer,
 } from './host-services.js'
+import { type PackageSource, type PackageRef } from '../domain/domain.js'
+import { type Diagnostic } from '../diagnostics/diagnostic.js'
 
 // Owns exactly ONE active solution (the Visual Studio .sln model): create a new
 // empty solution, open/save/close one, and keep a recent-solutions list. Opening
@@ -28,18 +31,35 @@ export class SolutionManagerService extends ServiceBase implements IActivatable 
         new ServiceKey<IProjectFactoryRegistry>('SolutionProjectFactoryRegistry')
     public static readonly DiscardConfirmerKey =
         new ServiceKey<IDiscardConfirmer>('SolutionDiscardConfirmer')
+    // The Domain package backend the composition engine loads members through
+    // (app: an IpcPackageSource over the main-side resolver; test: a fake).
+    public static readonly PackageSourceKey =
+        new ServiceKey<PackageSource>('SolutionPackageSource')
 
     private activeSolution: SolutionViewService | undefined
     private readonly recentSolutions: string[] = []
     private readonly storages: IStorageProviderRegistry
     private readonly factories: IProjectFactoryRegistry
     private readonly confirmer: IDiscardConfirmer
+    private readonly packages: PackageSource
 
     constructor(provider: IServiceProvider) {
         super(provider)
         this.storages = provider.getRequired(SolutionManagerService.StorageRegistryKey)
         this.factories = provider.getRequired(SolutionManagerService.ProjectFactoryRegistryKey)
         this.confirmer = provider.getRequired(SolutionManagerService.DiscardConfirmerKey)
+        this.packages = provider.getRequired(SolutionManagerService.PackageSourceKey)
+    }
+
+    // Compose the given member packages into one Domain graph and return the
+    // cross-project diagnostics. Members are Domain refs (a package id + version)
+    // the caller resolved by compiling each member first (so it is registered in
+    // the local package store the source reads). A fresh SolutionSession per call
+    // keeps composition stateless; the caller surfaces the diagnostics.
+    public async Compose(members: readonly PackageRef[]): Promise<readonly Diagnostic[]> {
+        const session = new SolutionSession(this.packages)
+        await session.compose(members)
+        return session.Diagnostics
     }
 
     public get ActiveSolution(): SolutionViewService | undefined {

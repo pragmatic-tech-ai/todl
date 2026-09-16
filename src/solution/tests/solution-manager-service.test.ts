@@ -27,12 +27,15 @@ function makeService(opts?: { confirmDiscard?: () => Promise<boolean> }) {
     const confirmer: IDiscardConfirmer = {
         confirmDiscard: opts?.confirmDiscard ?? (async () => true),
     }
+    // Compose is not exercised by these tests, but the ctor now requires the key.
+    const packages = { resolve: async () => { throw new Error('no compose in test') } }
     const provider = {
         get: () => undefined,
         getRequired: (token: unknown) => {
             if (token === SolutionManagerService.StorageRegistryKey) return storages
             if (token === SolutionManagerService.ProjectFactoryRegistryKey) return factories
             if (token === SolutionManagerService.DiscardConfirmerKey) return confirmer
+            if (token === SolutionManagerService.PackageSourceKey) return packages
             throw new Error('unexpected service key')
         },
         has: () => true,
@@ -72,6 +75,13 @@ test('Save clears dirty; opening adds to RecentSolutions (move-to-front, deduped
     // Save again should not duplicate the recent entry.
     await svc.Save()
     assert.equal(svc.RecentSolutions.filter((p) => p === '/work/sol').length, 1)
+})
+
+test('Compose runs members through the injected source and returns diagnostics', async () => {
+    const { svc } = makeService()   // fake package source rejects every resolve
+    const diagnostics = await svc.Compose([{ model: 'acme.widgets', version: '1.0.0' }])
+    assert.equal(diagnostics.length, 1)
+    assert.match(diagnostics[0]!.message, /acme\.widgets/)
 })
 
 test('a dirty solution blocks replace when the user declines', async () => {
