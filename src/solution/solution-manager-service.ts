@@ -3,22 +3,13 @@ import {
     type IServiceProvider,
 } from '@pragmatic-tech-ai/mural/runtime'
 import { type IActivatable } from '@pragmatic-tech-ai/mural/framework'
-import { type IStorage } from '@pragmatic-tech-ai/todl-runtime'
-import { SolutionSession } from './solution-session.js'
+import { SolutionViewService } from './solution-view-service.js'
 import { SolutionManifest } from './solution-manifest.js'
-import { type IProjectFactory } from './project-factory.js'
-
-// The seams the manager needs from its host — supplied by the module wiring
-// (Configure) in a real app, or by fakes in a test. Kept as an injected object
-// so the manager stays testable without the container / dialog / registries.
-export interface SolutionSeams {
-    // Build a rooted IStorage for an absolute folder (host: StorageProviderRegistry).
-    storageForFolder: (folder: string) => IStorage
-    // Resolve a project type id to its factory (host: ProjectFactoryRegistry).
-    factoryFor: (typeId: string) => IProjectFactory | undefined
-    // Save-prompt when replacing a dirty solution; resolves true to discard.
-    confirmDiscard: () => Promise<boolean>
-}
+import {
+    type IStorageProviderRegistry,
+    type IProjectFactoryRegistry,
+    type IDiscardConfirmer,
+} from './host-services.js'
 
 // Owns exactly ONE active solution (the Visual Studio .sln model): create a new
 // empty solution, open/save/close one, and keep a recent-solutions list. Opening
@@ -26,25 +17,35 @@ export interface SolutionSeams {
 export class SolutionManagerService extends ServiceBase implements IActivatable {
     public static readonly Key = new ServiceKey<SolutionManagerService>('SolutionManager')
 
-    // The host seams are resolved from the container under this key — the app
-    // registers a concrete SolutionSeams (storage backend, project factories,
-    // discard dialog); a test registers fakes. Resolving through DI keeps the
-    // manager free of any public post-construction setter.
-    public static readonly SeamsKey = new ServiceKey<SolutionSeams>('SolutionSeams')
+    // The host services are resolved from the container by these keys — the app
+    // registers concretes at its composition root (storage backend registry,
+    // project-factory registry, discard dialog); a test registers fakes.
+    // Resolving through DI keeps the manager free of any post-construction setter
+    // and free of a lambda "seams" bag.
+    public static readonly StorageRegistryKey =
+        new ServiceKey<IStorageProviderRegistry>('SolutionStorageProviderRegistry')
+    public static readonly ProjectFactoryRegistryKey =
+        new ServiceKey<IProjectFactoryRegistry>('SolutionProjectFactoryRegistry')
+    public static readonly DiscardConfirmerKey =
+        new ServiceKey<IDiscardConfirmer>('SolutionDiscardConfirmer')
 
-    private activeSolution: SolutionSession | undefined
+    private activeSolution: SolutionViewService | undefined
     private readonly recentSolutions: string[] = []
-    private readonly seams: SolutionSeams
+    private readonly storages: IStorageProviderRegistry
+    private readonly factories: IProjectFactoryRegistry
+    private readonly confirmer: IDiscardConfirmer
 
     constructor(provider: IServiceProvider) {
         super(provider)
-        this.seams = provider.get(SolutionManagerService.SeamsKey) ?? SolutionManagerService.throwingSeams()
+        this.storages = provider.getRequired(SolutionManagerService.StorageRegistryKey)
+        this.factories = provider.getRequired(SolutionManagerService.ProjectFactoryRegistryKey)
+        this.confirmer = provider.getRequired(SolutionManagerService.DiscardConfirmerKey)
     }
 
-    public get ActiveSolution(): SolutionSession | undefined {
+    public get ActiveSolution(): SolutionViewService | undefined {
         return this.activeSolution
     }
-    private setActive(s: SolutionSession | undefined): void {
+    private setActive(s: SolutionViewService | undefined): void {
         const old = this.activeSolution
         this.activeSolution = s
         this.RaisePropertyChanged('ActiveSolution', old, s)
@@ -56,20 +57,20 @@ export class SolutionManagerService extends ServiceBase implements IActivatable 
 
     public async NewSolution(location: string): Promise<void> {
         if (!(await this.canReplace())) return
-        const storage = this.seams.storageForFolder(location)
-        this.setActive(new SolutionSession('Untitled Solution', storage))
+        const storage = this.storages.CreateStorage(location)
+        this.setActive(new SolutionViewService('Untitled Solution', storage))
     }
 
     public async OpenSolution(location: string): Promise<void> {
         if (!(await this.canReplace())) return
-        const storage = this.seams.storageForFolder(location)
+        const storage = this.storages.CreateStorage(location)
         const manifest = SolutionManifest.parse(await storage.ReadText('solution.json'))
-        const session = new SolutionSession(manifest.name, storage)
+        const session = new SolutionViewService(manifest.name, storage)
         for (const ref of manifest.members) session.AddMember(ref.path, ref.type)
         session.LoadSettings(manifest.settings)
         await session.OpenMembers(
-            (rel) => this.seams.storageForFolder(SolutionManagerService.joinPosix(location, rel)),
-            (type) => this.seams.factoryFor(type),
+            (rel) => this.storages.CreateStorage(SolutionManagerService.joinPosix(location, rel)),
+            (type) => this.factories.factoryFor(type),
         )
         session.IsDirty = false
         this.setActive(session)
@@ -88,10 +89,10 @@ export class SolutionManagerService extends ServiceBase implements IActivatable 
     public async SaveAs(location: string): Promise<void> {
         const s = this.ActiveSolution
         if (s === undefined) return
-        const target = this.seams.storageForFolder(location)
+        const target = this.storages.CreateStorage(location)
         const manifest = new SolutionManifest(s.Name, s.Members.ToArray().map((m) => m.Ref), s.CollectSettings())
         await target.WriteText('solution.json', manifest.stringify())
-        const reopened = new SolutionSession(s.Name, target)
+        const reopened = new SolutionViewService(s.Name, target)
         for (const m of s.Members) reopened.AddMember(m.Ref.path, m.Ref.type)
         reopened.LoadSettings(s.CollectSettings())
         reopened.IsDirty = false
@@ -109,7 +110,7 @@ export class SolutionManagerService extends ServiceBase implements IActivatable 
     private async canReplace(): Promise<boolean> {
         const s = this.ActiveSolution
         if (s === undefined || !s.IsDirty) return true
-        return this.seams.confirmDiscard()
+        return this.confirmer.confirmDiscard()
     }
 
     private pushRecent(location: string): void {
@@ -129,13 +130,5 @@ export class SolutionManagerService extends ServiceBase implements IActivatable 
             else parts.push(seg)
         }
         return (base.startsWith('/') ? '/' : '') + parts.join('/')
-    }
-
-    private static throwingSeams(): SolutionSeams {
-        return {
-            storageForFolder: () => { throw new Error('SolutionManagerService not configured') },
-            factoryFor: () => undefined,
-            confirmDiscard: async () => true,
-        }
     }
 }

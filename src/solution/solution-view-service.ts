@@ -5,11 +5,13 @@ import { SolutionSettingBag } from './solution-setting-bag.js'
 import { type SettingBagDefinition } from './setting-bag-definition.js'
 import { type MemberStorageResolver, type ProjectFactoryResolver } from './project-factory.js'
 
-// The live, in-memory solution: a name, the storage it is rooted at, its ordered
-// member projects (opened all-at-once), its cross-project setting bags, and a
-// dirty flag. Extends Observable so the shell binds Name/IsDirty and the
-// explorer binds Members.
-export class SolutionSession extends Observable {
+// The UI-facing view of the active solution: a name, the storage it is rooted at,
+// its ordered member projects (opened all-at-once for the explorer), its
+// cross-project setting bags, and a dirty flag. Extends Observable so the shell
+// binds Name/IsDirty and the explorer binds Members. The headless composition
+// engine (compile → package layer → Domain graph) lives in SolutionSession; this
+// class carries only the bindable surface the shell/explorer/tree consume.
+export class SolutionViewService extends Observable {
     private _name: string
     private _dirty = false
     public readonly Storage: IStorage

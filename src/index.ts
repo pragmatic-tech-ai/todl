@@ -137,11 +137,16 @@ export { parsePredicate } from "./parse/predicate-parser.js";
 export { tokenize, TokenKind, type Token } from "./parse/lexer.js";
 
 // ── Solution (SolutionManager + cross-project settings) ──
-export { SolutionManagerService, type SolutionSeams } from "./solution/solution-manager-service.js";
+export { SolutionManagerService } from "./solution/solution-manager-service.js";
+export {
+  type IStorageProviderRegistry,
+  type IProjectFactoryRegistry,
+  type IDiscardConfirmer,
+} from "./solution/host-services.js";
 export { SolutionSettingsRegistry } from "./solution/solution-settings-registry.js";
 export { SettingBagDefinition } from "./solution/setting-bag-definition.js";
 export { SolutionSettingBag } from "./solution/solution-setting-bag.js";
-export { SolutionSession } from "./solution/solution-session.js";
+export { SolutionViewService } from "./solution/solution-view-service.js";
 export { SolutionMember } from "./solution/solution-member.js";
 export { SolutionManifest } from "./solution/solution-manifest.js";
 export { type SolutionMemberRef, SolutionPath } from "./solution/solution-member-ref.js";

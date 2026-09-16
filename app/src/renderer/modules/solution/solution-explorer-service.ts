@@ -22,7 +22,7 @@ import { SolutionCommandsVM } from "./solution-commands-vm.js";
 //   • contributes the npm-registry cross-project setting bag;
 //   • projects the active solution into bindable view state — a New/Open/Save
 //     toolbar, the member/folder tree, and the setting-bag PropertyGrid.
-// The manager's host seams are registered separately (SolutionSeamsRegistration,
+// The manager's host services are registered separately (SolutionServicesRegistration,
 // installed from the bootstrap) and resolved by the manager from the container.
 export class SolutionExplorerService extends ServiceBase implements IActivatable {
   private _title = "No solution open";

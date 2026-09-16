@@ -8,8 +8,9 @@ import { AppLocalStorage } from "./app-local-storage.js";
 export type StorageProviderFactory = (location: string) => IStorage;
 
 // AppStorageProviderRegistry — maps a backend id → the factory that builds its
-// storage. The SolutionManagerService.Configure seam's `storageForFolder` calls
-// Create('local', folder) to get the IStorage it hands to project factories.
+// storage. Satisfies the solution package's IStorageProviderRegistry: its
+// CreateStorage(folder) calls Create('local', folder) to get the IStorage the
+// SolutionManagerService hands to project factories.
 // Mirrors Plexus's StorageProviderRegistry: one built-in backend, additional
 // backends register against the same surface.
 //
@@ -41,6 +42,13 @@ export class AppStorageProviderRegistry extends ServiceBase {
     const factory = this.factories.get(id);
     if (factory === undefined) throw new Error(`Unknown storage backend "${id}".`);
     return factory(location);
+  }
+
+  // Rooted IStorage for a folder using the default backend. Satisfies the
+  // solution package's IStorageProviderRegistry so the SolutionManagerService
+  // can root the solution + its members without knowing the backend id.
+  public CreateStorage(location: string): IStorage {
+    return this.Create(AppStorageProviderRegistry.DefaultBackendId, location);
   }
 
   private bridge(): TodlBridge {

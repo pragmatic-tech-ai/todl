@@ -2,26 +2,40 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { type IServiceProvider } from '@pragmatic-tech-ai/mural/runtime'
 import { FakeStorage } from '@pragmatic-tech-ai/todl-runtime'
-import { SolutionManagerService, type SolutionSeams } from '../solution-manager-service.js'
+import { SolutionManagerService } from '../solution-manager-service.js'
+import {
+    type IStorageProviderRegistry,
+    type IProjectFactoryRegistry,
+    type IDiscardConfirmer,
+} from '../host-services.js'
 import { FakeProjectFactory } from './fake-project-factory.js'
 
 // Build the service the way the container does — through the constructor — with
-// a fake provider that serves the test seams under SolutionManagerService.SeamsKey.
+// a fake provider that serves fake host services under the manager's three keys.
 function makeService(opts?: { confirmDiscard?: () => Promise<boolean> }) {
     const roots = new Map<string, FakeStorage>()
-    const seams: SolutionSeams = {
-        storageForFolder: (folder) => {
+    const storages: IStorageProviderRegistry = {
+        CreateStorage: (folder) => {
             const s = roots.get(folder) ?? new FakeStorage(folder)
             roots.set(folder, s)
             return s
         },
+    }
+    const factories: IProjectFactoryRegistry = {
         factoryFor: (type) => (type === 'architecture' ? new FakeProjectFactory() : undefined),
+    }
+    const confirmer: IDiscardConfirmer = {
         confirmDiscard: opts?.confirmDiscard ?? (async () => true),
     }
     const provider = {
-        get: (token: unknown) => (token === SolutionManagerService.SeamsKey ? seams : undefined),
-        getRequired: () => { throw new Error('no container in test') },
-        has: (token: unknown) => token === SolutionManagerService.SeamsKey,
+        get: () => undefined,
+        getRequired: (token: unknown) => {
+            if (token === SolutionManagerService.StorageRegistryKey) return storages
+            if (token === SolutionManagerService.ProjectFactoryRegistryKey) return factories
+            if (token === SolutionManagerService.DiscardConfirmerKey) return confirmer
+            throw new Error('unexpected service key')
+        },
+        has: () => true,
     } as unknown as IServiceProvider
     const svc = new SolutionManagerService(provider)
     return { svc, roots }
