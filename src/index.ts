@@ -147,6 +147,7 @@ export { SolutionSettingsRegistry } from "./solution/solution-settings-registry.
 export { SettingBagDefinition } from "./solution/setting-bag-definition.js";
 export { SolutionSettingBag } from "./solution/solution-setting-bag.js";
 export { SolutionViewService } from "./solution/solution-view-service.js";
+export { SolutionSession } from "./solution/solution-session.js";
 export { SolutionMember } from "./solution/solution-member.js";
 export { SolutionManifest } from "./solution/solution-manifest.js";
 export { type SolutionMemberRef, SolutionPath } from "./solution/solution-member-ref.js";

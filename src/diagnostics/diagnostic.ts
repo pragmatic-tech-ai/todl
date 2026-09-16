@@ -71,6 +71,9 @@ export enum DiagnosticCode {
   AnnotationInvalidTarget = "annotation.invalid-target",
   AnnotationBaseNotAnnotation = "annotation.base-not-annotation",
   AnnotationParamRedeclared = "annotation.param-redeclared",
+  // Solution composition phase (SPEC-06): a member/dependency package could not
+  // be resolved or loaded into the composed Domain.
+  PackageUnresolved = "package.unresolved",
 }
 
 export interface Diagnostic {
