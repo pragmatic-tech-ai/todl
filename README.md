@@ -23,11 +23,14 @@ files only and is not part of the gate.
 
 ## Tests-and-demos suite
 
-Sibling folders (`shared/`, `examples/`, `cli/`, `app/`) are the demos suite —
-one verify/compile core reused by a CLI and a browser app. They are excluded
-from the published package (`files: ["dist", "README.md"]`). See
-[`app/README.md`](app/README.md) for the app, and
+Sibling folders (`shared/`, `examples/`, `cli/`) are the demos suite — one
+verify/compile core reused by a CLI. They are excluded from the published
+package (`files: ["dist", "README.md"]`). See
 `docs/superpowers/specs/2026-09-01-todl-demos-app-design.md` for the design.
+
+The former Electron demo app (`app/`) has been retired from this repo; it now
+lives in the Plexus monorepo as `apps/devUI`, consuming `@pragmatic-tech-ai/todl`
+from the registry.
 
 ## CI & showcase
 

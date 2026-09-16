@@ -38,4 +38,3 @@ body from a file:
 New view-model classes derive from `Observable` (the lightweight INPC root),
 not `MuralBase`. Reserve `MuralBase` for the few things that genuinely need the
 dependency-property system. Default a VM to `Observable` unless told otherwise.
-Applies to the `app/` renderer view models (`*-vm.ts`).
