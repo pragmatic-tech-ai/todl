@@ -11,6 +11,10 @@ import { writeFileSync } from "node:fs";
 import { NpmRegistry, type NpmRegistryConfig, type PackageRef, type VersionList } from "./registry/npm-registry.js";
 import { TarReader } from "./registry/tar-reader.js";
 import { resolveClosure, type InstalledPackage, type ResolvedClosure } from "./resolve.js";
+import { LocalPackageStore } from "./local-package-store.js";
+import { PackageManifestBridge } from "./package-manifest-bridge.js";
+import type { PackageDocument } from "../publish/publish.js";
+import type { ResolvedPackage, PackageRef as DomainPackageRef } from "../domain/domain.js";
 
 /** One authored source file recovered from a published package tarball. */
 export interface PackageSource {
@@ -40,9 +44,34 @@ const decoder = new TextDecoder();
 
 export class PackageManager {
   private readonly registry: NpmRegistry;
+  private readonly localStore: LocalPackageStore | undefined;
 
-  constructor(config: NpmRegistryConfig) {
+  constructor(config: NpmRegistryConfig, localStore?: LocalPackageStore) {
     this.registry = new NpmRegistry(config);
+    this.localStore = localStore;
+  }
+
+  /** Resolve a Domain ref to manifest bytes + deps + seed, local store first.
+   *  A locally-compiled package resolves from its full closure (self-contained);
+   *  otherwise the published tarball's own-only document is bridged and the
+   *  Domain resolves its declared deps deps-first. */
+  async resolveResolved(ref: DomainPackageRef): Promise<ResolvedPackage> {
+    const version = ref.version ?? (await this.resolvedVersions(ref.model)).slice(-1)[0];
+    if (version === undefined) throw new Error(`no version available for "${ref.model}"`);
+    const local = this.localStore?.get(ref.model, version);
+    if (local !== undefined) return PackageManifestBridge.toResolved(local);
+    const installed = await this.getPackage({ name: ref.model, version });
+    const deps: DomainPackageRef[] = ((installed.document as PackageDocument).dependencies ?? []).map(
+      (d) => ({ model: d.id, version: d.version }),
+    );
+    return PackageManifestBridge.toResolvedDocument(installed.document, ref.model, version, deps);
+  }
+
+  /** Versions for an id: the local store unioned with the registry (deduped, sorted). */
+  async resolvedVersions(id: string): Promise<string[]> {
+    const local = this.localStore?.versions(id) ?? [];
+    const remote = await this.registry.listVersions(id).then((v) => v.versions).catch(() => [] as string[]);
+    return [...new Set([...remote, ...local])].sort();
   }
 
   /** Every package name published under the configured org. */

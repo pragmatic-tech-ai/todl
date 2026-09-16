@@ -4,6 +4,7 @@ import { ManifestEmitter, type DataNode } from "../emit/manifest.js";
 import { ManifestWriter } from "../manifest/manifest-writer.js";
 import { type LogicalManifest } from "../manifest/logical.js";
 import { type ReflectedNode } from "../manifest/reflection/reflection.js";
+import type { TodlDocument } from "../emit/json.js";
 import type { CompiledPackage } from "../publish/publish.js";
 import type { ResolvedPackage, PackageRef as DomainPackageRef, SeedGraph } from "../domain/domain.js";
 
@@ -19,17 +20,30 @@ export class PackageManifestBridge {
     return new ManifestEmitter(repo, model, version).emitManifest();
   }
 
-  // A compiled package as a Domain ResolvedPackage: manifest bytes, dependency
-  // refs (publish `id` -> Domain `model`), and — when the package carries
-  // instances — a seed graph. `seed` is omitted (not undefined) when empty.
+  // A compiled package as a Domain ResolvedPackage. Emits from the FULL closure,
+  // so extends/target refs resolve within one self-contained manifest.
   static toResolved(pkg: CompiledPackage): ResolvedPackage {
-    const repo = new Repository(graphFromJSON(pkg.fullDocument));
-    const { manifest, graph } = new ManifestEmitter(repo, pkg.id, pkg.version).emit();
     const dependencies: DomainPackageRef[] = (pkg.document.dependencies ?? []).map(
       (d) => ({ model: d.id, version: d.version }),
     );
+    return PackageManifestBridge.toResolvedDocument(pkg.fullDocument, pkg.id, pkg.version, dependencies);
+  }
+
+  // The shared primitive: a TodlDocument + identity + already-mapped Domain deps
+  // -> a ResolvedPackage (manifest bytes + seed). Callers pass a full closure for
+  // a self-contained manifest, or an own-only document when deps are resolved
+  // separately (the Domain loads them deps-first). `seed` is omitted (not
+  // undefined) when the document carries no instances.
+  static toResolvedDocument(
+    doc: TodlDocument,
+    model: string,
+    version: string,
+    dependencies: DomainPackageRef[],
+  ): ResolvedPackage {
+    const repo = new Repository(graphFromJSON(doc));
+    const { manifest, graph } = new ManifestEmitter(repo, model, version).emit();
     const resolved: ResolvedPackage = {
-      ref: { model: pkg.id, version: pkg.version },
+      ref: { model, version },
       manifest: ManifestWriter.fromLogical(manifest).toBinary(),
       dependencies,
     };
