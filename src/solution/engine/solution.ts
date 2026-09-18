@@ -5,13 +5,15 @@ import { SolutionSettingBag } from './solution-setting-bag.js'
 import { type SettingBagDefinition } from './setting-bag-definition.js'
 import { type MemberStorageResolver, type ProjectFactoryResolver } from './project-factory.js'
 
-// The UI-facing view of the active solution: a name, the storage it is rooted at,
-// its ordered member projects (opened all-at-once for the explorer), its
-// cross-project setting bags, and a dirty flag. Extends Observable so the shell
-// binds Name/IsDirty and the explorer binds Members. The headless composition
-// engine (compile → package layer → Domain graph) lives in SolutionSession; this
-// class carries only the bindable surface the shell/explorer/tree consume.
-export class SolutionViewService extends Observable {
+// The authoritative model of an open solution the SolutionManagerService owns: a
+// name, the storage it is rooted at, its ordered member projects (opened
+// all-at-once when the solution opens), its cross-project setting bags, and a
+// dirty flag. Extends Observable so a presentation View subscribes to Name/IsDirty
+// and re-projects on Members changes — but it is NOT a view: the projection VMs
+// (SolutionTreeVM) live in the presentation band. The headless composition engine
+// (compile → package layer → Domain graph) lives in SolutionSession; this class
+// carries the authoritative state a View reads and the manager mutates.
+export class Solution extends Observable {
     private _name: string
     private _dirty = false
     public readonly Storage: IStorage

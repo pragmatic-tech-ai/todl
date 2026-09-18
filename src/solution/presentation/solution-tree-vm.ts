@@ -1,6 +1,6 @@
 import { Observable, type IStorage, compareStorageEntries } from '@pragmatic-tech-ai/todl-runtime'
 import { ObservableCollection } from '@pragmatic-tech-ai/mural/runtime'
-import { type SolutionViewService } from '../engine/solution-view-service.js'
+import { type Solution } from '../engine/solution.js'
 import { type SolutionMember } from '../engine/solution-member.js'
 
 // Resolve a member to the IStorage its project is rooted at (host-supplied).
@@ -73,7 +73,7 @@ export class SolutionMemberNodeVM extends Observable {
 export class SolutionTreeVM extends Observable {
     public readonly Roots = new ObservableCollection<SolutionMemberNodeVM>()
 
-    constructor(session: SolutionViewService, storageFor: MemberStorageFor) {
+    constructor(session: Solution, storageFor: MemberStorageFor) {
         super()
         for (const member of session.Members) {
             const storage = member.IsResolved ? storageFor(member) : undefined

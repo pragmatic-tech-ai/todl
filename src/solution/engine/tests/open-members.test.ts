@@ -1,11 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { FakeStorage } from '@pragmatic-tech-ai/todl-runtime'
-import { SolutionViewService } from '../solution-view-service.js'
+import { Solution } from '../solution.js'
 import { FakeProjectFactory } from './fake-project-factory.js'
 
 test('OpenMembers resolves known types, leaves unknown unresolved', async () => {
-    const s = new SolutionViewService('S', new FakeStorage())
+    const s = new Solution('S', new FakeStorage())
     s.AddMember('./api', 'architecture')
     s.AddMember('./x', 'not-installed')
     const arch = new FakeProjectFactory()
@@ -20,7 +20,7 @@ test('OpenMembers resolves known types, leaves unknown unresolved', async () => 
 })
 
 test('OpenMembers passes a member-rooted storage to the factory', async () => {
-    const s = new SolutionViewService('S', new FakeStorage())
+    const s = new Solution('S', new FakeStorage())
     s.AddMember('./api', 'architecture')
     const arch = new FakeProjectFactory()
     const roots: string[] = []

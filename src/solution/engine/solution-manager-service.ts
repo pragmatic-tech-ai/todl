@@ -3,7 +3,7 @@ import {
     type IServiceProvider,
 } from '@pragmatic-tech-ai/mural/runtime'
 import { type IActivatable } from '@pragmatic-tech-ai/mural/framework'
-import { SolutionViewService } from './solution-view-service.js'
+import { Solution } from './solution.js'
 import { SolutionManifest } from './solution-manifest.js'
 import { SolutionSession } from './solution-session.js'
 import {
@@ -36,7 +36,7 @@ export class SolutionManagerService extends ServiceBase implements IActivatable 
     public static readonly PackageSourceKey =
         new ServiceKey<PackageSource>('SolutionPackageSource')
 
-    private activeSolution: SolutionViewService | undefined
+    private activeSolution: Solution | undefined
     private readonly recentSolutions: string[] = []
     private readonly storages: IStorageProviderRegistry
     private readonly factories: IProjectFactoryRegistry
@@ -62,10 +62,10 @@ export class SolutionManagerService extends ServiceBase implements IActivatable 
         return session.Diagnostics
     }
 
-    public get ActiveSolution(): SolutionViewService | undefined {
+    public get ActiveSolution(): Solution | undefined {
         return this.activeSolution
     }
-    private setActive(s: SolutionViewService | undefined): void {
+    private setActive(s: Solution | undefined): void {
         const old = this.activeSolution
         this.activeSolution = s
         this.RaisePropertyChanged('ActiveSolution', old, s)
@@ -78,14 +78,14 @@ export class SolutionManagerService extends ServiceBase implements IActivatable 
     public async NewSolution(location: string): Promise<void> {
         if (!(await this.canReplace())) return
         const storage = this.storages.CreateStorage(location)
-        this.setActive(new SolutionViewService('Untitled Solution', storage))
+        this.setActive(new Solution('Untitled Solution', storage))
     }
 
     public async OpenSolution(location: string): Promise<void> {
         if (!(await this.canReplace())) return
         const storage = this.storages.CreateStorage(location)
         const manifest = SolutionManifest.parse(await storage.ReadText('solution.json'))
-        const session = new SolutionViewService(manifest.name, storage)
+        const session = new Solution(manifest.name, storage)
         for (const ref of manifest.members) session.AddMember(ref.path, ref.type)
         session.LoadSettings(manifest.settings)
         await session.OpenMembers(
@@ -112,7 +112,7 @@ export class SolutionManagerService extends ServiceBase implements IActivatable 
         const target = this.storages.CreateStorage(location)
         const manifest = new SolutionManifest(s.Name, s.Members.ToArray().map((m) => m.Ref), s.CollectSettings())
         await target.WriteText('solution.json', manifest.stringify())
-        const reopened = new SolutionViewService(s.Name, target)
+        const reopened = new Solution(s.Name, target)
         for (const m of s.Members) reopened.AddMember(m.Ref.path, m.Ref.type)
         reopened.LoadSettings(s.CollectSettings())
         reopened.IsDirty = false

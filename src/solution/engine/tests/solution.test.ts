@@ -1,10 +1,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { FakeStorage } from '@pragmatic-tech-ai/todl-runtime'
-import { SolutionViewService } from '../solution-view-service.js'
+import { Solution } from '../solution.js'
 
 test('AddMember appends and marks dirty', () => {
-    const s = new SolutionViewService('S', new FakeStorage())
+    const s = new Solution('S', new FakeStorage())
     assert.equal(s.IsDirty, false)
     const m = s.AddMember('./api', 'architecture')
     assert.equal(s.Members.Count, 1)
@@ -14,7 +14,7 @@ test('AddMember appends and marks dirty', () => {
 })
 
 test('RemoveMember drops it and marks dirty', () => {
-    const s = new SolutionViewService('S', new FakeStorage())
+    const s = new Solution('S', new FakeStorage())
     const m = s.AddMember('./api', 'architecture')
     s.IsDirty = false
     s.RemoveMember(m)
@@ -23,7 +23,7 @@ test('RemoveMember drops it and marks dirty', () => {
 })
 
 test('setting Name raises PropertyChanged and marks dirty', () => {
-    const s = new SolutionViewService('S', new FakeStorage())
+    const s = new Solution('S', new FakeStorage())
     let fired = false
     s.PropertyChanged('Name').subscribe(() => { fired = true })
     s.Name = 'Renamed'
@@ -33,7 +33,7 @@ test('setting Name raises PropertyChanged and marks dirty', () => {
 })
 
 test('a fresh member is unresolved until a Project is set', () => {
-    const s = new SolutionViewService('S', new FakeStorage())
+    const s = new Solution('S', new FakeStorage())
     const m = s.AddMember('./api', 'architecture')
     assert.equal(m.IsResolved, false)
     m.Project = { kind: 'x' }
