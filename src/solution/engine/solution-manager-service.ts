@@ -11,8 +11,8 @@ import {
     type IProjectFactoryRegistry,
     type IDiscardConfirmer,
 } from './host-services.js'
-import { type PackageSource, type PackageRef } from '../domain/domain.js'
-import { type Diagnostic } from '../diagnostics/diagnostic.js'
+import { type PackageSource, type PackageRef } from '../../domain/domain.js'
+import { type Diagnostic } from '../../diagnostics/diagnostic.js'
 
 // Owns exactly ONE active solution (the Visual Studio .sln model): create a new
 // empty solution, open/save/close one, and keep a recent-solutions list. Opening

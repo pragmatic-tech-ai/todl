@@ -2,7 +2,7 @@ import {
     GridProperty, PropertyKind, MapPropertyBag, SettingKind,
     type IPropertyBag, type PropertyAccessor,
 } from '@pragmatic-tech-ai/mural/framework'
-import { type SolutionSettingBag } from './solution-setting-bag.js'
+import { type SolutionSettingBag } from '../engine/solution-setting-bag.js'
 
 // Bridges a live SolutionSettingBag to the PropertyGrid: maps each field's
 // SettingKind to a PropertyKind, produces the GridProperty descriptors, and wraps

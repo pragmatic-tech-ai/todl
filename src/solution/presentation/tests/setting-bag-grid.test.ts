@@ -1,8 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { SettingDefinition, SettingKind, PropertyKind } from '@pragmatic-tech-ai/mural/framework'
-import { SettingBagDefinition } from '../setting-bag-definition.js'
-import { SolutionSettingBag } from '../solution-setting-bag.js'
+import { SettingBagDefinition } from '../../engine/setting-bag-definition.js'
+import { SolutionSettingBag } from '../../engine/solution-setting-bag.js'
 import { SettingBagGrid } from '../setting-bag-grid.js'
 
 function field(key: string, kind: SettingKind, def: unknown): SettingDefinition {

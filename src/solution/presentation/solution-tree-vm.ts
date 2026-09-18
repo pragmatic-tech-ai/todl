@@ -1,7 +1,7 @@
 import { Observable, type IStorage, compareStorageEntries } from '@pragmatic-tech-ai/todl-runtime'
 import { ObservableCollection } from '@pragmatic-tech-ai/mural/runtime'
-import { type SolutionViewService } from './solution-view-service.js'
-import { type SolutionMember } from './solution-member.js'
+import { type SolutionViewService } from '../engine/solution-view-service.js'
+import { type SolutionMember } from '../engine/solution-member.js'
 
 // Resolve a member to the IStorage its project is rooted at (host-supplied).
 export type MemberStorageFor = (member: SolutionMember) => IStorage

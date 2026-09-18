@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { FakeStorage } from '@pragmatic-tech-ai/todl-runtime'
-import { SolutionViewService } from '../solution-view-service.js'
+import { SolutionViewService } from '../../engine/solution-view-service.js'
 import { SolutionTreeVM } from '../solution-tree-vm.js'
 
 test('tree has one root per member; unresolved flagged', () => {

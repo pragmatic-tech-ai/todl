@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { SolutionSession } from "../solution-session.js";
-import { PackageManifestBridge } from "../../package-manager/package-manifest-bridge.js";
-import { compilePackage, PackageKind } from "../../publish/publish.js";
-import type { PackageSource, PackageRef, ResolvedPackage } from "../../domain/domain.js";
+import { PackageManifestBridge } from "../../../package-manager/package-manifest-bridge.js";
+import { compilePackage, PackageKind } from "../../../publish/publish.js";
+import type { PackageSource, PackageRef, ResolvedPackage } from "../../../domain/domain.js";
 
 // A fake PackageSource backed by an in-memory map of Domain ResolvedPackages.
 class MapSource implements PackageSource {
