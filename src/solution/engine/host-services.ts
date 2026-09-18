@@ -20,9 +20,6 @@ export interface IProjectFactoryRegistry {
     factoryFor(typeId: string): IProjectFactory | undefined
 }
 
-// Prompts the user to discard unsaved changes before the active solution is
-// replaced; resolves true to discard. Implemented app-side over the Mural
-// DialogService, which keeps the manager itself UI-agnostic.
-export interface IDiscardConfirmer {
-    confirmDiscard(): Promise<boolean>
-}
+// (The former IDiscardConfirmer seam is gone: asking the user to discard unsaved
+//  changes now flows through IPromptService.Ask(new ConfirmAsk(...)) — the generic
+//  user-decision channel — resolved under SolutionManagerService.PromptServiceKey.)

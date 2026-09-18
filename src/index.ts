@@ -1,6 +1,10 @@
 /** Public API for `@pragmatic-tech-ai/todl`. */
 
 export { Signal, type Disposable } from "@pragmatic-tech-ai/todl-runtime";
+export {
+  Ask, ConfirmAsk, PickFolderAsk, PickFileAsk, PromptTextAsk, ChooseAsk,
+  type FileFilter, type Choice, type IPromptService,
+} from "@pragmatic-tech-ai/todl-runtime";
 
 export {
   Graph,
@@ -141,7 +145,6 @@ export { SolutionManagerService } from "./solution/engine/solution-manager-servi
 export {
   type IStorageProviderRegistry,
   type IProjectFactoryRegistry,
-  type IDiscardConfirmer,
 } from "./solution/engine/host-services.js";
 export { SolutionSettingsRegistry } from "./solution/engine/solution-settings-registry.js";
 export { SettingBagDefinition } from "./solution/engine/setting-bag-definition.js";

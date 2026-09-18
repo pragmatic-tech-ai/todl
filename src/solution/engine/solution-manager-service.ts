@@ -3,13 +3,13 @@ import {
     type IServiceProvider,
 } from '@pragmatic-tech-ai/mural/runtime'
 import { type IActivatable } from '@pragmatic-tech-ai/mural/framework'
+import { ConfirmAsk, type IPromptService } from '@pragmatic-tech-ai/todl-runtime'
 import { Solution } from './solution.js'
 import { SolutionManifest } from './solution-manifest.js'
 import { SolutionSession } from './solution-session.js'
 import {
     type IStorageProviderRegistry,
     type IProjectFactoryRegistry,
-    type IDiscardConfirmer,
 } from './host-services.js'
 import { type PackageSource, type PackageRef } from '../../domain/domain.js'
 import { type Diagnostic } from '../../diagnostics/diagnostic.js'
@@ -29,8 +29,11 @@ export class SolutionManagerService extends ServiceBase implements IActivatable 
         new ServiceKey<IStorageProviderRegistry>('SolutionStorageProviderRegistry')
     public static readonly ProjectFactoryRegistryKey =
         new ServiceKey<IProjectFactoryRegistry>('SolutionProjectFactoryRegistry')
-    public static readonly DiscardConfirmerKey =
-        new ServiceKey<IDiscardConfirmer>('SolutionDiscardConfirmer')
+    // The user-decision channel: the manager asks the user (e.g. to discard unsaved
+    // changes) through IPromptService.Ask, resolved here. Replaces the former
+    // single-purpose IDiscardConfirmer seam.
+    public static readonly PromptServiceKey =
+        new ServiceKey<IPromptService>('SolutionPromptService')
     // The Domain package backend the composition engine loads members through
     // (app: an IpcPackageSource over the main-side resolver; test: a fake).
     public static readonly PackageSourceKey =
@@ -40,14 +43,14 @@ export class SolutionManagerService extends ServiceBase implements IActivatable 
     private readonly recentSolutions: string[] = []
     private readonly storages: IStorageProviderRegistry
     private readonly factories: IProjectFactoryRegistry
-    private readonly confirmer: IDiscardConfirmer
+    private readonly prompts: IPromptService
     private readonly packages: PackageSource
 
     constructor(provider: IServiceProvider) {
         super(provider)
         this.storages = provider.getRequired(SolutionManagerService.StorageRegistryKey)
         this.factories = provider.getRequired(SolutionManagerService.ProjectFactoryRegistryKey)
-        this.confirmer = provider.getRequired(SolutionManagerService.DiscardConfirmerKey)
+        this.prompts = provider.getRequired(SolutionManagerService.PromptServiceKey)
         this.packages = provider.getRequired(SolutionManagerService.PackageSourceKey)
     }
 
@@ -130,7 +133,7 @@ export class SolutionManagerService extends ServiceBase implements IActivatable 
     private async canReplace(): Promise<boolean> {
         const s = this.ActiveSolution
         if (s === undefined || !s.IsDirty) return true
-        return this.confirmer.confirmDiscard()
+        return this.prompts.Ask(new ConfirmAsk('The current solution has unsaved changes. Discard them?', 'Discard'))
     }
 
     private pushRecent(location: string): void {
