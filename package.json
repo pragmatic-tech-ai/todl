@@ -1,6 +1,6 @@
 {
   "name": "@pragmatic-tech-ai/todl",
-  "version": "0.33.5",
+  "version": "0.34.0",
   "description": "Typed substrate for authoring and reasoning over ontologies and taxonomies",
   "type": "module",
   "main": "dist/index.js",
@@ -65,10 +65,12 @@
     "typecheck": "tsc --noEmit",
     "typecheck:demos": "tsc -p cli/tsconfig.json --noEmit",
     "gen:prelude": "node scripts/gen-prelude.mjs",
+    "gen:scaffold": "node scripts/gen-scaffold.mjs",
+    "compile:mu": "node scripts/compile-mu.mjs",
     "gen:corpus": "node scripts/gen-corpus.mjs",
     "gen:goldens": "tsx --conditions=development examples/tools/update-goldens.mts && npm run gen:corpus",
     "cli": "tsx --conditions=development cli/src/main.ts",
-    "build": "npm run gen:prelude && tsc -p tsconfig.build.json",
+    "build": "npm run gen:prelude && npm run gen:scaffold && npm run compile:mu && tsc -p tsconfig.build.json",
     "clean": "rimraf dist",
     "prepublishOnly": "npm run clean && npm run build"
   },
