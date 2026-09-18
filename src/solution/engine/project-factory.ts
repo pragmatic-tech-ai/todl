@@ -1,17 +1,13 @@
 import { type IStorage } from '@pragmatic-tech-ai/todl-runtime'
 
-// Consumer-side project factory contract (minimal): opens / creates / saves a
-// project rooted at an IStorage. A host registers concrete factories against
-// project type ids via Mural's ProjectFactoryRegistry; the solution machinery
-// only needs these three verbs.
-export interface IProjectFactory {
-    openProject(storage: IStorage): Promise<unknown>
-    createProject(storage: IStorage, name: string): Promise<unknown>
-    saveProject(project: unknown, storage: IStorage): Promise<void>
-}
+// The canonical project-factory contract lives in the projects module (the home of
+// the whole project infrastructure) — re-exported here so the solution engine's
+// consumers keep importing it from one place. A concrete factory (TodlProjectFactory
+// subclass) satisfies it; the engine only ever calls openProject to resolve members.
+export { type IProjectFactory } from '../projects/project-factory.js'
 
 // Resolve a member's relative path to a rooted IStorage (host-supplied).
 export type MemberStorageResolver = (relpath: string) => IStorage
 
 // Resolve a project type id to its factory, or undefined when unknown/uninstalled.
-export type ProjectFactoryResolver = (typeId: string) => IProjectFactory | undefined
+export type ProjectFactoryResolver = (typeId: string) => import('../projects/project-factory.js').IProjectFactory | undefined

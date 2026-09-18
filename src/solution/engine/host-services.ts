@@ -1,4 +1,4 @@
-import { type IStorage } from '@pragmatic-tech-ai/todl-runtime'
+import { ServiceKey, type IStorage } from '@pragmatic-tech-ai/todl-runtime'
 import { type IProjectFactory } from './project-factory.js'
 
 // The host services the SolutionManagerService resolves from the container (by
@@ -15,10 +15,21 @@ export interface IStorageProviderRegistry {
 }
 
 // Resolves a project type id to the factory that opens it, or undefined when no
-// installed module contributes that type (an unresolved member, not a throw).
+// installed module contributes that type (an unresolved member, not a throw); and
+// enumerates every installed factory for a New-Project gallery (each factory is
+// self-describing — typeId/title/description live on it).
 export interface IProjectFactoryRegistry {
     factoryFor(typeId: string): IProjectFactory | undefined
+    All(): readonly IProjectFactory[]
 }
+
+// The container key the registry registers under. Exported as a standalone const
+// (not only as SolutionManagerService.ProjectFactoryRegistryKey) so a basic
+// module's `.services:` markup can name it directly in the `Impl -> Token` form —
+// the compiler's `-> Token` accepts a bare imported symbol, not a static member.
+// SolutionManagerService aliases its static to this same instance.
+export const ProjectFactoryRegistryKey =
+    new ServiceKey<IProjectFactoryRegistry>('SolutionProjectFactoryRegistry')
 
 // (The former IDiscardConfirmer seam is gone: asking the user to discard unsaved
 //  changes now flows through IPromptService.Ask(new ConfirmAsk(...)) — the generic

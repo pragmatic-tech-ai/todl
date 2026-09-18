@@ -1,7 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { type IServiceProvider } from '@pragmatic-tech-ai/mural/runtime'
-import { FakeStorage, Ask, ConfirmAsk, type IPromptService } from '@pragmatic-tech-ai/todl-runtime'
+import { FakeStorage, Ask, ConfirmAsk, type IPromptService, type IServiceProvider } from '@pragmatic-tech-ai/todl-runtime'
 import { SolutionManagerService } from '../solution-manager-service.js'
 import {
     type IStorageProviderRegistry,
@@ -47,6 +46,7 @@ function makeService(opts?: { confirmDiscard?: () => Promise<boolean>; notifier?
     }
     const factories: IProjectFactoryRegistry = {
         factoryFor: (type) => (type === 'architecture' ? new FakeProjectFactory() : undefined),
+        All: () => [],
     }
     const prompts = new ScriptedPrompts(opts?.confirmDiscard ?? (async () => true))
     // Compose is not exercised by these tests, but the ctor now requires the key.

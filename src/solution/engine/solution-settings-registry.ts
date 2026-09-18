@@ -1,7 +1,7 @@
 import {
     ServiceBase, ServiceKey, ObservableCollection,
     type IServiceProvider,
-} from '@pragmatic-tech-ai/mural/runtime'
+} from '@pragmatic-tech-ai/todl-runtime'
 import { SettingBagDefinition } from './setting-bag-definition.js'
 
 // Aggregates the cross-project setting-bag DEFINITIONS a host contributes. Bags

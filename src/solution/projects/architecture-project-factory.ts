@@ -1,0 +1,64 @@
+import { ServiceKey, type IServiceProvider } from '@pragmatic-tech-ai/todl-runtime'
+import {
+    type ProjectFileFormat,
+    type ProjectManifestEnvelope,
+} from './project-factory.js'
+import { type BaseBindings, type BaseRef } from './base-binding.js'
+import { ProjectNodeKind } from './project.js'
+import { TodlProjectFactory, CLAUDE_MD_FILENAME, type ScaffoldFile } from './todl-project-factory.js'
+import { ARCHITECTURE_CLAUDE_ROOT } from './scaffold.generated.js'
+
+// The 'architecture' project type — a module's contribution to the generic project
+// explorer (declared via `.projectFactories:`, resolved through the factory
+// registry). It is a TODL-authoring project: its `.todl` files are the instance-tier
+// architecture model, validated live against the project's BOUND bases — a meta-model
+// AND a set of libraries — by the shared base-aware validation (which reads the
+// manifest's metaModel + libraries via resolveBases). Architecture is the terminal
+// consumer: it binds bases but publishes nothing, so it is not an
+// IPublishableProjectFactory.
+//
+// All project-lifecycle plumbing (create/open/save, the tree walk, and the TODL agent
+// scaffold) lives in TodlProjectFactory; this class declares only what differs: the
+// .diagram + .todl formats, the bound-manifest shape, and its own CLAUDE.md scaffold
+// contribution. The `.todl` / `.diagram` FILE formats are edited by their document
+// factories (resolved by extension) — editors own files, this factory owns the project.
+interface ArchitectureManifest extends ProjectManifestEnvelope {
+    metaModel?: BaseRef                  // the meta-model this architecture conforms to
+    libraries?: readonly BaseRef[]       // the technology libraries it draws on
+    diagrams?: { [path: string]: { viewpoints: string[] } }   // per-diagram viewpoint selection
+}
+
+export class ArchitectureProjectFactory extends TodlProjectFactory {
+    public static readonly Key = new ServiceKey<ArchitectureProjectFactory>('ArchitectureProjectFactory')
+    public static readonly ProjectType = 'architecture'
+
+    public readonly typeId = ArchitectureProjectFactory.ProjectType
+    public readonly title = 'Architecture Project'
+    public readonly description = ''
+
+    public readonly requiresMetaModel = true
+    public readonly offersLibraries = true
+
+    public readonly formats: readonly ProjectFileFormat[] = [
+        { extension: '.diagram', kind: ProjectNodeKind.Diagram, displayName: 'Diagram' },
+        { extension: '.todl', kind: ProjectNodeKind.Todl, displayName: 'TODL Definition' },
+    ]
+
+    constructor(provider: IServiceProvider) { super(provider) }
+
+    protected buildManifest(name: string, bindings?: BaseBindings): ProjectManifestEnvelope {
+        const manifest: ArchitectureManifest = {
+            type: ArchitectureProjectFactory.ProjectType, name, version: 1,
+            ...(bindings?.metaModel !== undefined ? { metaModel: bindings.metaModel } : {}),
+            ...(bindings?.libraries !== undefined && bindings.libraries.length > 0
+                ? { libraries: bindings.libraries } : {}),
+        }
+        return manifest
+    }
+
+    // The architecture project's own scaffold (its CLAUDE.md); the shared TODL manual
+    // + rules are added by the base.
+    protected scaffoldContributions(): readonly ScaffoldFile[] {
+        return [{ path: CLAUDE_MD_FILENAME, content: ARCHITECTURE_CLAUDE_ROOT }]
+    }
+}

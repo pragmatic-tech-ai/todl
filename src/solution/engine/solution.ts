@@ -1,5 +1,4 @@
-import { Observable, type IStorage } from '@pragmatic-tech-ai/todl-runtime'
-import { ObservableCollection } from '@pragmatic-tech-ai/mural/runtime'
+import { Observable, type IStorage, ObservableCollection } from '@pragmatic-tech-ai/todl-runtime'
 import { SolutionMember } from './solution-member.js'
 import { SolutionSettingBag } from './solution-setting-bag.js'
 import { type SettingBagDefinition } from './setting-bag-definition.js'

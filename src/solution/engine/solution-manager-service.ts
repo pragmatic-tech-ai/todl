@@ -1,12 +1,13 @@
 import {
     ServiceBase, ServiceKey,
     type IServiceProvider,
-} from '@pragmatic-tech-ai/mural/runtime'
+} from '@pragmatic-tech-ai/todl-runtime'
 import { ConfirmAsk, type IPromptService } from '@pragmatic-tech-ai/todl-runtime'
 import { Solution } from './solution.js'
 import { SolutionManifest } from './solution-manifest.js'
 import { SolutionSession } from './solution-session.js'
 import {
+    ProjectFactoryRegistryKey,
     type IStorageProviderRegistry,
     type IProjectFactoryRegistry,
 } from './host-services.js'
@@ -27,8 +28,9 @@ export class SolutionManagerService extends ServiceBase {
     // and free of a lambda "seams" bag.
     public static readonly StorageRegistryKey =
         new ServiceKey<IStorageProviderRegistry>('SolutionStorageProviderRegistry')
-    public static readonly ProjectFactoryRegistryKey =
-        new ServiceKey<IProjectFactoryRegistry>('SolutionProjectFactoryRegistry')
+    // Aliased to the standalone `ProjectFactoryRegistryKey` const (same instance) so
+    // both this static and a basic module's `.services:` markup name one token.
+    public static readonly ProjectFactoryRegistryKey = ProjectFactoryRegistryKey
     // The user-decision channel: the manager asks the user (e.g. to discard unsaved
     // changes) through IPromptService.Ask, resolved here. Replaces the former
     // single-purpose IDiscardConfirmer seam.
