@@ -13,8 +13,10 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "outDir": "dist",
-    "rootDir": "src"
+    "rootDir": "src",
+    "allowJs": true,
+    "checkJs": false
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "src/**/*.mu.js"],
   "exclude": ["dist", "node_modules"]
 }

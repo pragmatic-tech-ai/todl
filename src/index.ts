@@ -141,6 +141,9 @@ export { parsePredicate } from "./parse/predicate-parser.js";
 export { tokenize, TokenKind, type Token } from "./parse/lexer.js";
 
 // ── Solution (SolutionManager + cross-project settings) ──
+// The engine composition module is authored in .mu (a plain `module` → a headless
+// Module) and compiled to .mu.js by `npm run compile:mu`.
+export { SolutionServicesEngine } from "./solution/solution-services-engine.mu.js";
 export { SolutionManagerService } from "./solution/engine/solution-manager-service.js";
 export {
   type IStorageProviderRegistry,
