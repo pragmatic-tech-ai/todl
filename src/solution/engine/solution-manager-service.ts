@@ -2,7 +2,6 @@ import {
     ServiceBase, ServiceKey,
     type IServiceProvider,
 } from '@pragmatic-tech-ai/mural/runtime'
-import { type IActivatable } from '@pragmatic-tech-ai/mural/framework'
 import { ConfirmAsk, type IPromptService } from '@pragmatic-tech-ai/todl-runtime'
 import { Solution } from './solution.js'
 import { SolutionManifest } from './solution-manifest.js'
@@ -18,7 +17,7 @@ import { type Diagnostic } from '../../diagnostics/diagnostic.js'
 // Owns exactly ONE active solution (the Visual Studio .sln model): create a new
 // empty solution, open/save/close one, and keep a recent-solutions list. Opening
 // a solution opens ALL its member projects.
-export class SolutionManagerService extends ServiceBase implements IActivatable {
+export class SolutionManagerService extends ServiceBase {
     public static readonly Key = new ServiceKey<SolutionManagerService>('SolutionManager')
 
     // The host services are resolved from the container by these keys — the app
@@ -135,8 +134,6 @@ export class SolutionManagerService extends ServiceBase implements IActivatable 
         if (!(await this.canReplace())) return
         this.setActive(undefined)
     }
-
-    public OnActivated(): void { /* content-host wiring lands with the module/views */ }
 
     private async canReplace(): Promise<boolean> {
         const s = this.ActiveSolution
