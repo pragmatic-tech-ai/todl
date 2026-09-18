@@ -7,7 +7,16 @@ import {
     type IStorageProviderRegistry,
     type IProjectFactoryRegistry,
 } from '../host-services.js'
+import { type INotificationService } from '../notification-service.js'
 import { FakeProjectFactory } from './fake-project-factory.js'
+
+// Records the ambient feedback the manager emits so a test can assert on it.
+class RecordingNotifier implements INotificationService {
+    public statuses: string[] = []
+    Status(message: string): void { this.statuses.push(message) }
+    Progress(): void {}
+    Report(): void {}
+}
 
 // A prompt service whose ConfirmAsk answer is scripted; records that it was asked
 // so a test can assert the discard prompt actually fired. Every other ask throws.
@@ -27,7 +36,7 @@ class ScriptedPrompts implements IPromptService {
 
 // Build the service the way the container does — through the constructor — with
 // a fake provider that serves fake host services under the manager's keys.
-function makeService(opts?: { confirmDiscard?: () => Promise<boolean> }) {
+function makeService(opts?: { confirmDiscard?: () => Promise<boolean>; notifier?: INotificationService }) {
     const roots = new Map<string, FakeStorage>()
     const storages: IStorageProviderRegistry = {
         CreateStorage: (folder) => {
@@ -43,7 +52,10 @@ function makeService(opts?: { confirmDiscard?: () => Promise<boolean> }) {
     // Compose is not exercised by these tests, but the ctor now requires the key.
     const packages = { resolve: async () => { throw new Error('no compose in test') } }
     const provider = {
-        get: () => undefined,
+        // Notification is resolved optionally (provider.get) — undefined when the
+        // host doesn't register one (a headless batch), the notifier otherwise.
+        get: (token: unknown) =>
+            token === SolutionManagerService.NotificationServiceKey ? opts?.notifier : undefined,
         getRequired: (token: unknown) => {
             if (token === SolutionManagerService.StorageRegistryKey) return storages
             if (token === SolutionManagerService.ProjectFactoryRegistryKey) return factories
@@ -56,6 +68,20 @@ function makeService(opts?: { confirmDiscard?: () => Promise<boolean> }) {
     const svc = new SolutionManagerService(provider)
     return { svc, roots, prompts }
 }
+
+test('Save emits a Saved status when a notifier is registered', async () => {
+    const notifier = new RecordingNotifier()
+    const { svc } = makeService({ notifier })
+    await svc.NewSolution('/work/a')
+    await svc.Save()
+    assert.deepEqual(notifier.statuses, ['Saved.'])
+})
+
+test('Save works with no notifier registered', async () => {
+    const { svc } = makeService()   // no notifier
+    await svc.NewSolution('/work/a')
+    await svc.Save()   // must not throw
+})
 
 test('New → Save writes solution.json; Open reads it back with members', async () => {
     const { svc, roots } = makeService()

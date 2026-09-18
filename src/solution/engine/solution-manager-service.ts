@@ -11,6 +11,7 @@ import {
     type IStorageProviderRegistry,
     type IProjectFactoryRegistry,
 } from './host-services.js'
+import { type INotificationService } from './notification-service.js'
 import { type PackageSource, type PackageRef } from '../../domain/domain.js'
 import { type Diagnostic } from '../../diagnostics/diagnostic.js'
 
@@ -38,6 +39,10 @@ export class SolutionManagerService extends ServiceBase implements IActivatable 
     // (app: an IpcPackageSource over the main-side resolver; test: a fake).
     public static readonly PackageSourceKey =
         new ServiceKey<PackageSource>('SolutionPackageSource')
+    // Ambient feedback (status/progress/diagnostics) the manager emits for the host
+    // to display. Resolved OPTIONALLY — a headless batch may run without one.
+    public static readonly NotificationServiceKey =
+        new ServiceKey<INotificationService>('SolutionNotificationService')
 
     private activeSolution: Solution | undefined
     private readonly recentSolutions: string[] = []
@@ -45,6 +50,7 @@ export class SolutionManagerService extends ServiceBase implements IActivatable 
     private readonly factories: IProjectFactoryRegistry
     private readonly prompts: IPromptService
     private readonly packages: PackageSource
+    private readonly notifications: INotificationService | undefined
 
     constructor(provider: IServiceProvider) {
         super(provider)
@@ -52,6 +58,7 @@ export class SolutionManagerService extends ServiceBase implements IActivatable 
         this.factories = provider.getRequired(SolutionManagerService.ProjectFactoryRegistryKey)
         this.prompts = provider.getRequired(SolutionManagerService.PromptServiceKey)
         this.packages = provider.getRequired(SolutionManagerService.PackageSourceKey)
+        this.notifications = provider.get(SolutionManagerService.NotificationServiceKey)
     }
 
     // Compose the given member packages into one Domain graph and return the
@@ -107,6 +114,7 @@ export class SolutionManagerService extends ServiceBase implements IActivatable 
         await s.Storage.WriteText('solution.json', manifest.stringify())
         s.IsDirty = false
         this.pushRecent(s.Storage.Root)
+        this.notifications?.Status('Saved.')
     }
 
     public async SaveAs(location: string): Promise<void> {

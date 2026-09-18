@@ -146,6 +146,7 @@ export {
   type IStorageProviderRegistry,
   type IProjectFactoryRegistry,
 } from "./solution/engine/host-services.js";
+export { type INotificationService } from "./solution/engine/notification-service.js";
 export { SolutionSettingsRegistry } from "./solution/engine/solution-settings-registry.js";
 export { SettingBagDefinition } from "./solution/engine/setting-bag-definition.js";
 export { SolutionSettingBag } from "./solution/engine/solution-setting-bag.js";
