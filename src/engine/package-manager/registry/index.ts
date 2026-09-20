@@ -13,6 +13,7 @@ export {
   type HttpRequest,
   type HttpResponse,
   FetchTransport,
+  HttpTransportKey,
 } from "./transport.js";
 export { createTgz, type TarEntry } from "./tar.js";
 export { TarReader, type TarFile } from "./tar-reader.js";

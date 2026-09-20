@@ -4,6 +4,7 @@
  * never touch the network; the default implementation is a thin shell over the
  * global `fetch` (Node 20+ / browser).
  */
+import { ServiceKey } from "@pragmatic-tech-ai/todl-runtime";
 
 /** A single HTTP request. `body` is a JSON string (publish) or absent (reads). */
 export interface HttpRequest
@@ -27,6 +28,11 @@ export interface HttpTransport
 {
   request(req: HttpRequest): Promise<HttpResponse>;
 }
+
+/** The container key an alternate transport registers under. Optional — the npm
+ *  registry factory falls back to {@link FetchTransport} when none is registered;
+ *  a test registers an in-memory fake here to exercise the wire protocol offline. */
+export const HttpTransportKey = new ServiceKey<HttpTransport>("PackageHttpTransport");
 
 /** The default transport: `fetch`, reading the whole body into a byte array. */
 export class FetchTransport implements HttpTransport

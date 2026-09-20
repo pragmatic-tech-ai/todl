@@ -60,6 +60,22 @@ export {
 export { ConnectionStoreKey, type IConnectionStore } from "./engine/connection-store.js";
 export { SecretStoreKey, type ISecretStore } from "./engine/secret-store.js";
 export { PackageManagerService, type PackageListing } from "./engine/package-manager-service.js";
+// The npm registry type: its connections, the HTTP + local backends, the two
+// factories, and the engine's default (npm-only) catalog.
+export {
+  NpmRegistryType,
+  NpmConnectionKind,
+  NpmRegistryConnection,
+  LocalDirectoryConnection,
+  type NpmConnection,
+  type NpmHttpConnectionConfig,
+} from "./registries/npm/npm-connection.js";
+export { NpmHttpRegistry } from "./registries/npm/npm-http-registry.js";
+export { LocalNpmRegistry } from "./registries/npm/local-npm-registry.js";
+export { NpmPackageRegistryFactory } from "./registries/npm/npm-package-registry-factory.js";
+export { NpmConnectionFactory } from "./registries/npm/npm-connection-factory.js";
+export { DefaultPackageRegistryCatalog } from "./registries/npm/default-package-registry-catalog.js";
+export { HttpTransportKey } from "./registry/index.js";
 export { readProject, type Project } from "./project.js";
 export { resolveRegistryConfig, type RegistryCliOptions } from "./registry/config.js";
 export {
