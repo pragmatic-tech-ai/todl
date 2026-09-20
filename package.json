@@ -38,6 +38,14 @@
       },
       "require": "./dist/engine/package-manager/index.js"
     },
+    "./package-manager/connections": {
+      "types": "./dist/engine/package-manager/engine/registry-connection.d.ts",
+      "import": {
+        "development": "./src/engine/package-manager/engine/registry-connection.ts",
+        "default": "./dist/engine/package-manager/engine/registry-connection.js"
+      },
+      "require": "./dist/engine/package-manager/engine/registry-connection.js"
+    },
     "./domain": {
       "types": "./dist/domain/index.d.ts",
       "import": {
