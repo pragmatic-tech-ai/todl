@@ -6,10 +6,10 @@
  * already-compiled directory, and downloading a tarball — speaking only in the
  * abstraction's PascalCase surface, so any backend (HTTP npm, a local directory, …)
  * plugs in unchanged. It never reads a project directory to COMPILE and never
- * invokes the compiler — that is `PackageCompiler`'s / `ProjectInstaller`'s job.
+ * invokes the compiler — that is `PackageCompiler`'s job.
  *
  * `PackageManager` is the backward-compatible subclass that builds this over an
- * HTTP npm backend from an `NpmRegistryConfig` (the shape existing CLI / host
+ * HTTP npm backend from an `NpmRegistryConfig` (the shape existing host
  * consumers construct).
  */
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";

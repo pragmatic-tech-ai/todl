@@ -56,8 +56,7 @@
     }
   },
   "bin": {
-    "todl-language-server": "./dist/language-server/stdio.js",
-    "todl": "./dist/solution-services/package-manager/cli.js"
+    "todl-language-server": "./dist/language-server/stdio.js"
   },
   "files": [
     "dist",
