@@ -19,7 +19,12 @@ export {
   type PackageCompilerDeps,
 } from "./package-compiler.js";
 export { RegistryBaseResolver, type BaseResolver, type RegistryFactory } from "./base-resolver.js";
-export { PackageManager, type PackageSource, type PackageContents } from "./package-manager.js";
+export { PackageManager } from "./package-manager.js";
+export {
+  PackageRegistryClient,
+  type PackageSource,
+  type PackageContents,
+} from "./package-registry-client.js";
 export { LocalPackageStore } from "./local-package-store.js";
 export { StoragePackageSource } from "./storage-package-source.js";
 export { PackageManifestBridge } from "./package-manifest-bridge.js";
