@@ -4,8 +4,9 @@ type SettingValues = Record<string, string | number | boolean>
 
 // The persisted shape of a solution: a name, an ordered list of member project
 // references, and per-bag cross-project setting values. Parsed from / written to
-// `solution.json`. Mirrors the todl package's `parseManifest` convention:
-// JSON.parse + shape validation, not a schema library.
+// the solution manifest file `<name>.pksln` (the file stem is the authoritative
+// name; this `name` field is informational). Mirrors the todl package's
+// `parseManifest` convention: JSON.parse + shape validation, not a schema library.
 export class SolutionManifest
 {
     static readonly KIND = 'todl-solution'

@@ -21,12 +21,12 @@ import { FakeProjectFactory } from './fake-project-factory.js';
 // Integration coverage for the SolutionManager ↔ SessionStore round-trip: the manager
 // runs against the REAL todl-runtime SessionStore and a rooted IStorage, and each test
 // models one or two application "runs" that share the same storage — the way disk would
-// persist session.json + solution.json between launches.
+// persist session.json + the `<name>.pksln` solution manifest between launches.
 
 const USER_DIR = '/user';
 
 // A storage backend shared across runs: one FakeStorage per location, kept in a map the
-// test owns. session.json (under USER_DIR) and every solution.json therefore survive a
+// test owns. session.json (under USER_DIR) and every `<name>.pksln` therefore survive a
 // fresh provider + SessionStore, exactly as files on disk would. Satisfies both the
 // SessionStore's IStorageProvider seam and the manager's IStorageProviderRegistry (same
 // CreateStorage shape), so one instance backs both.
@@ -115,7 +115,7 @@ test('a saved solution is remembered and reopened after a restart', async () => 
     await run1.store.Restore(); // empty session on first launch
     await m1.NewSolution('/work/proj');
     m1.ActiveSolution!.Name = 'My Work';
-    await m1.Save(); // writes solution.json + remembers lastSolution
+    await m1.Save(); // writes <name>.pksln + remembers lastSolution
     await run1.store.Save(); // flush session.json under USER_DIR
 
     // Run 2: a fresh provider + SessionStore over the SAME storage — a "restart".

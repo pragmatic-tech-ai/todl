@@ -1,4 +1,9 @@
-import { ServiceBase, ServiceKey, type IServiceProvider } from '@pragmatic-tech-ai/todl-runtime';
+import {
+    ServiceBase,
+    ServiceKey,
+    type IServiceProvider,
+    type IStorage,
+} from '@pragmatic-tech-ai/todl-runtime';
 import { ConfirmAsk, type IPromptService } from '@pragmatic-tech-ai/todl-runtime';
 import {
     MapPropertyBag,
@@ -52,6 +57,29 @@ export class SolutionManagerService extends ServiceBase
         'SolutionNotificationService',
     );
 
+    // Fixed text and keys hoisted out of the method bodies (no inline string
+    // literals): user-facing strings live in one place, and the session property
+    // names are shared between the bag accessors and the SetValue call sites so the
+    // two can't drift.
+    // The default name for a solution the user has not named yet. The manifest file
+    // is `<name>.<ManifestFileExtension>` (e.g. "Default Solution.pksln"), so a
+    // rename changes the file name — see manifestFileName / Rename.
+    private static readonly UntitledName = 'Default Solution';
+    private static readonly ManifestFileExtension = 'pksln';
+    private static readonly SaveAsPrompt = 'Save Solution As';
+    private static readonly DiscardMessage =
+        'The current solution has unsaved changes. Discard them?';
+    private static readonly DiscardConfirmLabel = 'Discard';
+    private static readonly SavedStatus = 'Saved.';
+    private static readonly SessionRegistrationKey = 'solution-manager';
+    private static readonly LastSolutionName = 'lastSolution';
+    private static readonly LastSolutionLabel = 'Last Solution';
+    private static readonly RecentSolutionsName = 'recentSolutions';
+    private static readonly RecentSolutionsLabel = 'Recent Solutions';
+    // INPC property names (match the public getters) raised for view-model binding.
+    private static readonly ActiveSolutionChangeName = 'ActiveSolution';
+    private static readonly RecentSolutionsChangeName = 'RecentSolutions';
+
     private activeSolution: Solution | undefined;
     private readonly recentSolutions: string[] = [];
     // The disk root of the last-active saved solution, restored at startup. Empty
@@ -78,7 +106,9 @@ export class SolutionManagerService extends ServiceBase
         // Optional: a host that persists session state registers a SessionStore; a
         // headless batch or a test omits it, and the bag simply isn't tracked. The
         // store applies any stored slice to the bag on Register (or on its Restore).
-        provider.get(SessionStoreKey)?.Register('solution-manager', this.sessionBag);
+        provider
+            .get(SessionStoreKey)
+            ?.Register(SolutionManagerService.SessionRegistrationKey, this.sessionBag);
     }
 
     // The bag the SessionStore persists: the last-active solution's location and the
@@ -87,17 +117,17 @@ export class SolutionManagerService extends ServiceBase
     private buildSessionBag(): MapPropertyBag
     {
         const accessors = new Map<string, PropertyAccessor>();
-        accessors.set('lastSolution', {
-            id: () => 'lastSolution',
-            displayName: () => 'Last Solution',
+        accessors.set(SolutionManagerService.LastSolutionName, {
+            id: () => SolutionManagerService.LastSolutionName,
+            displayName: () => SolutionManagerService.LastSolutionLabel,
             get: () => this.lastSolution,
             set: (v) => {
                 this.lastSolution = typeof v === 'string' ? v : '';
             },
         });
-        accessors.set('recentSolutions', {
-            id: () => 'recentSolutions',
-            displayName: () => 'Recent Solutions',
+        accessors.set(SolutionManagerService.RecentSolutionsName, {
+            id: () => SolutionManagerService.RecentSolutionsName,
+            displayName: () => SolutionManagerService.RecentSolutionsLabel,
             get: () => [...this.recentSolutions],
             set: (v) =>
                 this.setRecent(
@@ -127,7 +157,7 @@ export class SolutionManagerService extends ServiceBase
     {
         const old = this.activeSolution;
         this.activeSolution = s;
-        this.RaisePropertyChanged('ActiveSolution', old, s);
+        this.RaisePropertyChanged(SolutionManagerService.ActiveSolutionChangeName, old, s);
     }
 
     public get RecentSolutions(): readonly string[]
@@ -135,22 +165,27 @@ export class SolutionManagerService extends ServiceBase
         return this.recentSolutions;
     }
 
-    public async NewSolution(location: string): Promise<void>
+    public async NewSolution(
+        location: string,
+        name: string = SolutionManagerService.UntitledName,
+    ): Promise<void>
     {
         if (!(await this.canReplace())) return;
         const storage = this.storages.CreateStorage(location);
-        this.setActive(new Solution('Untitled Solution', storage));
+        this.setActive(new Solution(name, storage));
     }
 
     // Create an empty, unsaved solution with no on-disk location. Created at startup
     // when no previous solution is remembered, and used as the fallback when a
     // remembered solution fails to open. Not added to recents and clears lastSolution
     // (nothing to reopen) — the user roots it with Save As, or discards it on close.
-    public async NewUntitledSolution(): Promise<void>
+    public async NewUntitledSolution(
+        name: string = SolutionManagerService.UntitledName,
+    ): Promise<void>
     {
         if (!(await this.canReplace())) return;
-        this.setActive(new Solution('Untitled Solution'));
-        this.sessionBag.SetValue('lastSolution', '');
+        this.setActive(new Solution(name));
+        this.sessionBag.SetValue(SolutionManagerService.LastSolutionName, '');
     }
 
     // Startup: reopen the remembered solution, else create an empty untitled one. The
@@ -171,10 +206,10 @@ export class SolutionManagerService extends ServiceBase
                 // The remembered folder is gone or its manifest is unreadable: drop it
                 // from recents and fall through to an untitled solution.
                 this.sessionBag.SetValue(
-                    'recentSolutions',
+                    SolutionManagerService.RecentSolutionsName,
                     this.recentSolutions.filter((p) => p !== last),
                 );
-                this.sessionBag.SetValue('lastSolution', '');
+                this.sessionBag.SetValue(SolutionManagerService.LastSolutionName, '');
             }
         }
         await this.NewUntitledSolution();
@@ -184,8 +219,14 @@ export class SolutionManagerService extends ServiceBase
     {
         if (!(await this.canReplace())) return;
         const storage = this.storages.CreateStorage(location);
-        const manifest = SolutionManifest.parse(await storage.ReadText('solution.json'));
-        const session = new Solution(manifest.name, storage);
+        const manifestFile = await this.findManifestFile(storage);
+        const manifest = SolutionManifest.parse(await storage.ReadText(manifestFile));
+        // The file stem IS the solution name (the manifest is `<name>.pksln`), so a
+        // rename that moved the file is reflected on reopen without rewriting content.
+        const session = new Solution(
+            SolutionManagerService.solutionNameFromFile(manifestFile),
+            storage,
+        );
         for (const ref of manifest.members) session.AddMember(ref.path, ref.type);
         session.LoadSettings(manifest.settings);
         await session.OpenMembers(
@@ -205,7 +246,7 @@ export class SolutionManagerService extends ServiceBase
         if (storage === undefined)
         {
             // Untitled — pick a folder and persist there as a real solution (Save As).
-            const location = await this.prompts.PickFolder('Save Solution As');
+            const location = await this.prompts.PickFolder(SolutionManagerService.SaveAsPrompt);
             if (location !== undefined) await this.SaveAs(location);
             return;
         }
@@ -214,10 +255,13 @@ export class SolutionManagerService extends ServiceBase
             s.Members.ToArray().map((m) => m.Ref),
             s.CollectSettings(),
         );
-        await storage.WriteText('solution.json', manifest.stringify());
+        await storage.WriteText(
+            SolutionManagerService.manifestFileName(s.Name),
+            manifest.stringify(),
+        );
         s.IsDirty = false;
         this.pushRecent(storage.Root);
-        this.notifications?.Status('Saved.');
+        this.notifications?.Status(SolutionManagerService.SavedStatus);
     }
 
     public async SaveAs(location: string): Promise<void>
@@ -230,7 +274,10 @@ export class SolutionManagerService extends ServiceBase
             s.Members.ToArray().map((m) => m.Ref),
             s.CollectSettings(),
         );
-        await target.WriteText('solution.json', manifest.stringify());
+        await target.WriteText(
+            SolutionManagerService.manifestFileName(s.Name),
+            manifest.stringify(),
+        );
         const reopened = new Solution(s.Name, target);
         for (const m of s.Members) reopened.AddMember(m.Ref.path, m.Ref.type);
         reopened.LoadSettings(s.CollectSettings());
@@ -239,11 +286,30 @@ export class SolutionManagerService extends ServiceBase
         this.pushRecent(location);
     }
 
+    // Set the active solution's name — the engine seam the UI drives (a rename
+    // dialog or an in-place tree-view edit). The manifest file name is derived from
+    // the name, so when the solution is already saved the on-disk manifest is
+    // renamed to match (<old>.pksln -> <new>.pksln); the new name is persisted into
+    // the manifest content on the next Save (the rename marks the solution dirty).
+    public async Rename(name: string): Promise<void>
+    {
+        const s = this.ActiveSolution;
+        if (s === undefined || name === s.Name) return;
+        const storage = s.Storage;
+        if (storage !== undefined)
+        {
+            const from = SolutionManagerService.manifestFileName(s.Name);
+            const to = SolutionManagerService.manifestFileName(name);
+            if (from !== to && (await storage.Exists(from))) await storage.Rename(from, to);
+        }
+        s.Name = name;
+    }
+
     public async CloseSolution(): Promise<void>
     {
         if (!(await this.canReplace())) return;
         this.setActive(undefined);
-        this.sessionBag.SetValue('lastSolution', '');
+        this.sessionBag.SetValue(SolutionManagerService.LastSolutionName, '');
     }
 
     private async canReplace(): Promise<boolean>
@@ -251,7 +317,10 @@ export class SolutionManagerService extends ServiceBase
         const s = this.ActiveSolution;
         if (s === undefined || !s.IsDirty) return true;
         return this.prompts.Ask(
-            new ConfirmAsk('The current solution has unsaved changes. Discard them?', 'Discard'),
+            new ConfirmAsk(
+                SolutionManagerService.DiscardMessage,
+                SolutionManagerService.DiscardConfirmLabel,
+            ),
         );
     }
 
@@ -262,8 +331,8 @@ export class SolutionManagerService extends ServiceBase
     {
         const next = this.recentSolutions.filter((p) => p !== location);
         next.unshift(location);
-        this.sessionBag.SetValue('recentSolutions', next);
-        this.sessionBag.SetValue('lastSolution', location);
+        this.sessionBag.SetValue(SolutionManagerService.RecentSolutionsName, next);
+        this.sessionBag.SetValue(SolutionManagerService.LastSolutionName, location);
     }
 
     // Replace the recent-solutions list in place and notify. Invoked by the session
@@ -271,7 +340,44 @@ export class SolutionManagerService extends ServiceBase
     private setRecent(list: readonly string[]): void
     {
         this.recentSolutions.splice(0, this.recentSolutions.length, ...list);
-        this.RaisePropertyChanged('RecentSolutions', undefined, this.recentSolutions);
+        this.RaisePropertyChanged(
+            SolutionManagerService.RecentSolutionsChangeName,
+            undefined,
+            this.recentSolutions,
+        );
+    }
+
+    // The manifest file name for a solution: `<name>.<ext>` (e.g.
+    // "Default Solution.pksln"). The user-facing solution name IS the file stem.
+    private static manifestFileName(name: string): string
+    {
+        return `${name}.${SolutionManagerService.ManifestFileExtension}`;
+    }
+
+    // Inverse of manifestFileName: the solution name from its manifest file name
+    // (the stem, dropping the `.pksln` extension).
+    private static solutionNameFromFile(fileName: string): string
+    {
+        const suffix = `.${SolutionManagerService.ManifestFileExtension}`;
+        return fileName.endsWith(suffix) ? fileName.slice(0, -suffix.length) : fileName;
+    }
+
+    // Locate the solution manifest in a folder: the single `*.pksln` file (the file
+    // name is not fixed — it is derived from the solution name). Throws when the
+    // folder holds no manifest, so a missing/renamed solution surfaces to the caller
+    // (RestoreSession treats the throw as "the remembered solution is gone").
+    private async findManifestFile(storage: IStorage): Promise<string>
+    {
+        const suffix = `.${SolutionManagerService.ManifestFileExtension}`;
+        const entries = await storage.List('');
+        const entry = entries.find((e) => !e.IsDirectory && e.Name.endsWith(suffix));
+        if (entry === undefined)
+        {
+            throw new Error(
+                `No .${SolutionManagerService.ManifestFileExtension} solution manifest in '${storage.Root}'`,
+            );
+        }
+        return entry.Name;
     }
 
     // POSIX-join a solution folder with a member's relative path, collapsing

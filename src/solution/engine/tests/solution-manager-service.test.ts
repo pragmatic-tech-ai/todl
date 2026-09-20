@@ -154,8 +154,8 @@ function makeService(opts?: {
     return { svc, roots, prompts };
 }
 
-// Write a valid solution.json into a fake root so OpenSolution/RestoreSession can
-// read it back — mirrors what Save() would have persisted.
+// Write a valid `<name>.pksln` manifest into a fake root so OpenSolution/
+// RestoreSession can read it back — mirrors what Save() would have persisted.
 async function seedSolution(
     roots: Map<string, FakeStorage>,
     location: string,
@@ -165,7 +165,7 @@ async function seedSolution(
     const storage = new FakeStorage(location);
     roots.set(location, storage);
     await storage.WriteText(
-        'solution.json',
+        `${name}.pksln`,
         JSON.stringify({ kind: 'todl-solution', version: 1, name, members: [], settings: {} }),
     );
 }
@@ -184,14 +184,14 @@ test('Save works with no notifier registered', async () => {
     await svc.Save(); // must not throw
 });
 
-test('New → Save writes solution.json; Open reads it back with members', async () => {
+test('New → Save writes <name>.pksln; Open reads it back with members', async () => {
     const { svc, roots } = makeService();
     await svc.NewSolution('/work/sol');
     svc.ActiveSolution!.Name = 'My Solution';
     svc.ActiveSolution!.AddMember('./api', 'architecture');
     await svc.Save();
 
-    const stored = await roots.get('/work/sol')!.ReadText('solution.json');
+    const stored = await roots.get('/work/sol')!.ReadText('My Solution.pksln');
     assert.match(stored, /todl-solution/);
     assert.match(stored, /\.\/api/);
 
@@ -237,7 +237,7 @@ test('a dirty solution asks to discard and blocks replace when the user declines
 test('NewUntitledSolution creates an unsaved, location-less solution', async () => {
     const { svc } = makeService();
     await svc.NewUntitledSolution();
-    assert.equal(svc.ActiveSolution!.Name, 'Untitled Solution');
+    assert.equal(svc.ActiveSolution!.Name, 'Default Solution');
     assert.equal(svc.ActiveSolution!.HasLocation, false);
     assert.equal(svc.ActiveSolution!.Storage, undefined);
 });
@@ -308,7 +308,7 @@ test('Save on an untitled solution picks a folder and persists there', async () 
     await svc.Save(); // untitled → PickFolder → SaveAs('/work/chosen')
     assert.equal(svc.ActiveSolution!.HasLocation, true);
     assert.equal(svc.ActiveSolution!.Storage!.Root, '/work/chosen');
-    const stored = await roots.get('/work/chosen')!.ReadText('solution.json');
+    const stored = await roots.get('/work/chosen')!.ReadText('Fresh.pksln');
     assert.match(stored, /Fresh/);
     assert.ok(svc.RecentSolutions.includes('/work/chosen'));
 });
@@ -317,5 +317,44 @@ test('Save on an untitled solution is a no-op when the folder pick is cancelled'
     const { svc } = makeService({ pickFolder: async () => undefined });
     await svc.NewUntitledSolution();
     await svc.Save(); // cancelled → stays untitled, no throw
+    assert.equal(svc.ActiveSolution!.HasLocation, false);
+});
+
+test('NewSolution takes a user-specified name', async () => {
+    const { svc } = makeService();
+    await svc.NewSolution('/work/sol', 'Acme Platform');
+    assert.equal(svc.ActiveSolution!.Name, 'Acme Platform');
+});
+
+test('Save writes the manifest as <name>.pksln, derived from the solution name', async () => {
+    const { svc, roots } = makeService();
+    await svc.NewSolution('/work/sol', 'Acme Platform');
+    await svc.Save();
+    assert.equal(await roots.get('/work/sol')!.Exists('Acme Platform.pksln'), true);
+});
+
+test('Rename moves the on-disk manifest of a saved solution to <new>.pksln', async () => {
+    const { svc, roots } = makeService();
+    await svc.NewSolution('/work/sol', 'Old Name');
+    await svc.Save();
+    const storage = roots.get('/work/sol')!;
+    assert.equal(await storage.Exists('Old Name.pksln'), true);
+
+    await svc.Rename('New Name');
+    assert.equal(svc.ActiveSolution!.Name, 'New Name');
+    assert.equal(await storage.Exists('Old Name.pksln'), false); // old file gone
+    assert.equal(await storage.Exists('New Name.pksln'), true); // renamed to the new name
+
+    // Reopening the folder finds the manifest by extension and reads the new name.
+    await svc.CloseSolution();
+    await svc.OpenSolution('/work/sol');
+    assert.equal(svc.ActiveSolution!.Name, 'New Name');
+});
+
+test('Rename of an unsaved solution just sets the name (no storage touched)', async () => {
+    const { svc } = makeService();
+    await svc.NewUntitledSolution();
+    await svc.Rename('Named But Unsaved');
+    assert.equal(svc.ActiveSolution!.Name, 'Named But Unsaved');
     assert.equal(svc.ActiveSolution!.HasLocation, false);
 });
