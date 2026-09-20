@@ -5,15 +5,32 @@
 // (a shell adds it alongside its shell modules; mural's ShellCompositionRoot routes
 // a plain Module straight through to RegisterServices, never into `Modules`).
 //
-// The host still supplies the manager's seams — the storage-provider registry, the
-// project-factory registry, the prompt service, the package source — under their
-// keys; this module owns only the engine services themselves, which are UI-agnostic.
+// It owns the engine services themselves (SolutionManagerService + settings
+// registry) AND todl's three built-in project TYPES — the meta-model / library /
+// architecture factories — plus the registrar that indexes them
+// (DefaultProjectFactoryRegistry, under ProjectFactoryRegistryKey). Project types
+// are an engine concern (opening/creating project data), so a host composes them by
+// composing the engine, with no app-side factory wiring; an app that ships a
+// different type set (e.g. devUI's todl-package) shadows ProjectFactoryRegistryKey
+// with its own registry after composing the engine.
+//
+// The host still supplies the manager's remaining seams — the storage-provider
+// registry, the prompt service, the package source — under their keys.
 import SolutionManagerService from "./engine/solution-manager-service.js"
 import SolutionSettingsRegistry from "./engine/solution-settings-registry.js"
+import ProjectFactoryRegistryKey from "./engine/host-services.js"
+import MetaModelProjectFactory from "./projects/meta-model-project-factory.js"
+import LibraryProjectFactory from "./projects/library-project-factory.js"
+import ArchitectureProjectFactory from "./projects/architecture-project-factory.js"
+import DefaultProjectFactoryRegistry from "./projects/default-project-factory-registry.js"
 
 module SolutionServicesEngine {
     .services: {
         SolutionManagerService
         SolutionSettingsRegistry
+        MetaModelProjectFactory
+        LibraryProjectFactory
+        ArchitectureProjectFactory
+        DefaultProjectFactoryRegistry -> ProjectFactoryRegistryKey
     }
 }

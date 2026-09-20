@@ -1,10 +1,10 @@
-import { ProjectFactoryRegistryKey } from "./engine/host-services.js";
-import { SolutionManagerService } from "./engine/solution-manager-service.js";
-import { SolutionSettingsRegistry } from "./engine/solution-settings-registry.js";
-import { ArchitectureProjectFactory } from "./projects/architecture-project-factory.js";
-import { DefaultProjectFactoryRegistry } from "./projects/default-project-factory-registry.js";
-import { LibraryProjectFactory } from "./projects/library-project-factory.js";
-import { MetaModelProjectFactory } from "./projects/meta-model-project-factory.js";
+import { ProjectFactoryRegistryKey } from "../engine/host-services.js";
+import { SolutionManagerService } from "../engine/solution-manager-service.js";
+import { SolutionSettingsRegistry } from "../engine/solution-settings-registry.js";
+import { ArchitectureProjectFactory } from "../projects/architecture-project-factory.js";
+import { DefaultProjectFactoryRegistry } from "../projects/default-project-factory-registry.js";
+import { LibraryProjectFactory } from "../projects/library-project-factory.js";
+import { MetaModelProjectFactory } from "../projects/meta-model-project-factory.js";
 import { Module, ServiceProvider } from "@pragmatic-tech-ai/mural/runtime";
 
 export const SolutionServicesEngine = (() => {
