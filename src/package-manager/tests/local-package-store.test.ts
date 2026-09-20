@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { LocalPackageStore } from "../local-package-store.js";
 import { compilePackage } from "../../publish/publish.js";
 
-function pkg(id: string, version: string) {
+function pkg(id: string, version: string)
+{
   const out = compilePackage(
     [],
     [{ uri: `${id}.todl`, text: `namespace acme { concept Widget { name : string; } }` }],

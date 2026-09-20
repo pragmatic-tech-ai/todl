@@ -10,7 +10,8 @@ const codes = (ds: { code: DiagnosticCode }[]) => ds.map((d) => d.code);
 // library carries a taxonomy (`fleet`) and a class (`ec2`), both in namespace
 // `lib`. A model binds the library's namespace by `uses`-ing one of its
 // taxonomies — that brings the whole `lib` vocabulary (including `ec2`) in scope.
-function bases() {
+function bases()
+{
   const meta = toJSON(check([{ uri: "meta.todl", text:
     `namespace meta { concept server { } }` }]).model);
   const lib = toJSON(checkAgainst([meta], [{ uri: "lib.todl", text:

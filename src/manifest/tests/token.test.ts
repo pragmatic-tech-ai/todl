@@ -43,8 +43,10 @@ describe("TypeDefOrRef — coded index over TypeInfo | TypeRef (SPEC-04 §6)", (
   });
 
   test("encode/decode round-trips for both tags across a range", () => {
-    for (const toRef of [false, true]) {
-      for (const row of [1, 2, 32767, 32768, 1_000_000]) {
+    for (const toRef of [false, true])
+    {
+      for (const row of [1, 2, 32767, 32768, 1_000_000])
+      {
         const coded = new TypeDefOrRef(toRef, row).encode();
         const back = TypeDefOrRef.decode(coded);
         assert.equal(back.toTypeRef, toRef, `tag@${row}`);

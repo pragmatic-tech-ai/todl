@@ -6,7 +6,8 @@ import { join } from "node:path";
 import { runCommand } from "../main.js";
 
 // Capture stdout for assertions.
-function capture(fn: () => number): { code: number; out: string } {
+function capture(fn: () => number): { code: number; out: string }
+{
   const chunks: string[] = [];
   const orig = process.stdout.write.bind(process.stdout);
   (process.stdout as any).write = (s: string) => { chunks.push(s); return true; };

@@ -8,7 +8,8 @@ import { mergeBases } from "../../api.js";
 import { ModelDraft, type InstanceDescriptor } from "../../index.js";
 import { checkAgainst } from "../../api.js";
 
-function baseClient(): FrozenRepository {
+function baseClient(): FrozenRepository
+{
   const repo = new Repository();
   const b = repo.builder().setNamespace("acme.ea");
   b.definePrimitive("string");
@@ -23,7 +24,8 @@ function baseClient(): FrozenRepository {
   return FrozenRepository.fromJSON(toJSON(repo));
 }
 
-function draftWithGw() {
+function draftWithGw()
+{
   const base = baseClient();
   const draft = ModelDraft.on([base], { namespace: "app" });
   draft.add({

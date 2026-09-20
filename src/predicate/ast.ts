@@ -10,7 +10,8 @@
 
 import type { NodeId } from "../model/graph.js";
 
-export enum ExprKind {
+export enum ExprKind
+{
   This,
   Var,
   Name,
@@ -22,7 +23,8 @@ export enum ExprKind {
   Unary,
 }
 
-export enum BinaryOp {
+export enum BinaryOp
+{
   And,
   Or,
   Implies,
@@ -31,48 +33,57 @@ export enum BinaryOp {
   In,
 }
 
-export enum UnaryOp {
+export enum UnaryOp
+{
   Not,
 }
 
-export enum QuantifierKind {
+export enum QuantifierKind
+{
   All,
   Any,
 }
 
-export interface ThisExpr {
+export interface ThisExpr
+{
   kind: ExprKind.This;
 }
 
-export interface VarExpr {
+export interface VarExpr
+{
   kind: ExprKind.Var;
   name: string;
 }
 
 /** A bare reference to a node by id — an enum member (`service`) or a record (`&x`). */
-export interface NameExpr {
+export interface NameExpr
+{
   kind: ExprKind.Name;
   id: NodeId;
 }
 
-export interface NoneExpr {
+export interface NoneExpr
+{
   kind: ExprKind.None;
 }
 
-export interface MemberExpr {
+export interface MemberExpr
+{
   kind: ExprKind.Member;
   target: Expr;
   member: string;
 }
 
-export interface ComprehensionExpr {
+export interface ComprehensionExpr
+{
   kind: ExprKind.Comprehension;
   variable: string;
   concept: NodeId;
   body: Expr;
 }
 
-export interface QuantifierExpr {
+export interface QuantifierExpr
+{
   kind: ExprKind.Quantifier;
   quantifier: QuantifierKind;
   variable: string;
@@ -80,14 +91,16 @@ export interface QuantifierExpr {
   body: Expr;
 }
 
-export interface BinaryExpr {
+export interface BinaryExpr
+{
   kind: ExprKind.Binary;
   op: BinaryOp;
   left: Expr;
   right: Expr;
 }
 
-export interface UnaryExpr {
+export interface UnaryExpr
+{
   kind: ExprKind.Unary;
   op: UnaryOp;
   operand: Expr;
@@ -109,54 +122,67 @@ export type Expr =
 export const THIS: ThisExpr = { kind: ExprKind.This };
 export const NONE: NoneExpr = { kind: ExprKind.None };
 
-export function variable(name: string): VarExpr {
+export function variable(name: string): VarExpr
+{
   return { kind: ExprKind.Var, name };
 }
 
-export function name(id: NodeId): NameExpr {
+export function name(id: NodeId): NameExpr
+{
   return { kind: ExprKind.Name, id };
 }
 
-export function member(target: Expr, name: string): MemberExpr {
+export function member(target: Expr, name: string): MemberExpr
+{
   return { kind: ExprKind.Member, target, member: name };
 }
 
-export function comprehension(name: string, concept: NodeId, body: Expr): ComprehensionExpr {
+export function comprehension(name: string, concept: NodeId, body: Expr): ComprehensionExpr
+{
   return { kind: ExprKind.Comprehension, variable: name, concept, body };
 }
 
-export function all(name: string, concept: NodeId, body: Expr): QuantifierExpr {
+export function all(name: string, concept: NodeId, body: Expr): QuantifierExpr
+{
   return { kind: ExprKind.Quantifier, quantifier: QuantifierKind.All, variable: name, concept, body };
 }
 
-export function any(name: string, concept: NodeId, body: Expr): QuantifierExpr {
+export function any(name: string, concept: NodeId, body: Expr): QuantifierExpr
+{
   return { kind: ExprKind.Quantifier, quantifier: QuantifierKind.Any, variable: name, concept, body };
 }
 
-export function and(left: Expr, right: Expr): BinaryExpr {
+export function and(left: Expr, right: Expr): BinaryExpr
+{
   return { kind: ExprKind.Binary, op: BinaryOp.And, left, right };
 }
 
-export function or(left: Expr, right: Expr): BinaryExpr {
+export function or(left: Expr, right: Expr): BinaryExpr
+{
   return { kind: ExprKind.Binary, op: BinaryOp.Or, left, right };
 }
 
-export function implies(left: Expr, right: Expr): BinaryExpr {
+export function implies(left: Expr, right: Expr): BinaryExpr
+{
   return { kind: ExprKind.Binary, op: BinaryOp.Implies, left, right };
 }
 
-export function eq(left: Expr, right: Expr): BinaryExpr {
+export function eq(left: Expr, right: Expr): BinaryExpr
+{
   return { kind: ExprKind.Binary, op: BinaryOp.Eq, left, right };
 }
 
-export function neq(left: Expr, right: Expr): BinaryExpr {
+export function neq(left: Expr, right: Expr): BinaryExpr
+{
   return { kind: ExprKind.Binary, op: BinaryOp.Neq, left, right };
 }
 
-export function isIn(left: Expr, right: Expr): BinaryExpr {
+export function isIn(left: Expr, right: Expr): BinaryExpr
+{
   return { kind: ExprKind.Binary, op: BinaryOp.In, left, right };
 }
 
-export function not(operand: Expr): UnaryExpr {
+export function not(operand: Expr): UnaryExpr
+{
   return { kind: ExprKind.Unary, op: UnaryOp.Not, operand };
 }

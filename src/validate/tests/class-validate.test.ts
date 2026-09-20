@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { load } from "../../parse/loader.js";
 import { DiagnosticCode } from "../../diagnostics/diagnostic.js";
 
-function codes(text: string): DiagnosticCode[] {
+function codes(text: string): DiagnosticCode[]
+{
   return load([{ uri: "t.todl", text: `namespace n {\n${text}\n}` }]).model.validate().map((d) => d.code);
 }
 

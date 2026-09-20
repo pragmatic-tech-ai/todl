@@ -19,11 +19,13 @@ import { FakeProjectFactory } from './fake-project-factory.js';
 // A stand-in SessionStore: on Register it applies a preset slice to the bag (as the
 // real store does once loaded) and holds the bag so a test can read what the manager
 // persisted. Change subscriptions count as "scheduled saves".
-class FakeSessionStore implements ISessionStore {
+class FakeSessionStore implements ISessionStore
+{
     public bag: IPropertyBag | undefined;
     public saveScheduled = 0;
     constructor(private readonly slice: Record<string, Record<string, unknown>> = {}) {}
-    Register(key: string, bag: IPropertyBag): Disposable {
+    Register(key: string, bag: IPropertyBag): Disposable
+    {
         this.bag = bag;
         const stored = this.slice[key];
         if (stored !== undefined) for (const [n, v] of Object.entries(stored)) bag.SetValue(n, v);
@@ -39,15 +41,18 @@ class FakeSessionStore implements ISessionStore {
         };
     }
     async Restore(): Promise<void> {}
-    async Save(): Promise<void> {
+    async Save(): Promise<void>
+    {
         this.saveScheduled++;
     }
 }
 
 // Records the ambient feedback the manager emits so a test can assert on it.
-class RecordingNotifier implements INotificationService {
+class RecordingNotifier implements INotificationService
+{
     public statuses: string[] = [];
-    Status(message: string): void {
+    Status(message: string): void
+    {
         this.statuses.push(message);
     }
     Progress(): void {}
@@ -56,34 +61,42 @@ class RecordingNotifier implements INotificationService {
 
 // A prompt service whose ConfirmAsk answer is scripted; records that it was asked
 // so a test can assert the discard prompt actually fired. Every other ask throws.
-class ScriptedPrompts implements IPromptService {
+class ScriptedPrompts implements IPromptService
+{
     public asked = 0;
     public foldersPicked = 0;
     constructor(
         private readonly confirm: () => Promise<boolean>,
         private readonly folder: () => Promise<string | undefined> = async () => undefined,
     ) {}
-    async Ask<R>(request: Ask<R>): Promise<R> {
-        if (request instanceof ConfirmAsk) {
+    async Ask<R>(request: Ask<R>): Promise<R>
+    {
+        if (request instanceof ConfirmAsk)
+        {
             this.asked++;
             return (await this.confirm()) as R;
         }
         throw new Error(`unhandled ${request.constructor.name}`);
     }
-    Confirm(message: string, confirmLabel?: string): Promise<boolean> {
+    Confirm(message: string, confirmLabel?: string): Promise<boolean>
+    {
         return this.Ask(new ConfirmAsk(message, confirmLabel));
     }
-    PickFolder(): Promise<string | undefined> {
+    PickFolder(): Promise<string | undefined>
+    {
         this.foldersPicked++;
         return this.folder();
     }
-    PickFile(): Promise<string | undefined> {
+    PickFile(): Promise<string | undefined>
+    {
         throw new Error('nyi');
     }
-    PromptText(): Promise<string | undefined> {
+    PromptText(): Promise<string | undefined>
+    {
         throw new Error('nyi');
     }
-    Choose<T>(): Promise<T | undefined> {
+    Choose<T>(): Promise<T | undefined>
+    {
         throw new Error('nyi');
     }
 }
@@ -95,7 +108,8 @@ function makeService(opts?: {
     notifier?: INotificationService;
     sessionStore?: ISessionStore;
     pickFolder?: () => Promise<string | undefined>;
-}) {
+})
+{
     const roots = new Map<string, FakeStorage>();
     const storages: IStorageProviderRegistry = {
         CreateStorage: (folder) => {
@@ -146,7 +160,8 @@ async function seedSolution(
     roots: Map<string, FakeStorage>,
     location: string,
     name: string,
-): Promise<void> {
+): Promise<void>
+{
     const storage = new FakeStorage(location);
     roots.set(location, storage);
     await storage.WriteText(

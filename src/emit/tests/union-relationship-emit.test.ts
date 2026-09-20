@@ -4,7 +4,8 @@ import assert from "node:assert/strict";
 import { load as loadFiles } from "../../parse/loader.js";
 import { toMetaModule } from "../js-module.js";
 
-function load(texts: string[]) {
+function load(texts: string[])
+{
   return loadFiles(texts.map((text, i) => ({ uri: `s${i}.todl`, text }))).model;
 }
 

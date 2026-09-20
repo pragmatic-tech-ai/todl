@@ -10,7 +10,8 @@ import { EdgeKind, Direction } from "../../model/graph.js";
 // (`a ==> b;` on its own line in a record body) rather than the value form
 // (`steps = [ a ==> b ]`). A bare nested record already appends to the matching
 // array member; a bare edge statement must do the same.
-function loadSrc(body: string, gen = new FakeIdGenerator()) {
+function loadSrc(body: string, gen = new FakeIdGenerator())
+{
   const src = `namespace t {
     concept endpoint { label : string; }
     concept step { src : endpoint; dst : endpoint; }

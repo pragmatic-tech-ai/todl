@@ -5,7 +5,8 @@ import { MetaKind } from "../kinds.js";
 import { Repository } from "../model.js";
 
 // Build a 3-level taxonomy by hand: root -> mid -> leaf, plus a sibling leaf.
-function taxo(): Repository {
+function taxo(): Repository
+{
   const g = new Graph();
   g.addNode({ id: "cc", tier: Tier.Ontology, type: null, metaKind: MetaKind.Taxonomy, namespace: null, localId: null, isClass: false, class: null, storageId: null, fields: [], attrs: new Map() });
   for (const id of ["cc.Surface", "cc.ApiService", "cc.WebPortal", "cc.DataStore"])

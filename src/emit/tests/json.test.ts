@@ -5,7 +5,8 @@ import { Repository } from "../../model/model.js";
 import { EdgeKind, Direction } from "../../model/graph.js";
 import { toJSON, fromJSON } from "../json.js";
 
-function sample(): Repository {
+function sample(): Repository
+{
   const model = new Repository();
   model
     .builder()

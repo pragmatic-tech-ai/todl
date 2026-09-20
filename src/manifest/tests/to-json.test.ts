@@ -5,7 +5,8 @@ import { MetaKind, Cardinality } from "../enums.js";
 import { TypeDefOrRef } from "../token.js";
 import { Base64 } from "../bytes.js";
 
-function buildShop(): ManifestWriter {
+function buildShop(): ManifestWriter
+{
   const w = new ManifestWriter("shop", "1.2.0");
   // Field "size" : Number(=0 for this fixture), Optional
   const fSize = w.addField({ name: w.internString("size"), type: 0, card: Cardinality.Optional });

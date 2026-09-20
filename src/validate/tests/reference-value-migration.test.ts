@@ -9,7 +9,8 @@ const CONCEPTS = `
   concept actor {}
   concept edge { relationship end -> actor; }`;
 
-function diagnostics(body: string) {
+function diagnostics(body: string)
+{
   return check([{ uri: "m.todl", text: `namespace ta {${CONCEPTS}\n${body}\n}` }]).diagnostics;
 }
 

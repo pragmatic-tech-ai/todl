@@ -9,7 +9,8 @@ import { gzipSync } from "node:zlib";
 
 /** One file to place in the archive. `path` is the full archive path, e.g.
  *  `package/model.json`. */
-export interface TarEntry {
+export interface TarEntry
+{
   path: string;
   bytes: Uint8Array;
 }
@@ -18,12 +19,14 @@ const BLOCK = 512;
 const encoder = new TextEncoder();
 
 /** A fixed-width, null-terminated octal field (npm's numeric header encoding). */
-function octalField(value: number, length: number): string {
+function octalField(value: number, length: number): string
+{
   return `${value.toString(8).padStart(length - 1, "0")}\0`;
 }
 
 /** Build the 512-byte USTAR header for one regular-file entry. */
-function header(name: string, size: number): Uint8Array {
+function header(name: string, size: number): Uint8Array
+{
   const block = new Uint8Array(BLOCK);
   const put = (str: string, offset: number, max: number): void => {
     const bytes = encoder.encode(str);
@@ -34,7 +37,8 @@ function header(name: string, size: number): Uint8Array {
   // USTAR splits paths over 100 bytes into a 155-byte prefix + 100-byte name.
   let filename = name;
   let prefix = "";
-  if (encoder.encode(name).length > 100) {
+  if (encoder.encode(name).length > 100)
+  {
     const cut = name.lastIndexOf("/", 100);
     if (cut < 0) throw new Error(`tar path too long to split: ${name}`);
     prefix = name.slice(0, cut);
@@ -60,15 +64,18 @@ function header(name: string, size: number): Uint8Array {
 }
 
 /** Pad a body to the next 512-byte boundary. */
-function padding(size: number): Uint8Array {
+function padding(size: number): Uint8Array
+{
   const remainder = size % BLOCK;
   return remainder === 0 ? new Uint8Array(0) : new Uint8Array(BLOCK - remainder);
 }
 
 /** Assemble `entries` into a gzipped tar archive (an npm-style `.tgz`). */
-export function createTgz(entries: readonly TarEntry[]): Uint8Array {
+export function createTgz(entries: readonly TarEntry[]): Uint8Array
+{
   const blocks: Uint8Array[] = [];
-  for (const entry of entries) {
+  for (const entry of entries)
+  {
     blocks.push(header(entry.path, entry.bytes.length));
     blocks.push(entry.bytes);
     blocks.push(padding(entry.bytes.length));
@@ -79,7 +86,8 @@ export function createTgz(entries: readonly TarEntry[]): Uint8Array {
   const total = blocks.reduce((n, b) => n + b.length, 0);
   const tar = new Uint8Array(total);
   let offset = 0;
-  for (const block of blocks) {
+  for (const block of blocks)
+  {
     tar.set(block, offset);
     offset += block.length;
   }

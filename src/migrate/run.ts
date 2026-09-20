@@ -11,13 +11,18 @@ import { join, relative, dirname } from "node:path";
 import { rewrite } from "./rewriter.js";
 
 /** Recursively list every legacy TODL source under `dir`, sorted for determinism. */
-export function listTodlSources(dir: string): string[] {
+export function listTodlSources(dir: string): string[]
+{
   const out: string[] = [];
-  for (const entry of readdirSync(dir)) {
+  for (const entry of readdirSync(dir))
+  {
     const full = join(dir, entry);
-    if (statSync(full).isDirectory()) {
+    if (statSync(full).isDirectory())
+    {
       out.push(...listTodlSources(full));
-    } else if (full.endsWith(".todl") || full.endsWith(".model")) {
+    }
+    else if (full.endsWith(".todl") || full.endsWith(".model"))
+    {
       // `.todl`, plus legacy `.architecture.model` / `.technology-library.model`.
       out.push(full);
     }
@@ -26,7 +31,8 @@ export function listTodlSources(dir: string): string[] {
 }
 
 /** Read + rewrite each file, returning the rewritten sources in order. */
-export function migrateFiles(files: string[]): string[] {
+export function migrateFiles(files: string[]): string[]
+{
   return files.map((file) => rewrite(readFileSync(file, "utf8")));
 }
 
@@ -34,9 +40,11 @@ export function migrateFiles(files: string[]): string[] {
  * Rewrite every source under `srcDir` into `destDir`, preserving the relative
  * tree and renaming `.architecture.model` → `.todl`. Returns the written paths.
  */
-export function migrateTree(srcDir: string, destDir: string): string[] {
+export function migrateTree(srcDir: string, destDir: string): string[]
+{
   const written: string[] = [];
-  for (const src of listTodlSources(srcDir)) {
+  for (const src of listTodlSources(srcDir))
+  {
     const outRel = relative(srcDir, src)
       .replace(/\.(architecture|technology-library)\.model$/, ".todl")
       .replace(/\.model$/, ".todl");

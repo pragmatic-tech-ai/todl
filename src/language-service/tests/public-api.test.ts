@@ -8,7 +8,8 @@ import {
 
 test("the public barrel exposes the advanced surface", () => {
   for (const fn of [renameEdits, prepareRename, documentSymbols, foldingRanges,
-    workspaceSymbols, semanticTokens, signatureHelpAt, codeActions, formatDocument]) {
+    workspaceSymbols, semanticTokens, signatureHelpAt, codeActions, formatDocument])
+    {
     assert.equal(typeof fn, "function");
   }
 });

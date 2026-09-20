@@ -9,7 +9,8 @@ import { ModelDraft } from "../model-draft.js";
 // A tiny meta-model base : concept `component` with a scalar `label` and a
 // reference field `implementedBy : Technology`; concept `technology`; plus a
 // library instance `copilot` (a technology) to reference across the boundary.
-function baseClient(): FrozenRepository {
+function baseClient(): FrozenRepository
+{
   const repo = new Repository();
   const b = repo.builder();
   b.definePrimitive("string");

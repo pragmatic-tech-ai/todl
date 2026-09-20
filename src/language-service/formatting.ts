@@ -6,7 +6,8 @@ const INDENT = "  ";
 // Re-indent each line by its brace depth, trim trailing whitespace, and collapse
 // runs of blank lines to one. Only `{`/`}` outside strings and comments drive
 // depth, so cardinality `[]` and braces inside literals/comments are inert.
-export function formatText(text: string): string {
+export function formatText(text: string): string
+{
   const lines = text.split("\n");
   const hadTrailingNewline = text.endsWith("\n");
   if (hadTrailingNewline) lines.pop();   // drop the empty element after the last "\n"
@@ -14,7 +15,8 @@ export function formatText(text: string): string {
   const out: string[] = [];
   let depth = 0;
   let blankRun = 0;
-  for (const raw of lines) {
+  for (const raw of lines)
+  {
     const trimmed = raw.trim();
     if (trimmed === "") { blankRun += 1; if (blankRun <= 1) out.push(""); continue; }
     blankRun = 0;
@@ -27,7 +29,8 @@ export function formatText(text: string): string {
   return out.join("\n") + (hadTrailingNewline ? "\n" : "");
 }
 
-export function formatDocument(a: Analysis, uri: string): TextEdit[] {
+export function formatDocument(a: Analysis, uri: string): TextEdit[]
+{
   const file = a.sources.get(uri);
   if (file === undefined) return [];
   const formatted = formatText(file.text);
@@ -36,13 +39,16 @@ export function formatDocument(a: Analysis, uri: string): TextEdit[] {
 }
 
 // Net `{` minus `}` on a line, ignoring braces inside "…"/`//`/`/* */`.
-function braceDelta(line: string): number {
+function braceDelta(line: string): number
+{
   let delta = 0;
   let i = 0;
   let inString = false;
-  while (i < line.length) {
+  while (i < line.length)
+  {
     const ch = line[i]!;
-    if (inString) {
+    if (inString)
+    {
       if (ch === '"') inString = false;
       i += 1; continue;
     }
@@ -60,7 +66,8 @@ function braceDelta(line: string): number {
   return delta;
 }
 
-function fullRange(text: string): Range {
+function fullRange(text: string): Range
+{
   const lines = text.split("\n");
   const last = lines.length - 1;
   return { start: { line: 0, character: 0 }, end: { line: last, character: lines[last]!.length } };

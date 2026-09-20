@@ -8,7 +8,8 @@ const BASE = `namespace tech {
   annotation Badge { path : string; }
   taxonomy Actors : represents Actor { `;
 
-function codes(termBody: string): DiagnosticCode[] {
+function codes(termBody: string): DiagnosticCode[]
+{
   const src = `${BASE} term Internal { label = "I"; ${termBody} } } }`;
   return check([{ uri: "a.todl", text: src }]).diagnostics.map((d) => d.code);
 }

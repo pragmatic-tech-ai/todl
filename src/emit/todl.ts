@@ -15,9 +15,11 @@ export interface EmitOperator { glyph: string; from: string; to: string; }
 
 /** Reverse map concept id → the first operator that reifies it (design §6), for
  * shorthand emit. Deterministic: first operator in allNodes order wins. */
-export function collectOperators(model: Repository): Map<string, EmitOperator> {
+export function collectOperators(model: Repository): Map<string, EmitOperator>
+{
   const byConcept = new Map<string, EmitOperator>();
-  for (const node of model.allNodes()) {
+  for (const node of model.allNodes())
+  {
     if (node.metaKind !== MetaKind.Operator) continue;
     const from = node.attrs.get("from");
     const to = node.attrs.get("to");
@@ -34,7 +36,8 @@ const PRELUDE_NAMESPACE = "todl";
 /** Attrs that are markers, not authored fields. */
 const MARKER_ATTRS = new Set(["id", "class", "namespace", "conforms"]);
 
-export interface ModelBindings {
+export interface ModelBindings
+{
   metaModel: string;
   uses: string[];
   imports: string[];
@@ -46,10 +49,12 @@ export function deriveBindings(
   baseIds: ReadonlySet<NodeId>,
   namespace: string,
   own: TodlDocument,
-): ModelBindings {
+): ModelBindings
+{
   const baseNs = new Set<string>();
   const taxIds = new Set<string>();
-  for (const node of model.allNodes()) {
+  for (const node of model.allNodes())
+  {
     if (!baseIds.has(node.id)) continue;
     const ns = node.namespace;
     if (ns !== null && ns.length > 0 && ns !== PRELUDE_NAMESPACE) baseNs.add(ns);
@@ -62,7 +67,8 @@ export function deriveBindings(
     return taxIds.has(tax) ? tax : undefined;
   };
   const usesSet = new Set<string>();
-  for (const edge of own.edges) {
+  for (const edge of own.edges)
+  {
     const tax = taxonomyOf(String(edge.to));
     if (tax !== undefined) usesSet.add(tax);
   }
@@ -73,18 +79,21 @@ export function deriveBindings(
 }
 
 /** The local (un-dotted) name of an id — for the instance's own id/concept/class. */
-function localName(id: string): string {
+function localName(id: string): string
+{
   const i = id.lastIndexOf(".");
   return i >= 0 ? id.slice(i + 1) : id;
 }
 
-function literal(v: Scalar): string {
+function literal(v: Scalar): string
+{
   return typeof v === "string" ? JSON.stringify(v) : String(v);
 }
 
 /** Shared emit context: node lookup, instanceof map, relationship edges, and the
  * set of ids to render inline (a field-bound contained child). */
-interface EmitCtx {
+interface EmitCtx
+{
   byId: Map<string, JsonNode>;
   instanceOf: Map<string, string>;
   rels: Map<string, Array<{ via: string; to: string }>>;
@@ -93,11 +102,13 @@ interface EmitCtx {
   operators: Map<string, EmitOperator>;
 }
 
-function isClassNode(n: JsonNode): boolean {
+function isClassNode(n: JsonNode): boolean
+{
   return n.isClass === true;
 }
 
-export function emitModelTodl(own: TodlDocument, namespace: string, bindings: ModelBindings, conforms?: string, operators?: Map<string, EmitOperator>): string {
+export function emitModelTodl(own: TodlDocument, namespace: string, bindings: ModelBindings, conforms?: string, operators?: Map<string, EmitOperator>): string
+{
   const instances = own.nodes;
   const classes = instances.filter(isClassNode);
   const concrete = instances.filter((n) => !isClassNode(n));
@@ -105,11 +116,13 @@ export function emitModelTodl(own: TodlDocument, namespace: string, bindings: Mo
   const instanceOf = new Map<string, string>();
   const rels = new Map<string, Array<{ via: string; to: string }>>();
   const containedBy = new Map<string, string>();
-  for (const e of own.edges) {
+  for (const e of own.edges)
+  {
     const from = String(e.from);
     if (e.kind === "InstanceOf") instanceOf.set(from, String(e.to));
     else if (e.kind === "Contains") containedBy.set(String(e.to), from);
-    else if (e.kind === "Relationship" && e.via !== null) {
+    else if (e.kind === "Relationship" && e.via !== null)
+    {
       const list = rels.get(from) ?? [];
       list.push({ via: String(e.via), to: String(e.to) });
       rels.set(from, list);
@@ -121,7 +134,8 @@ export function emitModelTodl(own: TodlDocument, namespace: string, bindings: Mo
   // relationship at it — it is that field's value, so it is rendered inside the
   // parent (with its id) and skipped at top level.
   const inline = new Set<string>();
-  for (const [from, list] of rels) {
+  for (const [from, list] of rels)
+  {
     for (const r of list) if (containedBy.get(r.to) === from && byId.has(r.to)) inline.add(r.to);
   }
   const ctx: EmitCtx = { byId, instanceOf, rels, inline, operators: operators ?? new Map() };
@@ -129,14 +143,16 @@ export function emitModelTodl(own: TodlDocument, namespace: string, bindings: Mo
   const lines: string[] = [`namespace ${namespace}`, "{"];
   for (const ns of bindings.imports) lines.push(`  import ${ns};`);
   for (const n of classes) lines.push(...emitOne(n, ctx, 1));
-  if (concrete.length > 0) {
+  if (concrete.length > 0)
+  {
     const uses = bindings.uses.length > 0 ? ` uses ${bindings.uses.join(", ")}` : "";
     // The model id must be a bare C-like identifier (no dots); a dotted namespace
     // is flattened to camelCase so `acme.app` → `acmeAppModel`.
     const modelId = `${namespace.split(".").map((s, i) => (i === 0 ? s : s.charAt(0).toUpperCase() + s.slice(1))).join("")}Model`;
     const conf = conforms !== undefined ? ` conforms ${conforms}` : "";
     lines.push(`  model ${modelId} : ${bindings.metaModel}${uses}${conf} {`);
-    for (const n of concrete) {
+    for (const n of concrete)
+    {
       if (ctx.inline.has(n.id)) continue; // emitted inline inside its parent
       for (const l of emitOne(n, ctx, 2)) lines.push(l);
     }
@@ -149,7 +165,8 @@ export function emitModelTodl(own: TodlDocument, namespace: string, bindings: Mo
 /** If `node` is a reified edge whose concept has an operator and whose two
  * endpoint members are bound, return `left <glyph> right` plus any non-endpoint
  * body lines; else null. Shared by emitOne (statement) and emitInline (value). */
-function edgeShorthand(node: JsonNode, ctx: EmitCtx, indent: number): { head: string; rest: string[] } | null {
+function edgeShorthand(node: JsonNode, ctx: EmitCtx, indent: number): { head: string; rest: string[] } | null
+{
   const op = ctx.operators.get(node.type ?? "");
   if (op === undefined || isClassNode(node) || ctx.instanceOf.get(node.id) !== undefined) return null;
   const rels = ctx.rels.get(node.id) ?? [];
@@ -175,11 +192,13 @@ function edgeShorthand(node: JsonNode, ctx: EmitCtx, indent: number): { head: st
 }
 
 /** Emit a top-level record (head + braced body) at `indent` (levels of 2 spaces). */
-function emitOne(node: JsonNode, ctx: EmitCtx, indent: number): string[] {
+function emitOne(node: JsonNode, ctx: EmitCtx, indent: number): string[]
+{
   const pad = "  ".repeat(indent);
   // A reified edge whose concept has an operator re-emits as shorthand (design §6).
   const sh = edgeShorthand(node, ctx, indent);
-  if (sh !== null) {
+  if (sh !== null)
+  {
     if (sh.rest.length === 0) return [`${pad}${sh.head};`];
     return [`${pad}${sh.head} {`, ...sh.rest, `${pad}};`];
   }
@@ -197,23 +216,27 @@ function emitOne(node: JsonNode, ctx: EmitCtx, indent: number): string[] {
 
 /** The attr + member lines of a node. `inlineChild` keeps the `id` attr (the
  * object's persisted identity) rather than dropping it as a marker. */
-function emitBody(node: JsonNode, ctx: EmitCtx, indent: number, inlineChild: boolean): string[] {
+function emitBody(node: JsonNode, ctx: EmitCtx, indent: number, inlineChild: boolean): string[]
+{
   const pad = "  ".repeat(indent);
   const lines: string[] = [];
   // Identity is the root `localId` now (SPEC-01); re-emit it for inline children,
   // which persist their own id inside the parent's braces.
   if (inlineChild && node.localId !== null) lines.push(`${pad}id = ${literal(node.localId)};`);
-  for (const [name, value] of Object.entries(node.attrs)) {
+  for (const [name, value] of Object.entries(node.attrs))
+  {
     if (MARKER_ATTRS.has(name)) continue;
     lines.push(`${pad}${name} = ${literal(value as Scalar)};`);
   }
   const byMember = new Map<string, string[]>();
-  for (const r of ctx.rels.get(node.id) ?? []) {
+  for (const r of ctx.rels.get(node.id) ?? [])
+  {
     const list = byMember.get(r.via) ?? [];
     list.push(r.to);
     byMember.set(r.via, list);
   }
-  for (const [member, targets] of byMember) {
+  for (const [member, targets] of byMember)
+  {
     const allInline = targets.length > 0 && targets.every((t) => ctx.inline.has(t) && ctx.byId.has(t));
     const render = allInline
       ? targets.map((t) => emitInline(ctx.byId.get(t)!, ctx, indent))
@@ -226,9 +249,11 @@ function emitBody(node: JsonNode, ctx: EmitCtx, indent: number, inlineChild: boo
 /** Render a field-bound contained child as a value: operator shorthand
  * `left <glyph> right` when it is a reified edge, else an inline object
  * `concept { … }`. */
-function emitInline(node: JsonNode, ctx: EmitCtx, indent: number): string {
+function emitInline(node: JsonNode, ctx: EmitCtx, indent: number): string
+{
   const sh = edgeShorthand(node, ctx, indent);
-  if (sh !== null) {
+  if (sh !== null)
+  {
     if (sh.rest.length === 0) return sh.head;
     return `${sh.head} {\n${sh.rest.join("\n")}\n${"  ".repeat(indent)}}`;
   }

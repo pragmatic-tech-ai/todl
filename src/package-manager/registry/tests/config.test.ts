@@ -5,7 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { resolveRegistryConfig } from "../config.js";
 
-function projectDir(npmrc?: string): string {
+function projectDir(npmrc?: string): string
+{
   const dir = mkdtempSync(join(tmpdir(), "todl-cfg-"));
   if (npmrc !== undefined) writeFileSync(join(dir, ".npmrc"), npmrc);
   return dir;

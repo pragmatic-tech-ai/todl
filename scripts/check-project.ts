@@ -6,9 +6,11 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { check } from "../src/api.js";
 
-function todlFiles(dir: string): string[] {
+function todlFiles(dir: string): string[]
+{
   const out: string[] = [];
-  for (const entry of readdirSync(dir)) {
+  for (const entry of readdirSync(dir))
+  {
     const p = join(dir, entry);
     if (statSync(p).isDirectory()) out.push(...todlFiles(p));
     else if (entry.endsWith(".todl")) out.push(p);
@@ -17,7 +19,8 @@ function todlFiles(dir: string): string[] {
 }
 
 const [metaDir, dataDir, ...libs] = process.argv.slice(2);
-if (metaDir === undefined || dataDir === undefined) {
+if (metaDir === undefined || dataDir === undefined)
+{
   console.error("usage: check-project <metaModelDir> <dataDir> <libFile...>");
   process.exit(2);
 }
@@ -34,7 +37,8 @@ const byCode = new Map<string, number>();
 for (const d of data) byCode.set(d.code, (byCode.get(d.code) ?? 0) + 1);
 console.log(`total: ${diagnostics.length}  data-file: ${data.length}`);
 for (const [code, n] of [...byCode.entries()].sort()) console.log(`  ${code}: ${n}`);
-for (const d of data.slice(0, 40)) {
+for (const d of data.slice(0, 40))
+{
   const u = norm(String(d.span?.uri ?? "")).split("/").pop();
   console.log(`  [${d.code}] ${u}:${d.span?.start?.line ?? "?"}  ${d.message.split("\n")[0].slice(0, 100)}`);
 }

@@ -14,22 +14,26 @@ import { TarReader } from "./registry/tar-reader.js";
 import { resolveRegistryConfig } from "./registry/config.js";
 
 /** Resolves declared deps into ordered base documents (deps-first). */
-export interface BaseResolver {
+export interface BaseResolver
+{
   resolve(directory: string, manifest: ProjectManifest, scope: string): Promise<readonly TodlDocument[]>;
 }
 
 /** Builds the registry client for a project dir + scope. `undefined` → offline. */
 export type RegistryFactory = (directory: string, scope: string) => NpmRegistry | undefined;
 
-export class RegistryBaseResolver implements BaseResolver {
+export class RegistryBaseResolver implements BaseResolver
+{
   constructor(private readonly registryFor: RegistryFactory = RegistryBaseResolver.defaultRegistry) {}
 
   /** Default: a client configured from the project's layered registry config. */
-  private static defaultRegistry(directory: string, scope: string): NpmRegistry {
+  private static defaultRegistry(directory: string, scope: string): NpmRegistry
+  {
     return new NpmRegistry(resolveRegistryConfig(directory, { scope }, process.env));
   }
 
-  async resolve(directory: string, manifest: ProjectManifest, scope: string): Promise<readonly TodlDocument[]> {
+  async resolve(directory: string, manifest: ProjectManifest, scope: string): Promise<readonly TodlDocument[]>
+  {
     const installed = new Map<string, InstalledPackage>();
     for (const pkg of readInstalledPackages(join(directory, "node_modules"))) installed.set(pkg.name, pkg);
 
@@ -38,14 +42,17 @@ export class RegistryBaseResolver implements BaseResolver {
     const collected: InstalledPackage[] = [];
     const seen = new Set<string>();
     const queue = [...roots];
-    while (queue.length > 0) {
+    while (queue.length > 0)
+    {
       const name = queue.shift() as string;
       if (seen.has(name)) continue;
       seen.add(name);
       let pkg = installed.get(name);
-      if (pkg === undefined) {
+      if (pkg === undefined)
+      {
         pkg = registry === undefined ? undefined : await RegistryBaseResolver.fetch(registry, name);
-        if (pkg === undefined) {
+        if (pkg === undefined)
+        {
           throw new Error(`cannot resolve dependency "${name}" (not installed, not on the registry)`);
         }
       }
@@ -58,10 +65,14 @@ export class RegistryBaseResolver implements BaseResolver {
   }
 
   /** Fetch + read a package's tarball; `undefined` if absent or not a TODL package. */
-  private static async fetch(registry: NpmRegistry, name: string): Promise<InstalledPackage | undefined> {
-    try {
+  private static async fetch(registry: NpmRegistry, name: string): Promise<InstalledPackage | undefined>
+  {
+    try
+    {
       return TarReader.readPackage(await registry.getContent({ name }));
-    } catch {
+    }
+    catch
+    {
       return undefined; // 404 / transport failure → treated as unresolvable by the caller
     }
   }

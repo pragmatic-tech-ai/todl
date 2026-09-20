@@ -11,7 +11,8 @@ const SEVERITY: Record<Severity, DiagnosticSeverity> = {
 // the current in-renderer behavior.
 const DOC_START = { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } };
 
-export function mapDiagnostic(d: TodlDiagnostic): Diagnostic {
+export function mapDiagnostic(d: TodlDiagnostic): Diagnostic
+{
   return {
     severity: SEVERITY[d.severity] ?? DiagnosticSeverity.Error,
     message: d.message,
@@ -21,6 +22,7 @@ export function mapDiagnostic(d: TodlDiagnostic): Diagnostic {
   };
 }
 
-export function mapDiagnostics(ds: readonly TodlDiagnostic[]): Diagnostic[] {
+export function mapDiagnostics(ds: readonly TodlDiagnostic[]): Diagnostic[]
+{
   return ds.map(mapDiagnostic);
 }

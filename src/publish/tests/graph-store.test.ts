@@ -4,7 +4,8 @@ import { InMemoryGraphStore } from "../../model/graph-store.js";
 import type { CompiledPackage } from "../publish.js";
 import { GraphPackageStore } from "../stores.js";
 
-function pkg(): CompiledPackage {
+function pkg(): CompiledPackage
+{
   const document = {
     nodes: [
       { id: "ms.a", tier: "Instance", type: "t", metaKind: null, namespace: null, localId: "a", isClass: false, class: null, storageId: null, fields: [], attrs: { label: "A" } },

@@ -2,7 +2,8 @@ import { check, type TodlDocument, type Repository } from "@pragmatic-tech-ai/to
 import type { ExampleSource, GoldenDiagnostic } from "./corpus-types.js";
 import { DeterministicIdGenerator, normalize, selectOwnDocument } from "./verify.js";
 
-export interface DisplayResult {
+export interface DisplayResult
+{
   diagnostics: GoldenDiagnostic[];
   document: TodlDocument;
   ok: boolean;
@@ -12,7 +13,8 @@ export interface DisplayResult {
   provenance: Map<string, string>;
 }
 
-export interface DisplayOptions {
+export interface DisplayOptions
+{
   /** Attach readable debug metadata (kind/name/type/namespace/source, edge
    *  endpoints) to each emitted node/edge — survives id canonicalization. */
   debug?: boolean;
@@ -21,7 +23,8 @@ export interface DisplayOptions {
 /** Compile editor text for on-screen display: canonicalized diagnostics + the
  *  own-nodes document (concepts, taxonomies, terms, models, instances — the same
  *  selection goldens use). Pure — no golden comparison, no filesystem. */
-export function compileForDisplay(sources: ExampleSource[], options?: DisplayOptions): DisplayResult {
+export function compileForDisplay(sources: ExampleSource[], options?: DisplayOptions): DisplayResult
+{
   const idGen = new DeterministicIdGenerator();
   const { model, diagnostics, provenance } = check(sources.map((s) => ({ uri: s.name, text: s.text })), idGen);
   const emit = options?.debug ? { debug: true, provenance } : undefined;

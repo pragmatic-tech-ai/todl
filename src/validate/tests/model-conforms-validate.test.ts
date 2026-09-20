@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { check } from "../../api.js";
 import { DiagnosticCode } from "../../diagnostics/diagnostic.js";
 
-function codes(text: string): DiagnosticCode[] {
+function codes(text: string): DiagnosticCode[]
+{
   return check([{ uri: "t.todl", text: `namespace n {\n${text}\n}` }]).diagnostics.map((d) => d.code);
 }
 

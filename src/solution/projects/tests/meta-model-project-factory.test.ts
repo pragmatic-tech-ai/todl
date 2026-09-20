@@ -13,21 +13,24 @@ import { FakePresentationBaker, FakeProducerBackends } from './fake-producer-sea
 
 const META = 'namespace acme { concept Widget { label : string?; } }'
 
-async function tempDir(t: TestContext): Promise<NodeFsStorage> {
+async function tempDir(t: TestContext): Promise<NodeFsStorage>
+{
     const dir = await mkdtemp(join(tmpdir(), 'todl-mm-'))
     t.after(async () => { await rm(dir, { recursive: true, force: true }) })
     return new NodeFsStorage(dir)
 }
 
 // A provider wiring the two producer seams to the given fakes.
-function providerWith(baker: FakePresentationBaker, metaBackend: IStorage, libBackend: IStorage): ServiceProvider {
+function providerWith(baker: FakePresentationBaker, metaBackend: IStorage, libBackend: IStorage): ServiceProvider
+{
     const p = new ServiceProvider()
     p.registerInstance(PresentationBakerKey, baker)
     p.registerInstance(ProducerBackendsKey, new FakeProducerBackends(metaBackend, libBackend))
     return p
 }
 
-function factory(provider: ServiceProvider = new ServiceProvider()): MetaModelProjectFactory {
+function factory(provider: ServiceProvider = new ServiceProvider()): MetaModelProjectFactory
+{
     return new MetaModelProjectFactory(provider)
 }
 

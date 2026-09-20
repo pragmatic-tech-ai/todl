@@ -4,7 +4,8 @@ import assert from "node:assert/strict";
 import { Graph, Tier, EdgeKind, Direction, type Node } from "../graph.js";
 import { MetaKind } from "../kinds.js";
 
-function ontologyNode(id: string): Node {
+function ontologyNode(id: string): Node
+{
   return {
     id,
     tier: Tier.Ontology,
@@ -20,7 +21,8 @@ function ontologyNode(id: string): Node {
   };
 }
 
-function instanceNode(id: string, type: string): Node {
+function instanceNode(id: string, type: string): Node
+{
   return {
     id,
     tier: Tier.Instance,
@@ -37,7 +39,8 @@ function instanceNode(id: string, type: string): Node {
 }
 
 /** component <- frontend <- spa, via Extends edges (subtype -> supertype). */
-function lattice(): Graph {
+function lattice(): Graph
+{
   const graph = new Graph();
   graph.addNode(ontologyNode("component"));
   graph.addNode(ontologyNode("frontend"));

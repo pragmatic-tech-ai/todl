@@ -22,36 +22,43 @@ import {
 } from "./graph.js";
 import type { Repository } from "./model.js";
 
-export enum PropertyChangeKind {
+export enum PropertyChangeKind
+{
   Set,
   Cleared,
 }
 
-export interface PropertyChangedArgs {
+export interface PropertyChangedArgs
+{
   property: string;
   kind: PropertyChangeKind;
 }
 
-export interface INotifyPropertyChanged {
+export interface INotifyPropertyChanged
+{
   readonly propertyChanged: Signal<PropertyChangedArgs>;
 }
 
-export enum CollectionChangeKind {
+export enum CollectionChangeKind
+{
   Added,
   Removed,
 }
 
-export interface CollectionChangedArgs {
+export interface CollectionChangedArgs
+{
   property: string;
   kind: CollectionChangeKind;
   item: NodeId;
 }
 
-export interface INotifyCollectionChanged {
+export interface INotifyCollectionChanged
+{
   readonly collectionChanged: Signal<CollectionChangedArgs>;
 }
 
-export class ReactiveNode implements INotifyPropertyChanged, INotifyCollectionChanged {
+export class ReactiveNode implements INotifyPropertyChanged, INotifyCollectionChanged
+{
   readonly propertyChanged = new Signal<PropertyChangedArgs>();
   readonly collectionChanged = new Signal<CollectionChangedArgs>();
   private readonly subscription: Disposable;
@@ -59,15 +66,18 @@ export class ReactiveNode implements INotifyPropertyChanged, INotifyCollectionCh
   constructor(
     private readonly model: Repository,
     readonly id: NodeId,
-  ) {
-    if (model.resolve(id) === undefined) {
+  )
+  {
+    if (model.resolve(id) === undefined)
+    {
       throw new Error(`node "${id}" does not exist`);
     }
     this.subscription = model.changed.subscribe((change) => this.onChange(change));
   }
 
   /** Read a property by name: a scalar attr, or the ids of its forward relationship edges. */
-  get(name: string): Scalar | NodeId[] | undefined {
+  get(name: string): Scalar | NodeId[] | undefined
+  {
     const node = this.model.resolve(this.id);
     if (node === undefined) return undefined;
     const scalar = node.attrs.get(name);
@@ -76,26 +86,32 @@ export class ReactiveNode implements INotifyPropertyChanged, INotifyCollectionCh
     return targets.length > 0 ? targets : undefined;
   }
 
-  dispose(): void {
+  dispose(): void
+  {
     this.subscription.dispose();
   }
 
-  private onChange(change: GraphChangeArgs): void {
+  private onChange(change: GraphChangeArgs): void
+  {
     if (change.node !== this.id || change.property === null) return;
 
-    if (this.isCollection(change.property)) {
+    if (this.isCollection(change.property))
+    {
       if (change.target === null) return;
       const kind =
         change.kind === GraphChangeKind.EdgeRemoved ? CollectionChangeKind.Removed : CollectionChangeKind.Added;
       this.collectionChanged.emit({ property: change.property, kind, item: change.target });
-    } else {
+    }
+    else
+    {
       const kind =
         change.kind === GraphChangeKind.EdgeRemoved ? PropertyChangeKind.Cleared : PropertyChangeKind.Set;
       this.propertyChanged.emit({ property: change.property, kind });
     }
   }
 
-  private isCollection(name: string): boolean {
+  private isCollection(name: string): boolean
+  {
     const concept = this.model.resolve(this.id)?.type;
     if (concept === undefined || concept === null) return false;
     const schema = this.model.effectiveSchema(concept);

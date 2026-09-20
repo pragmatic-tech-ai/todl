@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { check } from "../../api.js";
 import { Severity } from "../../diagnostics/diagnostic.js";
 
-function errors(src: string) {
+function errors(src: string)
+{
   return check([{ uri: "n.todl", text: src }]).diagnostics.filter((d) => d.severity === Severity.Error);
 }
 

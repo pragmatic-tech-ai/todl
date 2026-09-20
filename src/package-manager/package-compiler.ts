@@ -23,13 +23,16 @@ import { toPackageJson, DEFAULT_SCOPE, type PackageJson, type TodlPackageMeta } 
 import { RegistryBaseResolver, type BaseResolver } from "./base-resolver.js";
 
 /** Reads a project directory → manifest + .todl sources. */
-export interface ProjectReader {
+export interface ProjectReader
+{
   read(directory: string): Project;
 }
 
 /** The default reader: node:fs, via the existing `readProject`. */
-export class NodeProjectReader implements ProjectReader {
-  read(directory: string): Project {
+export class NodeProjectReader implements ProjectReader
+{
+  read(directory: string): Project
+  {
     return readProject(directory);
   }
 }
@@ -37,14 +40,16 @@ export class NodeProjectReader implements ProjectReader {
 /** Makes the output sink for a directory. */
 export type SinkFactory = (outDir: string) => PackageSink;
 
-export interface CompileOptions {
+export interface CompileOptions
+{
   /** npm scope override. Default: DEFAULT_SCOPE. */
   scope?: string;
   /** Output directory. Default: `<directory>/dist`. */
   outDir?: string;
 }
 
-export interface CompileResult {
+export interface CompileResult
+{
   ok: boolean;
   diagnostics: readonly Diagnostic[];
   errors: readonly Diagnostic[];
@@ -54,18 +59,21 @@ export interface CompileResult {
   package?: CompiledPackage;
 }
 
-export interface PackageCompilerDeps {
+export interface PackageCompilerDeps
+{
   reader?: ProjectReader;
   resolver?: BaseResolver;
   createSink?: SinkFactory;
 }
 
-export class PackageCompiler {
+export class PackageCompiler
+{
   private readonly reader: ProjectReader;
   private readonly resolver: BaseResolver;
   private readonly createSink: SinkFactory;
 
-  constructor(deps: PackageCompilerDeps = {}) {
+  constructor(deps: PackageCompilerDeps = {})
+  {
     this.reader = deps.reader ?? new NodeProjectReader();
     this.resolver = deps.resolver ?? new RegistryBaseResolver();
     this.createSink = deps.createSink ?? ((dir) => new FileSink(dir));
@@ -73,7 +81,8 @@ export class PackageCompiler {
 
   /** Read → resolve deps → compile → emit. Writes nothing on a failing compile.
    *  Throws for an architecture manifest and for an unresolvable dependency. */
-  async compile(directory: string, options: CompileOptions = {}): Promise<CompileResult> {
+  async compile(directory: string, options: CompileOptions = {}): Promise<CompileResult>
+  {
     const project = this.reader.read(directory);
     const scope = options.scope ?? DEFAULT_SCOPE;
     const packageJson = toPackageJson(project.manifest, { scope }); // throws on an architecture
@@ -81,7 +90,8 @@ export class PackageCompiler {
 
     const identity: PackageIdentity = { id: packageJson.todl.id, version: packageJson.version, name: project.manifest.name };
     const outcome = compilePackage(bases, project.sources, identity, this.dependencyRefs(project.manifest));
-    if (!outcome.ok || outcome.package === undefined) {
+    if (!outcome.ok || outcome.package === undefined)
+    {
       return { ok: false, diagnostics: outcome.diagnostics, errors: outcome.errors };
     }
 
@@ -91,19 +101,23 @@ export class PackageCompiler {
   }
 
   /** The pinned dependency refs a manifest declares, as `PackageRef`s. */
-  private dependencyRefs(manifest: ProjectManifest): PackageRef[] {
+  private dependencyRefs(manifest: ProjectManifest): PackageRef[]
+  {
     const refs: PackageRef[] = [];
-    if (manifest.metaModel !== undefined) {
+    if (manifest.metaModel !== undefined)
+    {
       refs.push({ kind: PackageKind.MetaModel, id: manifest.metaModel.id, version: manifest.metaModel.version });
     }
-    for (const library of manifest.libraries ?? []) {
+    for (const library of manifest.libraries ?? [])
+    {
       refs.push({ kind: PackageKind.Library, id: library.id, version: library.version });
     }
     return refs;
   }
 
   /** Write the npm package layout, returning the package-relative paths written. */
-  private async emit(sink: PackageSink, pkg: CompiledPackage, packageJson: PackageJson, resources: readonly ResourceFile[]): Promise<string[]> {
+  private async emit(sink: PackageSink, pkg: CompiledPackage, packageJson: PackageJson, resources: readonly ResourceFile[]): Promise<string[]>
+  {
     const files: string[] = [];
     const write = async (path: string, content: string): Promise<void> => {
       await sink.writeText(path, content);
@@ -117,7 +131,8 @@ export class PackageCompiler {
     // Every non-`.todl` project file, packed verbatim under `resources/` so the
     // package carries what it needs to work (mural resources, images, docs).
     // Binary-safe when the sink supports it; falls back to a text write.
-    for (const r of resources) {
+    for (const r of resources)
+    {
       const path = `resources/${r.path}`;
       if (sink.writeBytes !== undefined) await sink.writeBytes(path, r.bytes);
       else await sink.writeText(path, new TextDecoder().decode(r.bytes));
@@ -128,7 +143,8 @@ export class PackageCompiler {
 
   /** The embedded handle module: the compiled `model.json` inlined as a
    *  browser-safe ES module (importing the package yields its document, no I/O). */
-  private static handleModule(document: TodlDocument, meta: TodlPackageMeta): string {
+  private static handleModule(document: TodlDocument, meta: TodlPackageMeta): string
+  {
     return [
       "// Generated TODL package handle. The compiled model.json is inlined so that",
       "// importing this package yields its document with no I/O (browser-safe).",
@@ -140,7 +156,8 @@ export class PackageCompiler {
   }
 
   /** Types for the handle module (the richer typed-class bridge is a later increment). */
-  private static handleTypes(): string {
+  private static handleTypes(): string
+  {
     return [
       "export declare const document: unknown;",
       "export declare const meta: { kind: string; id: string };",

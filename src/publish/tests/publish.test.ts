@@ -4,7 +4,8 @@ import type { CompiledPackage } from "../publish.js";
 import { publish } from "../publish.js";
 import type { PackageStore } from "../stores.js";
 
-function spyStore() {
+function spyStore()
+{
   const seen: CompiledPackage[] = [];
   const store: PackageStore = { persist: async (p) => void seen.push(p) };
   return { store, seen };

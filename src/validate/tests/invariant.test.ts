@@ -7,7 +7,8 @@ import { DiagnosticCode } from "../validate.js";
 import { THIS, NONE, member, implies, neq, isIn } from "../../predicate/ast.js";
 
 /** component with the "location covered by implementing tech" invariant. */
-function coveredModel(): Repository {
+function coveredModel(): Repository
+{
   const model = new Repository();
   model
     .builder()
@@ -30,7 +31,8 @@ function coveredModel(): Repository {
   return model;
 }
 
-function invariantDiagnostics(model: Repository) {
+function invariantDiagnostics(model: Repository)
+{
   return model.validate().filter((diagnostic) => diagnostic.code === DiagnosticCode.InvariantFailed);
 }
 

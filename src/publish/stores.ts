@@ -11,13 +11,15 @@ import type { GraphStore } from "../model/graph-store.js";
 import type { CompiledPackage } from "./publish.js";
 
 /** Where and how a compiled package is persisted. */
-export interface PackageStore {
+export interface PackageStore
+{
   persist(pkg: CompiledPackage): Promise<void>;
 }
 
 /** The blob seam a file/object backend implements (a consumer adapts its own
  *  storage to it). Publish emits only text; `writeBytes` is optional. */
-export interface PackageSink {
+export interface PackageSink
+{
   writeText(path: string, content: string): Promise<void>;
   writeBytes?(path: string, bytes: Uint8Array): Promise<void>;
 }
@@ -25,16 +27,19 @@ export interface PackageSink {
 const defaultLayout = (id: string, version: string): string => `${id}/${version}`;
 
 /** Persist a package as blobs: `<base>/model.json` + `<base>/src/<uri>`. */
-export class BlobPackageStore implements PackageStore {
+export class BlobPackageStore implements PackageStore
+{
   private readonly layout: (id: string, version: string) => string;
   constructor(
     private readonly sink: PackageSink,
     opts?: { layout?: (id: string, version: string) => string },
-  ) {
+  )
+  {
     this.layout = opts?.layout ?? defaultLayout;
   }
 
-  async persist(pkg: CompiledPackage): Promise<void> {
+  async persist(pkg: CompiledPackage): Promise<void>
+  {
     const base = this.layout(pkg.id, pkg.version);
     await this.sink.writeText(`${base}/model.json`, JSON.stringify(pkg.document, null, 2));
     for (const s of pkg.sources) await this.sink.writeText(`${base}/src/${s.uri}`, s.text);
@@ -43,10 +48,12 @@ export class BlobPackageStore implements PackageStore {
 
 /** Persist a package's compiled graph into a GraphStore — the Cypher/Dgraph
  *  sibling of BlobPackageStore. Sources are not written: the graph IS the store. */
-export class GraphPackageStore implements PackageStore {
+export class GraphPackageStore implements PackageStore
+{
   constructor(private readonly store: GraphStore) {}
 
-  async persist(pkg: CompiledPackage): Promise<void> {
+  async persist(pkg: CompiledPackage): Promise<void>
+  {
     const graph = graphFromJSON(pkg.document);
     // All nodes first — addEdge requires both endpoints to already exist. Each
     // Node already carries its attrs, so no separate setAttr pass is needed.

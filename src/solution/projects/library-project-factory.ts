@@ -35,7 +35,8 @@ import { LIBRARY_CLAUDE_ROOT } from './scaffold.generated.js'
 // (mural-coupled) and backend resolution (app-coupled) are reached through the
 // IPresentationBaker / IProducerBackends seams. All persistence flows through the
 // project's rooted IStorage.
-interface LibraryManifest extends ProjectManifestEnvelope {
+interface LibraryManifest extends ProjectManifestEnvelope
+{
     id: string             // stable publish identity, defaults to slugify(name)
     libVersion: string     // published version, defaults to '0.1.0'
     metaModel?: BaseRef    // the meta-model this library is authored against
@@ -43,7 +44,8 @@ interface LibraryManifest extends ProjectManifestEnvelope {
 }
 
 export class LibraryProjectFactory extends TodlProjectFactory
-    implements IPublishableProjectFactory, IProducerProjectFactory, IPresentationProjectFactory, IVersionedProjectFactory {
+    implements IPublishableProjectFactory, IProducerProjectFactory, IPresentationProjectFactory, IVersionedProjectFactory
+    {
     public static readonly Key = new ServiceKey<LibraryProjectFactory>('LibraryProjectFactory')
     public static readonly ProjectType = 'library'
 
@@ -65,7 +67,8 @@ export class LibraryProjectFactory extends TodlProjectFactory
 
     constructor(provider: IServiceProvider) { super(provider) }
 
-    protected buildManifest(name: string, bindings?: BaseBindings): ProjectManifestEnvelope {
+    protected buildManifest(name: string, bindings?: BaseBindings): ProjectManifestEnvelope
+    {
         const manifest: LibraryManifest = {
             type: LibraryProjectFactory.ProjectType, name, version: 1,
             id: LibraryProjectFactory.slugify(name), libVersion: '0.1.0',
@@ -76,16 +79,19 @@ export class LibraryProjectFactory extends TodlProjectFactory
 
     // The library's own scaffold (its CLAUDE.md); the shared TODL manual + rules are
     // added by the base.
-    protected scaffoldContributions(): readonly ScaffoldFile[] {
+    protected scaffoldContributions(): readonly ScaffoldFile[]
+    {
         return [{ path: CLAUDE_MD_FILENAME, content: LIBRARY_CLAUDE_ROOT }]
     }
 
-    public async getVersion(storage: IStorage): Promise<string> {
+    public async getVersion(storage: IStorage): Promise<string>
+    {
         const manifest = JSON.parse(await storage.ReadText(PROJECT_MANIFEST_FILENAME)) as LibraryManifest
         return manifest.libVersion
     }
 
-    public async setVersion(storage: IStorage, version: string): Promise<void> {
+    public async setVersion(storage: IStorage, version: string): Promise<void>
+    {
         const manifest = JSON.parse(await storage.ReadText(PROJECT_MANIFEST_FILENAME)) as LibraryManifest
         manifest.libVersion = version
         await storage.WriteText(PROJECT_MANIFEST_FILENAME, JSON.stringify(manifest, null, 2))
@@ -97,7 +103,8 @@ export class LibraryProjectFactory extends TodlProjectFactory
         storage: IStorage,
         bases: TodlDocument[],
         _provider: IServiceProvider,
-    ): Promise<{ doc: TodlDocument; problems: string[] }> {
+    ): Promise<{ doc: TodlDocument; problems: string[] }>
+    {
         const sources = await TodlSources.CollectTaxonomy(storage)
         const { model, diagnostics } = checkAgainst(bases, sources)
         const problems = diagnostics
@@ -109,7 +116,8 @@ export class LibraryProjectFactory extends TodlProjectFactory
     // Validate every taxonomy `.todl` (samples/ excluded) against the bound meta-model;
     // if clean, emit model.json + library.json + the sources, and copy the resource
     // folders into the libraries backend under `<id>/<libVersion>/`.
-    public async publish(_project: Project, storage: IStorage, provider: IServiceProvider): Promise<PublishResult> {
+    public async publish(_project: Project, storage: IStorage, provider: IServiceProvider): Promise<PublishResult>
+    {
         const manifest = JSON.parse(await storage.ReadText(PROJECT_MANIFEST_FILENAME)) as LibraryManifest
         if (manifest.metaModel === undefined)
             return { ok: false, message: 'Set a meta-model binding before publishing.' }
@@ -142,7 +150,8 @@ export class LibraryProjectFactory extends TodlProjectFactory
 
         const classes: PublishedClass[] = pkg.classes.map((c) => ({ ...c }))
         const scanned = await LibraryResources.Scan(storage, classes.map((c) => c.id))
-        for (const c of classes) {
+        for (const c of classes)
+        {
             const r = scanned.byClass.get(c.id)
             if (r?.template) c.template = r.template
             if (r?.thumbnail) c.thumbnail = r.thumbnail
@@ -200,7 +209,8 @@ export class LibraryProjectFactory extends TodlProjectFactory
     // Capability entry point (the "Generate Presentation" command): compile the library's
     // taxonomy .todl against its bound meta-model, then write the presentation dictionary.
     // No .todl / unbound or unresolvable base / TODL error → no-op.
-    public async regeneratePresentation(storage: IStorage, colored: boolean): Promise<void> {
+    public async regeneratePresentation(storage: IStorage, colored: boolean): Promise<void>
+    {
         const sources = await TodlSources.CollectTaxonomy(storage)
         if (sources.length === 0) return
         const manifest = JSON.parse(await storage.ReadText(PROJECT_MANIFEST_FILENAME)) as LibraryManifest
@@ -213,7 +223,8 @@ export class LibraryProjectFactory extends TodlProjectFactory
         await this.writePresentation(storage, toJSON(model), colored)
     }
 
-    private async writePresentation(storage: IStorage, doc: TodlDocument, colored: boolean): Promise<void> {
+    private async writePresentation(storage: IStorage, doc: TodlDocument, colored: boolean): Promise<void>
+    {
         await storage.WriteText(
             LibraryProjectFactory.PRESENTATION_FILE,
             PresentationModel.GenerateAssets(doc, LibraryProjectFactory.DICT_NAME, colored))
@@ -223,10 +234,12 @@ export class LibraryProjectFactory extends TodlProjectFactory
     // `<destBase>/<folder>/…`. Text formats (.mural/.md/.todl) copy as text; everything
     // else (images) as bytes. A missing folder lists as empty, so this is a no-op when
     // the project doesn't use that folder.
-    private async copyResourceFolder(src: IStorage, dest: IStorage, folder: string, destBase: string): Promise<number> {
+    private async copyResourceFolder(src: IStorage, dest: IStorage, folder: string, destBase: string): Promise<number>
+    {
         let count = 0
         const walk = async (dir: string): Promise<void> => {
-            for (const e of await src.List(dir)) {
+            for (const e of await src.List(dir))
+            {
                 const rel = `${dir}/${e.Name}`
                 if (e.IsDirectory) { await walk(rel); continue }
                 const destPath = `${destBase}/${rel}`
@@ -240,12 +253,14 @@ export class LibraryProjectFactory extends TodlProjectFactory
     }
 
     // Text resource formats copy as text; all others (images) as bytes.
-    private static isTextResource(name: string): boolean {
+    private static isTextResource(name: string): boolean
+    {
         const ext = TodlSources.Extname(name)
         return ext === '.mural' || ext === '.md' || ext === '.todl'
     }
 
-    private static slugify(name: string): string {
+    private static slugify(name: string): string
+    {
         return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'library'
     }
 }

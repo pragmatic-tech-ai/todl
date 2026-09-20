@@ -13,11 +13,13 @@ let cachedNames: ReadonlySet<string> | undefined;
  *  embedded (generated from prelude.todl) so it survives bundling to a single
  *  file, where import.meta.url / sibling-file reads break. Throws if the
  *  prelude itself is malformed — a build/authoring error, not a user one. */
-export function preludeDocument(): TodlDocument {
+export function preludeDocument(): TodlDocument
+{
   if (cached !== undefined) return cached;
   const { model, diagnostics } = load([{ uri: "todl:prelude", text: PRELUDE_SOURCE }]);
   const errors = diagnostics.filter((d) => d.severity === Severity.Error);
-  if (errors.length > 0) {
+  if (errors.length > 0)
+  {
     throw new Error(`TODL prelude failed to compile: ${errors.map((d) => d.message).join("; ")}`);
   }
   cached = toJSON(model);
@@ -25,7 +27,8 @@ export function preludeDocument(): TodlDocument {
 }
 
 /** The bare ids the prelude defines — used to flag user redeclarations. */
-export function preludeNames(): ReadonlySet<string> {
+export function preludeNames(): ReadonlySet<string>
+{
   if (cachedNames !== undefined) return cachedNames;
   cachedNames = new Set(preludeDocument().nodes.map((n) => n.id));
   return cachedNames;

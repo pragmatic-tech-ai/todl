@@ -5,7 +5,8 @@ import { Cardinality } from "../enums.js";
 
 describe("CardinalityGlyph (SPEC-03 §logical) — enum ↔ wire glyph", () => {
   test("round-trips all four cardinalities", () => {
-    for (const c of [Cardinality.One, Cardinality.Optional, Cardinality.Many, Cardinality.OneOrMore]) {
+    for (const c of [Cardinality.One, Cardinality.Optional, Cardinality.Many, Cardinality.OneOrMore])
+    {
       assert.equal(CardinalityGlyph.fromGlyph(CardinalityGlyph.toGlyph(c)), c);
     }
   });
@@ -20,7 +21,8 @@ describe("CardinalityGlyph (SPEC-03 §logical) — enum ↔ wire glyph", () => {
 
 // A hand-built manifest: Element <- Component <- Surface; Component declares
 // name + color, Surface overrides color; class Components.Surface fixes color.
-function fixture(): ManifestModel {
+function fixture(): ManifestModel
+{
   const data: LogicalManifest = {
     format: "todl-manifest/1",
     model: "shop",

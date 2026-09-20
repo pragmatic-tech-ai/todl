@@ -12,12 +12,14 @@ import type { Diagnostic } from "../diagnostics/diagnostic.js";
 import type { ModelDraft } from "./model-draft.js";
 
 /** Read/write the underlying file. Back it with node:fs, Plexus IStorage, etc. */
-export interface FileIO {
+export interface FileIO
+{
   read(): Promise<string>;
   write(content: string): Promise<void>;
 }
 
-export class TodlFileStore {
+export class TodlFileStore
+{
   constructor(
     private readonly io: FileIO,
     private readonly bases: readonly Repository[],
@@ -25,12 +27,14 @@ export class TodlFileStore {
   ) {}
 
   /** Serialize the draft to `.todl` and write it. */
-  async save(draft: ModelDraft): Promise<void> {
+  async save(draft: ModelDraft): Promise<void>
+  {
     await this.io.write(draft.toTodl());
   }
 
   /** Read the `.todl` and reparse it against the bases. */
-  async load(): Promise<{ model: Repository; diagnostics: Diagnostic[] }> {
+  async load(): Promise<{ model: Repository; diagnostics: Diagnostic[] }>
+  {
     const text = await this.io.read();
     return checkAgainst(
       this.bases.map((b) => toJSON(b)),

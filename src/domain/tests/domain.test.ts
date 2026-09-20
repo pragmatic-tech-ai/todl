@@ -11,7 +11,8 @@ import type { ReflectedNode } from "../../manifest/reflection/reflection.js";
 // ── manifest builders ───────────────────────────────────────────────────
 
 // A trivial single-concept manifest via the SPEC-03→04 bridge.
-function soloManifest(model: string, concept: string): ManifestJson {
+function soloManifest(model: string, concept: string): ManifestJson
+{
   const logical: LogicalManifest = {
     format: "todl-manifest/1", model, version: "1.0.0", root: "Element",
     concepts: {
@@ -28,7 +29,8 @@ function soloManifest(model: string, concept: string): ManifestJson {
 }
 
 // Manifest "b" defines Base; manifest "a" has Sub extends b:Base via Imports+TypeRef.
-function manifestB(): ManifestJson {
+function manifestB(): ManifestJson
+{
   const w = new ManifestWriter("b", "1.0.0");
   const base = w.addTypeInfo({
     name: w.internString("Base"), ns: 0, kind: MetaKind.Concept,
@@ -37,7 +39,8 @@ function manifestB(): ManifestJson {
   w.setRoot(base);
   return w.toJSON();
 }
-function manifestA(): ManifestJson {
+function manifestA(): ManifestJson
+{
   const w = new ManifestWriter("a", "1.0.0");
   const imp = w.addImport({ model: w.internString("b"), version: w.internString("1.0.0") });
   const ref = w.addTypeRef({ import: imp, name: w.internString("Base") });
@@ -52,22 +55,26 @@ function manifestA(): ManifestJson {
 
 // ── a fake package source (no network) ──────────────────────────────────
 
-class FakeSource implements PackageSource {
+class FakeSource implements PackageSource
+{
   private readonly pkgs = new Map<string, ResolvedPackage>();
 
-  register(model: string, version: string, manifest: ManifestJson, deps: PackageRef[] = [], seed?: ResolvedPackage["seed"]): void {
+  register(model: string, version: string, manifest: ManifestJson, deps: PackageRef[] = [], seed?: ResolvedPackage["seed"]): void
+  {
     const pkg: ResolvedPackage = { ref: { model, version }, manifest, dependencies: deps };
     if (seed !== undefined) pkg.seed = seed;
     this.pkgs.set(`${model}@${version}`, pkg);
   }
 
-  async resolve(ref: PackageRef): Promise<ResolvedPackage> {
+  async resolve(ref: PackageRef): Promise<ResolvedPackage>
+  {
     const found = this.pkgs.get(`${ref.model}@${ref.version}`);
     if (found === undefined) throw new Error(`unknown package ${ref.model}@${ref.version}`);
     return found;
   }
 
-  async versions(model: string): Promise<readonly string[]> {
+  async versions(model: string): Promise<readonly string[]>
+  {
     return [...this.pkgs.keys()].filter((k) => k.startsWith(`${model}@`)).map((k) => k.split("@")[1]!);
   }
 }

@@ -14,8 +14,10 @@ import { ArchitectureProjectFactory } from './architecture-project-factory.js';
 // It is a provider-taking subclass of the generic ProjectFactoryRegistry so the
 // `.services:` `Impl -> Token` markup can register it as `(p) => new Impl(p)`; the
 // base stays list-based (a test or another host composes any factory set).
-export class DefaultProjectFactoryRegistry extends ProjectFactoryRegistry {
-    constructor(provider: IServiceProvider) {
+export class DefaultProjectFactoryRegistry extends ProjectFactoryRegistry
+{
+    constructor(provider: IServiceProvider)
+    {
         super([
             provider.getRequired(MetaModelProjectFactory.Key),
             provider.getRequired(LibraryProjectFactory.Key),

@@ -5,14 +5,16 @@
  */
 
 /** The kind of TODL project a manifest describes. */
-export enum ProjectType {
+export enum ProjectType
+{
   MetaModel = "meta-model",
   Library = "library",
   Architecture = "architecture",
 }
 
 /** A pinned dependency on another TODL package — id + exact version (no ranges). */
-export interface DependencyRef {
+export interface DependencyRef
+{
   id: string;
   version: string;
 }
@@ -23,7 +25,8 @@ export interface DependencyRef {
  * `metaModel`; an architecture carries `metaModel` + `libraries` (and is not
  * published — it is built by the application build system).
  */
-export interface ProjectManifest {
+export interface ProjectManifest
+{
   type: ProjectType;
   name: string;
   /** The `project.plexus` format version — NOT the package version. */
@@ -41,6 +44,7 @@ export interface ProjectManifest {
 }
 
 /** Parse a `project.plexus` JSON string into a typed manifest. */
-export function parseManifest(json: string): ProjectManifest {
+export function parseManifest(json: string): ProjectManifest
+{
   return JSON.parse(json) as ProjectManifest;
 }

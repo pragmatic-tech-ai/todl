@@ -4,7 +4,8 @@ import assert from "node:assert/strict";
 import { parse } from "../parser.js";
 import { DeclKind, ValueKind, type ModelDecl, type ObjectValue } from "../ast.js";
 
-function firstInstanceAssignments(text: string) {
+function firstInstanceAssignments(text: string)
+{
   const model = parse(text).namespace.declarations.find((d) => d.kind === DeclKind.Model) as ModelDecl;
   return model.instances[0]!.assignments;
 }

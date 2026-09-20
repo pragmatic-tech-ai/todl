@@ -10,7 +10,8 @@ import { ArchitectureProjectFactory } from '../architecture-project-factory.js';
 // static Keys and indexes them by typeId — the exact set SolutionServicesEngine
 // registers, so a host that composes the engine gets meta-model / library /
 // architecture with no app-side wiring.
-function providerWithFactories(): ServiceProvider {
+function providerWithFactories(): ServiceProvider
+{
     const provider = new ServiceProvider();
     provider.register(MetaModelProjectFactory.Key, (p) => new MetaModelProjectFactory(p));
     provider.register(LibraryProjectFactory.Key, (p) => new LibraryProjectFactory(p));

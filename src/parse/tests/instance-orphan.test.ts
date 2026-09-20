@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { load as loadFiles } from "../loader.js";
 import { DiagnosticCode } from "../../validate/validate.js";
 
-function diags(text: string) {
+function diags(text: string)
+{
   return loadFiles([{ uri: "s.todl", text }]).diagnostics;
 }
 

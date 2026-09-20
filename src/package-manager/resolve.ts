@@ -12,7 +12,8 @@ import { TODL, type Graph } from "../runtime/index.js";
 
 /** One installed TODL package: its npm name, `todl` block, npm dependency names,
  *  and its compiled `model.json`. */
-export interface InstalledPackage {
+export interface InstalledPackage
+{
   name: string;
   meta: TodlPackageMeta;
   dependencies: string[];
@@ -20,7 +21,8 @@ export interface InstalledPackage {
 }
 
 /** A resolved dependency closure, split by kind in dependency-first order. */
-export interface ResolvedClosure {
+export interface ResolvedClosure
+{
   metaModels: TodlDocument[];
   libraries: TodlDocument[];
   /** Resolved package names in load order (deps before dependents). */
@@ -28,7 +30,8 @@ export interface ResolvedClosure {
 }
 
 /** The npm package names a manifest depends on (meta-model + libraries), scoped. */
-export function dependencyNames(manifest: ProjectManifest, scope: string = DEFAULT_SCOPE): string[] {
+export function dependencyNames(manifest: ProjectManifest, scope: string = DEFAULT_SCOPE): string[]
+{
   const names: string[] = [];
   if (manifest.metaModel !== undefined) names.push(`${scope}/${manifest.metaModel.id}`);
   for (const library of manifest.libraries ?? []) names.push(`${scope}/${library.id}`);
@@ -41,13 +44,16 @@ export function dependencyNames(manifest: ProjectManifest, scope: string = DEFAU
  * package — two packages claiming the same `todl.id` is an error, not a silent pick.
  * A dependency name absent from the installed set is a non-TODL npm dep and ignored.
  */
-export function resolveClosure(packages: readonly InstalledPackage[], rootDeps: readonly string[]): ResolvedClosure {
+export function resolveClosure(packages: readonly InstalledPackage[], rootDeps: readonly string[]): ResolvedClosure
+{
   const byName = new Map(packages.map((p) => [p.name, p]));
 
   const byId = new Map<string, InstalledPackage>();
-  for (const p of packages) {
+  for (const p of packages)
+  {
     const existing = byId.get(p.meta.id);
-    if (existing !== undefined && existing.name !== p.name) {
+    if (existing !== undefined && existing.name !== p.name)
+    {
       throw new Error(`two packages claim TODL id "${p.meta.id}": ${existing.name} and ${p.name}`);
     }
     byId.set(p.meta.id, p);
@@ -74,6 +80,7 @@ export function resolveClosure(packages: readonly InstalledPackage[], rootDeps: 
 }
 
 /** Compose a resolved closure into a runtime schema `Graph`. */
-export function composeClosure(closure: ResolvedClosure): Graph {
+export function composeClosure(closure: ResolvedClosure): Graph
+{
   return TODL.ComposeGraph(closure.metaModels, closure.libraries);
 }

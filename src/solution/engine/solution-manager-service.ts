@@ -20,7 +20,8 @@ import { type Diagnostic } from '../../diagnostics/diagnostic.js';
 // Owns exactly ONE active solution (the Visual Studio .sln model): create a new
 // empty solution, open/save/close one, and keep a recent-solutions list. Opening
 // a solution opens ALL its member projects.
-export class SolutionManagerService extends ServiceBase {
+export class SolutionManagerService extends ServiceBase
+{
     public static readonly Key = new ServiceKey<SolutionManagerService>('SolutionManager');
 
     // The host services are resolved from the container by these keys — the app
@@ -65,7 +66,8 @@ export class SolutionManagerService extends ServiceBase {
     private readonly packages: PackageSource;
     private readonly notifications: INotificationService | undefined;
 
-    constructor(provider: IServiceProvider) {
+    constructor(provider: IServiceProvider)
+    {
         super(provider);
         this.storages = provider.getRequired(SolutionManagerService.StorageRegistryKey);
         this.factories = provider.getRequired(SolutionManagerService.ProjectFactoryRegistryKey);
@@ -82,7 +84,8 @@ export class SolutionManagerService extends ServiceBase {
     // The bag the SessionStore persists: the last-active solution's location and the
     // recent-solutions list. The accessors read/write this manager's own fields, so a
     // restore (bag.SetValue on load) seeds them and a change (pushRecent) notifies.
-    private buildSessionBag(): MapPropertyBag {
+    private buildSessionBag(): MapPropertyBag
+    {
         const accessors = new Map<string, PropertyAccessor>();
         accessors.set('lastSolution', {
             id: () => 'lastSolution',
@@ -109,26 +112,31 @@ export class SolutionManagerService extends ServiceBase {
     // the caller resolved by compiling each member first (so it is registered in
     // the local package store the source reads). A fresh SolutionSession per call
     // keeps composition stateless; the caller surfaces the diagnostics.
-    public async Compose(members: readonly PackageRef[]): Promise<readonly Diagnostic[]> {
+    public async Compose(members: readonly PackageRef[]): Promise<readonly Diagnostic[]>
+    {
         const session = new SolutionSession(this.packages);
         await session.compose(members);
         return session.Diagnostics;
     }
 
-    public get ActiveSolution(): Solution | undefined {
+    public get ActiveSolution(): Solution | undefined
+    {
         return this.activeSolution;
     }
-    private setActive(s: Solution | undefined): void {
+    private setActive(s: Solution | undefined): void
+    {
         const old = this.activeSolution;
         this.activeSolution = s;
         this.RaisePropertyChanged('ActiveSolution', old, s);
     }
 
-    public get RecentSolutions(): readonly string[] {
+    public get RecentSolutions(): readonly string[]
+    {
         return this.recentSolutions;
     }
 
-    public async NewSolution(location: string): Promise<void> {
+    public async NewSolution(location: string): Promise<void>
+    {
         if (!(await this.canReplace())) return;
         const storage = this.storages.CreateStorage(location);
         this.setActive(new Solution('Untitled Solution', storage));
@@ -138,7 +146,8 @@ export class SolutionManagerService extends ServiceBase {
     // when no previous solution is remembered, and used as the fallback when a
     // remembered solution fails to open. Not added to recents and clears lastSolution
     // (nothing to reopen) — the user roots it with Save As, or discards it on close.
-    public async NewUntitledSolution(): Promise<void> {
+    public async NewUntitledSolution(): Promise<void>
+    {
         if (!(await this.canReplace())) return;
         this.setActive(new Solution('Untitled Solution'));
         this.sessionBag.SetValue('lastSolution', '');
@@ -147,13 +156,18 @@ export class SolutionManagerService extends ServiceBase {
     // Startup: reopen the remembered solution, else create an empty untitled one. The
     // session slice (lastSolution + recentSolutions) is already applied to the bag by
     // the SessionStore — on Register, or on its Restore — before this runs.
-    public async RestoreSession(): Promise<void> {
+    public async RestoreSession(): Promise<void>
+    {
         const last = this.lastSolution;
-        if (last !== '') {
-            try {
+        if (last !== '')
+        {
+            try
+            {
                 await this.OpenSolution(last);
                 if (this.ActiveSolution !== undefined) return;
-            } catch {
+            }
+            catch
+            {
                 // The remembered folder is gone or its manifest is unreadable: drop it
                 // from recents and fall through to an untitled solution.
                 this.sessionBag.SetValue(
@@ -166,7 +180,8 @@ export class SolutionManagerService extends ServiceBase {
         await this.NewUntitledSolution();
     }
 
-    public async OpenSolution(location: string): Promise<void> {
+    public async OpenSolution(location: string): Promise<void>
+    {
         if (!(await this.canReplace())) return;
         const storage = this.storages.CreateStorage(location);
         const manifest = SolutionManifest.parse(await storage.ReadText('solution.json'));
@@ -182,11 +197,13 @@ export class SolutionManagerService extends ServiceBase {
         this.pushRecent(location);
     }
 
-    public async Save(): Promise<void> {
+    public async Save(): Promise<void>
+    {
         const s = this.ActiveSolution;
         if (s === undefined) return;
         const storage = s.Storage;
-        if (storage === undefined) {
+        if (storage === undefined)
+        {
             // Untitled — pick a folder and persist there as a real solution (Save As).
             const location = await this.prompts.PickFolder('Save Solution As');
             if (location !== undefined) await this.SaveAs(location);
@@ -203,7 +220,8 @@ export class SolutionManagerService extends ServiceBase {
         this.notifications?.Status('Saved.');
     }
 
-    public async SaveAs(location: string): Promise<void> {
+    public async SaveAs(location: string): Promise<void>
+    {
         const s = this.ActiveSolution;
         if (s === undefined) return;
         const target = this.storages.CreateStorage(location);
@@ -221,13 +239,15 @@ export class SolutionManagerService extends ServiceBase {
         this.pushRecent(location);
     }
 
-    public async CloseSolution(): Promise<void> {
+    public async CloseSolution(): Promise<void>
+    {
         if (!(await this.canReplace())) return;
         this.setActive(undefined);
         this.sessionBag.SetValue('lastSolution', '');
     }
 
-    private async canReplace(): Promise<boolean> {
+    private async canReplace(): Promise<boolean>
+    {
         const s = this.ActiveSolution;
         if (s === undefined || !s.IsDirty) return true;
         return this.prompts.Ask(
@@ -238,7 +258,8 @@ export class SolutionManagerService extends ServiceBase {
     // Record a solution's disk root as the most-recent entry (move-to-front, deduped)
     // and remember it as the last-active solution. Routed through the session bag so
     // both changes persist (the SessionStore schedules a debounced save) in one place.
-    private pushRecent(location: string): void {
+    private pushRecent(location: string): void
+    {
         const next = this.recentSolutions.filter((p) => p !== location);
         next.unshift(location);
         this.sessionBag.SetValue('recentSolutions', next);
@@ -247,16 +268,19 @@ export class SolutionManagerService extends ServiceBase {
 
     // Replace the recent-solutions list in place and notify. Invoked by the session
     // bag's writable accessor — on restore (stored slice applied) and on pushRecent.
-    private setRecent(list: readonly string[]): void {
+    private setRecent(list: readonly string[]): void
+    {
         this.recentSolutions.splice(0, this.recentSolutions.length, ...list);
         this.RaisePropertyChanged('RecentSolutions', undefined, this.recentSolutions);
     }
 
     // POSIX-join a solution folder with a member's relative path, collapsing
     // './' and '../'. Keeps a leading '/' for absolute roots.
-    private static joinPosix(base: string, rel: string): string {
+    private static joinPosix(base: string, rel: string): string
+    {
         const parts = base.split(/[\\/]+/).filter((s) => s.length > 0);
-        for (const seg of rel.split(/[\\/]+/)) {
+        for (const seg of rel.split(/[\\/]+/))
+        {
             if (seg === '' || seg === '.') continue;
             if (seg === '..') parts.pop();
             else parts.push(seg);

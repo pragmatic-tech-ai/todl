@@ -6,15 +6,19 @@ import type { Repository } from "../model/model.js";
 // The kind of a resolved symbol, from the reflective graph. Ontology nodes stamp
 // their MetaKind on `typeOf` (see Builder); instances live in the Instance tier,
 // and a class-marked instance is a taxonomy term.
-export enum SymbolKind {
+export enum SymbolKind
+{
   Concept, Primitive, Taxonomy, Term, Instance, Field, Relationship, Unknown,
 }
 
-export function symbolKindOf(model: Repository, id: NodeId): SymbolKind {
+export function symbolKindOf(model: Repository, id: NodeId): SymbolKind
+{
   const node = model.resolve(id);
   if (node === undefined) return SymbolKind.Unknown;
-  if (node.tier === Tier.Ontology) {
-    switch (node.metaKind) {
+  if (node.tier === Tier.Ontology)
+  {
+    switch (node.metaKind)
+    {
       case MetaKind.Concept:      return SymbolKind.Concept;
       case MetaKind.Primitive:    return SymbolKind.Primitive;
       case MetaKind.Taxonomy:     return SymbolKind.Taxonomy;
@@ -23,7 +27,8 @@ export function symbolKindOf(model: Repository, id: NodeId): SymbolKind {
       default:                    return SymbolKind.Unknown;
     }
   }
-  if (node.tier === Tier.Instance) {
+  if (node.tier === Tier.Instance)
+  {
     return model.isClass(id) ? SymbolKind.Term : SymbolKind.Instance;
   }
   return SymbolKind.Unknown;

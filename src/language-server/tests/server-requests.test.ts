@@ -4,7 +4,8 @@ import { startServer, pushedInit } from "./harness.js";
 
 const SRC = "namespace demo {\n  concept animal { }\n  concept dog : animal { }\n}";
 
-async function ready() {
+async function ready()
+{
   const h = startServer();
   await h.client.sendRequest("initialize", pushedInit());
   h.client.sendNotification("initialized", {});

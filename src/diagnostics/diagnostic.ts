@@ -1,12 +1,14 @@
 import type { NodeId } from "../model/graph.js";
 import type { SourceSpan } from "./span.js";
 
-export enum Severity {
+export enum Severity
+{
   Error = "error",
   Warning = "warning",
 }
 
-export enum DiagnosticCode {
+export enum DiagnosticCode
+{
   // Lex / parse (syntax) phase.
   UnexpectedCharacter = "syntax.unexpected-character",
   UnterminatedString = "syntax.unterminated-string",
@@ -76,7 +78,8 @@ export enum DiagnosticCode {
   PackageUnresolved = "package.unresolved",
 }
 
-export interface Diagnostic {
+export interface Diagnostic
+{
   code: DiagnosticCode;
   severity: Severity;
   message: string;

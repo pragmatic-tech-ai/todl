@@ -5,7 +5,8 @@ import { Tier } from "../graph.js";
 
 // component/technology instances plus an `appComponent : Component` subtype and
 // a `web-app` class, and a mutual reference cycle a <-> b via member `peer`.
-function fixture(): Repository {
+function fixture(): Repository
+{
   const repo = new Repository();
   const b = repo.builder();
   b.defineConcept("component");

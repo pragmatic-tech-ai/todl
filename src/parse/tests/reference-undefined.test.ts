@@ -4,7 +4,8 @@ import { load } from "../loader.js";
 import { DiagnosticCode, Severity, type Diagnostic } from "../../diagnostics/diagnostic.js";
 
 function src(text: string) { return { uri: "t.todl", text }; }
-function undefinedRefs(diags: Diagnostic[]): Diagnostic[] {
+function undefinedRefs(diags: Diagnostic[]): Diagnostic[]
+{
   return diags.filter((d) => d.code === DiagnosticCode.ReferenceUndefined);
 }
 

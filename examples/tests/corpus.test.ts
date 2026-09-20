@@ -11,7 +11,8 @@ test("every corpus example matches its committed golden", () => {
 });
 
 test("expectClean matches golden diagnostics", () => {
-  for (const e of CORPUS) {
+  for (const e of CORPUS)
+  {
     const hasErrors = e.golden.diagnostics.some((d) => d.severity === "error");
     assert.equal(!hasErrors, e.manifest.expectClean, `${e.manifest.id}: expectClean mismatch`);
   }

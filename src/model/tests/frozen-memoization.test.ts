@@ -4,7 +4,8 @@ import { Repository } from "../model.js";
 import { toJSON } from "../../emit/json.js";
 import { FrozenRepository } from "../frozen.js";
 
-function build(): Repository {
+function build(): Repository
+{
   const repo = new Repository();
   const b = repo.builder();
   b.defineConcept("component");

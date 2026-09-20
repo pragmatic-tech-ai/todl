@@ -6,7 +6,8 @@ import { toJSON, type TodlDocument } from "../json.js";
 import { collectOperators, deriveBindings, emitModelTodl } from "../todl.js";
 
 // Base: sequence { steps : step[] }, step { src, dst }, operator ==> : step(src,dst).
-function base(): Repository {
+function base(): Repository
+{
   const r = new Repository();
   const b = r.builder().setNamespace("acme.ea");
   b.definePrimitive("string");

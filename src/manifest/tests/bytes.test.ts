@@ -31,7 +31,8 @@ describe("ByteWriter / ByteReader — little-endian fixed widths", () => {
 
 describe("varlen(u32) — ECMA-335 §II.23.2 compressed unsigned integer", () => {
   test("1-byte form for 0..0x7F", () => {
-    for (const v of [0, 1, 0x7f]) {
+    for (const v of [0, 1, 0x7f])
+    {
       const w = new ByteWriter();
       w.varlenU32(v);
       assert.equal(w.length, 1, `len@${v}`);
@@ -40,7 +41,8 @@ describe("varlen(u32) — ECMA-335 §II.23.2 compressed unsigned integer", () =>
   });
 
   test("2-byte form for 0x80..0x3FFF (high bit 10)", () => {
-    for (const v of [0x80, 0x3fff]) {
+    for (const v of [0x80, 0x3fff])
+    {
       const w = new ByteWriter();
       w.varlenU32(v);
       assert.equal(w.length, 2, `len@${v}`);
@@ -50,7 +52,8 @@ describe("varlen(u32) — ECMA-335 §II.23.2 compressed unsigned integer", () =>
   });
 
   test("4-byte form for 0x4000..0x1FFFFFFF (high bits 110)", () => {
-    for (const v of [0x4000, 0x1fffffff]) {
+    for (const v of [0x4000, 0x1fffffff])
+    {
       const w = new ByteWriter();
       w.varlenU32(v);
       assert.equal(w.length, 4, `len@${v}`);

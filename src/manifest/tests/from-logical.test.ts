@@ -10,7 +10,8 @@ import type { LogicalManifest } from "../logical.js";
 // declares name(string,1) + color(string,?) + dependsOn->Component(*, inverse
 // usedBy); Surface overrides color to (string,1). Class Components.Surface
 // (concept Surface) in taxonomy ComponentKinds fixes color="red".
-function logical(): LogicalManifest {
+function logical(): LogicalManifest
+{
   return {
     format: "todl-manifest/1",
     model: "shop",
@@ -42,12 +43,14 @@ function logical(): LogicalManifest {
   };
 }
 
-function read(): ManifestReader {
+function read(): ManifestReader
+{
   return ManifestReader.fromBinary(ManifestWriter.fromLogical(logical()).toBinary());
 }
 
 // Locate a TypeInfo row by name (helper — the bridge assigns rows by iteration order).
-function typeRow(r: ManifestReader, name: string): number {
+function typeRow(r: ManifestReader, name: string): number
+{
   for (let i = 1; i <= r.rowCount(TableId.TypeInfo); i++)
     if (r.getString(r.typeInfo(i).name) === name) return i;
   return 0;

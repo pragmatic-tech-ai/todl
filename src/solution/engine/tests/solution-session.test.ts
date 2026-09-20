@@ -6,16 +6,19 @@ import { compilePackage, PackageKind } from "../../../publish/publish.js";
 import type { PackageSource, PackageRef, ResolvedPackage } from "../../../domain/domain.js";
 
 // A fake PackageSource backed by an in-memory map of Domain ResolvedPackages.
-class MapSource implements PackageSource {
+class MapSource implements PackageSource
+{
   constructor(private readonly byId: Map<string, ResolvedPackage>) {}
-  async resolve(ref: PackageRef): Promise<ResolvedPackage> {
+  async resolve(ref: PackageRef): Promise<ResolvedPackage>
+  {
     const r = this.byId.get(`${ref.model}@${ref.version}`);
     if (r === undefined) throw new Error(`unknown ${ref.model}@${ref.version}`);
     return r;
   }
 }
 
-function resolved(id: string, version: string): ResolvedPackage {
+function resolved(id: string, version: string): ResolvedPackage
+{
   const out = compilePackage(
     [],
     [{ uri: `${id}.todl`, text: `namespace acme { concept Widget { name : string; } }` }],

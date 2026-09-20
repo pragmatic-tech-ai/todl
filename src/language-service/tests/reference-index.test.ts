@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { parse } from "../../parse/parser.js";
 import { buildReferenceIndex, Role } from "../reference-index.js";
 
-function indexOf(src: string, uri = "d.todl") {
+function indexOf(src: string, uri = "d.todl")
+{
   const files = new Map([[uri, parse(src, uri).namespace]]);
   return buildReferenceIndex(files);
 }

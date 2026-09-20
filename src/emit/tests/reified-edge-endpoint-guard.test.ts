@@ -9,7 +9,8 @@ import { collectOperators, deriveBindings, emitModelTodl } from "../todl.js";
 // two endpoints are mandatory. Emitting a step that lost an endpoint (its ref
 // target was undefined and dropped on load) must THROW, not silently degrade to
 // `step { id }` — that silent degrade is the scenario-corruption data-loss bug.
-function base(): Repository {
+function base(): Repository
+{
   const r = new Repository();
   const b = r.builder().setNamespace("acme.ea");
   b.definePrimitive("string");
@@ -25,7 +26,8 @@ function base(): Repository {
   return r;
 }
 
-function ownDoc(model: Repository, baseIds: ReadonlySet<string>): TodlDocument {
+function ownDoc(model: Repository, baseIds: ReadonlySet<string>): TodlDocument
+{
   const own: TodlDocument = { nodes: [], edges: [] };
   const full = toJSON(model);
   for (const n of full.nodes) if (!baseIds.has(n.id)) own.nodes.push(n);
@@ -33,7 +35,8 @@ function ownDoc(model: Repository, baseIds: ReadonlySet<string>): TodlDocument {
   return own;
 }
 
-function emit(model: Repository, baseIds: ReadonlySet<string>): string {
+function emit(model: Repository, baseIds: ReadonlySet<string>): string
+{
   const own = ownDoc(model, baseIds);
   return emitModelTodl(own, "acme.app", deriveBindings(model, baseIds, "acme.app", own), undefined, collectOperators(model));
 }

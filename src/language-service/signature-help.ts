@@ -8,7 +8,8 @@ const CARD: Record<number, string> = {
   [Cardinality.Many]: "[]", [Cardinality.OneOrMore]: "[+]",
 };
 
-export function signatureHelpAt(a: Analysis, uri: string, pos: Position): SignatureHelp | null {
+export function signatureHelpAt(a: Analysis, uri: string, pos: Position): SignatureHelp | null
+{
   const ctx = assignmentContextAt(a, uri, pos);
   if (ctx === null || ctx.targetConcepts.length === 0) return null;
   const arrow = ctx.isRelationship ? "->" : ":";

@@ -2,7 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { load } from "../../parse/loader.js";
 
-function repo(text: string) {
+function repo(text: string)
+{
   return load([{ uri: "t.todl", text: `namespace n {\n${text}\n}` }]).model;
 }
 

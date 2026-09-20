@@ -14,15 +14,18 @@ import type { ResolvedPackage, PackageRef as DomainPackageRef, SeedGraph } from 
 // DataGraph) plus ManifestWriter.fromLogical (LogicalManifest -> binary). First
 // cut is self-contained: it emits from the package's full closure, so extends /
 // target refs always resolve within one manifest.
-export class PackageManifestBridge {
+export class PackageManifestBridge
+{
   // The logical manifest for a compiled Repository (schema tier only).
-  static toLogical(repo: Repository, model: string, version: string): LogicalManifest {
+  static toLogical(repo: Repository, model: string, version: string): LogicalManifest
+  {
     return new ManifestEmitter(repo, model, version).emitManifest();
   }
 
   // A compiled package as a Domain ResolvedPackage. Emits from the FULL closure,
   // so extends/target refs resolve within one self-contained manifest.
-  static toResolved(pkg: CompiledPackage): ResolvedPackage {
+  static toResolved(pkg: CompiledPackage): ResolvedPackage
+  {
     const dependencies: DomainPackageRef[] = (pkg.document.dependencies ?? []).map(
       (d) => ({ model: d.id, version: d.version }),
     );
@@ -39,7 +42,8 @@ export class PackageManifestBridge {
     model: string,
     version: string,
     dependencies: DomainPackageRef[],
-  ): ResolvedPackage {
+  ): ResolvedPackage
+  {
     const repo = new Repository(graphFromJSON(doc));
     const { manifest, graph } = new ManifestEmitter(repo, model, version).emit();
     const resolved: ResolvedPackage = {
@@ -47,7 +51,8 @@ export class PackageManifestBridge {
       manifest: ManifestWriter.fromLogical(manifest).toBinary(),
       dependencies,
     };
-    if (graph.nodes.length > 0) {
+    if (graph.nodes.length > 0)
+    {
       const seed: SeedGraph = {
         nodes: graph.nodes.map((n) => PackageManifestBridge.toReflected(n)),
         edges: graph.edges.map((e) => ({ from: e.from, rel: e.rel, to: e.to })),
@@ -59,7 +64,8 @@ export class PackageManifestBridge {
 
   // A flattened DataNode -> a self-contained ReflectedNode (edges become refs
   // during Domain.bindGraph, so refs are left off here).
-  private static toReflected(n: DataNode): ReflectedNode {
+  private static toReflected(n: DataNode): ReflectedNode
+  {
     const node: ReflectedNode = { id: n.id, type: n.type, attrs: n.attrs };
     if (n.class !== undefined) node.class = n.class;
     if (n.namespace.length > 0) node.namespace = n.namespace;

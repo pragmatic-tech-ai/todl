@@ -13,14 +13,17 @@ const SCOPE = "@pragmatic-tech-ai";
 const enc = new TextEncoder();
 
 /** An in-memory npm registry + GitHub Packages API (same 4 routes the client speaks). */
-class FakeRegistry implements HttpTransport {
+class FakeRegistry implements HttpTransport
+{
   private readonly packuments = new Map<string, Record<string, unknown>>();
   private readonly tarballs = new Map<string, Uint8Array>();
   private readonly packageNames = new Set<string>();
 
-  request(req: HttpRequest): Promise<HttpResponse> {
+  request(req: HttpRequest): Promise<HttpResponse>
+  {
     if (req.url.startsWith(`${GITHUB}/orgs/`)) return Promise.resolve(this.json([...this.packageNames].map((name) => ({ name }))));
-    if (req.url.includes("/-/")) {
+    if (req.url.includes("/-/"))
+    {
       const bytes = this.tarballs.get(req.url);
       return Promise.resolve(bytes === undefined ? this.json({ error: "nf" }, 404) : { status: 200, headers: {}, body: bytes });
     }
@@ -29,7 +32,8 @@ class FakeRegistry implements HttpTransport {
     const packument = this.packuments.get(key);
     return Promise.resolve(packument === undefined ? this.json({ error: "nf" }, 404) : this.json(packument));
   }
-  private put(key: string, req: HttpRequest): HttpResponse {
+  private put(key: string, req: HttpRequest): HttpResponse
+  {
     const body = JSON.parse(req.body as string) as {
       name: string; "dist-tags": Record<string, string>;
       versions: Record<string, { dist: { tarball: string } }>;
@@ -39,7 +43,8 @@ class FakeRegistry implements HttpTransport {
     Object.assign(existing["dist-tags"] as object, body["dist-tags"]);
     Object.assign(existing["versions"] as object, body.versions);
     this.packuments.set(key, existing);
-    for (const [file, att] of Object.entries(body._attachments)) {
+    for (const [file, att] of Object.entries(body._attachments))
+    {
       const v = Object.entries(body.versions).find(([, ver]) => ver.dist.tarball.endsWith(file));
       if (v !== undefined) this.tarballs.set(v[1].dist.tarball, new Uint8Array(Buffer.from(att.data, "base64")));
     }
@@ -47,7 +52,8 @@ class FakeRegistry implements HttpTransport {
     this.packageNames.add(slash < 0 ? body.name : body.name.slice(slash + 1));
     return { status: 201, headers: {}, body: enc.encode("{}") };
   }
-  private json(value: unknown, status = 200): HttpResponse {
+  private json(value: unknown, status = 200): HttpResponse
+  {
     return { status, headers: {}, body: enc.encode(JSON.stringify(value)) };
   }
 }
@@ -61,7 +67,8 @@ async function publishPackage(
   deps: Record<string, string> = {},
   src: Record<string, string> = {},
   resources: Record<string, string> = {},
-): Promise<void> {
+): Promise<void>
+{
   const files = [
     { path: "package/package.json", bytes: enc.encode(JSON.stringify({ name: `${SCOPE}/${id}`, version, todl, dependencies: deps })) },
     { path: "package/model.json", bytes: enc.encode(JSON.stringify({ nodes: [] })) },
@@ -73,10 +80,12 @@ async function publishPackage(
   await registry.publish({ name: `${SCOPE}/${id}`, version, todl, dependencies: deps } as never, createTgz(files));
 }
 
-function manager(transport: HttpTransport): PackageManager {
+function manager(transport: HttpTransport): PackageManager
+{
   return new PackageManager({ registry: REGISTRY, scope: SCOPE, token: "t", githubApi: GITHUB, transport });
 }
-function seeder(transport: HttpTransport): NpmRegistry {
+function seeder(transport: HttpTransport): NpmRegistry
+{
   return new NpmRegistry({ registry: REGISTRY, scope: SCOPE, token: "t", githubApi: GITHUB, transport });
 }
 

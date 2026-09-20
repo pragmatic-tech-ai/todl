@@ -7,7 +7,8 @@ export interface GraphLayout { nodes: LaidOutNode[]; edges: LaidOutEdge[]; width
 export interface EdgeGeometry { x1: number; y1: number; x2: number; y2: number; midX: number; midY: number; angleDeg: number }
 
 /** Center-to-center endpoints, midpoint, and heading angle (degrees) for an edge. Pure. */
-export function edgeGeometry(from: LaidOutNode, to: LaidOutNode): EdgeGeometry {
+export function edgeGeometry(from: LaidOutNode, to: LaidOutNode): EdgeGeometry
+{
   const x1 = from.x + from.w / 2, y1 = from.y + from.h / 2;
   const x2 = to.x + to.w / 2, y2 = to.y + to.h / 2;
   return { x1, y1, x2, y2, midX: (x1 + x2) / 2, midY: (y1 + y2) / 2, angleDeg: Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI };
@@ -18,10 +19,12 @@ const NODE_W = 150, NODE_H = 48, H_GAP = 70, V_GAP = 26, PAD = 24;
 /** A readable label for a node: the debug name (real name — survives id
  *  canonicalization, so it beats a `#n0` id), else a name-ish attribute, else its
  *  tier + id, else the raw id. Kept deterministic for stable rendering + tests. */
-export function nodeLabel(node: JsonNode): string {
+export function nodeLabel(node: JsonNode): string
+{
   if (node.debug?.name && node.debug.name.length > 0) return node.debug.name;
   const a = node.attrs ?? {};
-  for (const key of ["name", "label", "id", "title"]) {
+  for (const key of ["name", "label", "id", "title"])
+  {
     const v = a[key];
     if (typeof v === "string" && v.length > 0) return v;
   }
@@ -31,15 +34,18 @@ export function nodeLabel(node: JsonNode): string {
 
 /** Longest-path rank from any root (no incoming edge). Cycles are broken by the
  *  visited guard (a back-edge simply doesn't raise the rank further). */
-function ranks(ids: string[], adj: Map<string, string[]>, indeg: Map<string, number>): Map<string, number> {
+function ranks(ids: string[], adj: Map<string, string[]>, indeg: Map<string, number>): Map<string, number>
+{
   const rank = new Map<string, number>(ids.map((id) => [id, 0]));
   const queue = ids.filter((id) => (indeg.get(id) ?? 0) === 0).sort();
   const seen = new Set<string>();
-  while (queue.length) {
+  while (queue.length)
+  {
     const u = queue.shift()!;
     if (seen.has(u)) continue;
     seen.add(u);
-    for (const v of adj.get(u) ?? []) {
+    for (const v of adj.get(u) ?? [])
+    {
       if (rank.get(v)! < rank.get(u)! + 1) rank.set(v, rank.get(u)! + 1);
       queue.push(v);
     }
@@ -48,13 +54,15 @@ function ranks(ids: string[], adj: Map<string, string[]>, indeg: Map<string, num
   return rank;
 }
 
-export function layoutGraph(doc: TodlDocument): GraphLayout {
+export function layoutGraph(doc: TodlDocument): GraphLayout
+{
   const ids = doc.nodes.map((n) => String(n.id));
   const idSet = new Set(ids);
   const adj = new Map<string, string[]>(ids.map((id) => [id, []]));
   const indeg = new Map<string, number>(ids.map((id) => [id, 0]));
   const edges: LaidOutEdge[] = [];
-  for (const e of doc.edges) {
+  for (const e of doc.edges)
+  {
     const from = String(e.from), to = String(e.to);
     if (!idSet.has(from) || !idSet.has(to)) continue; // skip dangling base refs
     adj.get(from)!.push(to);
@@ -65,7 +73,8 @@ export function layoutGraph(doc: TodlDocument): GraphLayout {
   const rank = ranks(ids, adj, indeg);
   // Group by rank, order within a rank by id for stability.
   const byRank = new Map<number, string[]>();
-  for (const id of ids) {
+  for (const id of ids)
+  {
     const r = rank.get(id)!;
     const col = byRank.get(r) ?? (byRank.set(r, []), byRank.get(r)!);
     col.push(id);
@@ -74,7 +83,8 @@ export function layoutGraph(doc: TodlDocument): GraphLayout {
 
   const nodes: LaidOutNode[] = [];
   let maxRow = 0;
-  for (const [r, col] of [...byRank.entries()].sort((a, b) => a[0] - b[0])) {
+  for (const [r, col] of [...byRank.entries()].sort((a, b) => a[0] - b[0]))
+  {
     col.sort((a, b) => a.localeCompare(b));
     col.forEach((id, row) => {
       const meta = metaOf.get(id)!;

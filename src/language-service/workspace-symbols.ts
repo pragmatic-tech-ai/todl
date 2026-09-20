@@ -13,10 +13,12 @@ const TO_LSP: Record<SymbolKind, LspSymbolKind> = {
   [SymbolKind.Unknown]: LspSymbolKind.Null,
 };
 
-export function workspaceSymbols(a: Analysis, query: string): WorkspaceSymbol[] {
+export function workspaceSymbols(a: Analysis, query: string): WorkspaceSymbol[]
+{
   const needle = query.toLowerCase();
   const out: WorkspaceSymbol[] = [];
-  for (const def of a.defs.all()) {
+  for (const def of a.defs.all())
+  {
     if (needle !== "" && !def.symbol.toLowerCase().includes(needle)) continue;
     out.push({
       name: def.symbol,

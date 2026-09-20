@@ -37,7 +37,8 @@ describe("Imports / TypeRef cross-manifest references (SPEC-04 §5.8–5.9)", ()
 });
 
 describe("slice iterators (SPEC-04 §9.3)", () => {
-  function build(): ManifestReader {
+  function build(): ManifestReader
+  {
     const w = new ManifestWriter("m", "1.0.0");
     // two fields for a type
     const fStart = w.addField({ name: w.internString("a"), type: 0, card: Cardinality.One });

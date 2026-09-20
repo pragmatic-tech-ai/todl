@@ -47,7 +47,8 @@ import { type Diagnostic, DiagnosticCode, Severity } from "../diagnostics/diagno
  * literal glyph it represents (where applicable), which keeps debugging output
  * readable and lets the parser compare against the character it expects. */
 
-export enum TokenKind {
+export enum TokenKind
+{
   Identifier = "identifier",
   String = "string",
   RawString = "raw-string",
@@ -80,7 +81,8 @@ export enum TokenKind {
  * strings, already indent-stripped for raw strings). The `line`/`column` pair
  * marks where the token STARTS and `endLine`/`endColumn` where it ENDS — all
  * 1-based — so downstream stages can build precise diagnostic spans. */
-export interface Token {
+export interface Token
+{
   kind: TokenKind;
   value: string;
   line: number;
@@ -95,14 +97,16 @@ export interface Token {
 
 /** Tokenize `source` with no file identity, discarding any diagnostics. Convenient
  * for tests and callers that only care about the token stream of valid input. */
-export function tokenize(source: string): Token[] {
+export function tokenize(source: string): Token[]
+{
   return new Lexer(source, "<anonymous>").scan();
 }
 
 /** Tokenize `source` belonging to `uri`, returning both the tokens AND every
  * diagnostic gathered while scanning. This is the form the real pipeline uses:
  * the `uri` flows into each token's span so errors point at the right file. */
-export function lex(source: string, uri: string): { tokens: Token[]; diagnostics: Diagnostic[] } {
+export function lex(source: string, uri: string): { tokens: Token[]; diagnostics: Diagnostic[] }
+{
   const lexer = new Lexer(source, uri);
   const tokens = lexer.scan();
   return { tokens, diagnostics: lexer.diagnostics };
@@ -140,7 +144,8 @@ const SINGLE_CHAR: ReadonlyMap<string, TokenKind> = new Map([
 // THE LEXER — a stateful single-pass cursor over the source string
 // ═══════════════════════════════════════════════════════════════════════════════
 
-class Lexer {
+class Lexer
+{
   /** Absolute index of the cursor into `source`. */
   private pos = 0;
   /** 1-based line at the cursor (advanced on every `\n`). */
@@ -156,7 +161,8 @@ class Lexer {
 
   /** Record a lexing error as a single-line span from `column` to `endColumn`.
    * Errors never throw — the scanner keeps going so one pass finds many problems. */
-  private report(code: DiagnosticCode, message: string, line: number, column: number, endColumn: number): void {
+  private report(code: DiagnosticCode, message: string, line: number, column: number, endColumn: number): void
+  {
     this.diagnostics.push({
       code,
       severity: Severity.Error,
@@ -170,8 +176,10 @@ class Lexer {
   /** The main loop. Repeatedly: drop leading trivia, capture the start position,
    * then dispatch on the first character to the reader for that token family.
    * Terminates with an explicit EOF token so the parser always has a sentinel. */
-  scan(): Token[] {
-    for (;;) {
+  scan(): Token[]
+  {
+    for (;;)
+    {
       this.skipTrivia();
       if (this.pos >= this.source.length) break;
 
@@ -181,17 +189,20 @@ class Lexer {
       const column = this.column;
       const char = this.peek();
 
-      if (isIdentifierStart(char)) {
+      if (isIdentifierStart(char))
+      {
         const value = this.readIdentifier();
         this.tokens.push({ kind: TokenKind.Identifier, value, line, column, endLine: this.line, endColumn: this.column });
         continue;
       }
-      if (isDigit(char)) {
+      if (isDigit(char))
+      {
         const value = this.readNumber();
         this.tokens.push({ kind: TokenKind.Number, value, line, column, endLine: this.line, endColumn: this.column });
         continue;
       }
-      if (char === '"') {
+      if (char === '"')
+      {
         this.readStringLike(line, column);
         continue;
       }
@@ -207,14 +218,17 @@ class Lexer {
   // ── operators & punctuation ──
   /** Read whatever punctuation / operator begins at the cursor. Ordering matters:
    * longer / greedier matches are tried before shorter ones. */
-  private readOperator(line: number, column: number): void {
+  private readOperator(line: number, column: number): void
+  {
     const char = this.peek();
 
     // A maximal run of edge characters is one SymbolOp — an operator glyph or a
     // predicate operator (`==`, `!=`). A lone `=` is assignment, not a SymbolOp.
-    if (EDGE_CHARS.has(char)) {
+    if (EDGE_CHARS.has(char))
+    {
       let run = "";
-      while (EDGE_CHARS.has(this.peek())) {
+      while (EDGE_CHARS.has(this.peek()))
+      {
         run += this.peek();
         this.advance();
       }
@@ -245,10 +259,14 @@ class Lexer {
   // ── string literals ──
   /** Decide between a triple-quoted raw string (`"""`) and a plain string by
    * looking two characters ahead; the caller already knows the cursor is on `"`. */
-  private readStringLike(line: number, column: number): void {
-    if (this.peek(1) === '"' && this.peek(2) === '"') {
+  private readStringLike(line: number, column: number): void
+  {
+    if (this.peek(1) === '"' && this.peek(2) === '"')
+    {
       this.push(TokenKind.RawString, this.readRawString(), line, column, 0);
-    } else {
+    }
+    else
+    {
       this.push(TokenKind.String, this.readString(line, column), line, column, 0);
     }
   }
@@ -256,14 +274,19 @@ class Lexer {
   // ── identifiers & numbers ──
   /** Consume an identifier: one start char followed by zero or more part chars.
    * Returns the raw text; the caller wraps it in an Identifier token. */
-  private readIdentifier(): string {
+  private readIdentifier(): string
+  {
     const start = this.pos;
     this.advance();
-    for (;;) {
+    for (;;)
+    {
       const char = this.peek();
-      if (isIdentifierPart(char)) {
+      if (isIdentifierPart(char))
+      {
         this.advance();
-      } else {
+      }
+      else
+      {
         break;
       }
     }
@@ -273,10 +296,12 @@ class Lexer {
   /** Consume an integer, optionally followed by a fractional part. The fraction is
    * only taken when the `.` is FOLLOWED by a digit, so `1.foo` lexes as the number
    * `1` then the `.` operator then `foo` — the dot is not swallowed spuriously. */
-  private readNumber(): string {
+  private readNumber(): string
+  {
     const start = this.pos;
     while (isDigit(this.peek())) this.advance();
-    if (this.peek() === "." && isDigit(this.peek(1))) {
+    if (this.peek() === "." && isDigit(this.peek(1)))
+    {
       this.advance();
       while (isDigit(this.peek())) this.advance();
     }
@@ -287,19 +312,25 @@ class Lexer {
    * Recovers from an unterminated string (newline or EOF before the closing `"`)
    * by reporting and returning what it has WITHOUT consuming the newline/EOF, so
    * the outer loop can resume cleanly on the next line. */
-  private readString(line: number, column: number): string {
+  private readString(line: number, column: number): string
+  {
     this.advance(); // opening quote
     let value = "";
-    while (this.peek() !== '"') {
-      if (this.pos >= this.source.length || this.peek() === "\n") {
+    while (this.peek() !== '"')
+    {
+      if (this.pos >= this.source.length || this.peek() === "\n")
+      {
         this.report(DiagnosticCode.UnterminatedString, "unterminated string", line, column, this.column);
         return value; // recover: emit the partial string, do not consume the newline/EOF
       }
-      if (this.peek() === "\\") {
+      if (this.peek() === "\\")
+      {
         this.advance();
         value += unescape(this.peek());
         this.advance();
-      } else {
+      }
+      else
+      {
         value += this.peek();
         this.advance();
       }
@@ -312,13 +343,16 @@ class Lexer {
    * the delimiters is verbatim, then common leading indentation is stripped (see
    * {@link stripCommonIndent}) so indented multi-line blocks read naturally.
    * Recovers from a missing closing `"""` the same way as {@link readString}. */
-  private readRawString(): string {
+  private readRawString(): string
+  {
     this.advance();
     this.advance();
     this.advance(); // opening """
     const start = this.pos;
-    while (!(this.peek() === '"' && this.peek(1) === '"' && this.peek(2) === '"')) {
-      if (this.pos >= this.source.length) {
+    while (!(this.peek() === '"' && this.peek(1) === '"' && this.peek(2) === '"'))
+    {
+      if (this.pos >= this.source.length)
+      {
         this.report(DiagnosticCode.UnterminatedString, "unterminated raw string", this.line, this.column, this.column);
         return stripCommonIndent(this.source.slice(start, this.pos));
       }
@@ -335,20 +369,29 @@ class Lexer {
   /** Skip everything the parser never sees: whitespace, `//` line comments (to end
    * of line, leaving the `\n` for the next iteration), and `/* … *​/` block
    * comments. Loops until the cursor sits on a real token character or EOF. */
-  private skipTrivia(): void {
-    for (;;) {
+  private skipTrivia(): void
+  {
+    for (;;)
+    {
       const char = this.peek();
-      if (char === " " || char === "\t" || char === "\r" || char === "\n") {
+      if (char === " " || char === "\t" || char === "\r" || char === "\n")
+      {
         this.advance();
-      } else if (char === "/" && this.peek(1) === "/") {
+      }
+      else if (char === "/" && this.peek(1) === "/")
+      {
         while (this.pos < this.source.length && this.peek() !== "\n") this.advance();
-      } else if (char === "/" && this.peek(1) === "*") {
+      }
+      else if (char === "/" && this.peek(1) === "*")
+      {
         this.advance();
         this.advance();
         while (this.pos < this.source.length && !(this.peek() === "*" && this.peek(1) === "/")) this.advance();
         this.advance();
         this.advance();
-      } else {
+      }
+      else
+      {
         break;
       }
     }
@@ -358,25 +401,31 @@ class Lexer {
    * so the end position reflects the whole glyph. Used by the fixed-width readers
    * (single chars, `&&`/`||`); the string/raw readers pass `consume: 0` because
    * they have already advanced the cursor themselves. */
-  private push(kind: TokenKind, value: string, line: number, column: number, consume: number): void {
+  private push(kind: TokenKind, value: string, line: number, column: number, consume: number): void
+  {
     for (let i = 0; i < consume; i++) this.advance();
     this.tokens.push({ kind, value, line, column, endLine: this.line, endColumn: this.column });
   }
 
   /** Look at the character `offset` ahead of the cursor without consuming it.
    * Returns `""` past the end of input, so callers can compare safely at EOF. */
-  private peek(offset = 0): string {
+  private peek(offset = 0): string
+  {
     return this.source[this.pos + offset] ?? "";
   }
 
   /** Move the cursor forward one character, keeping the 1-based line/column in sync
    * (a `\n` bumps the line and resets the column). This is the ONLY place `pos`,
    * `line`, and `column` change together, which keeps spans accurate. */
-  private advance(): void {
-    if (this.source[this.pos] === "\n") {
+  private advance(): void
+  {
+    if (this.source[this.pos] === "\n")
+    {
       this.line += 1;
       this.column = 1;
-    } else {
+    }
+    else
+    {
       this.column += 1;
     }
     this.pos += 1;
@@ -388,8 +437,10 @@ class Lexer {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /** Decode a backslash-escaped character in a double-quoted string. */
-function unescape(char: string): string {
-  switch (char) {
+function unescape(char: string): string
+{
+  switch (char)
+  {
     case "n":
       return "\n";
     case "t":
@@ -402,17 +453,20 @@ function unescape(char: string): string {
 }
 
 /** True if `char` may begin an identifier: an ASCII letter or underscore. */
-function isIdentifierStart(char: string): boolean {
+function isIdentifierStart(char: string): boolean
+{
   return (char >= "a" && char <= "z") || (char >= "A" && char <= "Z") || char === "_";
 }
 
 /** True if `char` may continue an identifier: an identifier-start char or a digit. */
-function isIdentifierPart(char: string): boolean {
+function isIdentifierPart(char: string): boolean
+{
   return isIdentifierStart(char) || (char >= "0" && char <= "9");
 }
 
 /** True if `char` is an ASCII decimal digit. */
-function isDigit(char: string): boolean {
+function isDigit(char: string): boolean
+{
   return char >= "0" && char <= "9";
 }
 
@@ -420,13 +474,15 @@ function isDigit(char: string): boolean {
  * then remove the largest indentation common to all non-blank lines. This lets an
  * author indent a multi-line block to match the surrounding code without that
  * indentation leaking into the literal value. */
-function stripCommonIndent(text: string): string {
+function stripCommonIndent(text: string): string
+{
   const lines = text.split("\n");
   while (lines.length > 0 && (lines[0] ?? "").trim() === "") lines.shift();
   while (lines.length > 0 && (lines[lines.length - 1] ?? "").trim() === "") lines.pop();
 
   let min = Infinity;
-  for (const line of lines) {
+  for (const line of lines)
+  {
     if (line.trim() === "") continue;
     min = Math.min(min, line.length - line.trimStart().length);
   }

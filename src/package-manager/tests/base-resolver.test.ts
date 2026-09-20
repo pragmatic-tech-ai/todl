@@ -12,16 +12,20 @@ const REGISTRY = "https://reg.example";
 const enc = new TextEncoder();
 
 /** Minimal in-memory registry (publish → getContent), mirroring npm-registry.test. */
-class FakeRegistry implements HttpTransport {
+class FakeRegistry implements HttpTransport
+{
   private readonly packuments = new Map<string, Record<string, unknown>>();
   private readonly tarballs = new Map<string, Uint8Array>();
-  request(req: HttpRequest): Promise<HttpResponse> {
-    if (req.url.includes("/-/")) {
+  request(req: HttpRequest): Promise<HttpResponse>
+  {
+    if (req.url.includes("/-/"))
+    {
       const bytes = this.tarballs.get(req.url);
       return Promise.resolve(bytes === undefined ? this.notFound() : { status: 200, headers: {}, body: bytes });
     }
     const key = req.url.slice(REGISTRY.length + 1);
-    if (req.method === "PUT") {
+    if (req.method === "PUT")
+    {
       const body = JSON.parse(req.body as string) as {
         name: string;
         "dist-tags": Record<string, string>;
@@ -32,7 +36,8 @@ class FakeRegistry implements HttpTransport {
       Object.assign(existing["dist-tags"] as object, body["dist-tags"]);
       Object.assign(existing["versions"] as object, body.versions);
       this.packuments.set(key, existing);
-      for (const [file, att] of Object.entries(body._attachments)) {
+      for (const [file, att] of Object.entries(body._attachments))
+      {
         const v = Object.entries(body.versions).find(([, val]) => val.dist.tarball.endsWith(file));
         if (v) this.tarballs.set(v[1].dist.tarball, new Uint8Array(Buffer.from(att.data, "base64")));
       }
@@ -41,17 +46,20 @@ class FakeRegistry implements HttpTransport {
     const p = this.packuments.get(key);
     return Promise.resolve(p === undefined ? this.notFound() : { status: 200, headers: {}, body: enc.encode(JSON.stringify(p)) });
   }
-  private notFound(): HttpResponse {
+  private notFound(): HttpResponse
+  {
     return { status: 404, headers: {}, body: enc.encode("{}") };
   }
 }
 
-function registry(transport: HttpTransport): NpmRegistry {
+function registry(transport: HttpTransport): NpmRegistry
+{
   return new NpmRegistry({ registry: REGISTRY, scope: SCOPE, token: "t", transport });
 }
 
 /** Publish a TODL package (todl block + model.json) into a fake registry. */
-async function publishPkg(reg: NpmRegistry, id: string, deps: Record<string, string>, model: unknown): Promise<void> {
+async function publishPkg(reg: NpmRegistry, id: string, deps: Record<string, string>, model: unknown): Promise<void>
+{
   const packageJson = { name: `${SCOPE}/${id}`, version: "0.1.0", todl: { kind: "library", id }, dependencies: deps };
   await reg.publish(packageJson as never, createTgz([
     { path: "package/package.json", bytes: enc.encode(JSON.stringify(packageJson)) },

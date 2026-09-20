@@ -3,7 +3,8 @@ import { TokenKind, type Token } from "../parse/lexer.js";
 import type { Analysis } from "./analysis.js";
 import { positionToTodl } from "./position.js";
 
-export interface AssignmentContext {
+export interface AssignmentContext
+{
   concept: string;
   member: string;
   targetConcepts: string[];
@@ -19,7 +20,8 @@ export interface AssignmentContext {
 // This works purely off the token stream (which `tokenize` produces regardless
 // of parse errors), so it still resolves while the user is mid-typing an
 // incomplete value like `owner = &` — exactly when completion fires.
-export function assignmentContextAt(a: Analysis, uri: string, pos: Position): AssignmentContext | null {
+export function assignmentContextAt(a: Analysis, uri: string, pos: Position): AssignmentContext | null
+{
   const file = a.sources.get(uri);
   if (file === undefined) return null;
   const tp = positionToTodl(pos);
@@ -31,18 +33,21 @@ export function assignmentContextAt(a: Analysis, uri: string, pos: Position): As
 
   const schema = a.model.effectiveSchema(concept);
   const rel = schema.relationships.find((r) => r.name === member);
-  if (rel !== undefined) {
+  if (rel !== undefined)
+  {
     return { concept, member, targetConcepts: rel.targets, cardinality: rel.cardinality, isRelationship: true };
   }
   const field = schema.fields.find((f) => f.name === member);
-  if (field !== undefined) {
+  if (field !== undefined)
+  {
     return { concept, member, targetConcepts: [field.type], cardinality: field.cardinality, isRelationship: false };
   }
   return { concept, member, targetConcepts: [], cardinality: 0, isRelationship: false };
 }
 
 // Index of the first token starting at/after the cursor (else the end).
-function cursorIndex(tokens: Token[], tp: { line: number; column: number }): number {
+function cursorIndex(tokens: Token[], tp: { line: number; column: number }): number
+{
   const idx = tokens.findIndex((t) => t.line > tp.line || (t.line === tp.line && t.column >= tp.column));
   return idx === -1 ? tokens.length : idx;
 }
@@ -50,18 +55,21 @@ function cursorIndex(tokens: Token[], tp: { line: number; column: number }): num
 // The concept of the record enclosing the cursor: brace-match backwards to the
 // opening `{`, then take the leftmost identifier of the record header
 // (`<concept> <id> [instanceof X] [: Bind] {`).
-function enclosingConcept(tokens: Token[], tp: { line: number; column: number }): string | null {
+function enclosingConcept(tokens: Token[], tp: { line: number; column: number }): string | null
+{
   const start = cursorIndex(tokens, tp);
   let depth = 0;
   let openIdx = -1;
-  for (let i = start - 1; i >= 0; i -= 1) {
+  for (let i = start - 1; i >= 0; i -= 1)
+  {
     const k = tokens[i]?.kind;
     if (k === TokenKind.RBrace) depth += 1;
     else if (k === TokenKind.LBrace) { if (depth === 0) { openIdx = i; break; } depth -= 1; }
   }
   if (openIdx < 0) return null;
   let concept: string | null = null;
-  for (let i = openIdx - 1; i >= 0; i -= 1) {
+  for (let i = openIdx - 1; i >= 0; i -= 1)
+  {
     const t = tokens[i];
     if (t === undefined) continue;
     if (t.kind === TokenKind.Semicolon || t.kind === TokenKind.LBrace || t.kind === TokenKind.RBrace) break;
@@ -72,12 +80,15 @@ function enclosingConcept(tokens: Token[], tp: { line: number; column: number })
 
 // Scan back from the cursor for the `<identifier> =` pattern; return the
 // identifier — the member being assigned. Stops at a statement/block boundary.
-function memberBeforeCursor(tokens: Token[], tp: { line: number; column: number }): string | null {
+function memberBeforeCursor(tokens: Token[], tp: { line: number; column: number }): string | null
+{
   const start = cursorIndex(tokens, tp);
-  for (let i = start - 1; i >= 0; i -= 1) {
+  for (let i = start - 1; i >= 0; i -= 1)
+  {
     const t = tokens[i];
     if (t === undefined) continue;
-    if (t.kind === TokenKind.Equals) {
+    if (t.kind === TokenKind.Equals)
+    {
       const name = tokens[i - 1];
       return name !== undefined && name.kind === TokenKind.Identifier ? name.value : null;
     }

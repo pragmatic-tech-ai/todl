@@ -19,7 +19,8 @@ import { MetaKind } from "./kinds.js";
  * map) plus zero-or-more nested child terms. `concept` names which of the
  * taxonomy's represented concepts the term is a class of; omit it for the
  * single-concept `term` alias (falls back to the sole represented concept). */
-export interface TermInput {
+export interface TermInput
+{
   id: NodeId;
   concept?: NodeId;
   attrs?: ReadonlyMap<string, Scalar>;
@@ -29,25 +30,29 @@ export interface TermInput {
   children?: readonly TermInput[];
 }
 
-interface StagedAttr {
+interface StagedAttr
+{
   id: NodeId;
   name: string;
   value: Scalar;
 }
 
-interface StagedEdge {
+interface StagedEdge
+{
   kind: EdgeKind;
   via: NodeId | null;
   from: NodeId;
   to: NodeId;
 }
 
-interface StagedField {
+interface StagedField
+{
   concept: NodeId;
   decl: FieldDecl;
 }
 
-export class Builder {
+export class Builder
+{
   private readonly stagedNodes: Node[] = [];
   private readonly stagedAttrs: StagedAttr[] = [];
   private readonly stagedEdges: StagedEdge[] = [];
@@ -57,7 +62,8 @@ export class Builder {
   constructor(private readonly graph: Graph) {}
 
   /** Stamp `ns` as the `namespace` provenance attr on every node staged after this call. */
-  setNamespace(ns: string): this {
+  setNamespace(ns: string): this
+  {
     this.currentNamespace = ns;
     return this;
   }
@@ -66,35 +72,41 @@ export class Builder {
 
   /** Stage a new instance node typed by `type`; `asClass` marks it a class. The
    *  flat node id is also its `localId` (record identity — was the `id` attr). */
-  assertInstance(type: NodeId, id: NodeId, asClass = false): this {
+  assertInstance(type: NodeId, id: NodeId, asClass = false): this
+  {
     this.stagedNodes.push(this.makeNode(id, Tier.Instance, { type, isClass: asClass, localId: id }));
     return this;
   }
 
   /** Stage a model container node (Instance-tier, the Model language construct). */
-  assertModel(id: NodeId): this {
+  assertModel(id: NodeId): this
+  {
     this.stagedNodes.push(this.makeNode(id, Tier.Instance, { metaKind: MetaKind.Model, localId: id }));
     return this;
   }
 
   /** Stage an annotation-type declaration node (Ontology-tier). */
-  defineAnnotation(id: NodeId, extendsId: NodeId | null = null): this {
+  defineAnnotation(id: NodeId, extendsId: NodeId | null = null): this
+  {
     this.stagedNodes.push(this.makeNode(id, Tier.Ontology, { metaKind: MetaKind.Annotation }));
-    if (extendsId !== null) {
+    if (extendsId !== null)
+    {
       this.stagedEdges.push({ kind: EdgeKind.Extends, via: null, from: id, to: extendsId });
     }
     return this;
   }
 
   /** Stage the singleton package node (Ontology-tier), host of package annotations. */
-  definePackageNode(id: NodeId): this {
+  definePackageNode(id: NodeId): this
+  {
     this.stagedNodes.push(this.makeNode(id, Tier.Ontology, { metaKind: MetaKind.Package }));
     return this;
   }
 
   /** Stage an annotation application `<target>@<annotationId>` (Ontology-tier, typed by
    *  the annotation) plus the `Annotated` edge target -> application. Returns the app id. */
-  annotate(target: NodeId, annotationId: NodeId): NodeId {
+  annotate(target: NodeId, annotationId: NodeId): NodeId
+  {
     const appId = `${target}@${annotationId}`;
     this.stagedNodes.push(this.makeNode(appId, Tier.Ontology, { type: annotationId }));
     this.stagedEdges.push({ kind: EdgeKind.Annotated, via: null, from: target, to: appId });
@@ -102,25 +114,29 @@ export class Builder {
   }
 
   /** Stage a scalar field write on `id`. */
-  setField(id: NodeId, name: string, value: Scalar): this {
+  setField(id: NodeId, name: string, value: Scalar): this
+  {
     this.stagedAttrs.push({ id, name, value });
     return this;
   }
 
   /** Stage a domain relationship edge `from -[name]-> to`. */
-  addRelationship(from: NodeId, name: NodeId, to: NodeId): this {
+  addRelationship(from: NodeId, name: NodeId, to: NodeId): this
+  {
     this.stagedEdges.push({ kind: EdgeKind.Relationship, via: name, from, to });
     return this;
   }
 
   /** Stage a containment edge `parent -contains-> child`. */
-  addContains(parent: NodeId, child: NodeId): this {
+  addContains(parent: NodeId, child: NodeId): this
+  {
     this.stagedEdges.push({ kind: EdgeKind.Contains, via: null, from: parent, to: child });
     return this;
   }
 
   /** Stage a class-instantiation edge `leaf -instanceOf-> class`. */
-  addInstanceOf(leaf: NodeId, cls: NodeId): this {
+  addInstanceOf(leaf: NodeId, cls: NodeId): this
+  {
     this.stagedEdges.push({ kind: EdgeKind.InstanceOf, via: null, from: leaf, to: cls });
     return this;
   }
@@ -128,15 +144,18 @@ export class Builder {
   // ── Ontology tier ───────────────────────────────────────────────────────
 
   /** Stage a primitive declaration node. */
-  definePrimitive(id: NodeId): this {
+  definePrimitive(id: NodeId): this
+  {
     this.stagedNodes.push(this.makeNode(id, Tier.Ontology, { metaKind: MetaKind.Primitive }));
     return this;
   }
 
   /** Stage a concept declaration, optionally extending `extendsId`. */
-  defineConcept(id: NodeId, extendsId: NodeId | null = null): this {
+  defineConcept(id: NodeId, extendsId: NodeId | null = null): this
+  {
     this.stagedNodes.push(this.makeNode(id, Tier.Ontology, { metaKind: MetaKind.Concept }));
-    if (extendsId !== null) {
+    if (extendsId !== null)
+    {
       this.stagedEdges.push({ kind: EdgeKind.Extends, via: null, from: id, to: extendsId });
     }
     return this;
@@ -146,7 +165,8 @@ export class Builder {
    *  field's schema is carried on the owner node (SPEC-01 #4) — no member node,
    *  no `HasField` edge; the value lands in an instance's `attrs` (scalar) or a
    *  relationship edge (reference) at the instance tier. */
-  addField(concept: NodeId, name: string, type: NodeId, cardinality: Cardinality = Cardinality.One): this {
+  addField(concept: NodeId, name: string, type: NodeId, cardinality: Cardinality = Cardinality.One): this
+  {
     this.stagedFields.push({ concept, decl: { name, type, cardinality } });
     return this;
   }
@@ -158,7 +178,8 @@ export class Builder {
     targets: NodeId[],
     cardinality: Cardinality = Cardinality.Many,
     inverse: string | null = null,
-  ): this {
+  ): this
+  {
     const memberId = `${concept}.${name}`;
     const node = this.makeNode(memberId, Tier.Ontology, { metaKind: MetaKind.Relationship });
     node.attrs.set("name", name);
@@ -166,7 +187,8 @@ export class Builder {
     if (inverse !== null) node.attrs.set("inverse", inverse);
     this.stagedNodes.push(node);
     this.stagedEdges.push({ kind: EdgeKind.HasRelationship, via: null, from: concept, to: memberId });
-    for (const target of targets) {
+    for (const target of targets)
+    {
       this.stagedEdges.push({ kind: EdgeKind.Targets, via: null, from: memberId, to: target });
     }
     return this;
@@ -181,9 +203,11 @@ export class Builder {
    * `Narrower` edge from each parent term to each child term. Terms nest
    * arbitrarily.
    */
-  defineTaxonomy(name: NodeId, represents: readonly NodeId[], terms: readonly TermInput[]): this {
+  defineTaxonomy(name: NodeId, represents: readonly NodeId[], terms: readonly TermInput[]): this
+  {
     this.stagedNodes.push(this.makeNode(name, Tier.Ontology, { metaKind: MetaKind.Taxonomy }));
-    for (const concept of represents) {
+    for (const concept of represents)
+    {
       this.stagedEdges.push({ kind: EdgeKind.Represents, via: null, from: name, to: concept });
     }
     const fallback = represents[0] ?? "";
@@ -200,10 +224,12 @@ export class Builder {
       if (term.attrs !== undefined) for (const [key, value] of term.attrs) node.attrs.set(key, value);
       this.stagedNodes.push(node);
       this.stagedEdges.push({ kind: EdgeKind.Contains, via: null, from: name, to: id });
-      for (const rel of term.relationships ?? []) {
+      for (const rel of term.relationships ?? [])
+      {
         this.stagedEdges.push({ kind: EdgeKind.Relationship, via: rel.name, from: id, to: rel.target });
       }
-      if (parentId !== null) {
+      if (parentId !== null)
+      {
         this.stagedEdges.push({ kind: EdgeKind.Narrower, via: null, from: parentId, to: id });
       }
       for (const child of term.children ?? []) stageTerm(child, id);
@@ -221,7 +247,8 @@ export class Builder {
     fromMember: string | null,
     toMember: string | null,
     relationship: string | null,
-  ): this {
+  ): this
+  {
     this.stagedNodes.push(this.makeNode(glyph, Tier.Ontology, { metaKind: MetaKind.Operator }));
     if (fromMember !== null) this.stagedAttrs.push({ id: glyph, name: "from", value: fromMember });
     if (toMember !== null) this.stagedAttrs.push({ id: glyph, name: "to", value: toMember });
@@ -231,9 +258,11 @@ export class Builder {
   }
 
   /** Define a viewpoint node framing the given concepts (one Frames edge each). */
-  defineViewpoint(name: NodeId, frames: readonly NodeId[]): this {
+  defineViewpoint(name: NodeId, frames: readonly NodeId[]): this
+  {
     this.stagedNodes.push(this.makeNode(name, Tier.Ontology, { metaKind: MetaKind.Viewpoint }));
-    for (const concept of frames) {
+    for (const concept of frames)
+    {
       this.stagedEdges.push({ kind: EdgeKind.Frames, via: null, from: name, to: concept });
     }
     return this;
@@ -242,49 +271,64 @@ export class Builder {
   // ── Commit ──────────────────────────────────────────────────────────────
 
   /** Validate every staged reference, then apply all edits and clear staging. */
-  commit(skipMissingTargets?: ReadonlySet<NodeId>): void {
+  commit(skipMissingTargets?: ReadonlySet<NodeId>): void
+  {
     const willExist = new Set<NodeId>();
-    for (const node of this.stagedNodes) {
-      if (this.graph.hasNode(node.id) || willExist.has(node.id)) {
+    for (const node of this.stagedNodes)
+    {
+      if (this.graph.hasNode(node.id) || willExist.has(node.id))
+      {
         throw new Error(`node "${node.id}" already exists`);
       }
       willExist.add(node.id);
     }
 
     const exists = (id: NodeId): boolean => this.graph.hasNode(id) || willExist.has(id);
-    for (const attr of this.stagedAttrs) {
-      if (!exists(attr.id)) {
+    for (const attr of this.stagedAttrs)
+    {
+      if (!exists(attr.id))
+      {
         throw new Error(`cannot set "${attr.name}" on node "${attr.id}" — it does not exist`);
       }
     }
-    for (const field of this.stagedFields) {
-      if (!exists(field.concept)) {
+    for (const field of this.stagedFields)
+    {
+      if (!exists(field.concept))
+      {
         throw new Error(`cannot declare field "${field.decl.name}" on "${field.concept}" — it does not exist`);
       }
     }
-    for (const edge of this.stagedEdges) {
-      if (!exists(edge.from)) {
+    for (const edge of this.stagedEdges)
+    {
+      if (!exists(edge.from))
+      {
         throw new Error(`edge source "${edge.from}" does not exist`);
       }
-      if (skipMissingTargets?.has(edge.to) && !exists(edge.to)) {
+      if (skipMissingTargets?.has(edge.to) && !exists(edge.to))
+      {
         continue; // known-undefined (already diagnosed by the loader) — drop the edge
       }
-      if (!exists(edge.to)) {
+      if (!exists(edge.to))
+      {
         throw new Error(`edge target "${edge.to}" does not exist`);
       }
     }
 
-    for (const node of this.stagedNodes) {
+    for (const node of this.stagedNodes)
+    {
       this.graph.addNode(node);
     }
-    for (const attr of this.stagedAttrs) {
+    for (const attr of this.stagedAttrs)
+    {
       this.graph.setAttr(attr.id, attr.name, attr.value);
     }
-    for (const edge of this.stagedEdges) {
+    for (const edge of this.stagedEdges)
+    {
       if (skipMissingTargets?.has(edge.to) && !this.graph.hasNode(edge.to)) continue;
       this.graph.addEdge({ kind: edge.kind, via: edge.via, from: edge.from, to: edge.to });
     }
-    for (const field of this.stagedFields) {
+    for (const field of this.stagedFields)
+    {
       this.graph.addFieldDecl(field.concept, field.decl);
     }
 
@@ -306,7 +350,8 @@ export class Builder {
       localId?: string | null;
       class?: NodeId | null;
     } = {},
-  ): Node {
+  ): Node
+  {
     return {
       id,
       tier,

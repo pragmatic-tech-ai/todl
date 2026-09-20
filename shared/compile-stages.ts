@@ -6,7 +6,8 @@ import { nodeLabel } from "./graph-layout.js";
 
 export interface TokenRow { kind: string; value: string; line: number; column: number }
 export interface ModelRow { id: string; tier: string; typeOf: string; label: string }
-export interface StageResult {
+export interface StageResult
+{
   tokens: TokenRow[]; astText: string;
   modelRows: ModelRow[]; edgeRows: { kind: string; from: string; to: string }[];
   diagnostics: GoldenDiagnostic[];
@@ -28,9 +29,11 @@ const VALUE = ["String", "Name", "List", "Composite", "Boolean", "Object", "Edge
  *  - renders the numeric `kind` discriminant as its enum name (Concept, Model,
  *    String, …) using the parent object to disambiguate DeclKind vs ValueKind
  *    (both start at 0; a value node carries text/parts/items/edge). */
-function astReplacer(this: Record<string, unknown>, key: string, value: unknown): unknown {
+function astReplacer(this: Record<string, unknown>, key: string, value: unknown): unknown
+{
   if (/span/i.test(key)) return undefined;
-  if (key === "kind" && typeof value === "number") {
+  if (key === "kind" && typeof value === "number")
+  {
     const o = this;
     const isValue = o.text !== undefined || o.parts !== undefined || o.items !== undefined || o.edge !== undefined;
     return (isValue ? VALUE[value] ?? DECL[value] : DECL[value] ?? VALUE[value]) ?? value;
@@ -39,11 +42,13 @@ function astReplacer(this: Record<string, unknown>, key: string, value: unknown)
 }
 
 /** The parse-time AST serialized as JSON (span noise stripped, `kind` named). */
-function formatAst(namespace: unknown): string {
+function formatAst(namespace: unknown): string
+{
   return JSON.stringify(namespace, astReplacer, 2);
 }
 
-export function compileStages(source: ExampleSource, options?: { debug?: boolean }): StageResult {
+export function compileStages(source: ExampleSource, options?: { debug?: boolean }): StageResult
+{
   const tokens: TokenRow[] = tokenize(source.text).map((t) => ({ kind: t.kind, value: t.value, line: t.line, column: t.column }));
   const parsed = parse(source.text, source.name);
   const astText = parsed.diagnostics.length

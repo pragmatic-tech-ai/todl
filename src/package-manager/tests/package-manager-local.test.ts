@@ -5,7 +5,8 @@ import { LocalPackageStore } from "../local-package-store.js";
 import { compilePackage } from "../../publish/publish.js";
 import { Manifest } from "../../manifest/reflection/reflection.js";
 
-function widget(id: string, version: string) {
+function widget(id: string, version: string)
+{
   const out = compilePackage(
     [],
     [{ uri: "w.todl", text: `namespace acme { concept Widget { name : string; } }` }],

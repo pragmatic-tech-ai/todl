@@ -12,7 +12,8 @@ import { type MemberStorageResolver, type ProjectFactoryResolver } from './proje
 // (SolutionTreeVM) live in the presentation band. The headless composition engine
 // (compile → package layer → Domain graph) lives in SolutionSession; this class
 // carries the authoritative state a View reads and the manager mutates.
-export class Solution extends Observable {
+export class Solution extends Observable
+{
     private _name: string;
     private _dirty = false;
     // The storage the solution is rooted at, or undefined for an unsaved "untitled"
@@ -26,7 +27,8 @@ export class Solution extends Observable {
     // enriches this; for now it is a pass-through store for load/collect).
     private loadedSettings: Record<string, Record<string, string | number | boolean>> = {};
 
-    constructor(name: string, storage?: IStorage) {
+    constructor(name: string, storage?: IStorage)
+    {
         super();
         this._name = name;
         this.Storage = storage;
@@ -34,37 +36,44 @@ export class Solution extends Observable {
 
     // True once the solution has an on-disk root (i.e. it has been saved/opened).
     // An untitled solution is HasLocation === false until Save As roots it.
-    public get HasLocation(): boolean {
+    public get HasLocation(): boolean
+    {
         return this.Storage !== undefined;
     }
 
-    public get Name(): string {
+    public get Name(): string
+    {
         return this._name;
     }
-    public set Name(v: string) {
+    public set Name(v: string)
+    {
         const old = this._name;
         this._name = v;
         this.RaisePropertyChanged('Name', old, v);
         this.markDirty();
     }
 
-    public get IsDirty(): boolean {
+    public get IsDirty(): boolean
+    {
         return this._dirty;
     }
-    public set IsDirty(v: boolean) {
+    public set IsDirty(v: boolean)
+    {
         const old = this._dirty;
         this._dirty = v;
         this.RaisePropertyChanged('IsDirty', old, v);
     }
 
-    public AddMember(path: string, type: string): SolutionMember {
+    public AddMember(path: string, type: string): SolutionMember
+    {
         const member = new SolutionMember({ path, type });
         this.Members.Add(member);
         this.markDirty();
         return member;
     }
 
-    public RemoveMember(member: SolutionMember): void {
+    public RemoveMember(member: SolutionMember): void
+    {
         this.Members.Remove(member);
         this.markDirty();
     }
@@ -76,10 +85,13 @@ export class Solution extends Observable {
     public async OpenMembers(
         storageFor: MemberStorageResolver,
         factoryFor: ProjectFactoryResolver,
-    ): Promise<void> {
-        for (const member of this.Members) {
+    ): Promise<void>
+    {
+        for (const member of this.Members)
+        {
             const factory = factoryFor(member.Ref.type);
-            if (factory === undefined) {
+            if (factory === undefined)
+            {
                 member.Project = undefined;
                 continue;
             }
@@ -88,14 +100,17 @@ export class Solution extends Observable {
     }
 
     // Stash persisted setting values (from the manifest) to overlay when bags bind.
-    public LoadSettings(values: Record<string, Record<string, string | number | boolean>>): void {
+    public LoadSettings(values: Record<string, Record<string, string | number | boolean>>): void
+    {
         this.loadedSettings = values ?? {};
     }
 
     // Build live setting bags from definitions, overlaying any loaded values; each
     // bag's write marks the session dirty. Idempotent per Id.
-    public BindBags(defs: Iterable<SettingBagDefinition>): void {
-        for (const def of defs) {
+    public BindBags(defs: Iterable<SettingBagDefinition>): void
+    {
+        for (const def of defs)
+        {
             if (this.SettingBags.ToArray().some((b) => b.Definition.Id === def.Id)) continue;
             this.SettingBags.Add(
                 new SolutionSettingBag(def, this.loadedSettings[def.Id], () => this.markDirty()),
@@ -105,21 +120,25 @@ export class Solution extends Observable {
 
     // The setting values to persist: touched live bags, plus any loaded values for
     // bags that never bound (a missing module's settings round-trip, not dropped).
-    public CollectSettings(): Record<string, Record<string, string | number | boolean>> {
+    public CollectSettings(): Record<string, Record<string, string | number | boolean>>
+    {
         const out: Record<string, Record<string, string | number | boolean>> = {};
         const bound = new Set<string>();
-        for (const bag of this.SettingBags) {
+        for (const bag of this.SettingBags)
+        {
             bound.add(bag.Definition.Id);
             if (bag.IsTouched) out[bag.Definition.Id] = bag.ToRecord();
         }
-        for (const [id, vals] of Object.entries(this.loadedSettings)) {
+        for (const [id, vals] of Object.entries(this.loadedSettings))
+        {
             if (!bound.has(id) && !(id in out)) out[id] = vals;
         }
         return out;
     }
 
     // Any member/setting mutation flips dirty; Save clears it.
-    private markDirty(): void {
+    private markDirty(): void
+    {
         if (!this._dirty) this.IsDirty = true;
     }
 }

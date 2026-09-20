@@ -22,13 +22,15 @@ import { ARCHITECTURE_CLAUDE_ROOT } from './scaffold.generated.js'
 // .diagram + .todl formats, the bound-manifest shape, and its own CLAUDE.md scaffold
 // contribution. The `.todl` / `.diagram` FILE formats are edited by their document
 // factories (resolved by extension) — editors own files, this factory owns the project.
-interface ArchitectureManifest extends ProjectManifestEnvelope {
+interface ArchitectureManifest extends ProjectManifestEnvelope
+{
     metaModel?: BaseRef                  // the meta-model this architecture conforms to
     libraries?: readonly BaseRef[]       // the technology libraries it draws on
     diagrams?: { [path: string]: { viewpoints: string[] } }   // per-diagram viewpoint selection
 }
 
-export class ArchitectureProjectFactory extends TodlProjectFactory {
+export class ArchitectureProjectFactory extends TodlProjectFactory
+{
     public static readonly Key = new ServiceKey<ArchitectureProjectFactory>('ArchitectureProjectFactory')
     public static readonly ProjectType = 'architecture'
 
@@ -46,7 +48,8 @@ export class ArchitectureProjectFactory extends TodlProjectFactory {
 
     constructor(provider: IServiceProvider) { super(provider) }
 
-    protected buildManifest(name: string, bindings?: BaseBindings): ProjectManifestEnvelope {
+    protected buildManifest(name: string, bindings?: BaseBindings): ProjectManifestEnvelope
+    {
         const manifest: ArchitectureManifest = {
             type: ArchitectureProjectFactory.ProjectType, name, version: 1,
             ...(bindings?.metaModel !== undefined ? { metaModel: bindings.metaModel } : {}),
@@ -58,7 +61,8 @@ export class ArchitectureProjectFactory extends TodlProjectFactory {
 
     // The architecture project's own scaffold (its CLAUDE.md); the shared TODL manual
     // + rules are added by the base.
-    protected scaffoldContributions(): readonly ScaffoldFile[] {
+    protected scaffoldContributions(): readonly ScaffoldFile[]
+    {
         return [{ path: CLAUDE_MD_FILENAME, content: ARCHITECTURE_CLAUDE_ROOT }]
     }
 }

@@ -7,7 +7,8 @@ import { ManifestWriter } from "../../manifest/manifest-writer.js";
 import { Manifest } from "../../manifest/reflection/reflection.js";
 
 // Compile a tiny self-contained model the real way; emit its logical manifest.
-function logical() {
+function logical()
+{
   const { model, diagnostics } = check([{
     uri: "widgets.todl",
     text: `namespace acme {

@@ -11,7 +11,8 @@ import type { ReflectedNode } from "../reflection.js";
 // reflection results against the live Repository (SPEC-05 §7.10). Parity holds
 // where instance-wins and class-wins agree: the instance does NOT override the
 // class-fixed field, so both resolutions yield the same effective value.
-function buildRepo(): Repository {
+function buildRepo(): Repository
+{
   const repo = new Repository();
   repo
     .builder()
@@ -50,7 +51,8 @@ describe("SPEC-05 t14: reflection ↔ Repository parity", () => {
     const node = graph.nodes.find((n) => n.id === "app.home")! as ReflectedNode;
     const mirror = manifest.reflect(node);
 
-    for (const name of ["label", "tier"]) {
+    for (const name of ["label", "tier"])
+    {
       assert.equal(mirror.field(name)!.value, repo.attr("app.home", name));
     }
     assert.equal(mirror.field("tier")!.value, "ui"); // from the class

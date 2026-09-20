@@ -17,7 +17,8 @@ const DEFAULT_GITHUB_API = "https://api.github.com";
 const TOKEN_ENV_VARS = ["NODE_AUTH_TOKEN", "GITHUB_TOKEN", "NPM_TOKEN"] as const;
 
 /** The registry-related options a CLI command accepts as flags. */
-export interface RegistryCliOptions {
+export interface RegistryCliOptions
+{
   registry?: string;
   scope?: string;
   token?: string;
@@ -27,9 +28,11 @@ export interface RegistryCliOptions {
 
 /** Parse an `.npmrc` file into key→value, expanding `${VAR}` from the environment
  *  (npm's own interpolation, common in CI: `_authToken=${NODE_AUTH_TOKEN}`). */
-function parseNpmrc(text: string, env: NodeJS.ProcessEnv): Map<string, string> {
+function parseNpmrc(text: string, env: NodeJS.ProcessEnv): Map<string, string>
+{
   const out = new Map<string, string>();
-  for (const raw of text.split(/\r?\n/)) {
+  for (const raw of text.split(/\r?\n/))
+  {
     const line = raw.trim();
     if (line.length === 0 || line.startsWith("#") || line.startsWith(";")) continue;
     const eq = line.indexOf("=");
@@ -45,9 +48,11 @@ function parseNpmrc(text: string, env: NodeJS.ProcessEnv): Map<string, string> {
 }
 
 /** Read and merge `.npmrc` from the project dir then the user home (project wins). */
-function readNpmrc(cwd: string, env: NodeJS.ProcessEnv): Map<string, string> {
+function readNpmrc(cwd: string, env: NodeJS.ProcessEnv): Map<string, string>
+{
   const merged = new Map<string, string>();
-  for (const path of [join(homedir(), ".npmrc"), join(cwd, ".npmrc")]) {
+  for (const path of [join(homedir(), ".npmrc"), join(cwd, ".npmrc")])
+  {
     if (!existsSync(path)) continue;
     for (const [key, value] of parseNpmrc(readFileSync(path, "utf8"), env)) merged.set(key, value);
   }
@@ -55,7 +60,8 @@ function readNpmrc(cwd: string, env: NodeJS.ProcessEnv): Map<string, string> {
 }
 
 /** The `.npmrc` auth-token key for a registry URL (`//host/path:_authToken`). */
-function authTokenKey(registry: string): string {
+function authTokenKey(registry: string): string
+{
   const url = new URL(registry);
   const path = url.pathname.endsWith("/") ? url.pathname : `${url.pathname}/`;
   return `//${url.host}${path}:_authToken`;
@@ -70,7 +76,8 @@ export function resolveRegistryConfig(
   cwd: string,
   flags: RegistryCliOptions,
   env: NodeJS.ProcessEnv,
-): NpmRegistryConfig {
+): NpmRegistryConfig
+{
   const npmrc = readNpmrc(cwd, env);
   const scope = flags.scope ?? DEFAULT_SCOPE;
 

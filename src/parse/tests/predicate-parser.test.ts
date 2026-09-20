@@ -10,12 +10,14 @@ import { DeclKind } from "../ast.js";
 import { Repository } from "../../model/model.js";
 import { satisfies } from "../../predicate/evaluate.js";
 
-function predicate(source: string) {
+function predicate(source: string)
+{
   const tokens = tokenize(source).filter((token) => token.kind !== TokenKind.EOF);
   return parsePredicate(tokens);
 }
 
-function serviceTask(assignee: string | null): Repository {
+function serviceTask(assignee: string | null): Repository
+{
   const model = new Repository();
   const builder = model.builder();
   builder.assertInstance("TaskType", "service");

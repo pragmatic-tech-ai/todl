@@ -7,7 +7,8 @@ import { ModelDraft } from "../../authoring/model-draft.js";
 import { TechCatalog } from "./fixtures/tech-catalog.generated.js";
 
 // A base with concept schemas + library instances to reference across the boundary.
-function catalogRepo(): Repository {
+function catalogRepo(): Repository
+{
   const r = new Repository();
   const b = r.builder();
   b.definePrimitive("string");

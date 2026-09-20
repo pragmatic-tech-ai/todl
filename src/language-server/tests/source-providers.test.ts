@@ -10,7 +10,8 @@ import { PushedSourceProvider, ProjectRegistry } from "../workspace.js";
 import { FsSourceProvider } from "../workspace-fs.js";
 
 // A TextDocuments stub exposing just `all()` (the only method providers use).
-function docsWith(...docs: TextDocument[]): TextDocuments<TextDocument> {
+function docsWith(...docs: TextDocument[]): TextDocuments<TextDocument>
+{
   return { all: () => docs } as unknown as TextDocuments<TextDocument>;
 }
 

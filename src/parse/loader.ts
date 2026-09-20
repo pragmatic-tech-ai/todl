@@ -80,7 +80,8 @@ import { Severity, DiagnosticCode, type Diagnostic } from "../diagnostics/diagno
 
 /** What a load produces: the populated graph, every diagnostic gathered across
  * all passes, and a nodeId → source-uri map (which file each own node came from). */
-export interface LoadResult {
+export interface LoadResult
+{
   model: Repository;
   diagnostics: Diagnostic[];
   provenance: Map<string, string>;
@@ -90,12 +91,14 @@ export interface LoadResult {
 // is homed to the first file that creates it. `current` is set from each unit
 // before it is materialised; an undefined recorder means the caller does not
 // want provenance (a plain load pays nothing).
-interface HomeRecorder {
+interface HomeRecorder
+{
   current: string | null;
   readonly map: Map<string, string>;
 }
 
-function recordHome(rec: HomeRecorder | undefined, id: string): void {
+function recordHome(rec: HomeRecorder | undefined, id: string): void
+{
   if (rec !== undefined && rec.current !== null && !rec.map.has(id)) rec.map.set(id, rec.current);
 }
 
@@ -103,7 +106,8 @@ function recordHome(rec: HomeRecorder | undefined, id: string): void {
 // some term, a field type, an edge endpoint, …). The resolver pre-pass walks these
 // and either accepts, rewrites, or reports each one. `home` is where the reference
 // lives (its namespace + that file's imports), which decides what it can see.
-interface RefSite {
+interface RefSite
+{
   id: string;
   span: SourceSpan | null;
   node: NodeId | null;
@@ -122,7 +126,8 @@ interface RefSite {
 // A parsed-but-not-yet-registered invariant: its predicate AST + the concept it
 // guards. Collected during Pass 2a and registered on the model at the very end,
 // once every node it might reference exists.
-interface PendingInvariant {
+interface PendingInvariant
+{
   concept: string;
   expr: Expr;
   description: string;
@@ -155,7 +160,8 @@ interface PendingInvariant {
  * provenance.get("web");           // "landscape.todl"  (which file minted the node)
  * ```
  */
-export function load(sources: SourceFile[], idGenerator: IdGenerator = new SnowflakeIdGenerator()): LoadResult {
+export function load(sources: SourceFile[], idGenerator: IdGenerator = new SnowflakeIdGenerator()): LoadResult
+{
   const model = new Repository();
   const provenance = new Map<string, string>();
   const diagnostics = loadInto(model, sources, new Set(), idGenerator, provenance);
@@ -172,7 +178,8 @@ export function loadInto(
   reserved: ReadonlySet<string> = new Set(),
   idGenerator: IdGenerator = new SnowflakeIdGenerator(),
   provenance?: Map<string, string>,
-): Diagnostic[] {
+): Diagnostic[]
+{
   const diagnostics: Diagnostic[] = [];
   const rec: HomeRecorder | undefined = provenance !== undefined ? { current: null, map: provenance } : undefined;
 
@@ -183,10 +190,12 @@ export function loadInto(
   // (for provenance + split-model file grouping). From here on the loader works
   // over `units`, not files — the file boundary only matters for those three tags.
   const units: { ns: string; imports: readonly string[]; uri: string; decl: Declaration }[] = [];
-  for (const source of sources) {
+  for (const source of sources)
+  {
     const result = parse(source.text, source.uri);
     diagnostics.push(...result.diagnostics);
-    for (const decl of result.namespace.declarations) {
+    for (const decl of result.namespace.declarations)
+    {
       units.push({ ns: result.namespace.path, imports: result.namespace.imports, uri: source.uri, decl });
     }
   }
@@ -201,7 +210,8 @@ export function loadInto(
       decl.kind === DeclKind.Concept ||
       decl.kind === DeclKind.Annotation ||
       decl.kind === DeclKind.Taxonomy;
-    if (reserved.size > 0 && named && reserved.has(decl.name)) {
+    if (reserved.size > 0 && named && reserved.has(decl.name))
+    {
       diagnostics.push({
         code: DiagnosticCode.PreludeNameRedeclared,
         severity: Severity.Warning,
@@ -233,7 +243,8 @@ export function loadInto(
   const defined = new Set<string>();
   const sites: RefSite[] = [];
   const sourceNs = new Map<string, string>();
-  for (const { ns, imports, decl } of units) {
+  for (const { ns, imports, decl } of units)
+  {
     collectDefinitions(decl, ns, defined, sourceNs);
     const home: Home = { ns, imports };
     // `visitReferences` is the one unified AST walk that yields every reference in a
@@ -274,7 +285,8 @@ export function loadInto(
     for (const decl of declarations) if (decl.kind === DeclKind.Viewpoint && decl.name === id) return true;
     return model.resolve(id)?.metaKind === MetaKind.Viewpoint;
   };
-  for (const { ns, imports, decl } of units) {
+  for (const { ns, imports, decl } of units)
+  {
     if (decl.kind !== DeclKind.Taxonomy) continue;
     const home: Home = { ns, imports };
     decl.uses.forEach((u, i) => {
@@ -299,7 +311,8 @@ export function loadInto(
   // form a term-drop scope for the model's instance value refs. Normalize each
   // qualified `ns.tax` to its flat id in place (the captured scope holds the same
   // `decl.libraries` array) and require each to resolve to a known taxonomy.
-  for (const { ns, imports, decl } of units) {
+  for (const { ns, imports, decl } of units)
+  {
     if (decl.kind !== DeclKind.Model) continue;
     const home: Home = { ns, imports };
     decl.libraries.forEach((u, i) => {
@@ -322,7 +335,8 @@ export function loadInto(
 
   // A model's `conforms <viewpoint>` binds the viewpoint it homes entities for.
   // Resolve it (rewrite qualified → flat) and require it to be a viewpoint.
-  for (const { ns, imports, decl } of units) {
+  for (const { ns, imports, decl } of units)
+  {
     if (decl.kind !== DeclKind.Model || decl.conforms === null) continue;
     const home: Home = { ns, imports };
     const r = resolveRef(decl.conforms, home);
@@ -345,17 +359,21 @@ export function loadInto(
   // in every contributing block (the viewpoint is the per-file home discriminator).
   // A single-file model may omit it.
   const modelBlocks = new Map<string, { uris: Set<string>; blocks: ModelDecl[] }>();
-  for (const { uri, decl } of units) {
+  for (const { uri, decl } of units)
+  {
     if (decl.kind !== DeclKind.Model) continue;
     const entry = modelBlocks.get(decl.id) ?? { uris: new Set<string>(), blocks: [] };
     entry.uris.add(uri);
     entry.blocks.push(decl);
     modelBlocks.set(decl.id, entry);
   }
-  for (const [id, { uris, blocks }] of modelBlocks) {
+  for (const [id, { uris, blocks }] of modelBlocks)
+  {
     if (uris.size < 2) continue;
-    for (const decl of blocks) {
-      if (decl.conforms === null) {
+    for (const decl of blocks)
+    {
+      if (decl.conforms === null)
+      {
         diagnostics.push({
           code: DiagnosticCode.ModelConformsRequiredWhenSplit,
           severity: Severity.Error,
@@ -379,11 +397,13 @@ export function loadInto(
   // against terms of the taxonomies this one `uses`. A sibling shadows `uses`, and
   // shadows even a same-named node that exists but is unreachable elsewhere. Two
   // `uses` matches is genuinely ambiguous → error and drop the edge.
-  for (const site of sites) {
+  for (const site of sites)
+  {
     const r = resolveRef(site.id, site.home);
     if (r.kind === "ok") continue;
     if (r.kind === "qualified") { site.rewrite?.(r.flat); continue; }
-    if (site.scope !== undefined) {
+    if (site.scope !== undefined)
+    {
       // A model scope has no enclosing taxonomy (empty sibling slot); only the
       // `uses` candidates below apply. A taxonomy-body scope tries its sibling first.
       const sibling = site.scope.taxonomy ? `${site.scope.taxonomy}.${site.id}` : "";
@@ -392,7 +412,8 @@ export function loadInto(
         .map((u) => `${u}.${site.id}`)
         .filter((cand) => exists(cand) && reachable(cand, site.home));
       if (matches.length === 1) { site.rewrite?.(matches[0]!); continue; }
-      if (matches.length > 1) {
+      if (matches.length > 1)
+      {
         diagnostics.push({
           code: DiagnosticCode.TaxonomyAmbiguousBareReference,
           severity: Severity.Error,
@@ -438,16 +459,19 @@ export function loadInto(
   // are in `undefinedIds`, so the closing `commit` drops their edges.
   const first = model.builder();
   const definedOps = new Set<string>(); // glyph → staged once; duplicates diagnosed in validateOperators
-  for (const { ns, uri, decl: declaration } of units) {
+  for (const { ns, uri, decl: declaration } of units)
+  {
     first.setNamespace(ns);
-    switch (declaration.kind) {
+    switch (declaration.kind)
+    {
       case DeclKind.Primitive:
         first.definePrimitive(declaration.name);
         break;
       case DeclKind.Viewpoint:
         first.defineViewpoint(declaration.name, declaration.frames);
         break;
-      case DeclKind.Taxonomy: {
+      case DeclKind.Taxonomy:
+      {
         // A taxonomy is a hierarchy of TERMS, each classifying one of the concepts
         // it `represents`. `multi` (represents >1 concept) forces each term to name
         // its own concept; `primary` is the default concept for single-concept taxa.
@@ -461,7 +485,8 @@ export function loadInto(
         // composition record bound to the term's field (deferred); a
         // non-represented concept is an error ("throw and require a concept").
         const buildTerm = (t: Term, ownConcept: string): TermInput => {
-          if (t.concept === null && multi) {
+          if (t.concept === null && multi)
+          {
             diagnostics.push({
               code: DiagnosticCode.TaxonomyTermConceptAmbiguous,
               severity: Severity.Error,
@@ -472,11 +497,15 @@ export function loadInto(
             });
           }
           const hierarchy: TermInput[] = [];
-          for (const child of t.children) {
+          for (const child of t.children)
+          {
             const childConcept = child.concept;
-            if (childConcept === null || childConcept === ownConcept) {
+            if (childConcept === null || childConcept === ownConcept)
+            {
               hierarchy.push(buildTerm(child, childConcept ?? ownConcept));
-            } else if (represented.has(childConcept)) {
+            }
+            else if (represented.has(childConcept))
+            {
               deferredCompositions.push({
                 ns,
                 uri,
@@ -484,7 +513,9 @@ export function loadInto(
                 parentConcept: ownConcept,
                 decl: termToInstanceDecl(decl.name, child),
               });
-            } else {
+            }
+            else
+            {
               diagnostics.push({
                 code: DiagnosticCode.TermConceptNotRepresented,
                 severity: Severity.Error,
@@ -498,9 +529,11 @@ export function loadInto(
           // Literal scalars (String/Boolean) are unambiguously attrs; everything
           // else (Name/List/Composite) is classified by the concept schema and
           // deferred to Pass 2b.
-          for (const assignment of t.assignments) {
+          for (const assignment of t.assignments)
+          {
             const v = assignment.value;
-            if (v.kind !== ValueKind.String && v.kind !== ValueKind.Boolean) {
+            if (v.kind !== ValueKind.String && v.kind !== ValueKind.Boolean)
+            {
               deferredTermValues.push({ ns, uri, concept: ownConcept, termId: `${decl.name}.${t.id}`, name: assignment.name, value: v });
             }
           }
@@ -516,7 +549,8 @@ export function loadInto(
         first.defineTaxonomy(decl.name, decl.represents, decl.terms.map((t) => buildTerm(t, t.concept ?? primary)));
         break;
       }
-      case DeclKind.Concept: {
+      case DeclKind.Concept:
+      {
         // Persist ONLY the explicit parent (SPEC-02 #7). "Every parent-less
         // concept is an `Element`" is now a VIRTUAL root rule applied in
         // resolution (`Repository.supertypesOf`/`schemaOf`), not a stored
@@ -530,7 +564,8 @@ export function loadInto(
       case DeclKind.Operator:
         // Stage a glyph once; a redeclaration would collide on the node id, so
         // it is dropped here and reported by validateOperators.
-        if (!definedOps.has(declaration.glyph)) {
+        if (!definedOps.has(declaration.glyph))
+        {
           definedOps.add(declaration.glyph);
           first.defineOperator(declaration.glyph, declaration.concept, declaration.fromMember, declaration.toMember, declaration.relationship);
         }
@@ -551,22 +586,28 @@ export function loadInto(
   // Invariants are parsed here but only registered at the very end.
   const second = model.builder();
   const invariants: PendingInvariant[] = [];
-  for (const { ns, decl: declaration } of units) {
-    if (declaration.kind === DeclKind.Annotation) {
+  for (const { ns, decl: declaration } of units)
+  {
+    if (declaration.kind === DeclKind.Annotation)
+    {
       second.setNamespace(ns);
       for (const p of declaration.params) second.addField(declaration.name, p.name, p.type, p.cardinality);
       continue;
     }
     if (declaration.kind !== DeclKind.Concept) continue;
     second.setNamespace(ns);
-    for (const field of declaration.fields) {
+    for (const field of declaration.fields)
+    {
       second.addField(declaration.name, field.name, field.type, field.cardinality);
     }
-    for (const relationship of declaration.relationships) {
+    for (const relationship of declaration.relationships)
+    {
       second.addConceptRelationship(declaration.name, relationship.name, relationship.targets, relationship.cardinality);
     }
-    for (const invariant of declaration.invariants) {
-      if (invariant.predicate !== null) {
+    for (const invariant of declaration.invariants)
+    {
+      if (invariant.predicate !== null)
+      {
         invariants.push({
           concept: declaration.name,
           expr: parsePredicate(invariant.predicate),
@@ -591,24 +632,30 @@ export function loadInto(
   const asserted = new Set<string>();
   // Operators were committed in Pass 1, so the table sees bases + this load.
   const ops = operatorTable(model);
-  for (const { ns, uri, decl: declaration } of units) {
+  for (const { ns, uri, decl: declaration } of units)
+  {
     third.setNamespace(ns);
     if (rec !== undefined) rec.current = uri;
-    if (declaration.kind === DeclKind.Instance) {
+    if (declaration.kind === DeclKind.Instance)
+    {
       applyInstance(third, model, declaration, null, null, asserted, diagnostics, idGenerator, ops, rec);
-    } else if (declaration.kind === DeclKind.Model) {
+    }
+    else if (declaration.kind === DeclKind.Model)
+    {
       applyModel(third, model, declaration, asserted, diagnostics, idGenerator, ops, rec);
     }
   }
   // Composition records nested in taxonomy terms — applied here so they bind to
   // the parent term's field against the now-committed concept schema.
-  for (const composition of deferredCompositions) {
+  for (const composition of deferredCompositions)
+  {
     third.setNamespace(composition.ns);
     if (rec !== undefined) rec.current = composition.uri;
     applyInstance(third, model, composition.decl, composition.parentId, composition.parentConcept, asserted, diagnostics, idGenerator, ops, rec);
   }
   // Term values classified by the now-committed concept schema (type-directed).
-  for (const d of deferredTermValues) {
+  for (const d of deferredTermValues)
+  {
     third.setNamespace(d.ns);
     if (rec !== undefined) rec.current = d.uri;
     realizeValue(third, model, d.concept, d.termId, d.name, d.value, diagnostics, asserted, idGenerator, ops, rec);
@@ -626,35 +673,47 @@ export function loadInto(
   const fourth = model.builder();
   const seenApps = new Set<string>();
   let packageStaged = false;
-  for (const { ns, decl } of units) {
-    if (decl.kind === DeclKind.Concept) {
+  for (const { ns, decl } of units)
+  {
+    if (decl.kind === DeclKind.Concept)
+    {
       fourth.setNamespace(ns);
       stageApplications(fourth, model, decl.name, decl.annotations, seenApps, diagnostics, asserted, idGenerator, ops);
       // Member-level annotations decorate the member node (`<concept>.<member>@<Ann>`).
-      for (const rel of decl.relationships) {
+      for (const rel of decl.relationships)
+      {
         if (rel.annotations.length > 0)
           stageApplications(fourth, model, `${decl.name}.${rel.name}`, rel.annotations, seenApps, diagnostics, asserted, idGenerator, ops);
       }
-    } else if (decl.kind === DeclKind.Package) {
+    }
+    else if (decl.kind === DeclKind.Package)
+    {
       fourth.setNamespace(ns);
       if (!packageStaged) { fourth.definePackageNode(PACKAGE_NODE_ID); packageStaged = true; }
       stageApplications(fourth, model, PACKAGE_NODE_ID, decl.annotations, seenApps, diagnostics, asserted, idGenerator, ops);
-    } else if (decl.kind === DeclKind.Taxonomy) {
+    }
+    else if (decl.kind === DeclKind.Taxonomy)
+    {
       fourth.setNamespace(ns);
       // Taxonomy-level annotations decorate the taxonomy node itself
       // (`<taxonomy>@<name>`), exactly like a concept.
       stageApplications(fourth, model, decl.name, decl.annotations, seenApps, diagnostics, asserted, idGenerator, ops);
       const walkTerm = (t: Term): void => {
-        if (t.annotations.length > 0) {
+        if (t.annotations.length > 0)
+        {
           stageApplications(fourth, model, `${decl.name}.${t.id}`, t.annotations, seenApps, diagnostics, asserted, idGenerator, ops);
         }
         t.children.forEach(walkTerm);
       };
       decl.terms.forEach(walkTerm);
-    } else if (decl.kind === DeclKind.Instance) {
+    }
+    else if (decl.kind === DeclKind.Instance)
+    {
       fourth.setNamespace(ns);
       stageInstanceAnnotations(fourth, model, decl, seenApps, diagnostics, asserted, idGenerator, ops);
-    } else if (decl.kind === DeclKind.Model) {
+    }
+    else if (decl.kind === DeclKind.Model)
+    {
       fourth.setNamespace(ns);
       for (const inst of decl.instances) stageInstanceAnnotations(fourth, model, inst, seenApps, diagnostics, asserted, idGenerator, ops);
     }
@@ -664,7 +723,8 @@ export function loadInto(
   // ═══════════════════════════ INVARIANTS & spans ══════════════════════════════
   // Register the executable invariants collected in Pass 2a — done last, when every
   // node they might reference is guaranteed to exist.
-  for (const invariant of invariants) {
+  for (const invariant of invariants)
+  {
     model.defineInvariant(invariant.concept, invariant.expr, invariant.description);
   }
 
@@ -688,15 +748,19 @@ export function loadInto(
 // ══════════════════════════════════════════════════════════════════════════════
 
 /** Record each declaration's, instance's, and assignment's source span on the model. */
-function recordSpans(model: Repository, declarations: Declaration[]): void {
-  for (const declaration of declarations) {
-    switch (declaration.kind) {
+function recordSpans(model: Repository, declarations: Declaration[]): void
+{
+  for (const declaration of declarations)
+  {
+    switch (declaration.kind)
+    {
       case DeclKind.Primitive:
       case DeclKind.Concept:
       case DeclKind.Viewpoint:
         model.recordSpan(declaration.name, declaration.span);
         break;
-      case DeclKind.Taxonomy: {
+      case DeclKind.Taxonomy:
+      {
         model.recordSpan(declaration.name, declaration.span);
         const record = (t: Term): void => {
           model.recordSpan(`${declaration.name}.${t.id}`, t.span);
@@ -710,13 +774,15 @@ function recordSpans(model: Repository, declarations: Declaration[]): void {
         break;
       case DeclKind.Model:
         model.recordSpan(declaration.id, declaration.span);
-        if (declaration.metaModelSpan !== undefined) {
+        if (declaration.metaModelSpan !== undefined)
+        {
           model.recordSpan(Repository.memberKey(declaration.id, "meta-model"), declaration.metaModelSpan);
         }
         declaration.librarySpans?.forEach((s, i) =>
           model.recordSpan(Repository.memberKey(declaration.id, `uses.${i}`), s),
         );
-        if (declaration.conformsSpan !== undefined) {
+        if (declaration.conformsSpan !== undefined)
+        {
           model.recordSpan(Repository.memberKey(declaration.id, "conforms"), declaration.conformsSpan);
         }
         for (const inst of declaration.instances) recordInstanceSpans(model, inst);
@@ -730,10 +796,13 @@ function recordSpans(model: Repository, declarations: Declaration[]): void {
   }
 }
 
-function recordInstanceSpans(model: Repository, decl: InstanceDecl): void {
+function recordInstanceSpans(model: Repository, decl: InstanceDecl): void
+{
   model.recordSpan(decl.id, decl.span);
-  for (const assignment of decl.assignments) {
-    if (assignment.span !== undefined) {
+  for (const assignment of decl.assignments)
+  {
+    if (assignment.span !== undefined)
+    {
       model.recordSpan(Repository.memberKey(decl.id, assignment.name), assignment.span);
     }
   }
@@ -748,7 +817,8 @@ function recordInstanceSpans(model: Repository, decl: InstanceDecl): void {
 
 /** A type is reference-like when it resolves to a concept or taxonomy node;
  * primitives and unresolved ids are value-like. */
-function isReferenceType(model: Repository, type: string | undefined): boolean {
+function isReferenceType(model: Repository, type: string | undefined): boolean
+{
   if (type === undefined) return false;
   const kind = model.resolve(type)?.metaKind;
   return kind === MetaKind.Concept || kind === MetaKind.Taxonomy;
@@ -757,7 +827,8 @@ function isReferenceType(model: Repository, type: string | undefined): boolean {
 /** A member is reference-like when it is a `->` relationship, or a `:` field
  * whose declared type is reference-like. Reads the effective (inherited) schema
  * of `concept`, so schemas must be committed before this is called. */
-function isReferenceMember(model: Repository, concept: string, name: string): boolean {
+function isReferenceMember(model: Repository, concept: string, name: string): boolean
+{
   const schema = model.effectiveSchema(concept);
   if (schema.relationships.some((r) => r.name === name)) return true;
   const field = schema.fields.find((f) => f.name === name);
@@ -766,9 +837,11 @@ function isReferenceMember(model: Repository, concept: string, name: string): bo
 
 /** A term's literal scalar attrs only (String/Boolean). Name/List/Composite are
  * deferred and classified by the represented concept's schema after it commits. */
-function termLiteralAttrs(assignments: AssignmentNode[]): Map<string, Scalar> {
+function termLiteralAttrs(assignments: AssignmentNode[]): Map<string, Scalar>
+{
   const attrs = new Map<string, Scalar>();
-  for (const assignment of assignments) {
+  for (const assignment of assignments)
+  {
     const value = assignment.value;
     if (value.kind === ValueKind.String) attrs.set(assignment.name, value.text);
     else if (value.kind === ValueKind.Boolean) attrs.set(assignment.name, value.value);
@@ -780,7 +853,8 @@ function termLiteralAttrs(assignments: AssignmentNode[]): Map<string, Scalar> {
  * concept, e.g. a `billing` inside a `technology` term) into an instance
  * declaration — a class-level record applied through the instance machinery so
  * it binds to the parent term's field. Its own children are nested records. */
-function termToInstanceDecl(taxonomy: string, t: Term): InstanceDecl {
+function termToInstanceDecl(taxonomy: string, t: Term): InstanceDecl
+{
   return {
     kind: DeclKind.Instance,
     concept: t.concept ?? "",
@@ -806,18 +880,23 @@ const WRAPPER_CONCEPTS = new Set(["technology-library"]);
  * declaration is scanned for concrete objects with no model ancestor, and each
  * is flagged. Classes and transparent wrappers are recursed through, not flagged.
  */
-function detectOrphans(declarations: Declaration[], diagnostics: Diagnostic[]): void {
-  for (const declaration of declarations) {
+function detectOrphans(declarations: Declaration[], diagnostics: Diagnostic[]): void
+{
+  for (const declaration of declarations)
+  {
     if (declaration.kind === DeclKind.Instance) flagOrphans(declaration, diagnostics);
   }
 }
 
-function flagOrphans(decl: InstanceDecl, diagnostics: Diagnostic[]): void {
-  if (WRAPPER_CONCEPTS.has(decl.concept)) {
+function flagOrphans(decl: InstanceDecl, diagnostics: Diagnostic[]): void
+{
+  if (WRAPPER_CONCEPTS.has(decl.concept))
+  {
     for (const child of decl.children) flagOrphans(child, diagnostics);
     return;
   }
-  if (decl.isClass) {
+  if (decl.isClass)
+  {
     for (const child of decl.children) flagOrphans(child, diagnostics);
     return;
   }
@@ -846,10 +925,13 @@ function stageApplications(
   asserted: Set<string>,
   idGen: IdGenerator,
   ops: OperatorTable,
-): void {
-  for (const app of apps) {
+): void
+{
+  for (const app of apps)
+  {
     const appId = `${target}@${app.name}`;
-    if (seen.has(appId)) {
+    if (seen.has(appId))
+    {
       diagnostics.push({
         code: DiagnosticCode.AnnotationDuplicate,
         severity: Severity.Error,
@@ -878,12 +960,18 @@ function stageInstanceAnnotations(
   asserted: Set<string>,
   idGen: IdGenerator,
   ops: OperatorTable,
-): void {
-  if (decl.annotations.length > 0) {
-    if (decl.isClass) {
+): void
+{
+  if (decl.annotations.length > 0)
+  {
+    if (decl.isClass)
+    {
       stageApplications(builder, model, decl.id, decl.annotations, seen, diagnostics, asserted, idGen, ops);
-    } else {
-      for (const app of decl.annotations) {
+    }
+    else
+    {
+      for (const app of decl.annotations)
+      {
         diagnostics.push({
           code: DiagnosticCode.AnnotationInvalidTarget,
           severity: Severity.Error,
@@ -916,11 +1004,13 @@ function applyModel(
   idGen: IdGenerator,
   ops: OperatorTable,
   rec?: HomeRecorder,
-): void {
+): void
+{
   // A model may be split across several files (Option B): same id, one node.
   // Assert the container + its model-level fields only on first sight; later
   // same-id blocks merge their instances into it.
-  if (!asserted.has(decl.id)) {
+  if (!asserted.has(decl.id))
+  {
     builder.assertModel(decl.id);
     recordHome(rec, decl.id);
     builder.setField(decl.id, "MetaModel", decl.metaModel);
@@ -928,12 +1018,14 @@ function applyModel(
     decl.libraries.forEach((lib, i) => builder.setField(decl.id, `uses.${i}`, lib));
     asserted.add(decl.id);
   }
-  for (const child of decl.instances) {
+  for (const child of decl.instances)
+  {
     applyInstance(builder, model, child, decl.id, null, asserted, diagnostics, idGen, ops, rec);
     // `conforms` is a per-FILE (per-block) home viewpoint: stamp each concrete
     // top-level entity so a model split across files keeps each entity's own
     // viewpoint after the model nodes merge.
-    if (decl.conforms !== null && !child.isClass && !WRAPPER_CONCEPTS.has(child.concept)) {
+    if (decl.conforms !== null && !child.isClass && !WRAPPER_CONCEPTS.has(child.concept))
+    {
       builder.setField(child.id, "conforms", decl.conforms);
     }
   }
@@ -953,12 +1045,14 @@ function applyInstance(
   idGen: IdGenerator,
   ops: OperatorTable,
   rec?: HomeRecorder,
-): void {
+): void
+{
   // A `technology-library` is a transparent file wrapper (not an EA concept);
   // its members are top-level records. Skipping the container node also avoids
   // a legacy id collision (the aws library names both its container and its
   // root location `aws`).
-  if (WRAPPER_CONCEPTS.has(decl.concept)) {
+  if (WRAPPER_CONCEPTS.has(decl.concept))
+  {
     for (const child of decl.children) applyInstance(builder, model, child, null, null, asserted, diagnostics, idGen, ops, rec);
     return;
   }
@@ -967,7 +1061,8 @@ function applyInstance(
   // (e.g. a component under two location blocks); merge later fields onto the
   // first assertion rather than erroring on the duplicate node.
   const first = !asserted.has(decl.id);
-  if (first) {
+  if (first)
+  {
     asserted.add(decl.id);
     builder.assertInstance(decl.concept, decl.id, decl.isClass);
     recordHome(rec, decl.id);
@@ -975,15 +1070,18 @@ function applyInstance(
     // assertInstance), no longer surfaced as an `id` attr (SPEC-01: attrs are user-only).
     if (decl.binds !== null) builder.setField(decl.id, "MetaModel", decl.binds);
     if (decl.instanceOf !== null) builder.addInstanceOf(decl.id, decl.instanceOf);
-    if (parent !== null) {
+    if (parent !== null)
+    {
       builder.addContains(parent, decl.id);
       if (parentConcept !== null) bindToField(builder, model, parent, parentConcept, decl, diagnostics);
     }
   }
-  for (const assignment of decl.assignments) {
+  for (const assignment of decl.assignments)
+  {
     realizeValue(builder, model, decl.concept, decl.id, assignment.name, assignment.value, diagnostics, asserted, idGen, ops, rec);
   }
-  for (const child of decl.children) {
+  for (const child of decl.children)
+  {
     applyInstance(builder, model, child, decl.id, decl.concept, asserted, diagnostics, idGen, ops, rec);
   }
   // Edge applications in this record's body are contained by this instance, and
@@ -1004,7 +1102,8 @@ function bindToField(
   parentConcept: string,
   decl: InstanceDecl,
   diagnostics: Diagnostic[],
-): void {
+): void
+{
   bindEntityToField(builder, model, parent, parentConcept, decl.concept, decl.id, decl.span, diagnostics);
 }
 
@@ -1023,11 +1122,13 @@ function bindEntityToField(
   id: string,
   span: SourceSpan,
   diagnostics: Diagnostic[],
-): void {
+): void
+{
   const fields = model.effectiveSchema(parentConcept).fields.filter((field) => field.type === concept);
   const [only] = fields;
   if (only === undefined) return;
-  if (fields.length > 1) {
+  if (fields.length > 1)
+  {
     diagnostics.push({
       code: DiagnosticCode.AmbiguousFieldBinding,
       severity: Severity.Error,
@@ -1067,7 +1168,8 @@ function realizeValue(
   idGen: IdGenerator,
   ops: OperatorTable,
   rec?: HomeRecorder,
-): void {
+): void
+{
   const reference = isReferenceMember(model, concept, name);
   const mismatch = (msg: string): void => {
     diagnostics.push({
@@ -1080,7 +1182,8 @@ function realizeValue(
     });
   };
 
-  switch (value.kind) {
+  switch (value.kind)
+  {
     case ValueKind.String:
       if (reference) return mismatch(`"${concept}.${name}" is a reference — expected a name, not a quoted string`);
       builder.setField(id, name, value.text);
@@ -1103,10 +1206,13 @@ function realizeValue(
       realizeEdgeValue(builder, model, concept, id, name, value.edge, diagnostics, asserted, idGen, ops, rec);
       break;
     case ValueKind.Composite:
-      if (reference) {
+      if (reference)
+      {
         // A `|`-composed selection of taxonomy terms → one edge per part.
         for (const part of value.parts) builder.addRelationship(id, name, part);
-      } else {
+      }
+      else
+      {
         // Enum-flag scalar kept as the legacy `|`-joined string; the runtime
         // enum table's has() splits on `|`.
         builder.setField(id, name, value.parts.join(" | "));
@@ -1131,9 +1237,11 @@ function realizeInlineObject(
   idGen: IdGenerator,
   ops: OperatorTable,
   rec?: HomeRecorder,
-): void {
+): void
+{
   const fieldType = referenceMemberType(model, ownerConcept, field);
-  if (fieldType === undefined) {
+  if (fieldType === undefined)
+  {
     diagnostics.push({
       code: DiagnosticCode.InlineObjectTarget, severity: Severity.Error,
       message: `"${ownerConcept}.${field}" is not a concept-typed member — an inline object cannot be assigned to it`,
@@ -1141,7 +1249,8 @@ function realizeInlineObject(
     });
     return;
   }
-  if (value.concept !== fieldType && !model.supertypesOf(value.concept).includes(fieldType)) {
+  if (value.concept !== fieldType && !model.supertypesOf(value.concept).includes(fieldType))
+  {
     diagnostics.push({
       code: DiagnosticCode.InlineObjectType, severity: Severity.Error,
       message: `inline object of concept "${value.concept}" is not assignable to "${ownerConcept}.${field}" (expects "${fieldType}" or a subtype)`,
@@ -1170,7 +1279,8 @@ function realizeInlineObject(
 }
 
 /** The bare string of a name/string value — used to read an inline object's `id =`. */
-function nameOfValue(v: ValueNode): string {
+function nameOfValue(v: ValueNode): string
+{
   if (v.kind === ValueKind.Name) return v.name;
   if (v.kind === ValueKind.String) return v.text;
   return "";
@@ -1179,7 +1289,8 @@ function nameOfValue(v: ValueNode): string {
 /** The declared concept type a reference member targets (a concept-typed field's
  * type, or a relationship's single target), or undefined when `name` is not a
  * concept-typed member. */
-function referenceMemberType(model: Repository, concept: string, name: string): string | undefined {
+function referenceMemberType(model: Repository, concept: string, name: string): string | undefined
+{
   const schema = model.effectiveSchema(concept);
   const field = schema.fields.find((f) => f.name === name);
   if (field !== undefined) return isReferenceType(model, field.type) ? field.type : undefined;
@@ -1198,7 +1309,8 @@ function referenceMemberType(model: Repository, concept: string, name: string): 
 // (`steps = [ a ==> b ]`), binding the minted node to a field.
 
 /** A glyph resolved to its edge concept + endpoint members (design §4). */
-interface ResolvedOperator {
+interface ResolvedOperator
+{
   glyph: string;
   concept: string;
   from: string | null;
@@ -1210,9 +1322,11 @@ type OperatorTable = Map<string, ResolvedOperator>;
 
 /** Build the glyph → operator lookup from every committed operator node (the
  * bases plus this load's Pass-1 operators). */
-function operatorTable(model: Repository): OperatorTable {
+function operatorTable(model: Repository): OperatorTable
+{
   const table: OperatorTable = new Map();
-  for (const node of model.allNodes()) {
+  for (const node of model.allNodes())
+  {
     if (node.metaKind !== MetaKind.Operator) continue;
     const concept = model.related(node.id, EdgeKind.Targets, Direction.Out)[0];
     if (concept === undefined) continue; // dangling concept ref already diagnosed
@@ -1232,19 +1346,23 @@ function validateOperators(
   model: Repository,
   units: readonly { ns: string; decl: Declaration }[],
   diagnostics: Diagnostic[],
-): void {
+): void
+{
   const seen = new Set<string>();
   const GLYPH = /^[-~=><!]+$/;
-  for (const { decl } of units) {
+  for (const { decl } of units)
+  {
     if (decl.kind !== DeclKind.Operator) continue;
-    if (!GLYPH.test(decl.glyph) || decl.glyph === "=") {
+    if (!GLYPH.test(decl.glyph) || decl.glyph === "=")
+    {
       diagnostics.push({
         code: DiagnosticCode.OperatorMalformedGlyph, severity: Severity.Error,
         message: `operator glyph "${decl.glyph}" must be a run of edge characters ( - ~ = > < ! ) and not a lone "="`,
         span: decl.glyphSpan ?? decl.span, node: decl.glyph, path: null,
       });
     }
-    if (seen.has(decl.glyph)) {
+    if (seen.has(decl.glyph))
+    {
       diagnostics.push({
         code: DiagnosticCode.OperatorRedeclared, severity: Severity.Error,
         message: `operator "${decl.glyph}" is declared more than once`,
@@ -1269,10 +1387,14 @@ function validateOperators(
         span: decl.conceptSpan ?? decl.span, node: decl.glyph, path: null,
       });
     };
-    if (decl.relationship !== null) {
+    if (decl.relationship !== null)
+    {
       if (!isReferenceMemberName(decl.relationship)) badEndpoint(decl.relationship);
-    } else {
-      for (const member of [decl.fromMember, decl.toMember]) {
+    }
+    else
+    {
+      for (const member of [decl.fromMember, decl.toMember])
+      {
         if (member !== null && !isReferenceMemberName(member)) badEndpoint(member);
       }
     }
@@ -1282,7 +1404,8 @@ function validateOperators(
 function applyEdges(
   builder: Builder, model: Repository, edges: readonly EdgeApplication[], ownerId: string | null,
   ownerConcept: string | null, ops: OperatorTable, asserted: Set<string>, diagnostics: Diagnostic[], idGen: IdGenerator, rec?: HomeRecorder,
-): void {
+): void
+{
   for (const edge of edges) applyEdge(builder, model, edge, ownerId, ownerConcept, ops, asserted, diagnostics, idGen, rec);
 }
 
@@ -1292,9 +1415,11 @@ function applyEdges(
 function applyEdge(
   builder: Builder, model: Repository, edge: EdgeApplication, ownerId: string | null,
   ownerConcept: string | null, ops: OperatorTable, asserted: Set<string>, diagnostics: Diagnostic[], idGen: IdGenerator, rec?: HomeRecorder,
-): void {
+): void
+{
   const op = ops.get(edge.glyph);
-  if (op === undefined) {
+  if (op === undefined)
+  {
     diagnostics.push({
       code: DiagnosticCode.OperatorUndefined, severity: Severity.Error,
       message: `no operator "${edge.glyph}" is declared in the meta-model`,
@@ -1302,8 +1427,10 @@ function applyEdge(
     });
     return;
   }
-  if (op.relationship !== null) {
-    if (edge.body.length > 0) {
+  if (op.relationship !== null)
+  {
+    if (edge.body.length > 0)
+    {
       diagnostics.push({
         code: DiagnosticCode.OperatorBodyOnRelationship, severity: Severity.Error,
         message: `operator "${edge.glyph}" is a relationship edge and cannot carry a "{ … }" body`,
@@ -1320,7 +1447,8 @@ function applyEdge(
   // (`steps = [ a ==> b ]`) goes through realizeEdgeValue, not here, so there's
   // no double bind.
   const mintedId = mintReifiedEdge(builder, model, edge, op, ownerId, asserted, diagnostics, idGen, ops, rec);
-  if (ownerId !== null && ownerConcept !== null) {
+  if (ownerId !== null && ownerConcept !== null)
+  {
     bindEntityToField(builder, model, ownerId, ownerConcept, op.concept, mintedId, edge.span, diagnostics);
   }
 }
@@ -1332,7 +1460,8 @@ function applyEdge(
 function mintReifiedEdge(
   builder: Builder, model: Repository, edge: EdgeApplication, op: ResolvedOperator, ownerId: string | null,
   asserted: Set<string>, diagnostics: Diagnostic[], idGen: IdGenerator, ops: OperatorTable, rec?: HomeRecorder,
-): string {
+): string
+{
   const idAssign = edge.body.find((a) => a.name === "id");
   const objId = idAssign !== undefined ? nameOfValue(idAssign.value) : idGen.next();
   const assignments: AssignmentNode[] = [];
@@ -1353,9 +1482,11 @@ function mintReifiedEdge(
 function realizeEdgeValue(
   builder: Builder, model: Repository, ownerConcept: string, owner: string, field: string,
   edge: EdgeApplication, diagnostics: Diagnostic[], asserted: Set<string>, idGen: IdGenerator, ops: OperatorTable, rec?: HomeRecorder,
-): void {
+): void
+{
   const op = ops.get(edge.glyph);
-  if (op === undefined) {
+  if (op === undefined)
+  {
     diagnostics.push({
       code: DiagnosticCode.OperatorUndefined, severity: Severity.Error,
       message: `no operator "${edge.glyph}" is declared in the meta-model`,
@@ -1363,7 +1494,8 @@ function realizeEdgeValue(
     });
     return;
   }
-  if (op.relationship !== null) {
+  if (op.relationship !== null)
+  {
     diagnostics.push({
       code: DiagnosticCode.OperatorNotAValue, severity: Severity.Error,
       message: `operator "${edge.glyph}" is a relationship edge and yields no entity — it cannot be used as a value`,
@@ -1372,7 +1504,8 @@ function realizeEdgeValue(
     return;
   }
   const fieldType = referenceMemberType(model, ownerConcept, field);
-  if (fieldType === undefined) {
+  if (fieldType === undefined)
+  {
     diagnostics.push({
       code: DiagnosticCode.InlineObjectTarget, severity: Severity.Error,
       message: `"${ownerConcept}.${field}" is not a concept-typed member — an edge value cannot be assigned to it`,
@@ -1380,7 +1513,8 @@ function realizeEdgeValue(
     });
     return;
   }
-  if (op.concept !== fieldType && !model.supertypesOf(op.concept).includes(fieldType)) {
+  if (op.concept !== fieldType && !model.supertypesOf(op.concept).includes(fieldType))
+  {
     diagnostics.push({
       code: DiagnosticCode.InlineObjectType, severity: Severity.Error,
       message: `edge of concept "${op.concept}" is not assignable to "${ownerConcept}.${field}" (expects "${fieldType}" or a subtype)`,

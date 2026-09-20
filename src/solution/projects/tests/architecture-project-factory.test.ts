@@ -8,13 +8,15 @@ import { NodeFsStorage } from '@pragmatic-tech-ai/todl-runtime/node'
 import { ProjectNodeKind } from '../project.js'
 import { ArchitectureProjectFactory } from '../architecture-project-factory.js'
 
-async function tempStorage(t: TestContext): Promise<NodeFsStorage> {
+async function tempStorage(t: TestContext): Promise<NodeFsStorage>
+{
     const dir = await mkdtemp(join(tmpdir(), 'todl-arch-'))
     t.after(async () => { await rm(dir, { recursive: true, force: true }) })
     return new NodeFsStorage(dir)
 }
 
-function factory(): ArchitectureProjectFactory {
+function factory(): ArchitectureProjectFactory
+{
     return new ArchitectureProjectFactory(new ServiceProvider())
 }
 

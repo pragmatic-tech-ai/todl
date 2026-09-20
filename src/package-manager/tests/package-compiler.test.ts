@@ -13,7 +13,8 @@ import type { BaseResolver } from "../base-resolver.js";
 
 const PROJECTS = join(dirname(fileURLToPath(import.meta.url)), "../../../test_projects");
 type Src = { uri: string; text: string };
-function sources(project: string): Src[] {
+function sources(project: string): Src[]
+{
   const root = join(PROJECTS, project);
   const walk = (dir: string): Src[] =>
     readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
@@ -26,11 +27,13 @@ function sources(project: string): Src[] {
 const manifest = (project: string) => parseManifest(readFileSync(join(PROJECTS, project, "project.plexus"), "utf8"));
 
 /** A reader returning a fixed Project (the pipeline's disk read, faked). */
-function reader(project: Project): ProjectReader {
+function reader(project: Project): ProjectReader
+{
   return { read: () => project };
 }
 /** A resolver returning fixed bases (dependency resolution, faked). */
-function resolver(bases: readonly TodlDocument[]): BaseResolver {
+function resolver(bases: readonly TodlDocument[]): BaseResolver
+{
   return { resolve: () => Promise.resolve(bases) };
 }
 

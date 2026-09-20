@@ -12,7 +12,8 @@ const PROJECTS = join(dirname(fileURLToPath(import.meta.url)), "../../../test_pr
  *  installed into node_modules under `scope` — a realistic "ready to pack" project.
  *  The dependency is installed under the SAME scope the project will pack with,
  *  as it would be in real usage. */
-async function setupLibraryProject(scope = "@pragmatic-tech-ai"): Promise<string> {
+async function setupLibraryProject(scope = "@pragmatic-tech-ai"): Promise<string>
+{
   const dir = join(mkdtempSync(join(tmpdir(), "todl-cli-")), "microsoft");
   mkdirSync(dir, { recursive: true });
   copyFileSync(join(PROJECTS, "libraries/microsoft/project.plexus"), join(dir, "project.plexus"));

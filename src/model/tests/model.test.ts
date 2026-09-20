@@ -29,7 +29,8 @@ test("view returns a reactive facade wired to the model", () => {
 
 test("subtypesOf and supertypesOf walk the extends lattice", () => {
   const graph = new Graph();
-  for (const id of ["component", "frontend", "spa"]) {
+  for (const id of ["component", "frontend", "spa"])
+  {
     graph.addNode({ id, tier: Tier.Ontology, type: null, metaKind: MetaKind.Concept, namespace: null, localId: null, isClass: false, class: null, storageId: null, fields: [], attrs: new Map() });
   }
   graph.addEdge({ kind: EdgeKind.Extends, via: null, from: "frontend", to: "component" });

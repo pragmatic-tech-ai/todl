@@ -10,14 +10,17 @@ export enum Role { Extends, FieldType, RelationshipTarget, RefValue, InstanceCon
 
 export interface Occurrence { uri: string; range: Range; role: Role; symbol: string }
 
-export interface ReferenceIndex {
+export interface ReferenceIndex
+{
   get(symbol: string): Occurrence[];
   occurrenceAt(uri: string, pos: Position): Occurrence | null;
   all(): Occurrence[];
 }
 
-function roleOf(r: RefRole): Role {
-  switch (r) {
+function roleOf(r: RefRole): Role
+{
+  switch (r)
+  {
     case RefRole.Extends: return Role.Extends;
     case RefRole.FieldType: return Role.FieldType;
     case RefRole.ParamType: return Role.FieldType;
@@ -33,15 +36,19 @@ function roleOf(r: RefRole): Role {
   }
 }
 
-export function buildReferenceIndex(files: Map<string, NamespaceNode>): ReferenceIndex {
+export function buildReferenceIndex(files: Map<string, NamespaceNode>): ReferenceIndex
+{
   const occurrences: Occurrence[] = [];
-  for (const [uri, ns] of files) {
-    for (const span of ns.importSpans ?? []) {
+  for (const [uri, ns] of files)
+  {
+    for (const span of ns.importSpans ?? [])
+    {
       occurrences.push({ uri, symbol: "", role: Role.Import, range: spanToRange(span) });
     }
     // One shared walk — the SAME one the loader resolves through, so occurrences
     // and resolution can never disagree on what a reference is.
-    for (const decl of ns.declarations) {
+    for (const decl of ns.declarations)
+    {
       visitReferences(decl, (v) => {
         if (v.span === undefined) return;
         occurrences.push({ uri, symbol: v.name, role: roleOf(v.role), range: spanToRange(v.span) });
@@ -50,7 +57,8 @@ export function buildReferenceIndex(files: Map<string, NamespaceNode>): Referenc
   }
 
   const bySymbol = new Map<string, Occurrence[]>();
-  for (const occ of occurrences) {
+  for (const occ of occurrences)
+  {
     const list = bySymbol.get(occ.symbol);
     if (list === undefined) bySymbol.set(occ.symbol, [occ]);
     else list.push(occ);
@@ -64,7 +72,8 @@ export function buildReferenceIndex(files: Map<string, NamespaceNode>): Referenc
   };
 }
 
-function contains(range: Range, pos: Position): boolean {
+function contains(range: Range, pos: Position): boolean
+{
   const afterStart = pos.line > range.start.line ||
     (pos.line === range.start.line && pos.character >= range.start.character);
   const beforeEnd = pos.line < range.end.line ||

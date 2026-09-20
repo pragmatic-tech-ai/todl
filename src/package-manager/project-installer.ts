@@ -10,14 +10,17 @@ import { runNpm } from "./npm.js";
 /** Runs npm with `args` in `cwd`, resolving with npm's exit code. */
 export type NpmRunner = (args: readonly string[], cwd: string) => Promise<number>;
 
-export class ProjectInstaller {
+export class ProjectInstaller
+{
   private readonly run: NpmRunner;
-  constructor(run: NpmRunner = runNpm) {
+  constructor(run: NpmRunner = runNpm)
+  {
     this.run = run;
   }
 
   /** Install `directory`'s dependencies (delegates to `npm install`). */
-  install(directory: string): Promise<number> {
+  install(directory: string): Promise<number>
+  {
     return this.run(["install"], directory);
   }
 }

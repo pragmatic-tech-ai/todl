@@ -10,7 +10,8 @@ import {
   type CollectionChangedArgs,
 } from "../reactive.js";
 
-function instance(id: string, type: string): Node {
+function instance(id: string, type: string): Node
+{
   return {
     id,
     tier: Tier.Instance,

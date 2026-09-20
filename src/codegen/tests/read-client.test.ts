@@ -9,7 +9,8 @@ import { generateReadClient } from "../read-client.js";
 import { TechCatalog } from "./fixtures/tech-catalog.generated.js";
 
 // billing/location/technology concepts + a `stack` taxonomy + instances.
-function catalogRepo(): Repository {
+function catalogRepo(): Repository
+{
   const r = new Repository();
   const b = r.builder();
   b.definePrimitive("string");

@@ -20,7 +20,8 @@ const BUILTIN_TYPES: ReadonlySet<string> = new Set(["string", "number", "integer
 /** A reference's home: the namespace of the file it sits in + that file's
  * imports. A target is reachable iff its namespace is this ns, one of the
  * imports, or global (prelude / namespace-less). */
-export interface Home {
+export interface Home
+{
   ns: string;
   imports: readonly string[];
 }
@@ -34,11 +35,13 @@ export type Resolved =
 /** The namespace-provenance attr of a model node, or null when unlabeled
  * (prelude / namespace-less / old base). The single reader of a node's
  * namespace — shared by the resolver and validate.ts. */
-export function namespaceOf(model: Repository, id: string): string | null {
+export function namespaceOf(model: Repository, id: string): string | null
+{
   return model.resolve(id)?.namespace ?? null;
 }
 
-export interface Resolver {
+export interface Resolver
+{
   /** The namespace a flat id belongs to, or null for prelude / namespace-less. */
   nsOf(id: string): string | null;
   /** True if `id` is a source-defined or base node. */
@@ -54,7 +57,8 @@ export function makeResolver(
   defined: ReadonlySet<string>,
   sourceNs: ReadonlyMap<string, string>,
   reserved: ReadonlySet<string>,
-): Resolver {
+): Resolver
+{
   const nsOf = (id: string): string | null =>
     sourceNs.has(id) ? sourceNs.get(id)! : namespaceOf(model, id);
   const exists = (id: string): boolean => defined.has(id) || model.has(id) || BUILTIN_TYPES.has(id);
@@ -72,7 +76,8 @@ export function makeResolver(
     // in ns `ea`; `ns.tax.term` → flat `tax.term` in ns `ns`. Flat-id match
     // (above) wins first, so `categories.platform-api` stays the term node.
     const segs = id.split(".");
-    for (let k = 1; k < segs.length; k++) {
+    for (let k = 1; k < segs.length; k++)
+    {
       const rest = segs.slice(k).join(".");
       if (exists(rest) && nsOf(rest) === segs.slice(0, k).join(".")) return { kind: "qualified", flat: rest };
     }

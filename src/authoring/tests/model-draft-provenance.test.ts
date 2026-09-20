@@ -5,7 +5,8 @@ import { check } from "../../api.js";
 import { ModelDraft } from "../model-draft.js";
 
 // Meta-model: endpoints framed by Structure, reified connectors by Flow.
-function base() {
+function base()
+{
   return check([{ uri: "mm.todl", text: `namespace mm {
     concept endpoint { label : string?; }
     concept connector { from : endpoint; to : endpoint; }
@@ -25,7 +26,8 @@ const flow = { uri: "flow.todl", text: `namespace acme {
 }` };
 
 // The typeOf of an own instance (Entity exposes id; typeOf lives on the resolved node).
-function ownOfType(draft: ModelDraft, typeOf: string): string | undefined {
+function ownOfType(draft: ModelDraft, typeOf: string): string | undefined
+{
   return draft.ownInstances().map((e) => e.id).find((id) => draft.resolve(id)?.type === typeOf);
 }
 

@@ -6,7 +6,8 @@ import { Cardinality } from "../../model/graph.js";
 import { DiagnosticCode } from "../validate.js";
 
 /** edge { end -> actor | component }, with ai_agent : actor. */
-function baseModel(): Repository {
+function baseModel(): Repository
+{
   const model = new Repository();
   model
     .builder()
@@ -20,7 +21,8 @@ function baseModel(): Repository {
   return model;
 }
 
-function targetTypeDiagnostics(model: Repository) {
+function targetTypeDiagnostics(model: Repository)
+{
   return model.validate().filter((d) => d.code === DiagnosticCode.TargetTypeMismatch);
 }
 

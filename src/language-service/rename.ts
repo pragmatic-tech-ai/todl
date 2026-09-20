@@ -7,7 +7,8 @@ const KEBAB = /^[a-z][a-z0-9-]*$/;
 
 // Resolve the symbol under the cursor — a reference occurrence or a definition
 // name — tolerating a cursor on the identifier's trailing edge.
-function resolve(a: Analysis, uri: string, pos: Position): { symbol: string; range: Range } | null {
+function resolve(a: Analysis, uri: string, pos: Position): { symbol: string; range: Range } | null
+{
   const back = pos.character > 0 ? { line: pos.line, character: pos.character - 1 } : pos;
   const occ = a.refs.occurrenceAt(uri, pos) ?? a.refs.occurrenceAt(uri, back);
   if (occ !== null && occ.symbol !== "") return { symbol: occ.symbol, range: occ.range };
@@ -16,11 +17,13 @@ function resolve(a: Analysis, uri: string, pos: Position): { symbol: string; ran
   return null;
 }
 
-export function prepareRename(a: Analysis, uri: string, pos: Position): Range | null {
+export function prepareRename(a: Analysis, uri: string, pos: Position): Range | null
+{
   return resolve(a, uri, pos)?.range ?? null;
 }
 
-export function renameEdits(a: Analysis, uri: string, pos: Position, newName: string): WorkspaceEdit | RenameError {
+export function renameEdits(a: Analysis, uri: string, pos: Position, newName: string): WorkspaceEdit | RenameError
+{
   const target = resolve(a, uri, pos);
   if (target === null) return { error: "Nothing to rename here." };
   if (!KEBAB.test(newName)) return { error: `"${newName}" is not a valid kebab-case name.` };

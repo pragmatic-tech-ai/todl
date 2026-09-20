@@ -7,7 +7,8 @@ import { toJSON } from "../../emit/json.js";
 import { ModelDraft } from "../model-draft.js";
 import { TodlFileStore, type FileIO } from "../../index.js";
 
-function baseClient(): FrozenRepository {
+function baseClient(): FrozenRepository
+{
   const repo = new Repository();
   const b = repo.builder().setNamespace("acme.ea");
   b.definePrimitive("string");
@@ -22,12 +23,15 @@ function baseClient(): FrozenRepository {
   return FrozenRepository.fromJSON(toJSON(repo));
 }
 
-class MemoryFileIO implements FileIO {
+class MemoryFileIO implements FileIO
+{
   content = "";
-  async read(): Promise<string> {
+  async read(): Promise<string>
+  {
     return this.content;
   }
-  async write(content: string): Promise<void> {
+  async write(content: string): Promise<void>
+  {
     this.content = content;
   }
 }

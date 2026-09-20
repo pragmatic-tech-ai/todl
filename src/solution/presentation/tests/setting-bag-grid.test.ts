@@ -5,7 +5,8 @@ import { SettingBagDefinition } from '../../engine/setting-bag-definition.js'
 import { SolutionSettingBag } from '../../engine/solution-setting-bag.js'
 import { SettingBagGrid } from '../setting-bag-grid.js'
 
-function field(key: string, kind: SettingKind, def: unknown): SettingDefinition {
+function field(key: string, kind: SettingKind, def: unknown): SettingDefinition
+{
     const d = new SettingDefinition()
     d.Key = key; d.Kind = kind; d.Default = def; d.Label = key
     return d

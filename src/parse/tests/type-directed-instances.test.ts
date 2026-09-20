@@ -4,7 +4,8 @@ import { load as loadFiles } from "../loader.js";
 import { EdgeKind, Direction } from "../../model/graph.js";
 import { DiagnosticCode } from "../../validate/validate.js";
 
-function loaded(text: string) {
+function loaded(text: string)
+{
   return loadFiles([{ uri: "s.todl", text }]);
 }
 

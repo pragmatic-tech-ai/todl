@@ -8,7 +8,8 @@ import { spawn } from "node:child_process";
 
 /** Run npm with `args` in `cwd`. Resolves with npm's exit code (0 = success);
  *  rejects only if npm could not be spawned. */
-export function runNpm(args: readonly string[], cwd: string): Promise<number> {
+export function runNpm(args: readonly string[], cwd: string): Promise<number>
+{
   return new Promise<number>((resolve, reject) => {
     const child = spawn("npm", [...args], {
       cwd,

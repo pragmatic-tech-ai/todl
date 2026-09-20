@@ -6,7 +6,8 @@ import { Cardinality } from "../../model/graph.js";
 import { DiagnosticCode } from "../validate.js";
 
 /** technology { label: string [one]; available-in -> location [non-empty] }. */
-function schemaModel(): Repository {
+function schemaModel(): Repository
+{
   const model = new Repository();
   model
     .builder()

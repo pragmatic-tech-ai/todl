@@ -41,7 +41,8 @@ import type { SourceSpan } from "../diagnostics/span.js";
 /** The kind of a top-level declaration — one member per statement the language
  * supports at file scope (`primitive`, `taxonomy`, `concept`, `model`, …). */
 
-export enum DeclKind {
+export enum DeclKind
+{
   Primitive,
   Taxonomy,
   Viewpoint,
@@ -55,7 +56,8 @@ export enum DeclKind {
 
 /** The kind of an authored VALUE (the right-hand side of `name = …`, an array
  * element, or an annotation param) — the surface shapes a value can take. */
-export enum ValueKind {
+export enum ValueKind
+{
   String,
   Name,
   List,
@@ -72,20 +74,23 @@ export enum ValueKind {
 // member's declared type — so a plain `NameValue` may end up as either.
 
 /** A quoted string literal — `name = "text"`. */
-export interface StringValue {
+export interface StringValue
+{
   kind: ValueKind.String;
   text: string;
 }
 
 /** A boolean literal — the reserved words `true` / `false`. */
-export interface BooleanValue {
+export interface BooleanValue
+{
   kind: ValueKind.Boolean;
   value: boolean;
 }
 
 /** A bare identifier value — an enum member (`service`) or, when the member's
  * declared type is a concept/taxonomy, a reference. */
-export interface NameValue {
+export interface NameValue
+{
   kind: ValueKind.Name;
   name: string;
   /** Span of the name occurrence (set by the parser) — used for reference
@@ -95,13 +100,15 @@ export interface NameValue {
 
 /** A bracketed list value — `name = [a, b, c]` (a repeated member). Each item is
  * itself a value node; the loader realizes one attr/edge per item. */
-export interface ListValue {
+export interface ListValue
+{
   kind: ValueKind.List;
   items: ValueNode[];
 }
 
 /** A `|`-composed set of enum-flag members, e.g. `physical | on-premises`. */
-export interface CompositeValue {
+export interface CompositeValue
+{
   kind: ValueKind.Composite;
   parts: string[];
 }
@@ -109,7 +116,8 @@ export interface CompositeValue {
 /** A typed inline object literal — `concept { … }` — assignable to a
  * concept/taxonomy-typed field. Materialised by the loader as a contained,
  * field-bound node with a minted (or `id =`-supplied) id. */
-export interface ObjectValue {
+export interface ObjectValue
+{
   kind: ValueKind.Object;
   concept: string;
   assignments: AssignmentNode[];
@@ -123,7 +131,8 @@ export interface ObjectValue {
 /** An operator application used as a value — `a <glyph> b` on the RHS of `=` or
  * as an array element (design §2). Materialised by the loader as the minted
  * reified entity, contained by the owner and bound to the field. */
-export interface EdgeValue {
+export interface EdgeValue
+{
   kind: ValueKind.Edge;
   edge: EdgeApplication;
 }
@@ -144,7 +153,8 @@ export type ValueNode =
  * `frontend --> database { calls = "REST" }`. Shape-only: the loader resolves
  * `glyph` against the operator table and materializes the reified edge, with
  * `body` supplying the edge entity's own field assignments. */
-export interface EdgeApplication {
+export interface EdgeApplication
+{
   glyph: string;
   left: string;
   right: string;
@@ -156,7 +166,8 @@ export interface EdgeApplication {
 }
 
 /** One `name = value` assignment — the atom of every record/term/annotation body. */
-export interface AssignmentNode {
+export interface AssignmentNode
+{
   name: string;
   value: ValueNode;
   /** Source span of `name = value` — set for authored assignments; absent for synthesized ones (edge-record from/to/operator). */
@@ -172,7 +183,8 @@ export interface AssignmentNode {
 /** A record — a concrete object or a `class` (a partial, fixed-value definition),
  * e.g. `component api { … }` inside a model, or `class widget { … }`. Legal as a
  * concrete object only inside a `model { … }`; classes may live at file scope. */
-export interface InstanceDecl {
+export interface InstanceDecl
+{
   kind: DeclKind.Instance;
   concept: string;
   id: string;
@@ -202,7 +214,8 @@ export interface InstanceDecl {
 /** A `model <id> : <meta-model> [uses …] [conforms …] { … }` container — the
  * instance-carrier that holds concrete objects and body-level edges. May be split
  * across several files under one id (each block then required to `conforms`). */
-export interface ModelDecl {
+export interface ModelDecl
+{
   kind: DeclKind.Model;
   id: string;
   /** The bound meta-model (`: <meta-model>`) — required. */
@@ -227,7 +240,8 @@ export interface ModelDecl {
 /** A USE of an annotation — `target@Ann(param = v)` (or `annotate @Ann` in a
  * body). Decorates concepts, members, taxonomies/terms, classes, or the package.
  * The declaration of the annotation itself is {@link AnnotationDecl}. */
-export interface AnnotationApplication {
+export interface AnnotationApplication
+{
   /** The annotation being applied. */
   name: string;
   /** Fixed `param = value` param assignments. */
@@ -239,7 +253,8 @@ export interface AnnotationApplication {
 /** An `annotation <Name> [ : <Base> ] { <params> }` declaration — defines a
  * reusable type-level decorator with typed params. Applied via
  * {@link AnnotationApplication}. */
-export interface AnnotationDecl {
+export interface AnnotationDecl
+{
   kind: DeclKind.Annotation;
   name: string;
   /** The base annotation this one extends (`annotation Sub : Base`), or null. */
@@ -254,7 +269,8 @@ export interface AnnotationDecl {
 /** A `package { … }` block — carries annotation applications on the singleton
  * package node (per-package metadata). There is one shared package node across all
  * `package` blocks in a compile. */
-export interface PackageDecl {
+export interface PackageDecl
+{
   kind: DeclKind.Package;
   annotations: AnnotationApplication[];
   span: SourceSpan;
@@ -263,7 +279,8 @@ export interface PackageDecl {
 /** An `operator <glyph> : <concept> (<from>, <to>);` (reified edge) or
  * `operator <glyph> : <concept>.<relationship>;` (relationship member)
  * declaration — binds an infix glyph to edge materialization (design §1). */
-export interface OperatorDecl {
+export interface OperatorDecl
+{
   kind: DeclKind.Operator;
   glyph: string;
   glyphSpan?: SourceSpan;
@@ -284,7 +301,8 @@ export interface OperatorDecl {
 /** A `:` field member — `<name> : <type>` (with cardinality). Whether it becomes a
  * scalar attr or a reference edge depends on `type` (a primitive vs a
  * concept/taxonomy) — the loader decides. Also reused for annotation params. */
-export interface FieldDecl {
+export interface FieldDecl
+{
   name: string;
   type: string;
   cardinality: Cardinality;
@@ -295,7 +313,8 @@ export interface FieldDecl {
 /** A `->` relationship member — `<name> -> <T1>, <T2> …` (with cardinality). Always
  * reference-like: materialized as graph edges, never scalar attrs. May itself carry
  * member-level annotations. */
-export interface RelationshipDecl {
+export interface RelationshipDecl
+{
   name: string;
   targets: string[];
   cardinality: Cardinality;
@@ -307,7 +326,8 @@ export interface RelationshipDecl {
 /** An `invariant "<description>" [ predicate = … ]` — a constraint on a concept.
  * The predicate is kept as raw lexer tokens here; the predicate parser turns it
  * into an expression AST at load time. Prose-only invariants have `predicate: null`. */
-export interface InvariantDecl {
+export interface InvariantDecl
+{
   description: string;
   /** Raw tokens of the `predicate = …` expression, or `null` for prose-only invariants. */
   predicate: Token[] | null;
@@ -316,7 +336,8 @@ export interface InvariantDecl {
 /** A `concept <Name> [ : <parent> ] { … }` declaration — a type in the ontology,
  * with fields, relationships, invariants, and annotations. A parent-less concept
  * implicitly extends the prelude root `element` (the loader adds that). */
-export interface ConceptDecl {
+export interface ConceptDecl
+{
   kind: DeclKind.Concept;
   name: string;
   extends: string | null;
@@ -338,7 +359,8 @@ export interface ConceptDecl {
  * a CLASS of a represented concept, carrying that concept's fixed field values, and
  * may nest child terms (a hierarchy). Not a top-level Declaration; it only appears
  * inside a {@link TaxonomyDecl}. */
-export interface Term {
+export interface Term
+{
   id: string;
   /** The concept this term is a class of, from the leading keyword
    * (`location azure { }`). `null` for the bare `term` alias, valid only when
@@ -357,7 +379,8 @@ export interface Term {
 /** A `taxonomy <Name> : represents <C…> [uses …] { <terms> }` declaration — a
  * classification tree of {@link Term}s over one or more concepts. `uses` brings
  * sibling taxonomies' terms into bare scope for this one's term-body references. */
-export interface TaxonomyDecl {
+export interface TaxonomyDecl
+{
   kind: DeclKind.Taxonomy;
   name: string;
   /** The concepts this taxonomy represents (`taxonomy X : represents C1, C2`). */
@@ -382,7 +405,8 @@ export interface TaxonomyDecl {
 
 /** A `viewpoint <Name> : frames <C…>` declaration — names a set of concepts that
  * form one "view" of a model; a {@link ModelDecl} may `conforms` to a viewpoint. */
-export interface ViewpointDecl {
+export interface ViewpointDecl
+{
   kind: DeclKind.Viewpoint;
   name: string;
   /** The concepts this viewpoint frames (`viewpoint X : frames C1, C2`). */
@@ -397,7 +421,8 @@ export interface ViewpointDecl {
 /** A `primitive <name> [ : <base> ] [ /regex/ ]` declaration — a scalar value type
  * (the leaves of the type system, e.g. `string`, `int`). `base` refines another
  * primitive; `regex` optionally constrains its literal form. */
-export interface PrimitiveDecl {
+export interface PrimitiveDecl
+{
   kind: DeclKind.Primitive;
   name: string;
   base: string | null;
@@ -420,7 +445,8 @@ export type Declaration =
  * `namespace <path>` (visibility), its `import <path>` list (what it can see), and
  * the flat list of top-level {@link Declaration}s. The loader flattens all files'
  * namespace nodes into per-declaration "units" tagged with ns + imports + uri. */
-export interface NamespaceNode {
+export interface NamespaceNode
+{
   path: string;
   imports: string[];
   declarations: Declaration[];

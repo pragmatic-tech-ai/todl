@@ -3,7 +3,8 @@ import { byId } from "../../../shared/corpus-access.js";
 import { verifyExample } from "../../../shared/verify.js";
 import { header, red } from "../format.js";
 
-export function run(id: string | undefined): number {
+export function run(id: string | undefined): number
+{
   if (!id) { process.stdout.write(red("usage: todl-demo run <id>\n")); return 1; }
   const entry = byId(CORPUS, id);
   if (!entry) { process.stdout.write(red(`unknown example: ${id}\n`)); return 1; }

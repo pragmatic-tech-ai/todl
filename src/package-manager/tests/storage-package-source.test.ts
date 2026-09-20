@@ -17,7 +17,8 @@ import { StoragePackageSource } from "../storage-package-source.js";
 // relationship; two instances shop.hero (label "Hi") --next--> shop.tail. Emitting
 // this repo to a TodlDocument gives the exact `model.json` a published package
 // carries, so the source is exercised against a real round-trip.
-function buildRepo(): Repository {
+function buildRepo(): Repository
+{
   const repo = new Repository();
   repo
     .builder()
@@ -36,16 +37,19 @@ function buildRepo(): Repository {
 
 // A PackageSink over an IStorage (mirrors StoragePackageSink) — kept inline so the
 // test proves BlobPackageStore's on-disk layout is exactly what the source reads.
-function sink(storage: IStorage): PackageSink {
+function sink(storage: IStorage): PackageSink
+{
   return { writeText: (p, c) => storage.WriteText(p, c) };
 }
 
-function packageOf(doc: PackageDocument, id: string, version: string): CompiledPackage {
+function packageOf(doc: PackageDocument, id: string, version: string): CompiledPackage
+{
   return { id, version, document: doc, fullDocument: doc, sources: [{ uri: `${id}.todl`, text: "" }], classes: [] };
 }
 
 // Publish `buildRepo()` as `<id>/<version>/model.json` into a fresh FakeStorage.
-async function published(id = "shop", version = "1.0.0"): Promise<FakeStorage> {
+async function published(id = "shop", version = "1.0.0"): Promise<FakeStorage>
+{
   const storage = new FakeStorage();
   const doc = toJSON(buildRepo()) as PackageDocument;
   await new BlobPackageStore(sink(storage)).persist(packageOf(doc, id, version));

@@ -11,26 +11,33 @@
 import type { Expr } from "./ast.js";
 import type { NodeId } from "../model/graph.js";
 
-export interface InvariantDef {
+export interface InvariantDef
+{
   concept: NodeId;
   expr: Expr;
   description: string;
 }
 
-export class Invariants {
+export class Invariants
+{
   private readonly byConcept = new Map<NodeId, InvariantDef[]>();
 
-  define(concept: NodeId, expr: Expr, description: string): void {
+  define(concept: NodeId, expr: Expr, description: string): void
+  {
     const definition: InvariantDef = { concept, expr, description };
     const existing = this.byConcept.get(concept);
-    if (existing === undefined) {
+    if (existing === undefined)
+    {
       this.byConcept.set(concept, [definition]);
-    } else {
+    }
+    else
+    {
       existing.push(definition);
     }
   }
 
-  for(concept: NodeId): InvariantDef[] {
+  for(concept: NodeId): InvariantDef[]
+  {
     return this.byConcept.get(concept) ?? [];
   }
 }

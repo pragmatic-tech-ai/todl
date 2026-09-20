@@ -4,7 +4,8 @@ import { Graph } from "../graph.js";
 import { Repository } from "../model.js";
 import { MetaKind } from "../kinds.js";
 
-function built() {
+function built()
+{
   const repo = new Repository(new Graph());
   const b = repo.builder();
   b.defineConcept("Component");

@@ -7,7 +7,8 @@ import { FrozenRepository as FrozenFromRoot, type Entity } from "../../index.js"
 
 // Build a small graph with the mutable Repository, serialize it, and reload it
 // frozen. gw --implemented-by--> copilot; a <-> b via `peer` (a cycle).
-function doc() {
+function doc()
+{
   const repo = new Repository();
   const b = repo.builder();
   b.defineConcept("component");
@@ -54,11 +55,14 @@ test("entity handles are frozen", () => {
 
 // A hand-written package class: the shape Phase 3 codegen will emit. A collection
 // accessor per concept; entity reads via the inherited typed primitives.
-class TechCatalog extends FrozenFromRoot {
-  get technologies(): Entity[] {
+class TechCatalog extends FrozenFromRoot
+{
+  get technologies(): Entity[]
+  {
     return this.instancesOf("technology").map((id) => this.entity(id)!);
   }
-  get components(): Entity[] {
+  get components(): Entity[]
+  {
     return this.instancesOf("component").map((id) => this.entity(id)!);
   }
 }

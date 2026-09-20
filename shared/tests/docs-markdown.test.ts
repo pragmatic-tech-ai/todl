@@ -12,7 +12,8 @@ test("emits an index plus one file per example", () => {
 test("index links to every example file", () => {
   const files = renderDocs(CORPUS);
   const index = files.find((f) => f.path === "index.md")!;
-  for (const f of files) {
+  for (const f of files)
+  {
     if (f.path === "index.md") continue;
     assert.ok(index.content.includes(f.path), `index should link ${f.path}`);
   }

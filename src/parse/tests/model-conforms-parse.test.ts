@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { parse } from "../parser.js";
 import { DeclKind, type ModelDecl } from "../ast.js";
 
-function model(src: string): ModelDecl {
+function model(src: string): ModelDecl
+{
   const { namespace } = parse(`namespace n {\n${src}\n}`, "t.todl");
   const decl = namespace.declarations.find((d) => d.kind === DeclKind.Model);
   assert.ok(decl, "expected a model declaration");

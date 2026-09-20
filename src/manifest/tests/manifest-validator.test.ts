@@ -7,7 +7,8 @@ import { MetaKind, Cardinality } from "../enums.js";
 import { TypeDefOrRef } from "../token.js";
 import type { ManifestJson } from "../records.js";
 
-function buildValid(): ManifestWriter {
+function buildValid(): ManifestWriter
+{
   const w = new ManifestWriter("shop", "1.0.0");
   const fName = w.addField({ name: w.internString("name"), type: 0, card: Cardinality.One });
   const base = w.addTypeInfo({
@@ -23,12 +24,14 @@ function buildValid(): ManifestWriter {
   return w;
 }
 
-function jsonOf(w: ManifestWriter): ManifestJson {
+function jsonOf(w: ManifestWriter): ManifestJson
+{
   w.toBinary(); // intern model/version
   return JSON.parse(JSON.stringify(w.toJSON()));
 }
 
-function errorsOf(json: ManifestJson): string[] {
+function errorsOf(json: ManifestJson): string[]
+{
   return new ManifestValidator(ManifestReader.fromJSON(json))
     .validate()
     .filter((i) => i.severity === IssueSeverity.Error)

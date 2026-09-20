@@ -3,13 +3,15 @@ import assert from "node:assert/strict";
 import type { CompiledPackage } from "../publish.js";
 import { BlobPackageStore, type PackageSink } from "../stores.js";
 
-function fakeSink() {
+function fakeSink()
+{
   const files = new Map<string, string>();
   const sink: PackageSink = { writeText: async (p, c) => void files.set(p, c) };
   return { sink, files };
 }
 
-function pkg(): CompiledPackage {
+function pkg(): CompiledPackage
+{
   const document = { nodes: [{ id: "ms.a", tier: "Instance", type: "t", metaKind: null, namespace: null, localId: "a", isClass: false, class: null, storageId: null, fields: [], attrs: {} }], edges: [] };
   return {
     id: "ms",

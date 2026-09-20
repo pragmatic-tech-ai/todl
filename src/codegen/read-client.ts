@@ -11,7 +11,8 @@ import { Cardinality, type NodeId } from "../model/graph.js";
 import { Repository } from "../model/model.js";
 import { pascalCase, camelCase, pluralize, allocateNames } from "./naming.js";
 
-export interface ReadClientOptions {
+export interface ReadClientOptions
+{
   /** Artifact id (kebab); becomes the PascalCase package class name. */
   name: string;
   /** Import module specifier for the todl runtime. Defaults to the package name. */
@@ -19,36 +20,43 @@ export interface ReadClientOptions {
 }
 
 /** True when `typeId` names a concept or taxonomy (→ reference); false for a primitive. */
-export function isReferenceType(repo: Repository, typeId: string): boolean {
+export function isReferenceType(repo: Repository, typeId: string): boolean
+{
   const kind = repo.resolve(typeId)?.metaKind;
   return kind === MetaKind.Concept || kind === MetaKind.Taxonomy;
 }
 
-interface RefMember {
+interface RefMember
+{
   name: string;
   targetPascal: string;
   many: boolean;
 }
 
-function scalarTsType(typeId: string): string {
+function scalarTsType(typeId: string): string
+{
   if (typeId === "integer" || typeId === "number") return "number";
   if (typeId === "boolean") return "boolean";
   return "string";
 }
 
-function isMany(cardinality: Cardinality): boolean {
+function isMany(cardinality: Cardinality): boolean
+{
   return cardinality === Cardinality.Many || cardinality === Cardinality.OneOrMore;
 }
 
 /** The PascalCase entity type a reference member resolves to. */
-function targetPascal(repo: Repository, typeId: string): string {
-  if (repo.resolve(typeId)?.metaKind === MetaKind.Taxonomy) {
+function targetPascal(repo: Repository, typeId: string): string
+{
+  if (repo.resolve(typeId)?.metaKind === MetaKind.Taxonomy)
+  {
     return pascalCase(repo.represents(typeId)[0] ?? typeId);
   }
   return pascalCase(typeId);
 }
 
-export function generateReadClient(repo: Repository, options: ReadClientOptions): string {
+export function generateReadClient(repo: Repository, options: ReadClientOptions): string
+{
   const importSpecifier = options.importSpecifier ?? "@pragmatic-tech-ai/todl";
 
   const concepts = repo
@@ -81,7 +89,8 @@ function emitPackageClass(
   concepts: readonly NodeId[],
   taxonomies: readonly NodeId[],
   repo: Repository,
-): string {
+): string
+{
   const cases = concepts.map((c) => `      case "${c}": return new ${pascalCase(c)}(this, id);`).join("\n");
   const createEntity =
     `  protected override createEntity(id: string): EntityBase {\n` +
@@ -111,14 +120,17 @@ function emitPackageClass(
   return `export class ${className} extends FrozenRepository {\n${createEntity}\n\n${members}\n}`;
 }
 
-function emitAuthoringConstructor(concept: NodeId, repo: Repository): string {
+function emitAuthoringConstructor(concept: NodeId, repo: Repository): string
+{
   const schema = repo.effectiveSchema(concept);
 
   const scalarFields = schema.fields
     .filter((f) => !isReferenceType(repo, f.type))
     .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
-  for (const f of scalarFields) {
-    if (isMany(f.cardinality)) {
+  for (const f of scalarFields)
+  {
+    if (isMany(f.cardinality))
+    {
       throw new Error(`Authoring codegen: ManyValued scalar field "${concept}.${f.name}" is unsupported`);
     }
   }
@@ -146,7 +158,8 @@ function emitAuthoringConstructor(concept: NodeId, repo: Repository): string {
   const params: string[] = [];
   const assigns: string[] = [];
 
-  for (const f of scalarFields) {
+  for (const f of scalarFields)
+  {
     const opt = required(f.cardinality) ? "" : "?";
     params.push(`    ${camelCase(f.name)}${opt}: ${scalarTsType(f.type)};`);
     const read = `fields.${camelCase(f.name)}`;
@@ -157,7 +170,8 @@ function emitAuthoringConstructor(concept: NodeId, repo: Repository): string {
     );
   }
 
-  for (const m of refMembers) {
+  for (const m of refMembers)
+  {
     const opt = required(cardOf(m.name)) ? "" : "?";
     const type = m.many ? `readonly ${m.targetPascal}[]` : m.targetPascal;
     params.push(`    ${camelCase(m.name)}${opt}: ${type};`);
@@ -182,7 +196,8 @@ function emitAuthoringConstructor(concept: NodeId, repo: Repository): string {
   );
 }
 
-function emitEntityClass(concept: NodeId, repo: Repository): string {
+function emitEntityClass(concept: NodeId, repo: Repository): string
+{
   const schema = repo.effectiveSchema(concept);
 
   const scalarGetters = schema.fields

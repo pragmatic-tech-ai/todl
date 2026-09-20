@@ -7,12 +7,14 @@ import { startServer, pushedInit } from "./harness.js";
 // base's schema is what makes an instance missing `label` an error — proving the
 // pushed base actually reached the analysis (an unresolved reference would emit a
 // reference.undefined diagnostic, not the cardinality diagnostic checked here).
-function baseDoc(): unknown {
+function baseDoc(): unknown
+{
   const { model } = check([{ uri: "base.todl", text: "namespace base {\n  concept record { label : string; }\n}" }]);
   return toJSON(model);
 }
 
-function waitDiag(client: { onNotification: Function }, uri: string) {
+function waitDiag(client: { onNotification: Function }, uri: string)
+{
   return new Promise<{ message?: string }[]>((resolve) => {
     client.onNotification("textDocument/publishDiagnostics", (p: { uri: string; diagnostics: { message?: string }[] }) => {
       if (p.uri === uri) resolve(p.diagnostics);

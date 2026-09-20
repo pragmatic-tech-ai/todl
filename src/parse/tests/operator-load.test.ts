@@ -6,7 +6,8 @@ import { FakeIdGenerator } from "../../model/tests/fake-id-generator.js";
 import { EdgeKind, Direction } from "../../model/graph.js";
 import { Severity, DiagnosticCode } from "../../diagnostics/diagnostic.js";
 
-function loadSrc(body: string, gen = new FakeIdGenerator()) {
+function loadSrc(body: string, gen = new FakeIdGenerator())
+{
   const src = `namespace t {
     concept endpoint { label : string; }
     concept connector { from : endpoint; to : endpoint; kind : string; }

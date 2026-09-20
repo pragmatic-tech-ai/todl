@@ -6,7 +6,8 @@ import { fileURLToPath } from "node:url";
 import { parse } from "../parser.js";
 import { DeclKind } from "../ast.js";
 
-function fixture(name: string): string {
+function fixture(name: string): string
+{
   return readFileSync(fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url)), "utf8");
 }
 

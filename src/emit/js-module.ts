@@ -23,7 +23,8 @@ import type { Repository, FieldSchema, RelationshipSchema } from "../model/model
 /** Default import specifier for the `Observable` base the emitted classes extend. */
 const DEFAULT_RUNTIME_IMPORT = "@pragmatic-tech-ai/todl-runtime";
 
-export interface MetaModuleOptions {
+export interface MetaModuleOptions
+{
   /** The meta-model slug, e.g. `bpmn`. Names the registry and the `slug` field. */
   slug: string;
   /** The root concept id, emitted as `rootConcept` when set. */
@@ -35,7 +36,8 @@ export interface MetaModuleOptions {
 }
 
 /** Emit a bundled `<slug>.js` ES module from `model`'s ontology tier. */
-export function toMetaModule(model: Repository, options: MetaModuleOptions): string {
+export function toMetaModule(model: Repository, options: MetaModuleOptions): string
+{
   const runtimeImport = options.runtimeImport ?? DEFAULT_RUNTIME_IMPORT;
   const registryName = options.registryName ?? camelCase(options.slug);
 
@@ -57,15 +59,18 @@ export function toMetaModule(model: Repository, options: MetaModuleOptions): str
     "",
   ];
 
-  for (const concept of concepts) {
+  for (const concept of concepts)
+  {
     lines.push(emitConcept(model, concept));
     lines.push("");
   }
 
-  if (taxonomies.length > 0) {
+  if (taxonomies.length > 0)
+  {
     lines.push("// ── Taxonomies ────────────────────────────────────────────");
     lines.push("");
-    for (const taxonomyId of taxonomies) {
+    for (const taxonomyId of taxonomies)
+    {
       lines.push(emitTaxonomy(model, taxonomyId));
       lines.push("");
     }
@@ -81,7 +86,8 @@ export function toMetaModule(model: Repository, options: MetaModuleOptions): str
 
 // ── Concept emission ──────────────────────────────────────────────────
 
-function emitConcept(model: Repository, concept: string): string {
+function emitConcept(model: Repository, concept: string): string
+{
   const schema = model.schemaOf(concept);
   const cls = pascalCase(concept);
   const i = "    ";
@@ -90,17 +96,21 @@ function emitConcept(model: Repository, concept: string): string {
   lines.push(`${i}static schema = {`);
   lines.push(`${i}${i}kind: ${jsStr(concept)},`);
 
-  if (schema.fields.length > 0) {
+  if (schema.fields.length > 0)
+  {
     lines.push(`${i}${i}fields: {`);
-    for (const field of schema.fields) {
+    for (const field of schema.fields)
+    {
       lines.push(`${i}${i}${i}${jsKey(field.name)}: { ${fieldEntries(field).join(", ")} },`);
     }
     lines.push(`${i}${i}},`);
   }
 
-  if (schema.relationships.length > 0) {
+  if (schema.relationships.length > 0)
+  {
     lines.push(`${i}${i}relationships: {`);
-    for (const rel of schema.relationships) {
+    for (const rel of schema.relationships)
+    {
       lines.push(`${i}${i}${i}${jsKey(rel.name)}: { ${relationshipEntries(rel).join(", ")} },`);
     }
     lines.push(`${i}${i}},`);
@@ -109,7 +119,8 @@ function emitConcept(model: Repository, concept: string): string {
   lines.push(`${i}};`);
 
   const names = memberNames(schema);
-  if (names.length > 0) {
+  if (names.length > 0)
+  {
     lines.push("");
     lines.push(...emitAccessors(names, i));
     lines.push("");
@@ -124,9 +135,11 @@ function emitConcept(model: Repository, concept: string): string {
 // order (fields first, then relationships). A member literally named
 // `constructor` would shadow the class constructor — reject it loudly rather
 // than emit broken code.
-function memberNames(schema: { fields: FieldSchema[]; relationships: RelationshipSchema[] }): string[] {
+function memberNames(schema: { fields: FieldSchema[]; relationships: RelationshipSchema[] }): string[]
+{
   const names = [...schema.fields.map((f) => f.name), ...schema.relationships.map((r) => r.name)];
-  for (const n of names) {
+  for (const n of names)
+  {
     if (n === "constructor") throw new Error(`Concept member may not be named 'constructor'.`);
   }
   return names;
@@ -135,9 +148,11 @@ function memberNames(schema: { fields: FieldSchema[]; relationships: Relationshi
 // One private backing field + getter + change-guarded setter per member. The
 // setter fires `RaisePropertyChanged` (protected on Observable) so mural's
 // binding — which reads `node[name]` and subscribes by name — reacts to writes.
-function emitAccessors(names: string[], i: string): string[] {
+function emitAccessors(names: string[], i: string): string[]
+{
   const lines: string[] = [];
-  for (const name of names) {
+  for (const name of names)
+  {
     lines.push(`${i}#${name};`);
     lines.push(`${i}get ${name}() { return this.#${name}; }`);
     lines.push(
@@ -151,16 +166,19 @@ function emitAccessors(names: string[], i: string): string[] {
 // Hydrates a realized node from a plain data object, assigning each known
 // member through its setter. Init assignments fire RaisePropertyChanged, but
 // no listeners are attached at construction, so they are harmless.
-function emitConstructor(names: string[], i: string): string[] {
+function emitConstructor(names: string[], i: string): string[]
+{
   const lines: string[] = [`${i}constructor(init = {}) {`, `${i}${i}super();`];
-  for (const name of names) {
+  for (const name of names)
+  {
     lines.push(`${i}${i}if (${jsStr(name)} in init) this.${name} = init.${name};`);
   }
   lines.push(`${i}}`);
   return lines;
 }
 
-function fieldEntries(field: FieldSchema): string[] {
+function fieldEntries(field: FieldSchema): string[]
+{
   const entries = [`type: ${jsStr(field.type)}`];
   const card = fieldCardinalityText(field.cardinality);
   if (card !== null) entries.push(`cardinality: ${jsStr(card)}`);
@@ -169,14 +187,16 @@ function fieldEntries(field: FieldSchema): string[] {
   return entries;
 }
 
-function relationshipEntries(rel: RelationshipSchema): string[] {
+function relationshipEntries(rel: RelationshipSchema): string[]
+{
   const targets = `[${rel.targets.map(jsStr).join(", ")}]`;
   return [`targets: ${targets}`, `cardinality: ${jsStr(relationshipCardinalityText(rel.cardinality))}`];
 }
 
 // ── Taxonomy emission ─────────────────────────────────────────────────
 
-function emitTaxonomy(model: Repository, taxonomyId: string): string {
+function emitTaxonomy(model: Repository, taxonomyId: string): string
+{
   const name = pascalCase(taxonomyId);
   const i = "    ";
   const bare = (qualified: string): string => {
@@ -187,7 +207,8 @@ function emitTaxonomy(model: Repository, taxonomyId: string): string {
   lines.push(`${i}slug: ${jsStr(taxonomyId)},`);
   lines.push(`${i}represents: [${model.represents(taxonomyId).map(jsStr).join(", ")}],`);
   lines.push(`${i}terms: {`);
-  for (const termId of model.termsOf(taxonomyId)) {
+  for (const termId of model.termsOf(taxonomyId))
+  {
     const node = model.resolve(termId);
     // Term node ids are taxonomy-qualified; the bare member id is the localId root field.
     const id = node?.localId ?? termId;
@@ -224,27 +245,31 @@ function emitRegistry(
   rootConcept: string | null,
   concepts: readonly string[],
   taxonomies: readonly string[],
-): string {
+): string
+{
   const i = "    ";
   const lines: string[] = [`export const ${registryName} = {`];
   lines.push(`${i}slug: ${jsStr(slug)},`);
   if (rootConcept !== null) lines.push(`${i}rootConcept: ${jsStr(rootConcept)},`);
 
   lines.push(`${i}concepts: {`);
-  for (const concept of concepts) {
+  for (const concept of concepts)
+  {
     lines.push(`${i}${i}${jsKey(concept)}: ${pascalCase(concept)}.schema,`);
   }
   lines.push(`${i}},`);
 
   lines.push(`${i}constructors: {`);
-  for (const concept of concepts) {
+  for (const concept of concepts)
+  {
     const cls = pascalCase(concept);
     lines.push(`${i}${i}${jsKey(concept)}: data => new ${cls}(data ?? {}),`);
   }
   lines.push(`${i}},`);
 
   lines.push(`${i}taxonomies: {`);
-  for (const taxonomyId of taxonomies) {
+  for (const taxonomyId of taxonomies)
+  {
     lines.push(`${i}${i}${jsKey(taxonomyId)}: ${pascalCase(taxonomyId)},`);
   }
   lines.push(`${i}},`);
@@ -256,8 +281,10 @@ function emitRegistry(
 // ── Cardinality + resolution hints ────────────────────────────────────
 
 /** Field cardinality text; `null` for required-single (the omitted default). */
-function fieldCardinalityText(card: Cardinality): string | null {
-  switch (card) {
+function fieldCardinalityText(card: Cardinality): string | null
+{
+  switch (card)
+  {
     case Cardinality.One:
       return null;
     case Cardinality.Optional:
@@ -270,12 +297,14 @@ function fieldCardinalityText(card: Cardinality): string | null {
 }
 
 /** Relationship cardinality text; relationships always carry an explicit value. */
-function relationshipCardinalityText(card: Cardinality): string {
+function relationshipCardinalityText(card: Cardinality): string
+{
   return fieldCardinalityText(card) ?? "1..1";
 }
 
 /** Coarse resolver classification for name-ref-typed fields. */
-function resolvesHint(type: string, card: Cardinality): string | null {
+function resolvesHint(type: string, card: Cardinality): string | null
+{
   if (type !== "identifier" && type !== "slug") return null;
   return card === Cardinality.Many || card === Cardinality.OneOrMore ? "list-of-name-ref" : "name-ref";
 }
@@ -283,7 +312,8 @@ function resolvesHint(type: string, card: Cardinality): string | null {
 // ── String helpers ────────────────────────────────────────────────────
 
 /** `component-category` → `ComponentCategory`. */
-function pascalCase(slug: string): string {
+function pascalCase(slug: string): string
+{
   return slug
     .split("-")
     .map((part) => (part.length > 0 ? part[0]!.toUpperCase() + part.slice(1) : part))
@@ -291,13 +321,15 @@ function pascalCase(slug: string): string {
 }
 
 /** `enterprise-architecture` → `enterpriseArchitecture`. */
-function camelCase(slug: string): string {
+function camelCase(slug: string): string
+{
   const pascal = pascalCase(slug);
   return pascal.length > 0 ? pascal[0]!.toLowerCase() + pascal.slice(1) : pascal;
 }
 
 /** JS double-quoted string literal with control characters escaped. */
-function jsStr(value: string): string {
+function jsStr(value: string): string
+{
   const escaped = value
     .replace(/\\/g, "\\\\")
     .replace(/"/g, '\\"')
@@ -308,6 +340,7 @@ function jsStr(value: string): string {
 }
 
 /** A JS object key — bare when a valid identifier, quoted otherwise. */
-function jsKey(value: string): string {
+function jsKey(value: string): string
+{
   return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(value) ? value : jsStr(value);
 }

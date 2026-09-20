@@ -11,7 +11,8 @@ import {
 } from "../graph.js";
 import { MetaKind } from "../kinds.js";
 
-function instance(id: string, type: string): Node {
+function instance(id: string, type: string): Node
+{
   return {
     id,
     tier: Tier.Instance,
@@ -27,7 +28,8 @@ function instance(id: string, type: string): Node {
   };
 }
 
-function record(graph: Graph): GraphChangeArgs[] {
+function record(graph: Graph): GraphChangeArgs[]
+{
   const changes: GraphChangeArgs[] = [];
   graph.changed.subscribe((change) => changes.push(change));
   return changes;

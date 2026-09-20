@@ -12,7 +12,8 @@ const quoted = new RegExp(`^(\\s*)(${MEMBERS.join("|")})(\\s*=\\s*)"([^"]+)"(\\s
 // A retyped member holding a list literal would need manual review; flag it.
 const listLiteral = new RegExp(`^\\s*(${MEMBERS.join("|")})\\s*=\\s*\\[`, "gm");
 
-for (const file of process.argv.slice(2)) {
+for (const file of process.argv.slice(2))
+{
   const before = readFileSync(file, "utf8");
   let n = 0;
   const after = before.replace(quoted, (_m, ind, mem, eq, val, semi) => { n++; return `${ind}${mem}${eq}${val}${semi}`; });

@@ -12,7 +12,8 @@ import { mapDiagnostics, mapDiagnostic } from "./diagnostics.js";
 
 // The whole-project analysis. Pure — recomputed from scratch by `analyze`; the
 // core keeps no cache (the server owns caching).
-export interface Analysis {
+export interface Analysis
+{
   sources: Map<string, { ast: NamespaceNode; tokens: Token[]; text: string }>;
   model: Repository;
   refs: ReferenceIndex;
@@ -24,10 +25,12 @@ export interface Analysis {
   diagnosticsByUri: Map<string, Diagnostic[]>;
 }
 
-export function analyze(sources: SourceFile[], bases: TodlDocument[] = []): Analysis {
+export function analyze(sources: SourceFile[], bases: TodlDocument[] = []): Analysis
+{
   const parsed = new Map<string, { ast: NamespaceNode; tokens: Token[]; text: string }>();
   const asts = new Map<string, NamespaceNode>();
-  for (const src of sources) {
+  for (const src of sources)
+  {
     const ast = parse(src.text, src.uri).namespace;
     parsed.set(src.uri, { ast, tokens: tokenize(src.text), text: src.text });
     asts.set(src.uri, ast);
@@ -37,7 +40,8 @@ export function analyze(sources: SourceFile[], bases: TodlDocument[] = []): Anal
   const byUri = new Map<string, Diagnostic[]>();
   for (const src of sources) byUri.set(src.uri, []);
   const wholeModel: Diagnostic[] = [];
-  for (const d of diagnostics) {
+  for (const d of diagnostics)
+  {
     const lsp = mapDiagnostic(d);
     const uri = d.span?.uri ?? null;
     if (uri === null) { wholeModel.push(lsp); continue; }

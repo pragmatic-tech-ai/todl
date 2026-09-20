@@ -10,7 +10,8 @@ import { Cardinality } from "../../enums.js";
 //   concept Element { name: string }
 //   concept Component : Element { tier: string } + dependsOn -> Component (*, inverse usedBy)
 //   taxonomy Layers represents Component; term Components.Surface : Component fixes tier = "ui".
-function shopLogical(): LogicalManifest {
+function shopLogical(): LogicalManifest
+{
   return {
     format: "todl-manifest/1",
     model: "shop",
@@ -39,7 +40,8 @@ function shopLogical(): LogicalManifest {
   };
 }
 
-function loadShop(binary = false): Manifest {
+function loadShop(binary = false): Manifest
+{
   const writer = ManifestWriter.fromLogical(shopLogical());
   return Manifest.load(binary ? writer.toBinary() : writer.toJSON());
 }
@@ -209,7 +211,8 @@ describe("SPEC-05 t12: resolveToken round-trip", () => {
     const rel = co.getDeclaredRelationships()[0]!;
     const term = m.getTerm("Components.Surface")!;
     const tax = m.getTaxonomy("Layers")!;
-    for (const h of [co, field, rel, term, tax]) {
+    for (const h of [co, field, rel, term, tax])
+    {
       const resolved = m.resolveToken(h.token) as { token: number };
       assert.equal(resolved.token, h.token);
     }

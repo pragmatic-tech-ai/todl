@@ -5,18 +5,21 @@ import type { SourceSpan, Position as TodlPosition } from "../diagnostics/span.j
 // line/character. Both use an exclusive end. This module is the ONLY place in
 // the language service that does the ±1 conversion.
 
-export function spanToRange(span: SourceSpan): Range {
+export function spanToRange(span: SourceSpan): Range
+{
   return {
     start: { line: span.start.line - 1, character: span.start.column - 1 },
     end: { line: span.end.line - 1, character: span.end.column - 1 },
   };
 }
 
-export function positionToTodl(pos: Position): TodlPosition {
+export function positionToTodl(pos: Position): TodlPosition
+{
   return { line: pos.line + 1, column: pos.character + 1 };
 }
 
-export function rangeToSpan(uri: string, range: Range): SourceSpan {
+export function rangeToSpan(uri: string, range: Range): SourceSpan
+{
   return {
     uri,
     start: { line: range.start.line + 1, column: range.start.character + 1 },

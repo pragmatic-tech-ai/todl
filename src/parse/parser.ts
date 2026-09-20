@@ -75,7 +75,8 @@ import {
 /** What a parse produces: the single top-level {@link NamespaceNode} (its path,
  * imports, and declarations) plus every diagnostic gathered — from the lexer AND
  * from this parser's own recovery. */
-export interface ParseResult {
+export interface ParseResult
+{
   namespace: NamespaceNode;
   diagnostics: Diagnostic[];
 }
@@ -83,14 +84,17 @@ export interface ParseResult {
 /** Parse one `.todl` source file into an AST. The single public entry point:
  * lex the text, then hand the tokens to a fresh {@link Parser}. Lexer
  * diagnostics are threaded in so parser recovery can append to the same list. */
-export function parse(source: string, uri = "<anonymous>"): ParseResult {
+export function parse(source: string, uri = "<anonymous>"): ParseResult
+{
   const { tokens, diagnostics } = lex(source, uri);
   return new Parser(tokens, uri, diagnostics).parse();
 }
 
 /** Thrown internally on a syntax error; carries the offending token for spanning. */
-class ParseError extends Error {
-  constructor(message: string, readonly token: Token) {
+class ParseError extends Error
+{
+  constructor(message: string, readonly token: Token)
+  {
     super(message);
   }
 }
@@ -101,7 +105,8 @@ class ParseError extends Error {
  * into `tokens`; every read primitive is expressed relative to it. Construct one
  * per file and call {@link Parser.parse} once.
  */
-class Parser {
+class Parser
+{
   /** Index of the next UNCONSUMED token — the whole parser's only mutable state. */
   private pos = 0;
 
@@ -115,11 +120,15 @@ class Parser {
    * escaping here is a hard failure (recovery inside parseNamespace didn't catch
    * it) — record it and return an empty namespace so the caller still gets a
    * well-formed result. Non-ParseError throws are bugs and re-propagate. */
-  parse(): ParseResult {
-    try {
+  parse(): ParseResult
+  {
+    try
+    {
       const namespace = this.parseNamespace();
       return { namespace, diagnostics: this.diagnostics };
-    } catch (err) {
+    }
+    catch (err)
+    {
       if (!(err instanceof ParseError)) throw err;
       this.diagnostics.push(this.toDiagnostic(err));
       const span = tokenSpan(err.token, this.uri);
@@ -128,7 +137,8 @@ class Parser {
   }
 
   /** Convert a caught {@link ParseError} into a diagnostic spanning its token. */
-  private toDiagnostic(err: ParseError): Diagnostic {
+  private toDiagnostic(err: ParseError): Diagnostic
+  {
     return {
       code: DiagnosticCode.UnexpectedToken,
       severity: Severity.Error,
@@ -150,16 +160,20 @@ class Parser {
    * — a top-level (`depth === 0`) declaration keyword or bare identifier — or at
    * the `}` that closes the enclosing namespace. Stopping at depth 0 keeps us from
    * treating a nested `}` as the namespace terminator and ending the file early. */
-  private synchronize(): void {
+  private synchronize(): void
+  {
     let depth = 0;
-    while (!this.check(TokenKind.EOF)) {
+    while (!this.check(TokenKind.EOF))
+    {
       const kind = this.current().kind;
-      if (kind === TokenKind.LBrace) {
+      if (kind === TokenKind.LBrace)
+      {
         depth += 1;
         this.advance();
         continue;
       }
-      if (kind === TokenKind.RBrace) {
+      if (kind === TokenKind.RBrace)
+      {
         if (depth === 0) return; // closes the enclosing namespace — stop here
         depth -= 1;
         this.advance();
@@ -173,7 +187,8 @@ class Parser {
           this.checkKeyword("internal") ||
           this.checkKeyword("sealed") ||
           kind === TokenKind.Identifier)
-      ) {
+      )
+      {
         return;
       }
       this.advance();
@@ -182,14 +197,16 @@ class Parser {
 
   /** The next unconsumed token — the start of whatever we're about to parse.
    * Capture this BEFORE a production, pair it with {@link Parser.spanFrom} after. */
-  private startToken(): Token {
+  private startToken(): Token
+  {
     return this.current();
   }
 
   /** Span from `start` through the last consumed token (the one before the cursor).
    * The end anchor is `tokens[pos - 1]` (falling back to `start` when nothing has
    * been consumed yet), so the span covers exactly the tokens the production ate. */
-  private spanFrom(start: Token): SourceSpan {
+  private spanFrom(start: Token): SourceSpan
+  {
     const last = this.tokens[this.pos > 0 ? this.pos - 1 : 0] ?? start;
     return {
       uri: this.uri,
@@ -207,7 +224,8 @@ class Parser {
    * Imports come first, then a sequence of declarations. Each declaration is parsed
    * inside a try/catch so a syntax error triggers {@link Parser.synchronize} and the
    * loop continues at the next boundary rather than aborting the whole file. */
-  parseNamespace(): NamespaceNode {
+  parseNamespace(): NamespaceNode
+  {
     const start = this.startToken();
     this.expectKeyword("namespace");
     const path = this.parseDottedPath();
@@ -215,7 +233,8 @@ class Parser {
 
     const imports: string[] = [];
     const importSpans: SourceSpan[] = [];
-    while (this.checkKeyword("import")) {
+    while (this.checkKeyword("import"))
+    {
       this.advance();
       const startTok = this.current();
       imports.push(this.parseDottedPath());
@@ -224,11 +243,15 @@ class Parser {
     }
 
     const declarations: Declaration[] = [];
-    while (!this.check(TokenKind.RBrace) && !this.check(TokenKind.EOF)) {
+    while (!this.check(TokenKind.RBrace) && !this.check(TokenKind.EOF))
+    {
       const before = this.pos; // remembered so we can force progress on a stuck error
-      try {
+      try
+      {
         declarations.push(this.parseDeclaration());
-      } catch (err) {
+      }
+      catch (err)
+      {
         if (!(err instanceof ParseError)) throw err;
         this.diagnostics.push(this.toDiagnostic(err));
         this.synchronize();
@@ -244,7 +267,8 @@ class Parser {
    * skipped. A `class`-prefixed or bare identifier heads an instance record; the
    * record's concept may be namespace-qualified, hence parseDottedPath. Anything
    * else is a syntax error (caught by the parseNamespace loop for recovery). */
-  private parseDeclaration(): Declaration {
+  private parseDeclaration(): Declaration
+  {
     while (this.checkKeyword("internal") || this.checkKeyword("sealed")) this.advance();
 
     const start = this.startToken();
@@ -256,11 +280,13 @@ class Parser {
     if (this.checkKeyword("annotation")) return this.parseAnnotation(start);
     if (this.checkKeyword("package")) return this.parsePackage(start);
     if (this.checkKeyword("operator")) return this.parseOperator(start);
-    if (this.checkKeyword("class")) {
+    if (this.checkKeyword("class"))
+    {
       this.advance(); // class modifier
       return this.parseInstanceFrom(this.expectIdentifier(), start, true);
     }
-    if (this.check(TokenKind.Identifier)) {
+    if (this.check(TokenKind.Identifier))
+    {
       const cStart = this.current();
       const concept = this.parseDottedPath();           // record concept may be ns-qualified
       return this.parseInstanceFrom(concept, start, false, this.spanFrom(cStart));
@@ -274,13 +300,15 @@ class Parser {
    * `<concept> <id> { … }` records (containment). An optional `: <meta-model>`
    * binding may follow the id on a container record.
    */
-  private parseInstanceFrom(concept: string, start: Token, isClass = false, conceptSpan?: SourceSpan): InstanceDecl {
+  private parseInstanceFrom(concept: string, start: Token, isClass = false, conceptSpan?: SourceSpan): InstanceDecl
+  {
     const idTok = this.expectRecordIdTok();
     const id = idTok.value;
     let instanceOf: string | null = null;
     let instanceOfSpan: SourceSpan | undefined;
     // Optional `<concept> <id> instanceof <class>` — the class this object realizes.
-    if (this.checkKeyword("instanceof")) {
+    if (this.checkKeyword("instanceof"))
+    {
       this.advance();
       // The class/term may be namespace-qualified; resolution strips the ns.
       const startTok = this.current();
@@ -308,12 +336,14 @@ class Parser {
     children: InstanceDecl[];
     annotations: AnnotationApplication[];
     edges: EdgeApplication[];
-  } {
+  }
+  {
     const assignments: AssignmentNode[] = [];
     const children: InstanceDecl[] = [];
     const annotations: AnnotationApplication[] = [];
     const edges: EdgeApplication[] = [];
-    while (!this.check(TokenKind.RBrace)) {
+    while (!this.check(TokenKind.RBrace))
+    {
       const memberStart = this.startToken();
       // Order matters: `annotate` and edge applications are recognised first,
       // before the generic identifier branch, since both start with tokens the
@@ -323,11 +353,14 @@ class Parser {
       // A leading identifier is either `name = value;` (assignment, disambiguated
       // by the `=`) or `<concept> <id> { … }` (a nested containment record).
       const first = this.expectIdentifier();
-      if (this.match(TokenKind.Equals)) {
+      if (this.match(TokenKind.Equals))
+      {
         const value = this.parseValue();
         this.expect(TokenKind.Semicolon);
         assignments.push({ name: first, value, span: this.spanFrom(memberStart) });
-      } else {
+      }
+      else
+      {
         children.push(this.parseInstanceFrom(first, memberStart));
       }
     }
@@ -337,7 +370,8 @@ class Parser {
   /** True when the tokens ahead form `Identifier ( . Identifier )* {` — a typed
    * inline object, distinct from a bare name value. Lookahead-only: scans past a
    * dotted concept path (without consuming) and checks for the opening `{`. */
-  private objectAhead(): boolean {
+  private objectAhead(): boolean
+  {
     let i = 0;
     if (this.peekKind(i) !== TokenKind.Identifier) return false;
     i += 1;
@@ -348,7 +382,8 @@ class Parser {
   /** Parse a typed inline object value `<concept> { <body> }` (used on the RHS of an
    * assignment). Shares parseRecordBody with instance records, so its body admits
    * the same members. Caller has already confirmed the shape via objectAhead. */
-  private parseInlineObject(start: Token): ObjectValue {
+  private parseInlineObject(start: Token): ObjectValue
+  {
     const cStart = this.current();
     const concept = this.parseDottedPath();
     const conceptSpan = this.spanFrom(cStart);
@@ -362,7 +397,8 @@ class Parser {
    * Parse a model: `model <id> : <meta-model> [uses <lib>, …] { <objects> }`.
    * The body reuses instance-record parsing for each contained object.
    */
-  private parseModel(start: Token): ModelDecl {
+  private parseModel(start: Token): ModelDecl
+  {
     this.expectKeyword("model");
     const idTok = this.expect(TokenKind.Identifier);
     this.expect(TokenKind.Colon);
@@ -375,9 +411,11 @@ class Parser {
     // Optional `uses <lib>, <lib>, …` — the taxonomies this model draws terms from.
     const libraries: string[] = [];
     const librarySpans: SourceSpan[] = [];
-    if (this.checkKeyword("uses")) {
+    if (this.checkKeyword("uses"))
+    {
       this.advance();
-      do {
+      do
+      {
         const libStart = this.current();
         libraries.push(this.parseDottedPath());
         librarySpans.push(this.spanFrom(libStart));
@@ -387,7 +425,8 @@ class Parser {
     // a model is split across files; see the loader).
     let conforms: string | null = null;
     let conformsSpan: SourceSpan | undefined;
-    if (this.checkKeyword("conforms")) {
+    if (this.checkKeyword("conforms"))
+    {
       this.advance();
       const cStart = this.current();
       conforms = this.parseDottedPath();   // viewpoint may be ns-qualified
@@ -396,9 +435,11 @@ class Parser {
     const instances: InstanceDecl[] = [];
     const edges: EdgeApplication[] = [];
     this.expect(TokenKind.LBrace);
-    while (!this.check(TokenKind.RBrace)) {
+    while (!this.check(TokenKind.RBrace))
+    {
       const memberStart = this.startToken();
-      if (this.edgeApplicationAhead()) {
+      if (this.edgeApplicationAhead())
+      {
         edges.push(this.parseEdgeApplication(memberStart));
         continue;
       }
@@ -425,21 +466,24 @@ class Parser {
   }
 
   /** `annotation <Name> { <param> : <type><card>; … }` — typed param fields. */
-  private parseAnnotation(start: Token): AnnotationDecl {
+  private parseAnnotation(start: Token): AnnotationDecl
+  {
     this.expectKeyword("annotation");
     const nameTok = this.expect(TokenKind.Identifier);
     // Optional base annotation (`annotation Sub : Base`), same `:` supertyping
     // syntax concepts use. The base may be namespace-qualified.
     let extendsName: string | null = null;
     let extendsSpan: SourceSpan | undefined;
-    if (this.match(TokenKind.Colon)) {
+    if (this.match(TokenKind.Colon))
+    {
       const startTok = this.current();
       extendsName = this.parseDottedPath();
       extendsSpan = this.spanFrom(startTok);
     }
     const params: FieldDecl[] = [];
     this.expect(TokenKind.LBrace);
-    while (!this.check(TokenKind.RBrace)) {
+    while (!this.check(TokenKind.RBrace))
+    {
       const pNameTok = this.expect(TokenKind.Identifier);
       this.expect(TokenKind.Colon);
       const typeStart = this.current();
@@ -460,14 +504,16 @@ class Parser {
   }
 
   /** `annotate <Name> { <param> = <value>; … }` — an application (concept or package body). */
-  private parseAnnotationApplication(start: Token): AnnotationApplication {
+  private parseAnnotationApplication(start: Token): AnnotationApplication
+  {
     this.expectKeyword("annotate");
     const nameStart = this.current();
     const name = this.parseDottedPath();                // applied annotation may be ns-qualified
     const nameSpan = this.spanFrom(nameStart);
     const assignments: AssignmentNode[] = [];
     this.expect(TokenKind.LBrace);
-    while (!this.check(TokenKind.RBrace)) {
+    while (!this.check(TokenKind.RBrace))
+    {
       const aStart = this.startToken();
       const pName = this.expect(TokenKind.Identifier).value;
       this.expect(TokenKind.Equals);
@@ -482,11 +528,13 @@ class Parser {
   }
 
   /** `package { annotate … }` — a block of package-level applications. */
-  private parsePackage(start: Token): PackageDecl {
+  private parsePackage(start: Token): PackageDecl
+  {
     this.expectKeyword("package");
     const annotations: AnnotationApplication[] = [];
     this.expect(TokenKind.LBrace);
-    while (!this.check(TokenKind.RBrace)) {
+    while (!this.check(TokenKind.RBrace))
+    {
       if (!this.checkKeyword("annotate")) throw this.error(`expected "annotate" in a package block`);
       annotations.push(this.parseAnnotationApplication(this.startToken()));
     }
@@ -496,7 +544,8 @@ class Parser {
 
   /** `operator <glyph> : <concept> (<from>, <to>);`  (reified edge) or
    *  `operator <glyph> : <concept>.<relationship>;`   (relationship member). */
-  private parseOperator(start: Token): OperatorDecl {
+  private parseOperator(start: Token): OperatorDecl
+  {
     this.expectKeyword("operator");
     const glyphTok = this.expect(TokenKind.SymbolOp);
     this.expect(TokenKind.Colon);
@@ -511,7 +560,8 @@ class Parser {
       this.expect(TokenKind.Comma);
       toMember = this.expectIdentifier();
       this.expect(TokenKind.RParen);
-    } else {                                           // relationship form: split last segment
+    }
+    else {                                           // relationship form: split last segment
       // With no `(from, to)`, the dotted path must be `concept.relationship`; the
       // last `.` splits the concept from its relationship member. A bare, dot-less
       // path is neither form and is an error.
@@ -536,7 +586,8 @@ class Parser {
    * (optional after a body, required otherwise). Shape-only: the loader resolves
    * the glyph against the operator table and materializes the edge (design §3).
    */
-  private parseEdgeApplication(start: Token): EdgeApplication {
+  private parseEdgeApplication(start: Token): EdgeApplication
+  {
     const { edge, sawBody } = this.parseEdgeExpr(start);
     if (sawBody) this.match(TokenKind.Semicolon); // optional trailing `;` after a body
     else this.expect(TokenKind.Semicolon);
@@ -547,7 +598,8 @@ class Parser {
    * terminator — shared by the statement form (which adds `;`) and the value
    * form (`a ==> b` on the RHS of `=` / in a list, where `;`/`,`/`]` belongs to
    * the enclosing context). `sawBody` records whether a `{ … }` block appeared. */
-  private parseEdgeExpr(start: Token): { edge: EdgeApplication; sawBody: boolean } {
+  private parseEdgeExpr(start: Token): { edge: EdgeApplication; sawBody: boolean }
+  {
     const leftStart = this.current();
     const left = this.parseDottedPath();
     const glyphTok = this.expect(TokenKind.SymbolOp);
@@ -555,9 +607,11 @@ class Parser {
     const right = this.parseDottedPath();
     const body: AssignmentNode[] = [];
     let sawBody = false;
-    if (this.match(TokenKind.LBrace)) {
+    if (this.match(TokenKind.LBrace))
+    {
       sawBody = true;
-      while (!this.check(TokenKind.RBrace)) {
+      while (!this.check(TokenKind.RBrace))
+      {
         const aStart = this.startToken();
         const name = this.expectIdentifier();
         this.expect(TokenKind.Equals);
@@ -578,7 +632,8 @@ class Parser {
    * followed by a SymbolOp — an edge application `a <glyph> b`. The one lookahead
    * that lets a record body / value position tell an edge apart from a plain name:
    * both start with a (dotted) identifier, but only an edge has a trailing SymbolOp. */
-  private edgeApplicationAhead(): boolean {
+  private edgeApplicationAhead(): boolean
+  {
     let i = 0;
     if (this.peekKind(i) !== TokenKind.Identifier) return false;
     i += 1;
@@ -594,26 +649,34 @@ class Parser {
    * and an inline object (`c { … }`) are both tried BEFORE a plain identifier name,
    * since a bare name is the fallthrough. Numbers are kept as String values (TODL
    * has no distinct numeric value kind at this layer). */
-  private parseValue(): ValueNode {
-    if (this.edgeApplicationAhead()) {
+  private parseValue(): ValueNode
+  {
+    if (this.edgeApplicationAhead())
+    {
       return { kind: ValueKind.Edge, edge: this.parseEdgeExpr(this.startToken()).edge };
     }
-    if (this.check(TokenKind.Identifier) && this.objectAhead()) {
+    if (this.check(TokenKind.Identifier) && this.objectAhead())
+    {
       return this.parseInlineObject(this.startToken());
     }
-    if (this.check(TokenKind.String) || this.check(TokenKind.RawString)) {
+    if (this.check(TokenKind.String) || this.check(TokenKind.RawString))
+    {
       return { kind: ValueKind.String, text: this.advance().value };
     }
-    if (this.check(TokenKind.Number)) {
+    if (this.check(TokenKind.Number))
+    {
       return { kind: ValueKind.String, text: this.advance().value };
     }
     // `[ v, v, … ]` — a list value; each item is a full nested value (so lists may
     // hold names, objects, edges…). A trailing comma before `]` is tolerated.
-    if (this.match(TokenKind.LBracket)) {
+    if (this.match(TokenKind.LBracket))
+    {
       const items: ValueNode[] = [];
-      if (!this.check(TokenKind.RBracket)) {
+      if (!this.check(TokenKind.RBracket))
+      {
         items.push(this.parseValue());
-        while (this.match(TokenKind.Comma)) {
+        while (this.match(TokenKind.Comma))
+        {
           if (this.check(TokenKind.RBracket)) break; // trailing comma
           items.push(this.parseValue());
         }
@@ -621,13 +684,15 @@ class Parser {
       this.expect(TokenKind.RBracket);
       return { kind: ValueKind.List, items };
     }
-    if (this.check(TokenKind.Identifier)) {
+    if (this.check(TokenKind.Identifier))
+    {
       // `true` / `false` are reserved boolean literals — a bare one is always a
       // boolean value (not a name/relationship). A dotted or `|`-composed use
       // (`x.true`, `a | true`) keeps the identifier path below.
       const word = this.current().value;
       if ((word === "true" || word === "false")
-          && this.peekKind(1) !== TokenKind.Dot && this.peekKind(1) !== TokenKind.Pipe) {
+          && this.peekKind(1) !== TokenKind.Dot && this.peekKind(1) !== TokenKind.Pipe)
+          {
         this.advance();
         return { kind: ValueKind.Boolean, value: word === "true" };
       }
@@ -635,12 +700,14 @@ class Parser {
       const first = this.advance().value;
       // `a | b | c` — a composite: a `|`-joined set of names (enum flags, or a
       // multi-term selection the loader turns into one edge per part).
-      if (this.check(TokenKind.Pipe)) {
+      if (this.check(TokenKind.Pipe))
+      {
         const parts = [first];
         while (this.match(TokenKind.Pipe)) parts.push(this.expectIdentifier());
         return { kind: ValueKind.Composite, parts };
       }
-      if (this.check(TokenKind.Dot)) {
+      if (this.check(TokenKind.Dot))
+      {
         // A dotted bare name — a taxonomy-qualified term ref (`taxonomy.term`).
         const parts = [first];
         while (this.match(TokenKind.Dot)) parts.push(this.expectIdentifier());
@@ -654,7 +721,8 @@ class Parser {
   /** `primitive <name> [: <base>] { description = "…"; regex = "…"; }` — a scalar
    * value type. The body holds only the recognised string members; the loop reads
    * generic `key = value;` members and keeps the two it knows. */
-  private parsePrimitive(start: Token): PrimitiveDecl {
+  private parsePrimitive(start: Token): PrimitiveDecl
+  {
     this.expectKeyword("primitive");
     const nameTok = this.expect(TokenKind.Identifier);
     const name = nameTok.value;
@@ -663,7 +731,8 @@ class Parser {
     let description = "";
     let regex: string | null = null;
     this.expect(TokenKind.LBrace);
-    while (!this.check(TokenKind.RBrace)) {
+    while (!this.check(TokenKind.RBrace))
+    {
       const [key, value] = this.readStringMember();
       if (key === "description") description = value ?? "";
       else if (key === "regex") regex = value;
@@ -678,7 +747,8 @@ class Parser {
    * hierarchy of terms classifying the represented concept(s). The header lists the
    * concepts it represents and the sibling taxonomies it may draw bare refs from;
    * the body mixes term rows, taxonomy-level `annotate`s, and a `description`. */
-  private parseTaxonomy(start: Token): TaxonomyDecl {
+  private parseTaxonomy(start: Token): TaxonomyDecl
+  {
     this.expectKeyword("taxonomy");
     const nameTok = this.expect(TokenKind.Identifier);
     const name = nameTok.value;
@@ -698,9 +768,11 @@ class Parser {
     while (this.match(TokenKind.Comma)) pushTarget();
     const uses: string[] = [];
     const usesSpans: SourceSpan[] = [];
-    if (this.checkKeyword("uses")) {
+    if (this.checkKeyword("uses"))
+    {
       this.advance();
-      do {
+      do
+      {
         const startTok = this.current();
         uses.push(this.parseDottedPath());
         usesSpans.push(this.spanFrom(startTok));
@@ -710,18 +782,23 @@ class Parser {
     const terms: Term[] = [];
     const annotations: AnnotationApplication[] = [];
     this.expect(TokenKind.LBrace);
-    while (!this.check(TokenKind.RBrace)) {
+    while (!this.check(TokenKind.RBrace))
+    {
       // Checked before tryParseTerm: `annotate` lexes as an identifier, so
       // `annotate icon {` would otherwise match the concept-led-term lookahead
       // (`<identifier> <identifier> {`) and be mis-parsed as a term.
-      if (this.checkKeyword("annotate")) {
+      if (this.checkKeyword("annotate"))
+      {
         annotations.push(this.parseAnnotationApplication(this.startToken()));
         continue;
       }
       const term = this.tryParseTerm();
-      if (term !== null) {
+      if (term !== null)
+      {
         terms.push(term);
-      } else {
+      }
+      else
+      {
         const [key, value] = this.readStringMember();
         if (key === "description" && value !== null) description = value;
       }
@@ -736,7 +813,8 @@ class Parser {
   /** `viewpoint <name> : frames <Concept>, …;` — a named lens over the concepts it
    * frames. Header-only: there is no body block, so the declaration ends at the
    * frame list (no trailing `;`/`}` is consumed here; the caller's loop moves on). */
-  private parseViewpoint(start: Token): ViewpointDecl {
+  private parseViewpoint(start: Token): ViewpointDecl
+  {
     this.expectKeyword("viewpoint");
     const nameTok = this.expect(TokenKind.Identifier);
     const name = nameTok.value;
@@ -766,9 +844,11 @@ class Parser {
    *   - `<concept> <id> { … }`       — concept-led (a class of `<concept>`)
    * The concept-led form is recognised by `<identifier> <identifier> {`.
    */
-  private tryParseTerm(): Term | null {
+  private tryParseTerm(): Term | null
+  {
     if (this.checkKeyword("term")) return this.parseTerm(null);
-    if (this.check(TokenKind.Identifier) && this.peekKind(1) === TokenKind.Identifier) {
+    if (this.check(TokenKind.Identifier) && this.peekKind(1) === TokenKind.Identifier)
+    {
       const concept = this.expectIdentifier();
       return this.parseTerm(concept);
     }
@@ -780,7 +860,8 @@ class Parser {
   // concept: its body mixes `name = value;` assignments (its fixed field values)
   // and nested term rows, distinguished from assignments by the same lookahead
   // at every depth.
-  private parseTerm(concept: string | null): Term {
+  private parseTerm(concept: string | null): Term
+  {
     const start = this.startToken();
     if (concept === null) this.expectKeyword("term");
     const idTok = this.expect(TokenKind.Identifier);
@@ -789,15 +870,20 @@ class Parser {
     const children: Term[] = [];
     const annotations: AnnotationApplication[] = [];
     this.expect(TokenKind.LBrace);
-    while (!this.check(TokenKind.RBrace)) {
-      if (this.checkKeyword("annotate")) {
+    while (!this.check(TokenKind.RBrace))
+    {
+      if (this.checkKeyword("annotate"))
+      {
         annotations.push(this.parseAnnotationApplication(this.startToken()));
         continue;
       }
       const child = this.tryParseTerm();
-      if (child !== null) {
+      if (child !== null)
+      {
         children.push(child);
-      } else {
+      }
+      else
+      {
         const memberStart = this.startToken();
         const name = this.expectIdentifier();
         this.expect(TokenKind.Equals);
@@ -817,13 +903,15 @@ class Parser {
    * edge member), `invariant` (a predicate), `annotate` (an application), and the
    * doc-only `authoring` block (skipped). A bare identifier is either a `:` typed
    * FIELD or a `=` doc assignment (only `description` is kept). */
-  private parseConcept(start: Token): ConceptDecl {
+  private parseConcept(start: Token): ConceptDecl
+  {
     this.expectKeyword("concept");
     const nameTok = this.expect(TokenKind.Identifier);
     const name = nameTok.value;
     let extendsName: string | null = null;
     let extendsSpan: SourceSpan | undefined;
-    if (this.match(TokenKind.Colon)) {
+    if (this.match(TokenKind.Colon))
+    {
       // A parent may be namespace-qualified (`ns.concept`); resolution strips
       // the namespace. Bare names still parse.
       const startTok = this.current();
@@ -838,23 +926,34 @@ class Parser {
     const annotations: AnnotationApplication[] = [];
 
     this.expect(TokenKind.LBrace);
-    while (!this.check(TokenKind.RBrace)) {
-      if (this.checkKeyword("relationship")) {
+    while (!this.check(TokenKind.RBrace))
+    {
+      if (this.checkKeyword("relationship"))
+      {
         relationships.push(this.parseRelationship());
-      } else if (this.checkKeyword("invariant")) {
+      }
+      else if (this.checkKeyword("invariant"))
+      {
         invariants.push(this.parseInvariant());
-      } else if (this.checkKeyword("annotate")) {
+      }
+      else if (this.checkKeyword("annotate"))
+      {
         annotations.push(this.parseAnnotationApplication(this.startToken()));
-      } else if (this.checkKeyword("authoring")) {
+      }
+      else if (this.checkKeyword("authoring"))
+      {
         // Doc-only authoring-form blocks (`authoring list-form { … }`) carry no
         // schema; skip them.
         this.advance();
         this.expectIdentifier();
         this.skipBracedBlock();
-      } else {
+      }
+      else
+      {
         const nameTok = this.expect(TokenKind.Identifier);
         const memberName = nameTok.value;
-        if (this.match(TokenKind.Colon)) {
+        if (this.match(TokenKind.Colon))
+        {
           const typeStart = this.current();
           const typeName = this.parseDottedPath();      // field type may be ns-qualified
           const typeSpan = this.spanFrom(typeStart);
@@ -864,16 +963,23 @@ class Parser {
             name: memberName, type: typeName, cardinality,
             nameSpan: tokenSpan(nameTok, this.uri), typeSpan,
           });
-        } else if (this.match(TokenKind.Equals)) {
-          if (this.check(TokenKind.String) || this.check(TokenKind.RawString)) {
+        }
+        else if (this.match(TokenKind.Equals))
+        {
+          if (this.check(TokenKind.String) || this.check(TokenKind.RawString))
+          {
             const value = this.parseStringValue();
             if (memberName === "description") description = value;
-          } else {
+          }
+          else
+          {
             // Doc-only non-string members (`references = [ … ]`); skip.
             this.skipToSemicolon();
           }
           this.expect(TokenKind.Semicolon);
-        } else {
+        }
+        else
+        {
           throw this.error(`expected ":" (field) or "=" (assignment) after "${memberName}"`);
         }
       }
@@ -888,7 +994,8 @@ class Parser {
   /** `relationship <name> -> <target> [| <target>…] <card> [{ annotate … } | ;]` —
    * an edge member. The `|`-separated target list is a union of allowed concepts.
    * A relationship may carry an annotate-only body, otherwise it ends in `;`. */
-  private parseRelationship(): RelationshipDecl {
+  private parseRelationship(): RelationshipDecl
+  {
     this.expectKeyword("relationship");
     const nameTok = this.expect(TokenKind.Identifier);
     this.expectSymbol("->");
@@ -902,16 +1009,23 @@ class Parser {
     }
     const cardinality = this.parseCardinality();
     const annotations: AnnotationApplication[] = [];
-    if (this.match(TokenKind.LBrace)) {
-      while (!this.check(TokenKind.RBrace)) {
-        if (this.checkKeyword("annotate")) {
+    if (this.match(TokenKind.LBrace))
+    {
+      while (!this.check(TokenKind.RBrace))
+      {
+        if (this.checkKeyword("annotate"))
+        {
           annotations.push(this.parseAnnotationApplication(this.startToken()));
-        } else {
+        }
+        else
+        {
           throw this.error('only "annotate" statements are allowed in a relationship body');
         }
       }
       this.expect(TokenKind.RBrace);
-    } else {
+    }
+    else
+    {
       this.expect(TokenKind.Semicolon);
     }
     return {
@@ -925,9 +1039,11 @@ class Parser {
    * description = "…"; }`. The `predicate` value is NOT parsed here — its raw token
    * slice is captured (see collectUntilSemicolon) and handed to the dedicated
    * predicate parser later by the loader. */
-  private parseInvariant(): InvariantDecl {
+  private parseInvariant(): InvariantDecl
+  {
     this.expectKeyword("invariant");
-    if (this.check(TokenKind.String) || this.check(TokenKind.RawString)) {
+    if (this.check(TokenKind.String) || this.check(TokenKind.RawString))
+    {
       const description = this.parseStringValue();
       this.expect(TokenKind.Semicolon);
       return { description, predicate: null };
@@ -936,13 +1052,17 @@ class Parser {
     let description = "";
     let predicate: Token[] | null = null;
     this.expect(TokenKind.LBrace);
-    while (!this.check(TokenKind.RBrace)) {
+    while (!this.check(TokenKind.RBrace))
+    {
       const key = this.expectIdentifier();
       this.expect(TokenKind.Equals);
-      if (key === "predicate") {
+      if (key === "predicate")
+      {
         predicate = this.collectUntilSemicolon();
         this.expect(TokenKind.Semicolon);
-      } else {
+      }
+      else
+      {
         const value = this.parseStringValue();
         this.expect(TokenKind.Semicolon);
         if (key === "description") description = value;
@@ -956,11 +1076,14 @@ class Parser {
 
   /** Read an optional cardinality suffix on a member type: `?` → Optional, `[]` →
    * Many, `[+]` → OneOrMore. Nothing → the default One (exactly one). */
-  private parseCardinality(): Cardinality {
+  private parseCardinality(): Cardinality
+  {
     if (this.match(TokenKind.Question)) return Cardinality.Optional;
-    if (this.check(TokenKind.LBracket)) {
+    if (this.check(TokenKind.LBracket))
+    {
       this.advance();
-      if (this.match(TokenKind.Plus)) {
+      if (this.match(TokenKind.Plus))
+      {
         this.expect(TokenKind.RBracket);
         return Cardinality.OneOrMore;
       }
@@ -973,17 +1096,21 @@ class Parser {
   /** Read a dotted name `a.b.c` and return it joined with `.`. Accepts a single
    * bare identifier (a one-segment path), so every namespace-qualifiable position
    * can call this uniformly whether or not the author qualified the name. */
-  private parseDottedPath(): string {
+  private parseDottedPath(): string
+  {
     const parts = [this.expectIdentifier()];
-    while (this.match(TokenKind.Dot)) {
+    while (this.match(TokenKind.Dot))
+    {
       parts.push(this.expectIdentifier());
     }
     return parts.join(".");
   }
 
   /** Expect and consume a string (or raw-string) literal, returning its text. */
-  private parseStringValue(): string {
-    if (this.check(TokenKind.String) || this.check(TokenKind.RawString)) {
+  private parseStringValue(): string
+  {
+    if (this.check(TokenKind.String) || this.check(TokenKind.RawString))
+    {
       return this.advance().value;
     }
     throw this.error(`expected a string value`);
@@ -994,13 +1121,17 @@ class Parser {
    * other value (a doc-only `references = [ … ]` list) is skipped and returned
    * as `null`, so callers ignore members they don't recognise.
    */
-  private readStringMember(): [string, string | null] {
+  private readStringMember(): [string, string | null]
+  {
     const key = this.expectIdentifier();
     this.expect(TokenKind.Equals);
     let value: string | null = null;
-    if (this.check(TokenKind.String) || this.check(TokenKind.RawString) || this.check(TokenKind.Number)) {
+    if (this.check(TokenKind.String) || this.check(TokenKind.RawString) || this.check(TokenKind.Number))
+    {
       value = this.advance().value;
-    } else {
+    }
+    else
+    {
       this.skipToSemicolon();
     }
     this.expect(TokenKind.Semicolon);
@@ -1008,10 +1139,12 @@ class Parser {
   }
 
   /** Skip a balanced `{ … }` block (raw strings are single tokens, so brace-safe). */
-  private skipBracedBlock(): void {
+  private skipBracedBlock(): void
+  {
     this.expect(TokenKind.LBrace);
     let depth = 1;
-    while (depth > 0 && !this.check(TokenKind.EOF)) {
+    while (depth > 0 && !this.check(TokenKind.EOF))
+    {
       if (this.check(TokenKind.LBrace)) depth += 1;
       else if (this.check(TokenKind.RBrace)) depth -= 1;
       this.advance();
@@ -1019,14 +1152,16 @@ class Parser {
   }
 
   /** Advance to (but not past) the next `;`. */
-  private skipToSemicolon(): void {
+  private skipToSemicolon(): void
+  {
     while (!this.check(TokenKind.Semicolon) && !this.check(TokenKind.EOF)) this.advance();
   }
 
   /** Consume tokens up to (not past) the next `;` and return them as a raw slice.
    * Used to capture an invariant `predicate = …` verbatim for the predicate parser,
    * so this parser never has to understand predicate grammar. */
-  private collectUntilSemicolon(): Token[] {
+  private collectUntilSemicolon(): Token[]
+  {
     const start = this.pos;
     while (!this.check(TokenKind.Semicolon) && !this.check(TokenKind.EOF)) this.advance();
     return this.tokens.slice(start, this.pos);
@@ -1039,37 +1174,44 @@ class Parser {
 
   /** The token at the cursor. Past the end, returns the last token (an EOF token),
    * never undefined, so callers never need a null check. */
-  private current(): Token {
+  private current(): Token
+  {
     return this.tokens[this.pos] ?? this.tokens[this.tokens.length - 1] ?? EOF_TOKEN;
   }
 
   /** True when the current token is of `kind` (no consumption). */
-  private check(kind: TokenKind): boolean {
+  private check(kind: TokenKind): boolean
+  {
     return this.current().kind === kind;
   }
 
   /** The kind of the token `offset` positions ahead of the cursor — the lookahead
    * primitive the `*Ahead` predicates are built on. Past the end reads as EOF. */
-  private peekKind(offset: number): TokenKind {
+  private peekKind(offset: number): TokenKind
+  {
     return (this.tokens[this.pos + offset] ?? EOF_TOKEN).kind;
   }
 
   /** True when the current token is the identifier `word`. Keywords in TODL are not
    * a distinct token kind — they lex as identifiers and are recognised by value. */
-  private checkKeyword(word: string): boolean {
+  private checkKeyword(word: string): boolean
+  {
     const token = this.current();
     return token.kind === TokenKind.Identifier && token.value === word;
   }
 
   /** True when the current token is a SymbolOp with exactly `value`. */
-  private checkSymbol(value: string): boolean {
+  private checkSymbol(value: string): boolean
+  {
     const t = this.current();
     return t.kind === TokenKind.SymbolOp && t.value === value;
   }
 
   /** Consume the current token if it is the SymbolOp `value`; report whether it was. */
-  private matchSymbol(value: string): boolean {
-    if (this.checkSymbol(value)) {
+  private matchSymbol(value: string): boolean
+  {
+    if (this.checkSymbol(value))
+    {
       this.advance();
       return true;
     }
@@ -1077,14 +1219,17 @@ class Parser {
   }
 
   /** Consume the SymbolOp `value` or throw. */
-  private expectSymbol(value: string): Token {
+  private expectSymbol(value: string): Token
+  {
     if (!this.checkSymbol(value)) throw this.error(`expected "${value}"`);
     return this.advance();
   }
 
   /** Consume the current token if it is of `kind`; report whether it was. */
-  private match(kind: TokenKind): boolean {
-    if (this.check(kind)) {
+  private match(kind: TokenKind): boolean
+  {
+    if (this.check(kind))
+    {
       this.advance();
       return true;
     }
@@ -1093,32 +1238,38 @@ class Parser {
 
   /** Return the current token and step the cursor forward. Clamps at the last token
    * (the EOF sentinel), so advancing at end-of-input is a harmless no-move. */
-  private advance(): Token {
+  private advance(): Token
+  {
     const token = this.current();
     if (this.pos < this.tokens.length - 1) this.pos += 1;
     return token;
   }
 
   /** Consume the current token, requiring it to be of `kind`, or throw a ParseError. */
-  private expect(kind: TokenKind): Token {
+  private expect(kind: TokenKind): Token
+  {
     if (!this.check(kind)) throw this.error(`expected "${kind}"`);
     return this.advance();
   }
 
   /** Consume the keyword `word` or throw. */
-  private expectKeyword(word: string): Token {
+  private expectKeyword(word: string): Token
+  {
     if (!this.checkKeyword(word)) throw this.error(`expected "${word}"`);
     return this.advance();
   }
 
   /** Consume an identifier and return its text, or throw. */
-  private expectIdentifier(): string {
+  private expectIdentifier(): string
+  {
     return this.expect(TokenKind.Identifier).value;
   }
 
   /** A record id token — a bare identifier or a quoted string (e.g. `sequence "…"`). */
-  private expectRecordIdTok(): Token {
-    if (this.check(TokenKind.String) || this.check(TokenKind.RawString)) {
+  private expectRecordIdTok(): Token
+  {
+    if (this.check(TokenKind.String) || this.check(TokenKind.RawString))
+    {
       return this.advance();
     }
     return this.expect(TokenKind.Identifier);
@@ -1127,7 +1278,8 @@ class Parser {
   /** Build a {@link ParseError} at the current token, appending its line:column and
    * the offending lexeme to `message`. The token is carried so the catch sites can
    * span the diagnostic precisely. */
-  private error(message: string): ParseError {
+  private error(message: string): ParseError
+  {
     const token = this.current();
     const got = token.value.length > 0 ? token.value : token.kind;
     return new ParseError(`${message} at ${token.line}:${token.column} (got "${got}")`, token);

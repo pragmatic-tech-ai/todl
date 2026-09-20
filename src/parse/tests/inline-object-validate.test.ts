@@ -5,7 +5,8 @@ import { load } from "../loader.js";
 import { FakeIdGenerator } from "../../model/tests/fake-id-generator.js";
 import { DiagnosticCode } from "../../diagnostics/diagnostic.js";
 
-function codes(instances: string) {
+function codes(instances: string)
+{
   const src = `namespace t {
     concept slot { environment : string; }
     concept fancy_slot : slot {}

@@ -5,10 +5,12 @@ import { MetaKind } from "../../model/kinds.js";
 import { EdgeKind, Direction } from "../../model/graph.js";
 import { DiagnosticCode } from "../../diagnostics/diagnostic.js";
 
-function loadResult(text: string) {
+function loadResult(text: string)
+{
   return load([{ uri: "t.todl", text: `namespace n {\n${text}\n}` }]);
 }
-function repo(text: string) {
+function repo(text: string)
+{
   return loadResult(text).model;
 }
 

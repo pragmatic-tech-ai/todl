@@ -4,7 +4,8 @@ import assert from "node:assert/strict";
 import { parse } from "../parser.js";
 import { DeclKind, type ConceptDecl } from "../ast.js";
 
-function concept(text: string): ConceptDecl {
+function concept(text: string): ConceptDecl
+{
   const decl = parse(text).namespace.declarations.find((d) => d.kind === DeclKind.Concept);
   assert.ok(decl, "expected a concept declaration");
   return decl as ConceptDecl;

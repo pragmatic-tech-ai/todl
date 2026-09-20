@@ -6,30 +6,39 @@ import { Severity, DiagnosticCode, type Diagnostic } from "../../diagnostics/dia
 // as diagnostics. Holds the composed Domain for later querying. Node-free (it
 // imports only Domain + diagnostics), so it is safe to export from the barrel and
 // run in the renderer.
-export class SolutionSession {
+export class SolutionSession
+{
   private readonly domain: Domain;
   private diagnostics: Diagnostic[] = [];
 
-  constructor(source: PackageSource) {
+  constructor(source: PackageSource)
+  {
     this.domain = new Domain(source);
   }
 
-  get Domain(): Domain {
+  get Domain(): Domain
+  {
     return this.domain;
   }
 
-  get Diagnostics(): readonly Diagnostic[] {
+  get Diagnostics(): readonly Diagnostic[]
+  {
     return this.diagnostics;
   }
 
   // Load every member deps-first into the shared Domain. A member that fails to
   // resolve/load becomes one diagnostic; siblings still load.
-  async compose(members: readonly PackageRef[]): Promise<void> {
+  async compose(members: readonly PackageRef[]): Promise<void>
+  {
     this.diagnostics = [];
-    for (const ref of members) {
-      try {
+    for (const ref of members)
+    {
+      try
+      {
         await this.domain.load(ref);
-      } catch (err) {
+      }
+      catch (err)
+      {
         const at = ref.version === undefined ? ref.model : `${ref.model}@${ref.version}`;
         this.diagnostics.push({
           code: DiagnosticCode.PackageUnresolved,

@@ -14,13 +14,15 @@ import type { InstalledPackage } from "../resolve.js";
 
 /** One file recovered from a tar archive. `path` is the full archive path,
  *  e.g. `package/model.json`. */
-export interface TarFile {
+export interface TarFile
+{
   path: string;
   bytes: Uint8Array;
 }
 
 /** The subset of a package.json `TarReader.readPackage` reads. */
-interface RawPackageJson {
+interface RawPackageJson
+{
   name?: string;
   dependencies?: Record<string, string>;
   todl?: TodlPackageMeta;
@@ -29,13 +31,16 @@ interface RawPackageJson {
 const BLOCK = 512;
 const decoder = new TextDecoder();
 
-export class TarReader {
+export class TarReader
+{
   /** Gunzip `bytes` and return every regular-file entry, in archive order. */
-  static read(bytes: Uint8Array): TarFile[] {
+  static read(bytes: Uint8Array): TarFile[]
+  {
     const tar = gunzipSync(bytes);
     const files: TarFile[] = [];
     let offset = 0;
-    while (offset + BLOCK <= tar.length) {
+    while (offset + BLOCK <= tar.length)
+    {
       const header = tar.subarray(offset, offset + BLOCK);
       if (TarReader.isZeroBlock(header)) break; // two zero blocks terminate the archive
       const name = TarReader.field(header, 0, 100);
@@ -52,7 +57,8 @@ export class TarReader {
   /** Interpret a package tarball as an `InstalledPackage`, or `undefined` if it is
    *  not a TODL package (no `package/package.json` with a `todl` block + `name`, or
    *  no `package/model.json`) — mirroring the Node loader's `readPackage(dir)`. */
-  static readPackage(bytes: Uint8Array): InstalledPackage | undefined {
+  static readPackage(bytes: Uint8Array): InstalledPackage | undefined
+  {
     const byPath = new Map(TarReader.read(bytes).map((f) => [f.path, f.bytes]));
     const packageJson = byPath.get("package/package.json");
     const modelJson = byPath.get("package/model.json");
@@ -68,7 +74,8 @@ export class TarReader {
   }
 
   /** Read a fixed-width, null/space-terminated string field from a header block. */
-  private static field(header: Uint8Array, offset: number, length: number): string {
+  private static field(header: Uint8Array, offset: number, length: number): string
+  {
     let end = offset;
     const limit = offset + length;
     while (end < limit && header[end] !== 0 && header[end] !== 0x20) end++;
@@ -76,18 +83,21 @@ export class TarReader {
   }
 
   /** Parse a null/space-terminated octal numeric field (tar's size encoding). */
-  private static octal(header: Uint8Array, offset: number, length: number): number {
+  private static octal(header: Uint8Array, offset: number, length: number): number
+  {
     const text = TarReader.field(header, offset, length).trim();
     return text.length === 0 ? 0 : parseInt(text, 8);
   }
 
   /** Round a body size up to the next 512-byte block boundary. */
-  private static roundUp(size: number): number {
+  private static roundUp(size: number): number
+  {
     const remainder = size % BLOCK;
     return remainder === 0 ? size : size + (BLOCK - remainder);
   }
 
-  private static isZeroBlock(header: Uint8Array): boolean {
+  private static isZeroBlock(header: Uint8Array): boolean
+  {
     for (let i = 0; i < BLOCK; i++) if (header[i] !== 0) return false;
     return true;
   }

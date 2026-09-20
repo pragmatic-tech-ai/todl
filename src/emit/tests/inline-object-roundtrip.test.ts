@@ -5,7 +5,8 @@ import { toJSON, type TodlDocument } from "../json.js";
 import { deriveBindings, emitModelTodl } from "../todl.js";
 
 // A meta-model base: concept `slot { environment }` and `component { slots : slot[] }`.
-function base(): Repository {
+function base(): Repository
+{
   const r = new Repository();
   const b = r.builder().setNamespace("acme.ea");
   b.definePrimitive("string");
@@ -19,7 +20,8 @@ function base(): Repository {
 
 // Own delta as the loader materialises an inline object: c1 contains slot `id-0`,
 // bound via the `slots` field.
-function emit(): string {
+function emit(): string
+{
   const model = base();
   const baseIds = new Set(model.allNodes().map((n) => n.id));
   const b = model.builder();

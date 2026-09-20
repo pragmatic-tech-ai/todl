@@ -6,7 +6,8 @@
  */
 
 /** A single HTTP request. `body` is a JSON string (publish) or absent (reads). */
-export interface HttpRequest {
+export interface HttpRequest
+{
   method: string;
   url: string;
   headers: Record<string, string>;
@@ -14,20 +15,24 @@ export interface HttpRequest {
 }
 
 /** An HTTP response with the body as raw bytes (tarballs are binary). */
-export interface HttpResponse {
+export interface HttpResponse
+{
   status: number;
   headers: Record<string, string>;
   body: Uint8Array;
 }
 
 /** The transport seam: everything the registry client needs from the network. */
-export interface HttpTransport {
+export interface HttpTransport
+{
   request(req: HttpRequest): Promise<HttpResponse>;
 }
 
 /** The default transport: `fetch`, reading the whole body into a byte array. */
-export class FetchTransport implements HttpTransport {
-  async request(req: HttpRequest): Promise<HttpResponse> {
+export class FetchTransport implements HttpTransport
+{
+  async request(req: HttpRequest): Promise<HttpResponse>
+  {
     const init: RequestInit = { method: req.method, headers: req.headers };
     // `string` and `Uint8Array` are both valid fetch bodies at runtime; the cast
     // bridges the lib.dom `BodyInit` typing (its `Uint8Array<ArrayBuffer>` view

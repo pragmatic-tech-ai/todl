@@ -4,7 +4,8 @@ import assert from "node:assert/strict";
 import { parse } from "../parser.js";
 import { DeclKind, type ConceptDecl } from "../ast.js";
 
-function rel(src: string) {
+function rel(src: string)
+{
   const { namespace } = parse(`namespace t { concept x { relationship ${src} } }`);
   const concept = namespace.declarations.find(
     (d): d is ConceptDecl => d.kind === DeclKind.Concept,

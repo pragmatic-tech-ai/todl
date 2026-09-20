@@ -7,7 +7,8 @@ import { startServer, pushedInit } from "./harness.js";
 // browser Web Worker uses. Guards the Phase-6 browser LSP.
 test("createServer initializes over an in-memory connection and answers in pushed mode", async () => {
   const { client, dispose } = startServer();
-  try {
+  try
+  {
     const init: any = await client.sendRequest("initialize", pushedInit());
     assert.equal(init.capabilities.hoverProvider, true);
     assert.ok(init.capabilities.completionProvider, "completion advertised");
@@ -19,7 +20,9 @@ test("createServer initializes over an in-memory connection and answers in pushe
     // A hover request must resolve (result or null) without throwing over the wire.
     const hover = await client.sendRequest("textDocument/hover", { textDocument: { uri }, position: { line: 0, character: 17 } });
     assert.ok(hover === null || typeof hover === "object");
-  } finally {
+  }
+  finally
+  {
     dispose();
   }
 });

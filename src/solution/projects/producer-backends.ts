@@ -7,7 +7,8 @@ import { PackageKind } from '../../publish/publish.js'
 // <userData>/meta-models and <userData>/libraries today), so it is app-coupled and
 // resolved here by key; todl owns only this contract. Each backend is a rooted
 // IStorage; a package lives at `<id>/<version>/…` beneath it.
-export interface IProducerBackends {
+export interface IProducerBackends
+{
     // The backend for a producer kind. MetaModel/Library map to their two roots; any
     // other kind is a caller error.
     Backend(kind: PackageKind): IStorage

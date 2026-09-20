@@ -6,15 +6,18 @@ import {
   DeclKind, type Declaration, type ConceptDecl, type InstanceDecl, type ModelDecl,
 } from "../parse/ast.js";
 
-export function documentSymbols(a: Analysis, uri: string): DocumentSymbol[] {
+export function documentSymbols(a: Analysis, uri: string): DocumentSymbol[]
+{
   const ast = a.sources.get(uri)?.ast;
   if (ast === undefined) return [];
   return ast.declarations.map((d) => toSymbol(d)).filter((s): s is DocumentSymbol => s !== null);
 }
 
-function toSymbol(decl: Declaration): DocumentSymbol | null {
+function toSymbol(decl: Declaration): DocumentSymbol | null
+{
   const range = spanToRange(decl.span);
-  switch (decl.kind) {
+  switch (decl.kind)
+  {
     case DeclKind.Primitive:
       return leaf(decl.name, SymbolKind.Struct, range, nameRange(decl.nameSpan, range));
     case DeclKind.Taxonomy:
@@ -36,19 +39,23 @@ function toSymbol(decl: Declaration): DocumentSymbol | null {
   }
 }
 
-function modelSymbol(decl: ModelDecl, range: Range): DocumentSymbol {
+function modelSymbol(decl: ModelDecl, range: Range): DocumentSymbol
+{
   const children = decl.instances.map((c) => instanceSymbol(c, spanToRange(c.span)));
   const sym = leaf(decl.id, SymbolKind.Module, range, nameRange(decl.idSpan, range));
   if (children.length > 0) sym.children = children;
   return sym;
 }
 
-function conceptSymbol(decl: ConceptDecl, range: Range): DocumentSymbol {
+function conceptSymbol(decl: ConceptDecl, range: Range): DocumentSymbol
+{
   const children: DocumentSymbol[] = [];
-  for (const f of decl.fields) {
+  for (const f of decl.fields)
+  {
     if (f.nameSpan !== undefined) children.push(leaf(f.name, SymbolKind.Field, spanToRange(f.nameSpan), spanToRange(f.nameSpan)));
   }
-  for (const r of decl.relationships) {
+  for (const r of decl.relationships)
+  {
     if (r.nameSpan !== undefined) children.push(leaf(r.name, SymbolKind.Method, spanToRange(r.nameSpan), spanToRange(r.nameSpan)));
   }
   const sym = leaf(decl.name, SymbolKind.Class, range, nameRange(decl.nameSpan, range));
@@ -56,17 +63,20 @@ function conceptSymbol(decl: ConceptDecl, range: Range): DocumentSymbol {
   return sym;
 }
 
-function instanceSymbol(decl: InstanceDecl, range: Range): DocumentSymbol {
+function instanceSymbol(decl: InstanceDecl, range: Range): DocumentSymbol
+{
   const children = decl.children.map((c) => instanceSymbol(c, spanToRange(c.span)));
   const sym = leaf(decl.id, SymbolKind.Object, range, nameRange(decl.idSpan, range));
   if (children.length > 0) sym.children = children;
   return sym;
 }
 
-function leaf(name: string, kind: SymbolKind, range: Range, selectionRange: Range): DocumentSymbol {
+function leaf(name: string, kind: SymbolKind, range: Range, selectionRange: Range): DocumentSymbol
+{
   return { name, kind, range, selectionRange };
 }
 
-function nameRange(span: SourceSpan | undefined, fallback: Range): Range {
+function nameRange(span: SourceSpan | undefined, fallback: Range): Range
+{
   return span === undefined ? fallback : spanToRange(span);
 }

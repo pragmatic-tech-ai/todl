@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { parse } from "../parser.js";
 import { DeclKind, type ViewpointDecl } from "../ast.js";
 
-function viewpoint(src: string): ViewpointDecl {
+function viewpoint(src: string): ViewpointDecl
+{
   const { namespace } = parse(`namespace n {\n${src}\n}`, "t.todl");
   const decl = namespace.declarations.find((d) => d.kind === DeclKind.Viewpoint);
   assert.ok(decl, "expected a viewpoint declaration");

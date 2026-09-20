@@ -17,8 +17,10 @@ const ROLE_TYPE: Record<Role, (typeof TYPES)[number]> = {
 };
 
 // A definition kind → token type.
-function defType(kind: SymbolKind): (typeof TYPES)[number] {
-  switch (kind) {
+function defType(kind: SymbolKind): (typeof TYPES)[number]
+{
+  switch (kind)
+  {
     case SymbolKind.Concept: return "type";
     case SymbolKind.Primitive: case SymbolKind.Taxonomy: return "class";
     case SymbolKind.Term: return "enumMember";
@@ -30,13 +32,16 @@ function defType(kind: SymbolKind): (typeof TYPES)[number] {
 
 interface Raw { line: number; char: number; len: number; type: number }
 
-export function semanticTokens(a: Analysis, uri: string): SemanticTokens {
+export function semanticTokens(a: Analysis, uri: string): SemanticTokens
+{
   const raws: Raw[] = [];
-  for (const occ of a.refs.all()) {
+  for (const occ of a.refs.all())
+  {
     if (occ.uri !== uri || occ.symbol === "") continue;
     raws.push(toRaw(occ.range, TYPE_INDEX[ROLE_TYPE[occ.role]]));
   }
-  for (const def of a.defs.all()) {
+  for (const def of a.defs.all())
+  {
     if (def.uri !== uri) continue;
     raws.push(toRaw(def.nameRange, TYPE_INDEX[defType(def.kind)]));
   }
@@ -44,7 +49,8 @@ export function semanticTokens(a: Analysis, uri: string): SemanticTokens {
 
   const data: number[] = [];
   let prevLine = 0, prevChar = 0;
-  for (const r of raws) {
+  for (const r of raws)
+  {
     const dLine = r.line - prevLine;
     const dChar = dLine === 0 ? r.char - prevChar : r.char;
     data.push(dLine, dChar, r.len, r.type, 0);
@@ -53,6 +59,7 @@ export function semanticTokens(a: Analysis, uri: string): SemanticTokens {
   return { data };
 }
 
-function toRaw(range: Range, type: number): Raw {
+function toRaw(range: Range, type: number): Raw
+{
   return { line: range.start.line, char: range.start.character, len: range.end.character - range.start.character, type };
 }

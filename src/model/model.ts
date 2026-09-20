@@ -31,71 +31,83 @@ import type { SourceSpan } from "../diagnostics/span.js";
 /** The prelude root concept — the virtual base of every parent-less concept (SPEC-02). */
 const ELEMENT_ID = "Element";
 
-export interface FieldSchema {
+export interface FieldSchema
+{
   name: string;
   type: NodeId;
   cardinality: Cardinality;
 }
 
-export interface RelationshipSchema {
+export interface RelationshipSchema
+{
   name: string;
   targets: NodeId[];
   cardinality: Cardinality;
   inverse: string | null;
 }
 
-export interface ConceptSchema {
+export interface ConceptSchema
+{
   concept: NodeId;
   extends: NodeId | null;
   fields: FieldSchema[];
   relationships: RelationshipSchema[];
 }
 
-export class Repository {
+export class Repository
+{
   private readonly graph: Graph;
   private readonly derivations: Derivations;
   private readonly invariants: Invariants;
   private readonly spans = new Map<string, SourceSpan>();
   private readonly entityCache = new Map<NodeId, EntityBase>();
 
-  constructor(graph: Graph = new Graph()) {
+  constructor(graph: Graph = new Graph())
+  {
     this.graph = graph;
     this.derivations = new Derivations(this);
     this.invariants = new Invariants();
   }
 
   /** Register a derived member (spec §4.4): a comprehension queried per instance. */
-  defineDerived(name: string, expr: Expr): void {
+  defineDerived(name: string, expr: Expr): void
+  {
     this.derivations.define(name, expr);
   }
 
   /** Query a derived member for an instance; lazily evaluated and memoized. */
-  derived(instance: NodeId, name: string): NodeId[] {
+  derived(instance: NodeId, name: string): NodeId[]
+  {
     return this.derivations.get(instance, name);
   }
 
   /** Register a concept invariant (spec §4.3): a predicate checked per instance. */
-  defineInvariant(concept: NodeId, expr: Expr, description = ""): void {
+  defineInvariant(concept: NodeId, expr: Expr, description = ""): void
+  {
     this.invariants.define(concept, expr, description);
   }
 
   /** Invariants declared directly on `concept`. */
-  invariantsFor(concept: NodeId): InvariantDef[] {
+  invariantsFor(concept: NodeId): InvariantDef[]
+  {
     return this.invariants.for(concept);
   }
 
   /** The mutation change stream (spec §R2). */
-  get changed(): Signal<GraphChangeArgs> {
+  get changed(): Signal<GraphChangeArgs>
+  {
     return this.graph.changed;
   }
 
   /** A staging mutation batch; call `commit()` to apply. */
-  builder(): Builder {
+  builder(): Builder
+  {
     return new Builder(this.graph);
   }
 
   /** A live reactive view of one node. */
-  view(id: NodeId): ReactiveNode {
+  view(id: NodeId): ReactiveNode
+  {
     return new ReactiveNode(this, id);
   }
 
@@ -104,10 +116,12 @@ export class Repository {
    * map), so references resolve to shared handles and cycles are safe. Undefined
    * when the node does not exist.
    */
-  entity<T extends Entity = Entity>(id: NodeId): T | undefined {
+  entity<T extends Entity = Entity>(id: NodeId): T | undefined
+  {
     if (!this.has(id)) return undefined;
     let handle = this.entityCache.get(id);
-    if (handle === undefined) {
+    if (handle === undefined)
+    {
       handle = this.createEntity(id);
       this.entityCache.set(id, handle);
     }
@@ -115,39 +129,47 @@ export class Repository {
   }
 
   /** Construct the handle for `id`. Override to return a typed EntityBase subclass. */
-  protected createEntity(id: NodeId): EntityBase {
+  protected createEntity(id: NodeId): EntityBase
+  {
     return new EntityBase(this, id);
   }
 
-  resolve(id: NodeId): Node | undefined {
+  resolve(id: NodeId): Node | undefined
+  {
     return this.graph.getNode(id);
   }
 
-  has(id: NodeId): boolean {
+  has(id: NodeId): boolean
+  {
     return this.graph.hasNode(id);
   }
 
-  instancesOf(concept: NodeId): NodeId[] {
+  instancesOf(concept: NodeId): NodeId[]
+  {
     return this.graph.instancesOf(concept);
   }
 
   /** Every node whose `metaKind` is `kind` (concept declarations, taxonomies,
    *  viewpoints, …). Replaces the old `instancesOf(<meta-kind sentinel>)`. */
-  nodesOfMetaKind(kind: MetaKind): NodeId[] {
+  nodesOfMetaKind(kind: MetaKind): NodeId[]
+  {
     return this.graph.nodesOfMetaKind(kind);
   }
 
   /** Every node in the model. */
-  allNodes(): Node[] {
+  allNodes(): Node[]
+  {
     return this.graph.allNodes();
   }
 
   /** All edges leaving `id` (forward adjacency). */
-  outEdges(id: NodeId): Edge[] {
+  outEdges(id: NodeId): Edge[]
+  {
     return this.graph.outEdges(id);
   }
 
-  related(id: NodeId, kind: EdgeKind, direction: Direction, via: NodeId | null = null): NodeId[] {
+  related(id: NodeId, kind: EdgeKind, direction: Direction, via: NodeId | null = null): NodeId[]
+  {
     return this.graph.related(id, kind, direction, via);
   }
 
@@ -157,17 +179,20 @@ export class Repository {
     direction: Direction,
     reflexive: boolean,
     via: NodeId | null = null,
-  ): NodeId[] {
+  ): NodeId[]
+  {
     return this.graph.closure(start, kind, direction, reflexive, via);
   }
 
   /** All concepts that transitively extend `concept`. */
-  subtypesOf(concept: NodeId): NodeId[] {
+  subtypesOf(concept: NodeId): NodeId[]
+  {
     return this.graph.closure(concept, EdgeKind.Extends, Direction.In, false);
   }
 
   /** All concepts `concept` transitively extends. */
-  supertypesOf(concept: NodeId): NodeId[] {
+  supertypesOf(concept: NodeId): NodeId[]
+  {
     const chain = this.graph.closure(concept, EdgeKind.Extends, Direction.Out, false);
     // Virtual-root rule (SPEC-02 #7): every parent-less concept IS an `Element`,
     // resolved here rather than via a stored `Extends → Element` super-node edge.
@@ -178,7 +203,8 @@ export class Repository {
 
   /** True when `id` is a concept (other than Element itself) that the virtual-root
    *  rule roots at `Element` — scoped to concepts so annotations never gain a base. */
-  private rootsAtElement(id: NodeId): boolean {
+  private rootsAtElement(id: NodeId): boolean
+  {
     return (
       id !== ELEMENT_ID &&
       this.graph.getNode(id)?.metaKind === MetaKind.Concept &&
@@ -187,79 +213,94 @@ export class Repository {
   }
 
   /** Direct child terms of a taxonomy term (one level narrower). */
-  narrowerOf(term: NodeId): NodeId[] {
+  narrowerOf(term: NodeId): NodeId[]
+  {
     return this.graph.related(term, EdgeKind.Narrower, Direction.Out);
   }
 
   /** Direct parent term(s) of a taxonomy term (one level broader). */
-  broaderOf(term: NodeId): NodeId[] {
+  broaderOf(term: NodeId): NodeId[]
+  {
     return this.graph.related(term, EdgeKind.Narrower, Direction.In);
   }
 
   /** Every term transitively narrower than `term` (its whole branch). */
-  descendantsOf(term: NodeId): NodeId[] {
+  descendantsOf(term: NodeId): NodeId[]
+  {
     return this.graph.closure(term, EdgeKind.Narrower, Direction.Out, false);
   }
 
   /** Every term transitively broader than `term` (its path to the root). */
-  ancestorsOf(term: NodeId): NodeId[] {
+  ancestorsOf(term: NodeId): NodeId[]
+  {
     return this.graph.closure(term, EdgeKind.Narrower, Direction.In, false);
   }
 
   // ── Classes + instantiation ─────────────────────────────────────────────
 
   /** True when a node is a class — a partial, fixed-value definition. */
-  isClass(id: NodeId): boolean {
+  isClass(id: NodeId): boolean
+  {
     return this.graph.getNode(id)?.isClass === true;
   }
 
   /** The class a leaf instantiates (`instanceof`), or null. */
-  classOf(leaf: NodeId): NodeId | null {
+  classOf(leaf: NodeId): NodeId | null
+  {
     return this.graph.related(leaf, EdgeKind.InstanceOf, Direction.Out)[0] ?? null;
   }
 
   /** Every leaf that instantiates `cls`. */
-  instancesOfClass(cls: NodeId): NodeId[] {
+  instancesOfClass(cls: NodeId): NodeId[]
+  {
     return this.graph.related(cls, EdgeKind.InstanceOf, Direction.In);
   }
 
   /** The concepts a taxonomy represents (one or more; empty if none). */
-  represents(taxonomy: NodeId): NodeId[] {
+  represents(taxonomy: NodeId): NodeId[]
+  {
     return this.graph.related(taxonomy, EdgeKind.Represents, Direction.Out);
   }
 
   /** Every taxonomy that represents `concept`. */
-  representedBy(concept: NodeId): NodeId[] {
+  representedBy(concept: NodeId): NodeId[]
+  {
     return this.graph.related(concept, EdgeKind.Represents, Direction.In);
   }
 
   /** The concepts a viewpoint frames (one or more; empty if none). */
-  frames(viewpoint: NodeId): NodeId[] {
+  frames(viewpoint: NodeId): NodeId[]
+  {
     return this.graph.related(viewpoint, EdgeKind.Frames, Direction.Out);
   }
 
   /** Every viewpoint that frames `concept` directly. */
-  framedBy(concept: NodeId): NodeId[] {
+  framedBy(concept: NodeId): NodeId[]
+  {
     return this.graph.related(concept, EdgeKind.Frames, Direction.In);
   }
 
   /** Every viewpoint in the model. */
-  viewpoints(): NodeId[] {
+  viewpoints(): NodeId[]
+  {
     return this.nodesOfMetaKind(MetaKind.Viewpoint);
   }
 
   /** Every viewpoint that frames `concept` OR any of its supertypes
    *  (subtype-aware: a subtype of a framed concept is framed). */
-  viewpointsFraming(concept: NodeId): NodeId[] {
+  viewpointsFraming(concept: NodeId): NodeId[]
+  {
     const seen = new Set<NodeId>();
-    for (const c of [concept, ...this.supertypesOf(concept)]) {
+    for (const c of [concept, ...this.supertypesOf(concept)])
+    {
       for (const vp of this.framedBy(c)) seen.add(vp);
     }
     return [...seen];
   }
 
   /** The term (class) members of a taxonomy. */
-  termsOf(taxonomy: NodeId): NodeId[] {
+  termsOf(taxonomy: NodeId): NodeId[]
+  {
     return this.graph.related(taxonomy, EdgeKind.Contains, Direction.Out);
   }
 
@@ -268,12 +309,15 @@ export class Repository {
    * fixed values (class wins). `attrs` is user-data-only now (markers moved to
    * root fields in SPEC-01), so the overlay is a clean merge with no blocklist.
    */
-  effectiveFields(leaf: NodeId): Map<string, Scalar> {
+  effectiveFields(leaf: NodeId): Map<string, Scalar>
+  {
     const result = new Map<string, Scalar>(this.graph.getNode(leaf)?.attrs ?? []);
     const cls = this.classOf(leaf);
-    if (cls !== null) {
+    if (cls !== null)
+    {
       const clsAttrs = this.graph.getNode(cls)?.attrs;
-      if (clsAttrs !== undefined) {
+      if (clsAttrs !== undefined)
+      {
         for (const [key, value] of clsAttrs) result.set(key, value);
       }
     }
@@ -284,10 +328,12 @@ export class Repository {
    * A leaf's effective domain relationships (name -> targets): the union of the
    * leaf's own relationship edges with those inherited from its class.
    */
-  effectiveRelationships(leaf: NodeId): Map<string, NodeId[]> {
+  effectiveRelationships(leaf: NodeId): Map<string, NodeId[]>
+  {
     const result = new Map<string, NodeId[]>();
     const collect = (id: NodeId): void => {
-      for (const edge of this.graph.outEdges(id)) {
+      for (const edge of this.graph.outEdges(id))
+      {
         if (edge.kind !== EdgeKind.Relationship || edge.via === null) continue;
         const list = result.get(edge.via) ?? [];
         if (!list.includes(edge.to)) list.push(edge.to);
@@ -303,31 +349,39 @@ export class Repository {
   // ── Read primitives (typed-client foundation, spec §4) ────────────────────
 
   /** A node's effective scalar field value (class-merged), or undefined. */
-  attr(id: NodeId, name: string): Scalar | undefined {
+  attr(id: NodeId, name: string): Scalar | undefined
+  {
     return this.effectiveFields(id).get(name);
   }
 
   /** The single target of reference member `member` (class-merged), or undefined. */
-  ref(id: NodeId, member: string): NodeId | undefined {
+  ref(id: NodeId, member: string): NodeId | undefined
+  {
     return this.refs(id, member)[0];
   }
 
   /** All targets of reference member `member` (class-merged); [] if none. */
-  refs(id: NodeId, member: string): NodeId[] {
+  refs(id: NodeId, member: string): NodeId[]
+  {
     return this.effectiveRelationships(id).get(member) ?? [];
   }
 
   /** Inbound reference sources (reverse adjacency), optionally filtered by member. */
-  referrers(id: NodeId, member?: string): NodeId[] {
+  referrers(id: NodeId, member?: string): NodeId[]
+  {
     return this.related(id, EdgeKind.Relationship, Direction.In, member ?? null);
   }
 
   /** Every relationship edge whose target node is absent (bulk dangling report). */
-  danglingRefs(): { from: NodeId; member: string; to: NodeId }[] {
+  danglingRefs(): { from: NodeId; member: string; to: NodeId }[]
+  {
     const result: { from: NodeId; member: string; to: NodeId }[] = [];
-    for (const node of this.allNodes()) {
-      for (const edge of this.outEdges(node.id)) {
-        if (edge.kind === EdgeKind.Relationship && edge.via !== null && !this.has(edge.to)) {
+    for (const node of this.allNodes())
+    {
+      for (const edge of this.outEdges(node.id))
+      {
+        if (edge.kind === EdgeKind.Relationship && edge.via !== null && !this.has(edge.to))
+        {
           result.push({ from: node.id, member: edge.via, to: edge.to });
         }
       }
@@ -336,7 +390,8 @@ export class Repository {
   }
 
   /** Reflect a concept's declared schema (spec §5): direct parent, fields, relationships. */
-  schemaOf(concept: NodeId): ConceptSchema {
+  schemaOf(concept: NodeId): ConceptSchema
+  {
     const parents = this.graph.related(concept, EdgeKind.Extends, Direction.Out);
 
     // Declared fields are carried on the concept node (SPEC-01 #4) — no HasField
@@ -348,7 +403,8 @@ export class Repository {
     }));
 
     const relationships: RelationshipSchema[] = [];
-    for (const memberId of this.graph.related(concept, EdgeKind.HasRelationship, Direction.Out)) {
+    for (const memberId of this.graph.related(concept, EdgeKind.HasRelationship, Direction.Out))
+    {
       const node = this.graph.getNode(memberId);
       if (node === undefined) continue;
       const inverse = node.attrs.get("inverse");
@@ -367,15 +423,19 @@ export class Repository {
   }
 
   /** A concept's schema merged with everything it extends (subtype members win). */
-  effectiveSchema(concept: NodeId): ConceptSchema {
+  effectiveSchema(concept: NodeId): ConceptSchema
+  {
     const fields = new Map<string, FieldSchema>();
     const relationships = new Map<string, RelationshipSchema>();
-    for (const current of [concept, ...this.supertypesOf(concept)]) {
+    for (const current of [concept, ...this.supertypesOf(concept)])
+    {
       const schema = this.schemaOf(current);
-      for (const field of schema.fields) {
+      for (const field of schema.fields)
+      {
         if (!fields.has(field.name)) fields.set(field.name, field);
       }
-      for (const relationship of schema.relationships) {
+      for (const relationship of schema.relationships)
+      {
         if (!relationships.has(relationship.name)) relationships.set(relationship.name, relationship);
       }
     }
@@ -388,30 +448,36 @@ export class Repository {
   }
 
   /** Validate the model, returning structured diagnostics (spec §6). */
-  validate(): Diagnostic[] {
+  validate(): Diagnostic[]
+  {
     return runValidation(this);
   }
 
   /** Record the defining source span for a node id or a member key. */
-  recordSpan(key: string, span: SourceSpan): void {
+  recordSpan(key: string, span: SourceSpan): void
+  {
     this.spans.set(key, span);
   }
 
   /** The span recorded for a node id or member key, or null. */
-  spanOf(key: string): SourceSpan | null {
+  spanOf(key: string): SourceSpan | null
+  {
     return this.spans.get(key) ?? null;
   }
 
   /** Composite key for a per-instance member span. */
-  static memberKey(node: NodeId, member: string): string {
+  static memberKey(node: NodeId, member: string): string
+  {
     return `${node}#${member}`;
   }
 }
 
-function readString(value: Scalar | undefined): string {
+function readString(value: Scalar | undefined): string
+{
   return typeof value === "string" ? value : "";
 }
 
-function readCardinality(value: Scalar | undefined): Cardinality {
+function readCardinality(value: Scalar | undefined): Cardinality
+{
   return typeof value === "number" ? value : Cardinality.One;
 }

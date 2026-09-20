@@ -10,9 +10,12 @@ import { type SolutionSettingBag } from '../engine/solution-setting-bag.js';
 // SettingKind to a PropertyKind, produces the GridProperty descriptors, and wraps
 // the bag's values in a MapPropertyBag whose accessors read/write the bag (so an
 // edit flows straight through to the session's dirty tracking).
-export class SettingBagGrid {
-    static kindOf(kind: SettingKind): PropertyKind {
-        switch (kind) {
+export class SettingBagGrid
+{
+    static kindOf(kind: SettingKind): PropertyKind
+    {
+        switch (kind)
+        {
             case SettingKind.Boolean:
                 return PropertyKind.Boolean;
             case SettingKind.Number:
@@ -28,14 +31,16 @@ export class SettingBagGrid {
         }
     }
 
-    static describe(bag: SolutionSettingBag): GridProperty[] {
+    static describe(bag: SolutionSettingBag): GridProperty[]
+    {
         return bag.Definition.Fields.map((f) => {
             const opts = {
                 displayName: f.Label || f.Key,
                 category: bag.Definition.Title,
                 description: f.Description,
             };
-            switch (SettingBagGrid.kindOf(f.Kind)) {
+            switch (SettingBagGrid.kindOf(f.Kind))
+            {
                 case PropertyKind.Boolean:
                     return GridProperty.bool(f.Key, opts);
                 case PropertyKind.Number:
@@ -50,9 +55,11 @@ export class SettingBagGrid {
         });
     }
 
-    static bagOf(bag: SolutionSettingBag): IPropertyBag {
+    static bagOf(bag: SolutionSettingBag): IPropertyBag
+    {
         const accessors = new Map<string, PropertyAccessor>();
-        for (const f of bag.Definition.Fields) {
+        for (const f of bag.Definition.Fields)
+        {
             accessors.set(f.Key, {
                 id: () => f.Key,
                 displayName: () => f.Label || f.Key,

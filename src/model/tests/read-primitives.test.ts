@@ -5,7 +5,8 @@ import { Repository } from "../model.js";
 // A small instance graph: a `component` gw whose reference field `implemented-by`
 // points at a `technology` copilot; plus a `component` class `web-app` with a
 // fixed `label` and an instance `portal` that `instanceof` it.
-function fixture(): Repository {
+function fixture(): Repository
+{
   const repo = new Repository();
   const b = repo.builder();
   b.defineConcept("component");

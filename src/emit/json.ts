@@ -11,7 +11,8 @@ import { Repository } from "../model/model.js";
 
 /** Human-readable metadata about an entity, added only in debug emit. Opaque
  *  ids stay in `id`/`typeOf`; this says what the entity *is* in plain terms. */
-export interface NodeDebug {
+export interface NodeDebug
+{
   /** Meta-kind: "concept" / "field" / "model" / "annotation" / … for ontology
    *  declarations, or "instance" for an instance of a concept. */
   kind: string;
@@ -27,21 +28,24 @@ export interface NodeDebug {
 }
 
 /** Readable endpoint names behind an edge's opaque `from`/`to`/`via` ids. */
-export interface EdgeDebug {
+export interface EdgeDebug
+{
   from: string;
   to: string;
   via?: string;
 }
 
 /** Opt-in emit controls. `debug` off ⇒ byte-identical to the plain wire form. */
-export interface EmitOptions {
+export interface EmitOptions
+{
   /** Attach `debug` blocks to every node and edge. */
   debug?: boolean;
   /** nodeId → source uri (as returned by `check`/`load`), for `debug.source`. */
   provenance?: ReadonlyMap<string, string>;
 }
 
-export interface JsonNode {
+export interface JsonNode
+{
   id: NodeId;
   tier: string;
   type: NodeId | null;
@@ -56,7 +60,8 @@ export interface JsonNode {
   debug?: NodeDebug;
 }
 
-export interface JsonEdge {
+export interface JsonEdge
+{
   kind: string;
   via: NodeId | null;
   from: NodeId;
@@ -64,18 +69,21 @@ export interface JsonEdge {
   debug?: EdgeDebug;
 }
 
-export interface TodlDocument {
+export interface TodlDocument
+{
   nodes: JsonNode[];
   edges: JsonEdge[];
 }
 
 /** An entity's readable name: its declared `name`, else its instance `id`
  *  attr, else the node id (which for ontology declarations *is* the name). */
-function nodeName(node: Node): string {
+function nodeName(node: Node): string
+{
   return String(node.attrs.get("name") ?? node.localId ?? node.id);
 }
 
-function nodeDebug(model: Repository, node: Node, provenance?: ReadonlyMap<string, string>): NodeDebug {
+function nodeDebug(model: Repository, node: Node, provenance?: ReadonlyMap<string, string>): NodeDebug
+{
   // A `type` that resolves to a real node is a concept/annotation id ⇒ this is
   // an instance of it. Otherwise the node is an ontology declaration whose
   // language construct is its `metaKind` sentinel ("concept", "field", …).
@@ -91,7 +99,8 @@ function nodeDebug(model: Repository, node: Node, provenance?: ReadonlyMap<strin
   return debug;
 }
 
-function edgeDebug(model: Repository, edge: Edge): EdgeDebug {
+function edgeDebug(model: Repository, edge: Edge): EdgeDebug
+{
   const nameOf = (id: NodeId): string => {
     const node = model.resolve(id);
     return node ? nodeName(node) : id;
@@ -101,7 +110,8 @@ function edgeDebug(model: Repository, edge: Edge): EdgeDebug {
   return debug;
 }
 
-function emitNode(model: Repository, node: Node, options?: EmitOptions): JsonNode {
+function emitNode(model: Repository, node: Node, options?: EmitOptions): JsonNode
+{
   const json: JsonNode = {
     id: node.id,
     tier: Tier[node.tier],
@@ -119,19 +129,23 @@ function emitNode(model: Repository, node: Node, options?: EmitOptions): JsonNod
   return json;
 }
 
-function emitEdge(model: Repository, edge: Edge, options?: EmitOptions): JsonEdge {
+function emitEdge(model: Repository, edge: Edge, options?: EmitOptions): JsonEdge
+{
   const json: JsonEdge = { kind: EdgeKind[edge.kind], via: edge.via, from: edge.from, to: edge.to };
   if (options?.debug) json.debug = edgeDebug(model, edge);
   return json;
 }
 
-export function toJSON(model: Repository, options?: EmitOptions): TodlDocument {
+export function toJSON(model: Repository, options?: EmitOptions): TodlDocument
+{
   const nodes: JsonNode[] = [];
   const edges: JsonEdge[] = [];
 
-  for (const node of model.allNodes()) {
+  for (const node of model.allNodes())
+  {
     nodes.push(emitNode(model, node, options));
-    for (const edge of model.outEdges(node.id)) {
+    for (const edge of model.outEdges(node.id))
+    {
       edges.push(emitEdge(model, edge, options));
     }
   }
@@ -149,14 +163,17 @@ export function toJSONOwn(
   model: Repository,
   ownIds: ReadonlySet<NodeId>,
   options?: EmitOptions,
-): TodlDocument {
+): TodlDocument
+{
   const nodes: JsonNode[] = [];
   const edges: JsonEdge[] = [];
 
-  for (const node of model.allNodes()) {
+  for (const node of model.allNodes())
+  {
     if (!ownIds.has(node.id)) continue;
     nodes.push(emitNode(model, node, options));
-    for (const edge of model.outEdges(node.id)) {
+    for (const edge of model.outEdges(node.id))
+    {
       edges.push(emitEdge(model, edge, options));
     }
   }
@@ -164,10 +181,12 @@ export function toJSONOwn(
   return { nodes, edges };
 }
 
-export function graphFromJSON(doc: TodlDocument): Graph {
+export function graphFromJSON(doc: TodlDocument): Graph
+{
   const graph = new Graph();
 
-  for (const node of doc.nodes) {
+  for (const node of doc.nodes)
+  {
     graph.addNode({
       id: node.id,
       tier: Tier[node.tier as keyof typeof Tier],
@@ -182,7 +201,8 @@ export function graphFromJSON(doc: TodlDocument): Graph {
       attrs: new Map(Object.entries(node.attrs)),
     });
   }
-  for (const edge of doc.edges) {
+  for (const edge of doc.edges)
+  {
     graph.addEdge({
       kind: EdgeKind[edge.kind as keyof typeof EdgeKind],
       via: edge.via,
@@ -194,6 +214,7 @@ export function graphFromJSON(doc: TodlDocument): Graph {
   return graph;
 }
 
-export function fromJSON(doc: TodlDocument): Repository {
+export function fromJSON(doc: TodlDocument): Repository
+{
   return new Repository(graphFromJSON(doc));
 }

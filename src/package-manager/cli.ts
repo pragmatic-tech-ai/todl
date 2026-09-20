@@ -20,26 +20,31 @@ import { PackageManager } from "./package-manager.js";
 import { ProjectInstaller } from "./project-installer.js";
 import { resolveRegistryConfig, type RegistryCliOptions } from "./registry/config.js";
 
-interface ParsedArgs {
+interface ParsedArgs
+{
   positionals: string[];
   flags: RegistryCliOptions;
   out?: string;
 }
 
 /** Split argv into positionals and known `--flag value` options. */
-function parseArgs(argv: readonly string[]): ParsedArgs {
+function parseArgs(argv: readonly string[]): ParsedArgs
+{
   const positionals: string[] = [];
   const flags: RegistryCliOptions = {};
   let out: string | undefined;
-  for (let i = 0; i < argv.length; i++) {
+  for (let i = 0; i < argv.length; i++)
+  {
     const arg = argv[i]!;
-    if (!arg.startsWith("--")) {
+    if (!arg.startsWith("--"))
+    {
       positionals.push(arg);
       continue;
     }
     const value = argv[++i];
     if (value === undefined) break; // trailing flag with no value
-    switch (arg.slice(2)) {
+    switch (arg.slice(2))
+    {
       case "registry": flags.registry = value; break;
       case "scope": flags.scope = value; break;
       case "token": flags.token = value; break;
@@ -55,17 +60,21 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
 const USAGE =
   "usage: todl <pack|install|publish|list|versions|get> [args] [--registry --scope --token --org --github-api --out]";
 
-async function main(argv: readonly string[]): Promise<number> {
+async function main(argv: readonly string[]): Promise<number>
+{
   const [command, ...rest] = argv;
   const { positionals, flags, out } = parseArgs(rest);
   const cwd = ".";
   const manager = () => new PackageManager(resolveRegistryConfig(cwd, flags, process.env));
 
-  switch (command) {
-    case "pack": {
+  switch (command)
+  {
+    case "pack":
+    {
       const directory = positionals[0] ?? cwd;
       const result = await new PackageCompiler().compile(directory, flags.scope !== undefined ? { scope: flags.scope } : {});
-      if (!result.ok) {
+      if (!result.ok)
+      {
         console.error(result.errors.map((e) => e.message).join("\n"));
         return 1;
       }
@@ -74,12 +83,14 @@ async function main(argv: readonly string[]): Promise<number> {
     }
     case "install":
       return new ProjectInstaller().install(positionals[0] ?? cwd);
-    case "publish": {
+    case "publish":
+    {
       const directory = positionals[0] ?? cwd;
       const config = resolveRegistryConfig(directory, flags, process.env);
       const outDir = out ?? join(directory, "dist");
       const result = await new PackageCompiler().compile(directory, { scope: config.scope, outDir });
-      if (!result.ok) {
+      if (!result.ok)
+      {
         console.error(result.errors.map((e) => e.message).join("\n"));
         return 1;
       }
@@ -87,14 +98,17 @@ async function main(argv: readonly string[]): Promise<number> {
       console.error(`published ${directory}`);
       return 0;
     }
-    case "list": {
+    case "list":
+    {
       const names = await manager().list();
       for (const name of names) console.log(name);
       return 0;
     }
-    case "versions": {
+    case "versions":
+    {
       const name = positionals[0];
-      if (name === undefined) {
+      if (name === undefined)
+      {
         console.error("usage: todl versions <name>");
         return 1;
       }
@@ -103,9 +117,11 @@ async function main(argv: readonly string[]): Promise<number> {
       for (const [tag, version] of Object.entries(distTags)) console.error(`  ${tag} -> ${version}`);
       return 0;
     }
-    case "get": {
+    case "get":
+    {
       const ref = positionals[0];
-      if (ref === undefined) {
+      if (ref === undefined)
+      {
         console.error("usage: todl get <name>[@version] [--out <file.tgz>]");
         return 1;
       }

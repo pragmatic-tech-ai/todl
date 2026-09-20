@@ -8,7 +8,8 @@ import { TypeDefOrRef } from "../token.js";
 // A canonical little manifest — shared by the golden fixture and the parity
 // chains. Any change to the binary layout breaks the golden and must be a
 // deliberate, reviewed update.
-function buildCanonical(): ManifestWriter {
+function buildCanonical(): ManifestWriter
+{
   const w = new ManifestWriter("shop", "1.0.0");
   const fName = w.addField({ name: w.internString("name"), type: 0, card: Cardinality.One });
   const base = w.addTypeInfo({
@@ -33,7 +34,8 @@ const GOLDEN_HEX =
   "000000000000000000000300040000020001000100000000000000010000000000000000" +
   "046e616d6507456c656d656e7409436f6d706f6e656e740473686f7005312e302e300000";
 
-function toHex(bytes: Uint8Array): string {
+function toHex(bytes: Uint8Array): string
+{
   let s = "";
   for (const b of bytes) s += b.toString(16).padStart(2, "0");
   return s;

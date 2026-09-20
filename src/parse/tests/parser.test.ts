@@ -8,7 +8,8 @@ import { DeclKind, ValueKind, type InstanceDecl, type ModelDecl, type NameValue 
 import { Cardinality } from "../../model/graph.js";
 import { DiagnosticCode } from "../../diagnostics/diagnostic.js";
 
-function fixture(name: string): string {
+function fixture(name: string): string
+{
   return readFileSync(fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url)), "utf8");
 }
 
@@ -18,7 +19,8 @@ test("parses a primitive declaration with base and regex", () => {
 
   const primitive = namespace.declarations[0];
   assert.equal(primitive?.kind, DeclKind.Primitive);
-  if (primitive?.kind === DeclKind.Primitive) {
+  if (primitive?.kind === DeclKind.Primitive)
+  {
     assert.equal(primitive.name, "Identifier");
     assert.equal(primitive.base, "string");
     assert.match(primitive.regex ?? "", /\^\[a-z\]/);
@@ -31,7 +33,8 @@ test("parses taxonomy declarations with their terms", () => {
     (declaration) => declaration.kind === DeclKind.Taxonomy && declaration.name === "TaskType",
   );
   assert.ok(taskType && taskType.kind === DeclKind.Taxonomy);
-  if (taskType.kind === DeclKind.Taxonomy) {
+  if (taskType.kind === DeclKind.Taxonomy)
+  {
     assert.deepEqual(taskType.represents, ["Task"]);
     assert.equal(taskType.terms.length, 7);
     assert.equal(taskType.terms[1]?.id, "User");
@@ -52,7 +55,8 @@ test("parses concept imports, fields with cardinality, relationships, and invari
     (declaration) => declaration.kind === DeclKind.Concept && declaration.name === "Task",
   );
   assert.ok(task && task.kind === DeclKind.Concept);
-  if (task.kind === DeclKind.Concept) {
+  if (task.kind === DeclKind.Concept)
+  {
     assert.equal(task.fields.find((field) => field.name === "label")?.cardinality, Cardinality.One);
     assert.equal(task.fields.find((field) => field.name === "assignee")?.cardinality, Cardinality.Optional);
     assert.equal(task.relationships.find((r) => r.name === "livesIn")?.cardinality, Cardinality.One);
@@ -83,7 +87,8 @@ test("tolerates doc-only concept members (authoring blocks, references, formal i
   }`);
   const concept = ns.declarations[0];
   assert.ok(concept && concept.kind === DeclKind.Concept);
-  if (concept.kind === DeclKind.Concept) {
+  if (concept.kind === DeclKind.Concept)
+  {
     assert.equal(concept.fields.length, 1);
     assert.equal(concept.fields[0]?.name, "label");
     assert.equal(concept.invariants.length, 1);
@@ -128,7 +133,8 @@ test("parses a model with a meta-model binding and nested instances", () => {
   }`);
   const model = ns.declarations[0];
   assert.ok(model && model.kind === DeclKind.Model);
-  if (model.kind === DeclKind.Model) {
+  if (model.kind === DeclKind.Model)
+  {
     assert.equal(model.id, "m");
     assert.equal(model.metaModel, "EnterpriseArchitecture");
     assert.equal(model.instances.length, 1);
@@ -141,7 +147,8 @@ test("parses a string-keyed record id", () => {
   const { namespace: ns } = parse(`namespace d { sequence "Conversation via M365 Copilot" { } }`);
   const inst = ns.declarations[0];
   assert.ok(inst && inst.kind === DeclKind.Instance);
-  if (inst.kind === DeclKind.Instance) {
+  if (inst.kind === DeclKind.Instance)
+  {
     assert.equal(inst.concept, "sequence");
     assert.equal(inst.id, "Conversation via M365 Copilot");
   }
@@ -154,7 +161,8 @@ test("parses a class modifier and an instanceof leaf", () => {
   }`);
   const cls = ns.declarations[0];
   assert.ok(cls && cls.kind === DeclKind.Instance);
-  if (cls.kind === DeclKind.Instance) {
+  if (cls.kind === DeclKind.Instance)
+  {
     assert.equal(cls.concept, "Component");
     assert.equal(cls.id, "teamsChat");
     assert.equal(cls.isClass, true);
@@ -162,7 +170,8 @@ test("parses a class modifier and an instanceof leaf", () => {
   }
   const leaf = ns.declarations[1];
   assert.ok(leaf && leaf.kind === DeclKind.Instance);
-  if (leaf.kind === DeclKind.Instance) {
+  if (leaf.kind === DeclKind.Instance)
+  {
     assert.equal(leaf.id, "chatHq");
     assert.equal(leaf.isClass, false);
     assert.equal(leaf.instanceOf, "teamsChat");
@@ -173,10 +182,12 @@ test("parses a |-composed enum-flag value", () => {
   const { namespace: ns } = parse(`namespace d { Location onPrem { type = physical | onPremises | logicalGrouping; } }`);
   const inst = ns.declarations[0];
   assert.ok(inst && inst.kind === DeclKind.Instance);
-  if (inst.kind === DeclKind.Instance) {
+  if (inst.kind === DeclKind.Instance)
+  {
     const value = inst.assignments[0]?.value;
     assert.equal(value?.kind, ValueKind.Composite);
-    if (value?.kind === ValueKind.Composite) {
+    if (value?.kind === ValueKind.Composite)
+    {
       assert.deepEqual(value.parts, ["physical", "onPremises", "logicalGrouping"]);
     }
   }

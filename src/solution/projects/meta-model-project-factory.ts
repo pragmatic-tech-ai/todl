@@ -37,13 +37,15 @@ import { META_MODEL_CLAUDE_ROOT, META_MODEL_GUIDE, META_MODEL_NEW_CONCEPT } from
 // resolution (app-coupled) are reached through the IPresentationBaker / IProducerBackends
 // seams, resolved from the container — todl stays free of both. All persistence flows
 // through the project's rooted IStorage.
-interface MetaModelManifest extends ProjectManifestEnvelope {
+interface MetaModelManifest extends ProjectManifestEnvelope
+{
     id: string             // stable publish identity, defaults to slugify(name)
     modelVersion: string   // published version, defaults to '0.1.0'
 }
 
 export class MetaModelProjectFactory extends TodlProjectFactory
-    implements IPublishableProjectFactory, IPresentationProjectFactory, IProducerProjectFactory, IVersionedProjectFactory {
+    implements IPublishableProjectFactory, IPresentationProjectFactory, IProducerProjectFactory, IVersionedProjectFactory
+    {
     public static readonly Key = new ServiceKey<MetaModelProjectFactory>('MetaModelProjectFactory')
     public static readonly ProjectType = 'meta-model'
 
@@ -66,7 +68,8 @@ export class MetaModelProjectFactory extends TodlProjectFactory
 
     constructor(provider: IServiceProvider) { super(provider) }
 
-    protected buildManifest(name: string): ProjectManifestEnvelope {
+    protected buildManifest(name: string): ProjectManifestEnvelope
+    {
         const manifest: MetaModelManifest = {
             type: MetaModelProjectFactory.ProjectType, name, version: 1,
             id: MetaModelProjectFactory.slugify(name), modelVersion: '0.1.0',
@@ -76,7 +79,8 @@ export class MetaModelProjectFactory extends TodlProjectFactory
 
     // The meta-model's own scaffold (its CLAUDE.md + guide + /new-concept); the shared
     // TODL manual + rules are added by the base.
-    protected scaffoldContributions(): readonly ScaffoldFile[] {
+    protected scaffoldContributions(): readonly ScaffoldFile[]
+    {
         return [
             { path: CLAUDE_MD_FILENAME, content: META_MODEL_CLAUDE_ROOT },
             { path: `${CLAUDE_DIR}/meta-model-guide.md`, content: META_MODEL_GUIDE },
@@ -84,12 +88,14 @@ export class MetaModelProjectFactory extends TodlProjectFactory
         ]
     }
 
-    public async getVersion(storage: IStorage): Promise<string> {
+    public async getVersion(storage: IStorage): Promise<string>
+    {
         const manifest = JSON.parse(await storage.ReadText(PROJECT_MANIFEST_FILENAME)) as MetaModelManifest
         return manifest.modelVersion
     }
 
-    public async setVersion(storage: IStorage, version: string): Promise<void> {
+    public async setVersion(storage: IStorage, version: string): Promise<void>
+    {
         const manifest = JSON.parse(await storage.ReadText(PROJECT_MANIFEST_FILENAME)) as MetaModelManifest
         manifest.modelVersion = version
         await storage.WriteText(PROJECT_MANIFEST_FILENAME, JSON.stringify(manifest, null, 2))
@@ -101,7 +107,8 @@ export class MetaModelProjectFactory extends TodlProjectFactory
         storage: IStorage,
         bases: TodlDocument[],
         _provider: IServiceProvider,
-    ): Promise<{ doc: TodlDocument; problems: string[] }> {
+    ): Promise<{ doc: TodlDocument; problems: string[] }>
+    {
         const sources = await TodlSources.Collect(storage)
         const { model, diagnostics } = checkAgainst(bases, sources)
         const problems = diagnostics
@@ -112,7 +119,8 @@ export class MetaModelProjectFactory extends TodlProjectFactory
 
     // Validate every `.todl` together; if clean, emit the compiled model + copy the
     // sources into the meta-models backend under `<id>/<modelVersion>/`.
-    public async publish(_project: Project, storage: IStorage, provider: IServiceProvider): Promise<PublishResult> {
+    public async publish(_project: Project, storage: IStorage, provider: IServiceProvider): Promise<PublishResult>
+    {
         const manifest = JSON.parse(await storage.ReadText(PROJECT_MANIFEST_FILENAME)) as MetaModelManifest
         const sources = await TodlSources.Collect(storage)
         if (sources.length === 0) return { ok: false, message: 'Nothing to publish — the project has no .todl files.' }
@@ -163,7 +171,8 @@ export class MetaModelProjectFactory extends TodlProjectFactory
     // Capability entry point (the "Generate Presentation" command): compile the project's
     // .todl to a model, then write the presentation dictionary. No .todl → no-op; a TODL
     // error → leave the file untouched (the Problems dock already surfaces the errors).
-    public async regeneratePresentation(storage: IStorage, colored: boolean): Promise<void> {
+    public async regeneratePresentation(storage: IStorage, colored: boolean): Promise<void>
+    {
         const sources = await TodlSources.Collect(storage)
         if (sources.length === 0) return
         const { model, diagnostics } = check(sources)
@@ -173,13 +182,15 @@ export class MetaModelProjectFactory extends TodlProjectFactory
 
     // Write presentation.generated.mu (icons-only assets dict) from an already-compiled
     // document. `colored` selects colorful vs monochrome icon includes.
-    private async writePresentation(storage: IStorage, doc: TodlDocument, colored: boolean): Promise<void> {
+    private async writePresentation(storage: IStorage, doc: TodlDocument, colored: boolean): Promise<void>
+    {
         await storage.WriteText(
             MetaModelProjectFactory.PRESENTATION_FILE,
             PresentationModel.GenerateAssets(doc, MetaModelProjectFactory.DICT_NAME, colored))
     }
 
-    private static slugify(name: string): string {
+    private static slugify(name: string): string
+    {
         return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'meta-model'
     }
 }

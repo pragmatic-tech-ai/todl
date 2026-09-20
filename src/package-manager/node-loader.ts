@@ -10,14 +10,16 @@ import type { TodlDocument } from "../emit/json.js";
 import type { TodlPackageMeta } from "./package-json.js";
 import type { InstalledPackage } from "./resolve.js";
 
-interface RawPackageJson {
+interface RawPackageJson
+{
   name?: string;
   dependencies?: Record<string, string>;
   todl?: TodlPackageMeta;
 }
 
 /** Read one package directory as a TODL package, or nothing if it is not one. */
-function readPackage(dir: string): InstalledPackage | undefined {
+function readPackage(dir: string): InstalledPackage | undefined
+{
   const packageJson = join(dir, "package.json");
   const modelJson = join(dir, "model.json");
   if (!existsSync(packageJson) || !existsSync(modelJson)) return undefined;
@@ -33,19 +35,25 @@ function readPackage(dir: string): InstalledPackage | undefined {
 
 /** Scan `nodeModulesDir` (including `@scope/*` subdirectories) for installed TODL
  *  packages. Non-TODL packages are skipped. */
-export function readInstalledPackages(nodeModulesDir: string): InstalledPackage[] {
+export function readInstalledPackages(nodeModulesDir: string): InstalledPackage[]
+{
   if (!existsSync(nodeModulesDir)) return [];
   const out: InstalledPackage[] = [];
-  for (const entry of readdirSync(nodeModulesDir, { withFileTypes: true })) {
+  for (const entry of readdirSync(nodeModulesDir, { withFileTypes: true }))
+  {
     if (!entry.isDirectory()) continue;
     const dir = join(nodeModulesDir, entry.name);
-    if (entry.name.startsWith("@")) {
-      for (const scoped of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.name.startsWith("@"))
+    {
+      for (const scoped of readdirSync(dir, { withFileTypes: true }))
+      {
         if (!scoped.isDirectory()) continue;
         const pkg = readPackage(join(dir, scoped.name));
         if (pkg !== undefined) out.push(pkg);
       }
-    } else {
+    }
+    else
+    {
       const pkg = readPackage(dir);
       if (pkg !== undefined) out.push(pkg);
     }

@@ -24,14 +24,16 @@ const RELATIONSHIP = EdgeKind[EdgeKind.Relationship];
 const MODEL_TYPEOF = "model";
 
 /** A plain instance record; Phase 5 codegen emits these, Phase 4 accepts them. */
-export interface InstanceDescriptor {
+export interface InstanceDescriptor
+{
   concept: string;
   id: string;
   scalars?: ReadonlyMap<string, Scalar>;
   refs?: ReadonlyMap<string, readonly NodeId[]>;
 }
 
-export class ModelDraft {
+export class ModelDraft
+{
   private own: TodlDocument = { nodes: [], edges: [] };
   private modelCache: Repository | undefined = undefined;
   private readonly baseIds: ReadonlySet<NodeId>;
@@ -42,19 +44,22 @@ export class ModelDraft {
     /** The frozen bases as documents: [prelude, ...bases]. */
     private readonly baseDocs: readonly TodlDocument[],
     readonly namespace: string,
-  ) {
+  )
+  {
     this.baseIds = new Set(baseDocs.flatMap((d) => d.nodes.map((n) => n.id)));
   }
 
   /** Open an empty draft over the given frozen bases (meta-model + libraries). */
-  static on(bases: readonly Repository[], opts: { namespace: string }): ModelDraft {
+  static on(bases: readonly Repository[], opts: { namespace: string }): ModelDraft
+  {
     return new ModelDraft([preludeDocument(), ...bases.map((b) => toJSON(b))], opts.namespace);
   }
 
   /** Reopen a saved `.todl` model as an editable draft: compile it against the
    *  bases and seed the own delta with the non-base instances. A blank source
    *  yields an empty draft. */
-  static fromSource(bases: readonly Repository[], source: string, opts: { namespace: string }): ModelDraft {
+  static fromSource(bases: readonly Repository[], source: string, opts: { namespace: string }): ModelDraft
+  {
     const draft = new ModelDraft([preludeDocument(), ...bases.map((b) => toJSON(b))], opts.namespace);
     if (source.trim().length === 0) return draft;
     const compiled = toJSON(checkAgainst([...draft.baseDocs], [{ uri: `${opts.namespace}.todl`, text: source }]).model);
@@ -75,7 +80,8 @@ export class ModelDraft {
     bases: readonly Repository[],
     sources: readonly { uri: string; text: string }[],
     opts: { namespace: string },
-  ): ModelDraft {
+  ): ModelDraft
+  {
     const draft = new ModelDraft([preludeDocument(), ...bases.map((b) => toJSON(b))], opts.namespace);
     const result = checkAgainst([...draft.baseDocs], sources.map((s) => ({ uri: s.uri, text: s.text })));
     const compiled = toJSON(result.model);
@@ -93,13 +99,16 @@ export class ModelDraft {
   }
 
   /** The home file (source uri) of an own node, or undefined. */
-  homeOf(id: NodeId): string | undefined {
+  homeOf(id: NodeId): string | undefined
+  {
     return this.home.get(id);
   }
 
   /** The combined working Repository (bases ∪ own), derived + cached. */
-  get model(): Repository {
-    if (this.modelCache === undefined) {
+  get model(): Repository
+  {
+    if (this.modelCache === undefined)
+    {
       const nodes = new Map<NodeId, TodlDocument["nodes"][number]>();
       for (const n of [...this.baseDocs.flatMap((d) => d.nodes), ...this.own.nodes]) nodes.set(n.id, n);
       const edges = new Map<string, TodlDocument["edges"][number]>();
@@ -110,22 +119,26 @@ export class ModelDraft {
     return this.modelCache;
   }
 
-  resolve(id: NodeId): Node | undefined {
+  resolve(id: NodeId): Node | undefined
+  {
     return this.model.resolve(id);
   }
 
-  has(id: NodeId): boolean {
+  has(id: NodeId): boolean
+  {
     return this.model.has(id);
   }
 
-  entity(id: NodeId): Entity | undefined {
+  entity(id: NodeId): Entity | undefined
+  {
     return this.model.entity(id);
   }
 
   /** Stage an instance (attrs + reference edges) into the overlay; return its
    *  handle. Fail-fast: throws (atomically, before any mutation) if a reference
    *  target does not exist — no dangling refs are ever staged. */
-  add(descriptor: InstanceDescriptor): Entity {
+  add(descriptor: InstanceDescriptor): Entity
+  {
     const known = new Set<NodeId>([...this.baseIds, ...this.own.nodes.map((n) => n.id), descriptor.id]);
     for (const [, targets] of descriptor.refs ?? [])
       for (const t of targets)
@@ -139,7 +152,8 @@ export class ModelDraft {
 
   /** Append a fresh own instance of `concept` with the given id; return its
    *  handle. `home` records the file it round-trips to (see toTodlByFile). */
-  create(concept: string, id: NodeId, home?: string): Entity {
+  create(concept: string, id: NodeId, home?: string): Entity
+  {
     this.own.nodes.push({
       id,
       tier: INSTANCE_TIER,
@@ -159,7 +173,8 @@ export class ModelDraft {
   }
 
   /** Set a scalar attr on an OWN instance. Throws for a base (frozen) or unknown id. */
-  setField(id: NodeId, name: string, value: Scalar): void {
+  setField(id: NodeId, name: string, value: Scalar): void
+  {
     const node = this.ownNode(id);
     (node.attrs as Record<string, Scalar>)[name] = value;
     this.invalidate();
@@ -167,7 +182,8 @@ export class ModelDraft {
 
   /** Append a reference edge from an OWN instance. Throws if `from` is not own or
    *  `to` does not exist. */
-  addRef(from: NodeId, member: string, to: NodeId): void {
+  addRef(from: NodeId, member: string, to: NodeId): void
+  {
     this.ownNode(from);
     if (!this.baseIds.has(to) && !this.own.nodes.some((n) => n.id === to))
       throw new Error(`reference target "${to}" does not exist`);
@@ -176,7 +192,8 @@ export class ModelDraft {
   }
 
   /** Drop a matching reference edge (no-op if absent). */
-  removeRef(from: NodeId, member: string, to: NodeId): void {
+  removeRef(from: NodeId, member: string, to: NodeId): void
+  {
     this.own.edges = this.own.edges.filter(
       (e) => !(e.kind === RELATIONSHIP && e.from === from && e.via === member && e.to === to),
     );
@@ -184,7 +201,8 @@ export class ModelDraft {
   }
 
   /** Remove an own instance and every edge touching it. Throws for a base id. */
-  remove(id: NodeId): void {
+  remove(id: NodeId): void
+  {
     if (this.baseIds.has(id)) throw new Error(`cannot remove base node "${id}" (frozen)`);
     this.own.nodes = this.own.nodes.filter((n) => n.id !== id);
     this.own.edges = this.own.edges.filter((e) => e.from !== id && e.to !== id);
@@ -193,7 +211,8 @@ export class ModelDraft {
 
   /** The reference members of `fromId`'s concept that `toId` could fill — the
    *  concept-typed fields whose type `toId` is (or is a subtype of). */
-  referenceMembers(fromId: NodeId, toId: NodeId): FieldSchema[] {
+  referenceMembers(fromId: NodeId, toId: NodeId): FieldSchema[]
+  {
     const fromConcept = this.model.resolve(fromId)?.type ?? undefined;
     const toConcept = this.model.resolve(toId)?.type ?? undefined;
     if (fromConcept === undefined || toConcept === undefined) return [];
@@ -202,7 +221,8 @@ export class ModelDraft {
   }
 
   /** The overlay's own instances (excludes all base nodes). */
-  ownInstances(): Entity[] {
+  ownInstances(): Entity[]
+  {
     return this.model
       .allNodes()
       .filter((n) => !this.isBase(n.id))
@@ -210,12 +230,14 @@ export class ModelDraft {
   }
 
   /** Validate the overlay against the frozen bases (the vocabulary). */
-  get diagnostics(): Diagnostic[] {
+  get diagnostics(): Diagnostic[]
+  {
     return this.model.validate();
   }
 
   /** Serialize ONLY the overlay delta: own instances + their edges. */
-  toJSON(): TodlDocument {
+  toJSON(): TodlDocument
+  {
     return {
       nodes: this.own.nodes.map((n) => ({ ...n, attrs: { ...(n.attrs as Record<string, Scalar>) } })),
       edges: this.own.edges.map((e) => ({ ...e })),
@@ -223,7 +245,8 @@ export class ModelDraft {
   }
 
   /** Serialize the overlay as round-trippable `.todl` model source (own delta + bindings). */
-  toTodl(): string {
+  toTodl(): string
+  {
     const own = this.toJSON();
     const bindings = deriveBindings(this.model, this.baseIds, this.namespace, own);
     return emitModelTodl(own, this.namespace, bindings, this.conformsOf(own), collectOperators(this.model));
@@ -233,7 +256,8 @@ export class ModelDraft {
    *  own nodes/edges partitioned by home, each file emitting its own model block
    *  with its `conforms <viewpoint>`. Nodes with no recorded home fall to a
    *  single default `${namespace}.todl`. */
-  toTodlByFile(): Map<string, string> {
+  toTodlByFile(): Map<string, string>
+  {
     const defaultUri = `${this.namespace}.todl`;
     const files = new Map<string, TodlDocument>();
     const ensure = (uri: string): TodlDocument => {
@@ -245,7 +269,8 @@ export class ModelDraft {
     for (const n of own.nodes) ensure(this.home.get(n.id) ?? defaultUri).nodes.push(n);
     for (const e of own.edges) ensure(this.home.get(String(e.from)) ?? defaultUri).edges.push(e);
     const result = new Map<string, string>();
-    for (const [uri, doc] of files) {
+    for (const [uri, doc] of files)
+    {
       const bindings = deriveBindings(this.model, this.baseIds, this.namespace, doc);
       result.set(uri, emitModelTodl(doc, this.namespace, bindings, this.conformsOf(doc), collectOperators(this.model)));
     }
@@ -254,8 +279,10 @@ export class ModelDraft {
 
   /** The shared `conforms` viewpoint of a file's concrete entities (file↔viewpoint
    *  1:1), or undefined when none carry one. */
-  private conformsOf(doc: TodlDocument): string | undefined {
-    for (const n of doc.nodes) {
+  private conformsOf(doc: TodlDocument): string | undefined
+  {
+    for (const n of doc.nodes)
+    {
       const c = (n.attrs as Record<string, Scalar>).conforms;
       if (typeof c === "string") return c;
     }
@@ -263,19 +290,22 @@ export class ModelDraft {
   }
 
   /** True when `id` is base (frozen), false when it is an own overlay instance. */
-  protected isBase(id: NodeId): boolean {
+  protected isBase(id: NodeId): boolean
+  {
     return this.baseIds.has(id);
   }
 
   /** An own node by id, or throw (base id → frozen; unknown → no such instance). */
-  private ownNode(id: NodeId): TodlDocument["nodes"][number] {
+  private ownNode(id: NodeId): TodlDocument["nodes"][number]
+  {
     if (this.baseIds.has(id)) throw new Error(`cannot mutate base node "${id}" (frozen)`);
     const node = this.own.nodes.find((n) => n.id === id);
     if (node === undefined) throw new Error(`no own instance "${id}"`);
     return node;
   }
 
-  private invalidate(): void {
+  private invalidate(): void
+  {
     this.modelCache = undefined;
   }
 }

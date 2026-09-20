@@ -15,7 +15,8 @@ const doc: TodlDocument = {
 test("every node gets a position and a label", () => {
   const g = layoutGraph(doc);
   assert.equal(g.nodes.length, 3);
-  for (const n of g.nodes) {
+  for (const n of g.nodes)
+  {
     assert.equal(typeof n.x, "number");
     assert.equal(typeof n.y, "number");
     assert.ok(n.w > 0 && n.h > 0);
@@ -37,7 +38,8 @@ test("layout is deterministic across runs", () => {
 
 test("overall size bounds all node boxes", () => {
   const g = layoutGraph(doc);
-  for (const n of g.nodes) {
+  for (const n of g.nodes)
+  {
     assert.ok(n.x + n.w <= g.width);
     assert.ok(n.y + n.h <= g.height);
   }

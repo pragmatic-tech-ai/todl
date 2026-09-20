@@ -4,7 +4,8 @@ import assert from "node:assert/strict";
 import { Repository } from "../../model/model.js";
 import { THIS, variable, member, comprehension, isIn } from "../ast.js";
 
-function techModel(): Repository {
+function techModel(): Repository
+{
   const model = new Repository();
   const builder = model.builder();
   builder.assertInstance("capability", "ui-framework");

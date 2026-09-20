@@ -5,7 +5,8 @@ import { toJSON, type TodlDocument } from "../json.js";
 import { deriveBindings, emitModelTodl } from "../todl.js";
 
 // A namespaced meta-model base : concept `component` { label; implemented-by : technology }.
-function base(): Repository {
+function base(): Repository
+{
   const r = new Repository();
   const b = r.builder().setNamespace("acme.ea");
   b.definePrimitive("string");
@@ -18,7 +19,8 @@ function base(): Repository {
 }
 
 // Own delta: a component `gw` with a label + a cross-boundary ref to `copilot`.
-function ownDoc(): { own: TodlDocument; model: Repository; baseIds: Set<string> } {
+function ownDoc(): { own: TodlDocument; model: Repository; baseIds: Set<string> }
+{
   const model = base();
   const baseIds = new Set(model.allNodes().map((n) => n.id));
   const b = model.builder();

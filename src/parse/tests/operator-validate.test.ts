@@ -5,7 +5,8 @@ import { load } from "../loader.js";
 import { FakeIdGenerator } from "../../model/tests/fake-id-generator.js";
 import { DiagnosticCode } from "../../diagnostics/diagnostic.js";
 
-function codes(decls: string) {
+function codes(decls: string)
+{
   const src = `namespace t {
     concept endpoint { label : string; }
     concept connector { from : endpoint; to : endpoint; note : string; }

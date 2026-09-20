@@ -2,7 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { startServer, pushedInit } from "./harness.js";
 
-function opened(uri: string, text: string) {
+function opened(uri: string, text: string)
+{
   return { textDocument: { uri, languageId: "todl", version: 1, text } };
 }
 

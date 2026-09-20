@@ -10,7 +10,8 @@ const SRC = `namespace app {
   model M : app { Component c { label = "x"; } }
 }`;
 
-function compile() {
+function compile()
+{
   const { model, diagnostics, provenance } = check(
     [{ uri: "app.todl", text: SRC }],
     new FakeIdGenerator(),

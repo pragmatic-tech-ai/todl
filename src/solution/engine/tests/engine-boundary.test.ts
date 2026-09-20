@@ -13,7 +13,8 @@ const ALLOWLIST = new Set(['setting-bag-definition.ts'])
 test('no engine file imports the mural UI framework', () => {
     const engineDir = dirname(dirname(fileURLToPath(import.meta.url)))   // …/engine
     const offenders: string[] = []
-    for (const name of readdirSync(engineDir)) {
+    for (const name of readdirSync(engineDir))
+    {
         if (!name.endsWith('.ts')) continue
         if (ALLOWLIST.has(name)) continue
         const text = readFileSync(join(engineDir, name), 'utf8')

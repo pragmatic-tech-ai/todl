@@ -4,7 +4,8 @@ import assert from "node:assert/strict";
 import { parse } from "../parser.js";
 import { DeclKind, type ModelDecl } from "../ast.js";
 
-function model(text: string): ModelDecl {
+function model(text: string): ModelDecl
+{
   return parse(text).namespace.declarations.find((d) => d.kind === DeclKind.Model) as ModelDecl;
 }
 

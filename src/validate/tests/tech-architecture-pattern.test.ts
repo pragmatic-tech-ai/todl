@@ -15,7 +15,8 @@ const CONCEPTS = `
     delivered : component?;
   }`;
 
-function diagnostics(body: string) {
+function diagnostics(body: string)
+{
   return check([{ uri: "ta.todl", text: `namespace ta {${CONCEPTS}\n${body}\n}` }]).diagnostics;
 }
 

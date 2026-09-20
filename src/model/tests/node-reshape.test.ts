@@ -7,7 +7,8 @@ import { DiagnosticCode } from "../../diagnostics/diagnostic.js";
 import { toJSON, fromJSON } from "../../emit/json.js";
 
 /** A fully-formed node literal — the reshape gives every node the same root shape. */
-function node(partial: Partial<Node> & Pick<Node, "id" | "tier">): Node {
+function node(partial: Partial<Node> & Pick<Node, "id" | "tier">): Node
+{
   return {
     type: null,
     metaKind: null,
@@ -50,7 +51,8 @@ describe("SPEC-01: the typeOf split (type vs metaKind)", () => {
 });
 
 describe("SPEC-01: a taxonomy term is dual (type + metaKind) with clean attrs", () => {
-  function paletteRepo(): Repository {
+  function paletteRepo(): Repository
+  {
     const repo = new Repository();
     repo
       .builder()
@@ -150,7 +152,8 @@ describe("SPEC-01: JSON round-trip is identity across the new root fields", () =
       .commit();
 
     const restored = fromJSON(toJSON(repo));
-    for (const id of ["Color", "Palette", "Palette.Surface", "brand"]) {
+    for (const id of ["Color", "Palette", "Palette.Surface", "brand"])
+    {
       const before = repo.resolve(id)!;
       const after = restored.resolve(id)!;
       assert.equal(after.type, before.type, `${id}.type`);

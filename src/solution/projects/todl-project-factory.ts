@@ -21,7 +21,8 @@ import { TODL_MANUAL_SOURCE, TODL_RULES_SOURCE } from './scaffold.generated.js'
 export const CLAUDE_MD_FILENAME = 'CLAUDE.md'
 export const CLAUDE_DIR = '.claude'
 
-export interface ScaffoldFile {
+export interface ScaffoldFile
+{
     readonly path: string       // project-relative destination (POSIX)
     readonly content: string
 }
@@ -36,7 +37,8 @@ export const TODL_BASE_SCAFFOLD: readonly ScaffoldFile[] = [
     { path: `${CLAUDE_DIR}/todl-rules.md`, content: TODL_RULES_SOURCE },
 ]
 
-export abstract class TodlProjectFactory extends ServiceBase implements IProjectFactory {
+export abstract class TodlProjectFactory extends ServiceBase implements IProjectFactory
+{
     constructor(provider: IServiceProvider) { super(provider) }
 
     // Self-describing type metadata (§ IProjectFactory) — each subclass supplies its
@@ -56,20 +58,23 @@ export abstract class TodlProjectFactory extends ServiceBase implements IProject
     // unioned with TODL_BASE_SCAFFOLD by ensureScaffold.
     protected abstract scaffoldContributions(): readonly ScaffoldFile[]
 
-    public async createProject(storage: IStorage, name: string, bindings?: BaseBindings): Promise<Project> {
+    public async createProject(storage: IStorage, name: string, bindings?: BaseBindings): Promise<Project>
+    {
         const manifest = this.buildManifest(name, bindings)
         await storage.WriteText(PROJECT_MANIFEST_FILENAME, JSON.stringify(manifest, null, 2))
         await this.ensureScaffold(storage)
         return this.buildProject(storage, manifest)
     }
 
-    public async openProject(storage: IStorage): Promise<Project> {
+    public async openProject(storage: IStorage): Promise<Project>
+    {
         const manifest = JSON.parse(await storage.ReadText(PROJECT_MANIFEST_FILENAME)) as ProjectManifestEnvelope
         await this.ensureScaffold(storage)          // self-heal any missing scaffold file
         return this.buildProject(storage, manifest)
     }
 
-    public async saveProject(project: Project, storage: IStorage): Promise<void> {
+    public async saveProject(project: Project, storage: IStorage): Promise<void>
+    {
         // Only the name tracks the project; every other manifest field is preserved.
         const manifest = JSON.parse(await storage.ReadText(PROJECT_MANIFEST_FILENAME)) as ProjectManifestEnvelope
         manifest.name = project.Name
@@ -78,9 +83,11 @@ export abstract class TodlProjectFactory extends ServiceBase implements IProject
 
     // Write base ∪ subclass scaffold, each only when absent — never overwrites an
     // author's edits.
-    protected async ensureScaffold(storage: IStorage): Promise<void> {
+    protected async ensureScaffold(storage: IStorage): Promise<void>
+    {
         await storage.CreateDirectory(`${CLAUDE_DIR}/commands`)
-        for (const file of [...TODL_BASE_SCAFFOLD, ...this.scaffoldContributions()]) {
+        for (const file of [...TODL_BASE_SCAFFOLD, ...this.scaffoldContributions()])
+        {
             if (await storage.Exists(file.path)) continue
             await storage.WriteText(file.path, file.content)
         }
@@ -91,10 +98,12 @@ export abstract class TodlProjectFactory extends ServiceBase implements IProject
     // Mirrors ensureScaffold's file set; returns the project-relative paths written
     // (refreshed or self-healed) for a status report. ensureScaffold stays write-once
     // and unchanged — this is the deliberate-refresh counterpart.
-    public async updateScaffold(storage: IStorage): Promise<readonly string[]> {
+    public async updateScaffold(storage: IStorage): Promise<readonly string[]>
+    {
         await storage.CreateDirectory(`${CLAUDE_DIR}/commands`)
         const written: string[] = []
-        for (const file of [...TODL_BASE_SCAFFOLD, ...this.scaffoldContributions()]) {
+        for (const file of [...TODL_BASE_SCAFFOLD, ...this.scaffoldContributions()])
+        {
             if (file.path === CLAUDE_MD_FILENAME && await storage.Exists(file.path)) continue
             await storage.WriteText(file.path, file.content)
             written.push(file.path)
@@ -102,7 +111,8 @@ export abstract class TodlProjectFactory extends ServiceBase implements IProject
         return written
     }
 
-    protected async buildProject(storage: IStorage, manifest: ProjectManifestEnvelope): Promise<Project> {
+    protected async buildProject(storage: IStorage, manifest: ProjectManifestEnvelope): Promise<Project>
+    {
         const rootName = TodlProjectFactory.basename(storage.Root)
         const root = new ProjectNode(rootName, '', ProjectNodeKind.Folder)     // the root node's path is ''
         await this.populate(storage, root)
@@ -112,9 +122,11 @@ export abstract class TodlProjectFactory extends ServiceBase implements IProject
     // Recursively fill a folder node from storage. The manifest file is hidden at the
     // root; node kinds come from the subclass's formats. Paths are project-relative
     // (POSIX `/`); the root node's path is ''.
-    private async populate(storage: IStorage, node: ProjectNode): Promise<void> {
+    private async populate(storage: IStorage, node: ProjectNode): Promise<void>
+    {
         const entries = [...await storage.List(node.Path)].sort(compareStorageEntries)
-        for (const e of entries) {
+        for (const e of entries)
+        {
             if (node.Path === '' && e.Name === PROJECT_MANIFEST_FILENAME) continue
             const childPath = node.Path === '' ? e.Name : `${node.Path}/${e.Name}`
             const kind: ProjectNodeKind = e.IsDirectory ? ProjectNodeKind.Folder : this.kindForFile(e.Name)
@@ -126,7 +138,8 @@ export abstract class TodlProjectFactory extends ServiceBase implements IProject
 
     // Map a file name to a ProjectNodeKind by matching its extension against the
     // subclass's declared formats; unmatched files are plain File attachments.
-    private kindForFile(name: string): ProjectNodeKind {
+    private kindForFile(name: string): ProjectNodeKind
+    {
         const ext = TodlProjectFactory.extname(name)
         const fmt = this.formats.find((f) => f.extension === ext)
         // Format kinds are the ProjectNodeKind string values ('todl'/'diagram'); the
@@ -134,12 +147,14 @@ export abstract class TodlProjectFactory extends ServiceBase implements IProject
         return fmt !== undefined ? (fmt.kind as ProjectNodeKind) : ProjectNodeKind.File
     }
 
-    private static basename(p: string): string {
+    private static basename(p: string): string
+    {
         const parts = p.split(/[\\/]/)
         return parts[parts.length - 1] || p
     }
 
-    private static extname(name: string): string {
+    private static extname(name: string): string
+    {
         const i = name.lastIndexOf('.')
         return i > 0 ? name.slice(i).toLowerCase() : ''
     }
@@ -148,6 +163,7 @@ export abstract class TodlProjectFactory extends ServiceBase implements IProject
 // Type guard: is this factory a TODL-authoring project (and thus carries the agent
 // scaffold updateScaffold refreshes)? All three concrete factories extend
 // TodlProjectFactory, so instanceof is exact.
-export function isTodlProject(factory: IProjectFactory): factory is TodlProjectFactory {
+export function isTodlProject(factory: IProjectFactory): factory is TodlProjectFactory
+{
     return factory instanceof TodlProjectFactory
 }

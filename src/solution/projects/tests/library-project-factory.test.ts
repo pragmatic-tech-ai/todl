@@ -14,20 +14,23 @@ import { FakePresentationBaker, FakeProducerBackends } from './fake-producer-sea
 const LIB = 'namespace lib { concept Foo { label : string?; } }'
 const META_REF = { id: 'mm', version: '0.1.0' }
 
-async function tempDir(t: TestContext): Promise<NodeFsStorage> {
+async function tempDir(t: TestContext): Promise<NodeFsStorage>
+{
     const dir = await mkdtemp(join(tmpdir(), 'todl-lib-'))
     t.after(async () => { await rm(dir, { recursive: true, force: true }) })
     return new NodeFsStorage(dir)
 }
 
-function providerWith(baker: FakePresentationBaker, metaBackend: IStorage, libBackend: IStorage): ServiceProvider {
+function providerWith(baker: FakePresentationBaker, metaBackend: IStorage, libBackend: IStorage): ServiceProvider
+{
     const p = new ServiceProvider()
     p.registerInstance(PresentationBakerKey, baker)
     p.registerInstance(ProducerBackendsKey, new FakeProducerBackends(metaBackend, libBackend))
     return p
 }
 
-function factory(provider: ServiceProvider = new ServiceProvider()): LibraryProjectFactory {
+function factory(provider: ServiceProvider = new ServiceProvider()): LibraryProjectFactory
+{
     return new LibraryProjectFactory(provider)
 }
 

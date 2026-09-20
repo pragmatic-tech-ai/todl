@@ -4,10 +4,12 @@ import { fixture } from "./fixtures.js";
 import { semanticTokens, SEMANTIC_LEGEND } from "../semantic-tokens.js";
 
 // Decode the flat [dLine,dChar,len,type,mods] quintuples into absolute tokens.
-function decode(data: number[]) {
+function decode(data: number[])
+{
   const out: { line: number; char: number; len: number; type: string }[] = [];
   let line = 0, char = 0;
-  for (let i = 0; i < data.length; i += 5) {
+  for (let i = 0; i < data.length; i += 5)
+  {
     const dLine = data[i]!, dChar = data[i + 1]!, len = data[i + 2]!, type = data[i + 3]!;
     line += dLine;
     char = dLine === 0 ? char + dChar : dChar;

@@ -19,7 +19,8 @@ import {
 const PROJECTS = join(dirname(fileURLToPath(import.meta.url)), "../../../test_projects");
 
 type Src = { uri: string; text: string };
-function sources(project: string): Src[] {
+function sources(project: string): Src[]
+{
   const root = join(PROJECTS, project);
   const walk = (dir: string): Src[] =>
     readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
@@ -38,7 +39,8 @@ const msDoc = toJSON(checkAgainst([metaDoc], sources("libraries/microsoft")).mod
 const awsDoc = toJSON(checkAgainst([metaDoc], sources("libraries/aws")).model);
 
 /** Pack the three schema packages into a fresh temp node_modules and return it. */
-async function installFixture(): Promise<string> {
+async function installFixture(): Promise<string>
+{
   const nodeModules = join(mkdtempSync(join(tmpdir(), "todl-pm-")), "node_modules");
   const packInto = async (project: string, bases: ReturnType<typeof toJSON>[]): Promise<void> => {
     const m = manifest(project);

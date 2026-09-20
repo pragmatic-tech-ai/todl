@@ -4,7 +4,8 @@ import { verifyExample, normalize, verifyAll } from "../verify.js";
 import type { CorpusEntry } from "../corpus-types.js";
 
 // Build an entry whose golden we compute now, so a re-run must match it.
-function entryFor(id: string, files: { name: string; text: string }[], manifest?: Partial<CorpusEntry["manifest"]>): CorpusEntry {
+function entryFor(id: string, files: { name: string; text: string }[], manifest?: Partial<CorpusEntry["manifest"]>): CorpusEntry
+{
   const base: CorpusEntry = {
     manifest: { id, title: id, group: "Test", order: 0, tags: [], narrative: "", files: files.map(f => f.name), expectClean: true, ...manifest },
     sources: files,

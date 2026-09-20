@@ -4,20 +4,25 @@ import { Repository } from "../model.js";
 import { EntityBase } from "../entity.js";
 import type { NodeId } from "../graph.js";
 
-class Widget extends EntityBase {
-  get label(): string {
+class Widget extends EntityBase
+{
+  get label(): string
+  {
     return this.field("label") as string;
   }
 }
 
 // A Repository whose `component` nodes hydrate as Widgets via the seam.
-class WidgetRepo extends Repository {
-  protected override createEntity(id: NodeId): EntityBase {
+class WidgetRepo extends Repository
+{
+  protected override createEntity(id: NodeId): EntityBase
+  {
     return this.resolve(id)?.type === "component" ? new Widget(this, id) : super.createEntity(id);
   }
 }
 
-function repo(): WidgetRepo {
+function repo(): WidgetRepo
+{
   const r = new WidgetRepo();
   const b = r.builder();
   b.defineConcept("component");

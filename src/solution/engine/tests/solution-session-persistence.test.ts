@@ -30,9 +30,11 @@ const USER_DIR = '/user';
 // fresh provider + SessionStore, exactly as files on disk would. Satisfies both the
 // SessionStore's IStorageProvider seam and the manager's IStorageProviderRegistry (same
 // CreateStorage shape), so one instance backs both.
-class SharedStorage implements IStorageProvider {
+class SharedStorage implements IStorageProvider
+{
     constructor(private readonly roots: Map<string, FakeStorage>) {}
-    public CreateStorage(location: string): IStorage {
+    public CreateStorage(location: string): IStorage
+    {
         const existing = this.roots.get(location);
         if (existing !== undefined) return existing;
         const fresh = new FakeStorage(location);
@@ -43,24 +45,31 @@ class SharedStorage implements IStorageProvider {
 
 // A prompt service that confirms every discard and cancels every pick — enough for the
 // startup/restore paths, which never need a real folder pick.
-class AllowPrompts implements IPromptService {
-    public async Ask<R>(request: Ask<R>): Promise<R> {
+class AllowPrompts implements IPromptService
+{
+    public async Ask<R>(request: Ask<R>): Promise<R>
+    {
         if (request instanceof ConfirmAsk) return true as R;
         throw new Error(`unhandled ${request.constructor.name}`);
     }
-    public Confirm(): Promise<boolean> {
+    public Confirm(): Promise<boolean>
+    {
         return Promise.resolve(true);
     }
-    public PickFolder(): Promise<string | undefined> {
+    public PickFolder(): Promise<string | undefined>
+    {
         return Promise.resolve(undefined);
     }
-    public PickFile(): Promise<string | undefined> {
+    public PickFile(): Promise<string | undefined>
+    {
         return Promise.resolve(undefined);
     }
-    public PromptText(): Promise<string | undefined> {
+    public PromptText(): Promise<string | undefined>
+    {
         return Promise.resolve(undefined);
     }
-    public Choose<T>(): Promise<T | undefined> {
+    public Choose<T>(): Promise<T | undefined>
+    {
         return Promise.resolve(undefined);
     }
 }
@@ -71,7 +80,8 @@ class AllowPrompts implements IPromptService {
 function bootRun(roots: Map<string, FakeStorage>): {
     provider: ServiceProvider;
     store: SessionStore;
-} {
+}
+{
     const provider = new ServiceProvider();
     const storage = new SharedStorage(roots);
     const factory = new FakeProjectFactory();

@@ -19,19 +19,22 @@ import { deriveClasses, type PublishedClass } from "./reflect.js";
 import type { PackageStore } from "./stores.js";
 
 /** The kind of package a dependency points at (which backend resolves it). */
-export enum PackageKind {
+export enum PackageKind
+{
   MetaModel = "meta-model",
   Library = "library",
 }
 
 /** A pinned reference to a base package this one was compiled against. */
-export interface PackageRef {
+export interface PackageRef
+{
   kind: PackageKind;
   id: string;
   version: string;
 }
 
-export interface PackageIdentity {
+export interface PackageIdentity
+{
   id: string;
   version: string;
   name?: string;
@@ -40,25 +43,29 @@ export interface PackageIdentity {
 /** The persisted model.json shape: a TodlDocument plus recorded base deps. The
  *  extra field is ignored by graphFromJSON and the `bases: TodlDocument[]` input
  *  path, so the base-input contract is unchanged (a superset of TodlDocument). */
-export interface PackageDocument extends TodlDocument {
+export interface PackageDocument extends TodlDocument
+{
   dependencies?: PackageRef[];
 }
 
-export interface CompiledPackage extends PackageIdentity {
+export interface CompiledPackage extends PackageIdentity
+{
   document: PackageDocument;         // own-only + dependencies — persisted as model.json
   fullDocument: TodlDocument;        // the full compiled closure — for presentation/annotation baking
   sources: readonly SourceFile[];    // raw .todl passthrough (persisted under src/)
   classes: readonly PublishedClass[]; // instantiable palette classes (own-only)
 }
 
-export interface CompileOutcome {
+export interface CompileOutcome
+{
   ok: boolean;
   diagnostics: readonly Diagnostic[];
   errors: readonly Diagnostic[]; // diagnostics filtered to Severity.Error
   package?: CompiledPackage; // present iff ok
 }
 
-export interface PublishOutcome extends CompileOutcome {
+export interface PublishOutcome extends CompileOutcome
+{
   persisted: boolean;
 }
 
@@ -77,7 +84,8 @@ export function compilePackage(
   identity: PackageIdentity,
   dependencies?: readonly PackageRef[],
   options?: EmitOptions,
-): CompileOutcome {
+): CompileOutcome
+{
   const { model, diagnostics, provenance } = checkAgainst([...bases], [...sources]);
   const errors = diagnostics.filter((d) => d.severity === Severity.Error);
   if (errors.length > 0) return { ok: false, diagnostics, errors };
@@ -95,7 +103,8 @@ export function compilePackage(
 
   const fullDocument = toJSON(model, emit);
   const document: PackageDocument = toJSONOwn(model, ownIds, emit);
-  if (dependencies !== undefined && dependencies.length > 0) {
+  if (dependencies !== undefined && dependencies.length > 0)
+  {
     document.dependencies = [...dependencies];
   }
 
@@ -116,7 +125,8 @@ export async function publish(
   store: PackageStore,
   identity: PackageIdentity,
   dependencies?: readonly PackageRef[],
-): Promise<PublishOutcome> {
+): Promise<PublishOutcome>
+{
   const outcome = compilePackage(bases, sources, identity, dependencies);
   if (!outcome.ok || outcome.package === undefined) return { ...outcome, persisted: false };
   await store.persist(outcome.package);

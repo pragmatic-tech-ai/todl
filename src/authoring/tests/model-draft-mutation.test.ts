@@ -4,7 +4,8 @@ import { Repository } from "../../model/model.js";
 import { ModelDraft } from "../model-draft.js";
 
 // Meta-model base : concept `component { label : string; impl : Technology }`.
-function base(): Repository {
+function base(): Repository
+{
   const r = new Repository();
   const b = r.builder().setNamespace("ea");
   b.definePrimitive("string");

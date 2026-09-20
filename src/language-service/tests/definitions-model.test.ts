@@ -4,7 +4,8 @@ import { parse } from "../../parse/parser.js";
 import { buildDefinitionIndex } from "../definitions.js";
 import { SymbolKind } from "../symbols.js";
 
-function defsOf(src: string, uri = "d.todl") {
+function defsOf(src: string, uri = "d.todl")
+{
   return buildDefinitionIndex(new Map([[uri, parse(src, uri).namespace]]));
 }
 

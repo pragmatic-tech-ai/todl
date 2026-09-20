@@ -7,18 +7,21 @@ import { load as loadFiles } from "../../parse/loader.js";
 import { toMetaModule } from "../js-module.js";
 
 /** Test shim: wrap raw source strings as SourceFiles and return the model. */
-function load(texts: string[]) {
+function load(texts: string[])
+{
   return loadFiles(texts.map((text, i) => ({ uri: `s${i}.todl`, text }))).model;
 }
 
-function fixture(name: string): string {
+function fixture(name: string): string
+{
   return readFileSync(
     fileURLToPath(new URL(`../../parse/tests/fixtures/${name}`, import.meta.url)),
     "utf8",
   );
 }
 
-function corpus() {
+function corpus()
+{
   return load([
     fixture("primitives.todl"),
     fixture("enums.todl"),

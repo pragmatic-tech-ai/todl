@@ -11,20 +11,23 @@ import { Observable, ObservableCollection } from '@pragmatic-tech-ai/todl-runtim
 // opens in-app (each is a factory format kind — the explorer routes any node
 // whose kind matches a declared format to openFile); 'file' is any other
 // attachment (opened via the OS); 'folder' groups.
-export enum ProjectNodeKind {
+export enum ProjectNodeKind
+{
     Folder = 'folder',
     Diagram = 'diagram',
     Todl = 'todl',
     File = 'file',
 }
 
-export class ProjectNode extends Observable {
+export class ProjectNode extends Observable
+{
     private _name: string
     private _path: string
     public readonly Kind: ProjectNodeKind
     public readonly Children = new ObservableCollection<ProjectNode>()
 
-    constructor(name: string, path: string, kind: ProjectNodeKind) {
+    constructor(name: string, path: string, kind: ProjectNodeKind)
+    {
         super()
         this._name = name
         this._path = path
@@ -35,7 +38,8 @@ export class ProjectNode extends Observable {
     // Settable so an in-place rename updates the node without rebuilding the tree
     // (the bound row re-reads Name; the node object is preserved, keeping its
     // container's expansion/selection). Path moves in lock-step, set by the caller.
-    public set Name(v: string) {
+    public set Name(v: string)
+    {
         const old = this._name
         if (old === v) return
         this._name = v
@@ -43,7 +47,8 @@ export class ProjectNode extends Observable {
     }
 
     public get Path(): string { return this._path }
-    public set Path(v: string) {
+    public set Path(v: string)
+    {
         const old = this._path
         if (old === v) return
         this._path = v
@@ -51,13 +56,15 @@ export class ProjectNode extends Observable {
     }
 }
 
-export class Project extends Observable {
+export class Project extends Observable
+{
     public readonly Type: string
     public readonly Name: string
     public readonly RootPath: string
     public readonly Root: ProjectNode
 
-    constructor(type: string, name: string, rootPath: string, root: ProjectNode) {
+    constructor(type: string, name: string, rootPath: string, root: ProjectNode)
+    {
         super()
         this.Type = type
         this.Name = name

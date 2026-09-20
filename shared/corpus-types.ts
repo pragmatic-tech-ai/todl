@@ -6,7 +6,8 @@ import type { TodlDocument } from "@pragmatic-tech-ai/todl";
 export interface ExampleSource { name: string; text: string; }
 
 /** The hand-authored manifest (example.json). */
-export interface ExampleManifest {
+export interface ExampleManifest
+{
   id: string;
   title: string;
   group: string;
@@ -23,7 +24,8 @@ export interface ExampleManifest {
 }
 
 /** A diagnostic reduced to the stable fields we snapshot. */
-export interface GoldenDiagnostic {
+export interface GoldenDiagnostic
+{
   code: string;
   severity: string;
   message: string;
@@ -32,13 +34,15 @@ export interface GoldenDiagnostic {
 }
 
 /** The committed expected output (golden.json), after canonicalization. */
-export interface Golden {
+export interface Golden
+{
   diagnostics: GoldenDiagnostic[];
   document: TodlDocument;
 }
 
 /** One corpus entry: manifest + sources + committed golden + on-disk dir. */
-export interface CorpusEntry {
+export interface CorpusEntry
+{
   manifest: ExampleManifest;
   sources: ExampleSource[];
   golden: Golden;
@@ -49,7 +53,8 @@ export interface CorpusEntry {
 
 export type VerifyStatus = "pass" | "fail" | "updated";
 
-export interface VerifyResult {
+export interface VerifyResult
+{
   id: string;
   status: VerifyStatus;
   /** Present when status === "fail": a human-readable diff. */
@@ -58,7 +63,8 @@ export interface VerifyResult {
   golden?: Golden;
 }
 
-export interface VerifySummary {
+export interface VerifySummary
+{
   passed: number;
   failed: number;
   updated: number;

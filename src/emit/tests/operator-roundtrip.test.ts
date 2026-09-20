@@ -30,7 +30,8 @@ test("a reified edge materializes as a connector binding a->b", () => {
 });
 
 // A meta-model base with a `~>` operator over a reified `connector` concept.
-function base(): Repository {
+function base(): Repository
+{
   const r = new Repository();
   const b = r.builder().setNamespace("acme.ea");
   b.definePrimitive("string");

@@ -28,7 +28,8 @@ const MODEL = `namespace t {
   }
 }`;
 
-function setup() {
+function setup()
+{
   const base = new Repository(graphFromJSON(toJSON(load([{ uri: "mm.todl", text: MM }]).model)));
   const draft = ModelDraft.fromSources([base], [{ uri: "a.todl", text: MODEL }], { namespace: "t" });
   draft.addRef("c1", "linkedTo", "c2");

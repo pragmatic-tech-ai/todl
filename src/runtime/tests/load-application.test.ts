@@ -42,10 +42,13 @@ test("loads a TODL application and reads instances by definition", async () => {
   assert.ok(locationDefinition, "Location definition resolves");
 
   const found: string[] = [];
-  for (const model of graph.Models) {
+  for (const model of graph.Models)
+  {
     if (model.Name !== "Major") continue;
-    for (const definition of model.GetDefinitions()) {
-      if (definition.Is(locationDefinition as TodlDefinition)) {
+    for (const definition of model.GetDefinitions())
+    {
+      if (definition.Is(locationDefinition as TodlDefinition))
+      {
         for (const location of model.GetInstances(definition)) found.push(location.Name);
       }
     }

@@ -13,13 +13,15 @@ import { InMemoryGraphStore, type GraphStore } from "./graph-store.js";
 
 export type CypherRow = Record<string, unknown>;
 
-export interface CypherOp {
+export interface CypherOp
+{
   cypher: string;
   params: Record<string, unknown>;
 }
 
 /** The async driver seam. A real adapter wraps neo4j-driver's `session.run`. */
-export interface CypherSession {
+export interface CypherSession
+{
   run(cypher: string, params?: Record<string, unknown>): Promise<CypherRow[]>;
 }
 
@@ -36,18 +38,22 @@ const LOAD_NODES = "MATCH (n:Node) RETURN n.id AS id, n.tier AS tier, n.type AS 
   "n.class AS class, n.storageId AS storageId, n.fields AS fields, properties(n) AS props";
 const LOAD_EDGES = "MATCH (a:Node)-[r:REL]->(b:Node) RETURN a.id AS from, b.id AS to, r.kind AS kind, r.via AS via";
 
-export class CypherGraphStore implements GraphStore {
+export class CypherGraphStore implements GraphStore
+{
   private readonly inner: InMemoryGraphStore;
   private readonly pending: CypherOp[] = [];
 
-  constructor(inner: InMemoryGraphStore = new InMemoryGraphStore()) {
+  constructor(inner: InMemoryGraphStore = new InMemoryGraphStore())
+  {
     this.inner = inner;
   }
 
   /** Load the whole graph from the DB into a fresh working copy (spec: reads → MATCH). */
-  static async load(session: CypherSession): Promise<CypherGraphStore> {
+  static async load(session: CypherSession): Promise<CypherGraphStore>
+  {
     const inner = new InMemoryGraphStore();
-    for (const row of await session.run(LOAD_NODES)) {
+    for (const row of await session.run(LOAD_NODES))
+    {
       const props = { ...(row.props as Record<string, Scalar>) };
       for (const col of ["id", "tier", "type", "metaKind", "namespace", "localId", "isClass", "class", "storageId", "fields"])
         delete props[col];
@@ -65,7 +71,8 @@ export class CypherGraphStore implements GraphStore {
         attrs: new Map(Object.entries(props)),
       });
     }
-    for (const row of await session.run(LOAD_EDGES)) {
+    for (const row of await session.run(LOAD_EDGES))
+    {
       inner.addEdge({
         kind: EdgeKind[row.kind as keyof typeof EdgeKind],
         via: (row.via as NodeId | null) ?? null,
@@ -77,33 +84,42 @@ export class CypherGraphStore implements GraphStore {
   }
 
   // ── reads: delegate to the working copy ──────────────────────────────────
-  getNode(id: NodeId): Node | undefined {
+  getNode(id: NodeId): Node | undefined
+  {
     return this.inner.getNode(id);
   }
-  hasNode(id: NodeId): boolean {
+  hasNode(id: NodeId): boolean
+  {
     return this.inner.hasNode(id);
   }
-  get nodeCount(): number {
+  get nodeCount(): number
+  {
     return this.inner.nodeCount;
   }
-  allNodes(): Node[] {
+  allNodes(): Node[]
+  {
     return this.inner.allNodes();
   }
-  instancesOf(type: NodeId): NodeId[] {
+  instancesOf(type: NodeId): NodeId[]
+  {
     return this.inner.instancesOf(type);
   }
-  nodesOfMetaKind(kind: MetaKind): NodeId[] {
+  nodesOfMetaKind(kind: MetaKind): NodeId[]
+  {
     return this.inner.nodesOfMetaKind(kind);
   }
-  outEdges(id: NodeId): Edge[] {
+  outEdges(id: NodeId): Edge[]
+  {
     return this.inner.outEdges(id);
   }
-  inEdges(id: NodeId): Edge[] {
+  inEdges(id: NodeId): Edge[]
+  {
     return this.inner.inEdges(id);
   }
 
   // ── writes: apply to the working copy (may throw) THEN record the Cypher ──
-  addNode(node: Node): void {
+  addNode(node: Node): void
+  {
     this.inner.addNode(node);
     this.pending.push({
       cypher: ADD_NODE,
@@ -123,7 +139,8 @@ export class CypherGraphStore implements GraphStore {
     });
   }
 
-  addEdge(edge: Edge): void {
+  addEdge(edge: Edge): void
+  {
     this.inner.addEdge(edge);
     this.pending.push({
       cypher: ADD_EDGE,
@@ -131,7 +148,8 @@ export class CypherGraphStore implements GraphStore {
     });
   }
 
-  addFieldDecl(concept: NodeId, decl: FieldDecl): void {
+  addFieldDecl(concept: NodeId, decl: FieldDecl): void
+  {
     this.inner.addFieldDecl(concept, decl);
     // Re-persist the whole list (Neo4j properties are primitives, so fields ride
     // as a JSON string) — the working copy already holds the appended decl.
@@ -139,28 +157,33 @@ export class CypherGraphStore implements GraphStore {
     this.pending.push({ cypher: SET_FIELDS, params: { id: concept, fields: JSON.stringify(fields) } });
   }
 
-  setAttr(id: NodeId, name: string, value: Scalar): void {
+  setAttr(id: NodeId, name: string, value: Scalar): void
+  {
     this.inner.setAttr(id, name, value);
     this.pending.push({ cypher: SET_ATTR, params: { id, delta: { [name]: value } } });
   }
 
-  remove(id: NodeId): void {
+  remove(id: NodeId): void
+  {
     this.inner.remove(id);
     this.pending.push({ cypher: REMOVE, params: { id } });
   }
 
   /** Sync checkpoint (GraphStore contract). DB persistence is `flush`. */
-  commit(): void {
+  commit(): void
+  {
     // no-op: the working copy is authoritative until flush() persists to the DB
   }
 
   /** The Cypher ops recorded since the last flush (inspection / batching). */
-  pendingCypher(): readonly CypherOp[] {
+  pendingCypher(): readonly CypherOp[]
+  {
     return this.pending;
   }
 
   /** Persist the recorded mutations to the DB as a batch, then clear them. */
-  async flush(session: CypherSession): Promise<void> {
+  async flush(session: CypherSession): Promise<void>
+  {
     for (const op of this.pending) await session.run(op.cypher, op.params);
     this.pending.length = 0;
   }

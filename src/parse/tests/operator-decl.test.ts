@@ -4,7 +4,8 @@ import assert from "node:assert/strict";
 import { parse } from "../parser.js";
 import { DeclKind, type OperatorDecl } from "../ast.js";
 
-function firstOperator(text: string): OperatorDecl {
+function firstOperator(text: string): OperatorDecl
+{
   return parse(text).namespace.declarations.find((d) => d.kind === DeclKind.Operator) as OperatorDecl;
 }
 

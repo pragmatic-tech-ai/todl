@@ -4,7 +4,8 @@ import { parse } from "../parser.js";
 import { DeclKind, ValueKind, type InstanceDecl, type BooleanValue } from "../ast.js";
 
 // Parse a single concrete instance's assignment value.
-function firstValue(text: string) {
+function firstValue(text: string)
+{
   const { namespace, diagnostics } = parse(text, "t.todl");
   assert.deepEqual(diagnostics, [], "no parse diagnostics");
   const model = namespace.declarations.find((d) => d.kind === DeclKind.Instance) as InstanceDecl;

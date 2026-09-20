@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { parse } from "../parser.js";
 import { DeclKind, type TaxonomyDecl, type InstanceDecl, type StringValue } from "../ast.js";
 
-function decls(text: string) {
+function decls(text: string)
+{
   const { namespace, diagnostics } = parse(text, "t.todl");
   assert.deepEqual(diagnostics, [], "expected no parse diagnostics");
   return namespace.declarations;

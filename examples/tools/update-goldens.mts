@@ -7,7 +7,8 @@ import { verifyExample } from "../../shared/verify.js";
 import type { VerifySummary } from "../../shared/corpus-types.js";
 import { loadExamplesFromDisk } from "./load-from-disk.mjs";
 
-export function updateGoldens(root: string): VerifySummary {
+export function updateGoldens(root: string): VerifySummary
+{
   const entries = loadExamplesFromDisk(root);
   const results = entries.map((entry) => {
     const r = verifyExample(entry, { update: true });
@@ -18,7 +19,8 @@ export function updateGoldens(root: string): VerifySummary {
 }
 
 // Runnable directly: `tsx examples/tools/update-goldens.mts`
-if (process.argv[1] && process.argv[1].endsWith("update-goldens.mts")) {
+if (process.argv[1] && process.argv[1].endsWith("update-goldens.mts"))
+{
   const root = join(dirname(fileURLToPath(import.meta.url)), "..");
   const s = updateGoldens(root);
   console.log(`updated ${s.updated} golden(s)`);

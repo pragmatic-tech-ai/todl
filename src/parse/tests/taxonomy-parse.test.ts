@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { parse } from "../parser.js";
 import { DeclKind, ValueKind, type TaxonomyDecl } from "../ast.js";
 
-function taxonomy(src: string): TaxonomyDecl {
+function taxonomy(src: string): TaxonomyDecl
+{
   const { namespace } = parse(`namespace n {\n${src}\n}`, "t.todl");
   const decl = namespace.declarations.find((d) => d.kind === DeclKind.Taxonomy);
   assert.ok(decl, "expected a taxonomy declaration");

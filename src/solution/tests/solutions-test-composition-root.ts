@@ -12,10 +12,12 @@ import { SolutionManagerService } from '../engine/solution-manager-service.js';
 // service and package source (and the optional notification service) — are NOT
 // baked in: a test registers them on `Provider` before resolving `Manager`, which
 // is safe because every module registration is a lazy factory.
-export class SolutionsTestCompositionRoot extends CompositionRoot {
+export class SolutionsTestCompositionRoot extends CompositionRoot
+{
     // The composed manager (built lazily from the module's registration on first
     // access, once the host seams are registered on Provider).
-    public get Manager(): SolutionManagerService {
+    public get Manager(): SolutionManagerService
+    {
         return this.Provider.getRequired(SolutionManagerService.Key);
     }
 }

@@ -24,19 +24,22 @@ const json = (value: unknown, status = 200): HttpResponse => ({
  * whole protocol the client depends on — driving it here exercises the real wire
  * shapes with no network.
  */
-class FakeRegistry implements HttpTransport {
+class FakeRegistry implements HttpTransport
+{
   private readonly packuments = new Map<string, Record<string, unknown>>();
   private readonly tarballs = new Map<string, Uint8Array>();
   private readonly packageNames = new Set<string>();
 
-  request(req: HttpRequest): Promise<HttpResponse> {
+  request(req: HttpRequest): Promise<HttpResponse>
+  {
     if (req.url.startsWith(`${GITHUB}/orgs/`)) return Promise.resolve(this.listPackages());
     if (req.url.includes("/-/")) return Promise.resolve(this.getTarball(req.url));
     const key = req.url.slice(REGISTRY.length + 1); // encoded package name
     return Promise.resolve(req.method === "PUT" ? this.put(key, req) : this.getPackument(key));
   }
 
-  private put(key: string, req: HttpRequest): HttpResponse {
+  private put(key: string, req: HttpRequest): HttpResponse
+  {
     const body = JSON.parse(req.body as string) as {
       name: string;
       "dist-tags": Record<string, string>;
@@ -49,7 +52,8 @@ class FakeRegistry implements HttpTransport {
     Object.assign(existing["versions"] as object, body.versions);
     this.packuments.set(key, existing);
     // Store each attachment under its version's tarball URL.
-    for (const [file, attachment] of Object.entries(body._attachments)) {
+    for (const [file, attachment] of Object.entries(body._attachments))
+    {
       const version = Object.entries(body.versions).find(([, v]) => v.dist.tarball.endsWith(file));
       if (version !== undefined) this.tarballs.set(version[1].dist.tarball, new Uint8Array(Buffer.from(attachment.data, "base64")));
     }
@@ -57,27 +61,32 @@ class FakeRegistry implements HttpTransport {
     return { status: 201, headers: {}, body: enc.encode("{}") };
   }
 
-  private getPackument(key: string): HttpResponse {
+  private getPackument(key: string): HttpResponse
+  {
     const packument = this.packuments.get(key);
     return packument === undefined ? json({ error: "not found" }, 404) : json(packument);
   }
 
-  private getTarball(url: string): HttpResponse {
+  private getTarball(url: string): HttpResponse
+  {
     const bytes = this.tarballs.get(url);
     return bytes === undefined ? json({ error: "not found" }, 404) : { status: 200, headers: {}, body: bytes };
   }
 
-  private listPackages(): HttpResponse {
+  private listPackages(): HttpResponse
+  {
     return json([...this.packageNames].map((name) => ({ name })));
   }
 }
 
-function unscoped(name: string): string {
+function unscoped(name: string): string
+{
   const slash = name.indexOf("/");
   return slash < 0 ? name : name.slice(slash + 1);
 }
 
-function client(transport: HttpTransport): NpmRegistry {
+function client(transport: HttpTransport): NpmRegistry
+{
   return new NpmRegistry({ registry: REGISTRY, scope: SCOPE, token: "t", githubApi: GITHUB, transport });
 }
 
@@ -141,7 +150,8 @@ test("publish keys the attachment + tarball by the full scoped name (GitHub Pack
   // packument" when the `_attachments` key is unscoped. Match npm exactly.
   let captured: HttpRequest | undefined;
   const spy: HttpTransport = {
-    request(req) {
+    request(req)
+    {
       if (req.method === "PUT") captured = req;
       return Promise.resolve({ status: 201, headers: {}, body: enc.encode("{}") });
     },
@@ -160,9 +170,11 @@ test("publish keys the attachment + tarball by the full scoped name (GitHub Pack
 test("deleteVersion resolves the version id via the GitHub API and DELETEs it", async () => {
   const calls: { method: string; url: string }[] = [];
   const transport: HttpTransport = {
-    request(req) {
+    request(req)
+    {
       calls.push({ method: req.method, url: req.url });
-      if (req.method === "GET" && req.url.endsWith("/versions")) {
+      if (req.method === "GET" && req.url.endsWith("/versions"))
+      {
         return Promise.resolve({ status: 200, headers: {}, body: enc.encode(JSON.stringify([{ id: 11, name: "0.1.0" }, { id: 12, name: "0.2.0" }])) });
       }
       return Promise.resolve({ status: 204, headers: {}, body: new Uint8Array() });

@@ -17,7 +17,8 @@ import {
 } from "../ast.js";
 
 /** react/vue provide ui-framework; express provides http-api; shop-web needs ui-framework. */
-function techModel(reactAvailableIn: string[] = ["m365", "browser"]): Repository {
+function techModel(reactAvailableIn: string[] = ["m365", "browser"]): Repository
+{
   const model = new Repository();
   const builder = model.builder();
   builder.assertInstance("capability", "ui-framework");
@@ -30,7 +31,8 @@ function techModel(reactAvailableIn: string[] = ["m365", "browser"]): Repository
   builder.addRelationship("react", "provides", "ui-framework");
   builder.addRelationship("vue", "provides", "ui-framework");
   builder.addRelationship("express", "provides", "http-api");
-  for (const location of reactAvailableIn) {
+  for (const location of reactAvailableIn)
+  {
     builder.addRelationship("react", "availableIn", location);
   }
   builder.assertInstance("frontend", "shop-web");

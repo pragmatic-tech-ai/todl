@@ -19,14 +19,16 @@ import { FetchTransport, type HttpResponse, type HttpTransport } from "./transpo
 /** A package reference. `scope` defaults to the client's configured scope;
  *  `version` defaults to the `latest` dist-tag. `name` may be bare (`microsoft`)
  *  or already scoped (`@scope/microsoft`). */
-export interface PackageRef {
+export interface PackageRef
+{
   scope?: string;
   name: string;
   version?: string;
 }
 
 /** The published versions of a package: concrete versions plus dist-tag aliases. */
-export interface VersionList {
+export interface VersionList
+{
   versions: string[];
   distTags: Record<string, string>;
 }
@@ -34,14 +36,16 @@ export interface VersionList {
 /** The subset of a package.json the client needs to publish a version. Any extra
  *  fields (dependencies, the `todl` block, …) pass through into the version
  *  manifest verbatim. */
-export interface PackageManifestJson {
+export interface PackageManifestJson
+{
   name: string;
   version: string;
   description?: string;
   [key: string]: unknown;
 }
 
-export interface NpmRegistryConfig {
+export interface NpmRegistryConfig
+{
   /** Registry base URL, e.g. `https://npm.pkg.github.com`. */
   registry: string;
   /** Default npm scope for bare package names, including the leading `@`. */
@@ -59,7 +63,8 @@ export interface NpmRegistryConfig {
 
 /** The shape of a packument (registry metadata document) we read. Each version
  *  entry is the published manifest (incl. any `todl` block) plus its `dist`. */
-interface Packument {
+interface Packument
+{
   "dist-tags"?: Record<string, string>;
   versions?: Record<string, PackageManifestJson & { dist?: { tarball?: string; integrity?: string } }>;
 }
@@ -67,11 +72,13 @@ interface Packument {
 const decoder = new TextDecoder();
 
 /** Encode a package name for a registry URL path (`@scope/name` → `@scope%2Fname`). */
-function encodeName(name: string): string {
+function encodeName(name: string): string
+{
   return name.replace("/", "%2F");
 }
 
-export class NpmRegistry {
+export class NpmRegistry
+{
   private readonly registry: string;
   private readonly scope: string;
   private readonly token: string;
@@ -79,7 +86,8 @@ export class NpmRegistry {
   private readonly org: string;
   private readonly transport: HttpTransport;
 
-  constructor(config: NpmRegistryConfig) {
+  constructor(config: NpmRegistryConfig)
+  {
     this.registry = config.registry.replace(/\/+$/, "");
     this.scope = config.scope;
     this.token = config.token;
@@ -91,9 +99,11 @@ export class NpmRegistry {
   /** List every TODL/npm package name published under the org, via the GitHub
    *  Packages REST API. Requires a token with `read:packages`. Returns bare names
    *  (no scope), following pagination to completion. */
-  async listPackages(): Promise<string[]> {
+  async listPackages(): Promise<string[]>
+  {
     const names: string[] = [];
-    for (let page = 1; ; page++) {
+    for (let page = 1; ; page++)
+    {
       const url = `${this.githubApi}/orgs/${this.org}/packages?package_type=npm&per_page=100&page=${page}`;
       const res = await this.transport.request({ method: "GET", url, headers: this.githubHeaders() });
       if (res.status !== 200) throw new Error(`list packages failed: HTTP ${res.status} ${text(res)}`);
@@ -105,7 +115,8 @@ export class NpmRegistry {
   }
 
   /** List a package's published versions and dist-tags (registry packument). */
-  async listVersions(name: string): Promise<VersionList> {
+  async listVersions(name: string): Promise<VersionList>
+  {
     const packument = await this.packument(this.qualify({ name }));
     return {
       versions: Object.keys(packument.versions ?? {}),
@@ -114,7 +125,8 @@ export class NpmRegistry {
   }
 
   /** Fetch a package's tarball bytes for a ref, verifying SRI integrity. */
-  async getContent(ref: PackageRef): Promise<Uint8Array> {
+  async getContent(ref: PackageRef): Promise<Uint8Array>
+  {
     const name = this.qualify(ref);
     const packument = await this.packument(name);
     const version = this.resolveVersion(packument, name, ref.version);
@@ -123,7 +135,8 @@ export class NpmRegistry {
 
     const res = await this.transport.request({ method: "GET", url: dist.tarball, headers: this.authHeaders() });
     if (res.status !== 200) throw new Error(`fetch tarball ${name}@${version} failed: HTTP ${res.status}`);
-    if (dist.integrity !== undefined && !verifyIntegrity(res.body, dist.integrity)) {
+    if (dist.integrity !== undefined && !verifyIntegrity(res.body, dist.integrity))
+    {
       throw new Error(`integrity check failed for ${name}@${version}`);
     }
     return res.body;
@@ -131,7 +144,8 @@ export class NpmRegistry {
 
   /** Read a package's resolved version manifest from the packument (no tarball
    *  download). Includes any published fields such as the `todl` block. */
-  async getManifest(ref: PackageRef): Promise<PackageManifestJson> {
+  async getManifest(ref: PackageRef): Promise<PackageManifestJson>
+  {
     const name = this.qualify(ref);
     const packument = await this.packument(name);
     const version = this.resolveVersion(packument, name, ref.version);
@@ -142,7 +156,8 @@ export class NpmRegistry {
 
   /** Publish a tarball for `manifest` (its parsed package.json) via a registry
    *  `PUT`. Computes integrity/shasum and embeds the tarball as an attachment. */
-  async publish(manifest: PackageManifestJson, tarball: Uint8Array): Promise<void> {
+  async publish(manifest: PackageManifestJson, tarball: Uint8Array): Promise<void>
+  {
     const { name, version } = manifest;
     // Key by the FULL (scoped) name, exactly as npm's libnpmpublish does:
     // `${manifest.name}-${version}.tgz`. GitHub Packages resolves the attachment
@@ -178,14 +193,16 @@ export class NpmRegistry {
       headers: { ...this.authHeaders(), "content-type": "application/json" },
       body: JSON.stringify(body),
     });
-    if (res.status < 200 || res.status >= 300) {
+    if (res.status < 200 || res.status >= 300)
+    {
       throw new Error(`publish ${name}@${version} failed: HTTP ${res.status} ${text(res)}`);
     }
   }
 
   /** Read a packed package directory (a `FileSink`/pack output), tar+gzip it under
    *  `package/`, and publish it — the npm-free equivalent of `npm publish`. */
-  async publishDir(distDir: string): Promise<void> {
+  async publishDir(distDir: string): Promise<void>
+  {
     const files = readPackageDir(distDir);
     const manifestFile = files.find((f) => f.rel === "package.json");
     if (manifestFile === undefined) throw new Error(`no package.json in ${distDir}`);
@@ -198,7 +215,8 @@ export class NpmRegistry {
    *  version's numeric id (npm packages are addressed by their UNSCOPED name
    *  under the org), then `DELETE` it. Requires a token with `delete:packages`.
    *  Registries other than GitHub Packages don't support this shape. */
-  async deleteVersion(name: string, version: string): Promise<void> {
+  async deleteVersion(name: string, version: string): Promise<void>
+  {
     const slash = name.indexOf("/");
     const pkg = slash < 0 ? name : name.slice(slash + 1);
     const base = `${this.githubApi}/orgs/${this.org}/packages/npm/${encodeURIComponent(pkg)}/versions`;
@@ -208,18 +226,21 @@ export class NpmRegistry {
     const match = versions.find((v) => v.name === version);
     if (match === undefined) throw new Error(`${name}@${version} is not a published version`);
     const delRes = await this.transport.request({ method: "DELETE", url: `${base}/${match.id}`, headers: this.githubHeaders() });
-    if (delRes.status < 200 || delRes.status >= 300) {
+    if (delRes.status < 200 || delRes.status >= 300)
+    {
       throw new Error(`delete ${name}@${version} failed: HTTP ${delRes.status} ${text(delRes)}`);
     }
   }
 
   /** Qualify a ref's name with a scope unless it is already scoped. */
-  private qualify(ref: PackageRef): string {
+  private qualify(ref: PackageRef): string
+  {
     if (ref.name.startsWith("@")) return ref.name;
     return `${ref.scope ?? this.scope}/${ref.name}`;
   }
 
-  private async packument(name: string): Promise<Packument> {
+  private async packument(name: string): Promise<Packument>
+  {
     const res = await this.transport.request({
       method: "GET",
       url: `${this.registry}/${encodeName(name)}`,
@@ -230,9 +251,11 @@ export class NpmRegistry {
   }
 
   /** Resolve a ref version: a dist-tag alias, a concrete version, or `latest`. */
-  private resolveVersion(packument: Packument, name: string, version?: string): string {
+  private resolveVersion(packument: Packument, name: string, version?: string): string
+  {
     const tags = packument["dist-tags"] ?? {};
-    if (version === undefined) {
+    if (version === undefined)
+    {
       if (tags["latest"] === undefined) throw new Error(`${name} has no latest dist-tag`);
       return tags["latest"];
     }
@@ -241,11 +264,13 @@ export class NpmRegistry {
     throw new Error(`${name}@${version} not found`);
   }
 
-  private authHeaders(): Record<string, string> {
+  private authHeaders(): Record<string, string>
+  {
     return { authorization: `Bearer ${this.token}` };
   }
 
-  private githubHeaders(): Record<string, string> {
+  private githubHeaders(): Record<string, string>
+  {
     return {
       authorization: `Bearer ${this.token}`,
       accept: "application/vnd.github+json",
@@ -255,20 +280,24 @@ export class NpmRegistry {
 }
 
 /** Decode a response body as UTF-8 text. */
-function text(res: HttpResponse): string {
+function text(res: HttpResponse): string
+{
   return decoder.decode(res.body);
 }
 
-interface PackageFile {
+interface PackageFile
+{
   rel: string;
   bytes: Uint8Array;
 }
 
 /** Read every file under `dir` recursively, with forward-slash relative paths. */
-function readPackageDir(dir: string): PackageFile[] {
+function readPackageDir(dir: string): PackageFile[]
+{
   const out: PackageFile[] = [];
   const walk = (current: string): void => {
-    for (const entry of readdirSync(current, { withFileTypes: true })) {
+    for (const entry of readdirSync(current, { withFileTypes: true }))
+    {
       const full = join(current, entry.name);
       if (entry.isDirectory()) walk(full);
       else out.push({ rel: relative(dir, full).split("\\").join("/"), bytes: new Uint8Array(readFileSync(full)) });

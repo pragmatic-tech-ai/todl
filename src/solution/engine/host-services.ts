@@ -10,7 +10,8 @@ import { type IProjectFactory } from './project-factory.js'
 // Builds a rooted IStorage for a folder using the registry's default backend.
 // The manager roots the solution and each member through this; which backend is
 // "default" (local fs, a remote container, …) stays the host's concern.
-export interface IStorageProviderRegistry {
+export interface IStorageProviderRegistry
+{
     CreateStorage(location: string): IStorage
 }
 
@@ -18,7 +19,8 @@ export interface IStorageProviderRegistry {
 // installed module contributes that type (an unresolved member, not a throw); and
 // enumerates every installed factory for a New-Project gallery (each factory is
 // self-describing — typeId/title/description live on it).
-export interface IProjectFactoryRegistry {
+export interface IProjectFactoryRegistry
+{
     factoryFor(typeId: string): IProjectFactory | undefined
     All(): readonly IProjectFactory[]
 }

@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { load } from "../loader.js";
 import { DiagnosticCode } from "../../diagnostics/diagnostic.js";
 
-function loadResult(text: string) {
+function loadResult(text: string)
+{
   return load([{ uri: "t.todl", text: `namespace n {\n${text}\n}` }]);
 }
 

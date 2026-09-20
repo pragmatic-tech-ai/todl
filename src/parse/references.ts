@@ -55,7 +55,8 @@ import { PACKAGE_NODE_ID } from "../model/kinds.js";
  * role resolves through the same name→node law — but it drives diagnostics,
  * hovers, and validation downstream.
  */
-export enum RefRole {
+export enum RefRole
+{
   Extends,               // the parent named in a concept's `extends`
   FieldType,             // the declared type of a `x : T` field
   RelationshipTarget,    // a target named in a `r -> T` relationship
@@ -71,7 +72,8 @@ export enum RefRole {
 /** One emitted reference: everything a consumer needs to resolve the name and,
  * once resolved, write the flat id back. This is the loader's {@link RefSite}
  * source of truth (loader.ts copies these fields into a RefSite). */
-export interface ReferenceVisit {
+export interface ReferenceVisit
+{
   /** The reference as written — bare or qualified (`ns.x`). */
   name: string;
   span: SourceSpan | undefined;
@@ -108,18 +110,22 @@ export type Visit = (v: ReferenceVisit) => void;
 // ══════════════════════════════════════════════════════════════════════════════
 
 /** Yield every symbol reference in `decl`. */
-export function visitReferences(decl: Declaration, visit: Visit): void {
+export function visitReferences(decl: Declaration, visit: Visit): void
+{
   // Emit each annotation-application name on `node`. The owner id is the
   // application node (`<node>@<name>`), and the rewrite closure reassigns the
   // application's `name` field so a qualified annotation name flattens in place.
   const annotationRefs = (apps: readonly AnnotationApplication[], node: string): void => {
-    for (const app of apps) {
+    for (const app of apps)
+    {
       visit({ name: app.name, span: app.nameSpan ?? app.span, role: RefRole.AnnotationName,
         ownerNode: `${node}@${app.name}`, memberPath: null, rewrite: (r) => { app.name = r; } });
     }
   };
-  switch (decl.kind) {
-    case DeclKind.Taxonomy: {
+  switch (decl.kind)
+  {
+    case DeclKind.Taxonomy:
+    {
       // Each concept the taxonomy `represents`; rewrite by index (represents is a
       // parallel array with representsSpans).
       decl.represents.forEach((c, i) => visit({
@@ -141,7 +147,8 @@ export function visitReferences(decl: Declaration, visit: Visit): void {
       decl.terms.forEach(walkTerm);
       break;
     }
-    case DeclKind.Viewpoint: {
+    case DeclKind.Viewpoint:
+    {
       // Each concept the viewpoint `frames`; rewrite by index (parallel to framesSpans).
       decl.frames.forEach((c, i) => visit({
         name: c, span: decl.framesSpans?.[i] ?? decl.span, role: RefRole.Frames,
@@ -149,20 +156,24 @@ export function visitReferences(decl: Declaration, visit: Visit): void {
       }));
       break;
     }
-    case DeclKind.Concept: {
+    case DeclKind.Concept:
+    {
       // The `extends` parent, if any. Cast is needed because `extends` is a
       // readonly field on the AST node; the rewrite is the one sanctioned mutation.
-      if (decl.extends !== null) {
+      if (decl.extends !== null)
+      {
         visit({ name: decl.extends, span: decl.extendsSpan ?? decl.span, role: RefRole.Extends,
           ownerNode: decl.name, memberPath: null, rewrite: (r) => { (decl as { extends: string | null }).extends = r; } });
       }
       // Each field's declared type. memberPath carries the field name so a
       // reference.undefined can point at the offending member.
-      for (const f of decl.fields) {
+      for (const f of decl.fields)
+      {
         visit({ name: f.type, span: f.typeSpan ?? decl.span, role: RefRole.FieldType,
           ownerNode: decl.name, memberPath: f.name, rewrite: (r) => { f.type = r; } });
       }
-      for (const rel of decl.relationships) {
+      for (const rel of decl.relationships)
+      {
         // A relationship may name several targets; rewrite each by index.
         rel.targets.forEach((target, i) => visit({
           name: target, span: rel.targetSpans?.[i] ?? decl.span, role: RefRole.RelationshipTarget,
@@ -177,7 +188,8 @@ export function visitReferences(decl: Declaration, visit: Visit): void {
     }
     case DeclKind.Annotation:
       // Annotation parameters are typed like fields; only their types are references.
-      for (const p of decl.params) {
+      for (const p of decl.params)
+      {
         visit({ name: p.type, span: p.typeSpan ?? decl.span, role: RefRole.ParamType,
           ownerNode: decl.name, memberPath: p.name, rewrite: (r) => { p.type = r; } });
       }
@@ -187,7 +199,8 @@ export function visitReferences(decl: Declaration, visit: Visit): void {
       // No model scope here — top-level instances are not inside a model's `uses`.
       visitInstanceRefs(decl, visit);
       break;
-    case DeclKind.Model: {
+    case DeclKind.Model:
+    {
       // A model's `uses` list is a term-drop scope for its instance value refs
       // (the model analogue of a taxonomy body's `uses`): a bare `azure-openai`
       // drops to the flat `stack.azure-openai` term. There is no enclosing
@@ -232,7 +245,8 @@ function visitEdgeRefs(
   edge: EdgeApplication,
   visit: Visit,
   scope?: { taxonomy: string; uses: readonly string[] },
-): void {
+): void
+{
   // Both endpoints are ordinary value references (RefValue): each may be bare and
   // may term-drop. The owner id is the left endpoint (an edge has no id of its own).
   visit({ name: edge.left, span: edge.leftSpan ?? edge.span, role: RefRole.RefValue,
@@ -249,15 +263,18 @@ function visitInstanceRefs(
   decl: InstanceDecl,
   visit: Visit,
   scope?: { taxonomy: string; uses: readonly string[] },
-): void {
+): void
+{
   // Concept and `instanceof` are constructor references — resolved by namespace
   // reachability, never term-dropped — so they carry no scope. Only value
   // assignments (and nested records) inherit the model's term-drop scope.
-  if (!WRAPPER_CONCEPTS.has(decl.concept)) {
+  if (!WRAPPER_CONCEPTS.has(decl.concept))
+  {
     visit({ name: decl.concept, span: decl.conceptSpan ?? decl.span, role: RefRole.RecordConcept,
       ownerNode: decl.id, memberPath: null, rewrite: (r) => { (decl as { concept: string }).concept = r; } });
   }
-  if (decl.instanceOf !== null) {
+  if (decl.instanceOf !== null)
+  {
     visit({ name: decl.instanceOf, span: decl.instanceOfSpan ?? decl.span, role: RefRole.InstanceOf,
       ownerNode: decl.id, memberPath: null, rewrite: (r) => { (decl as { instanceOf: string | null }).instanceOf = r; } });
   }
@@ -277,8 +294,10 @@ function visitValueRefs(
   memberSpan: SourceSpan | undefined,
   scope: { taxonomy: string; uses: readonly string[] } | undefined,
   visit: Visit,
-): void {
-  switch (value.kind) {
+): void
+{
+  switch (value.kind)
+  {
     case ValueKind.Name:
       // A bare name value — the archetypal RefValue; may term-drop via `scope`.
       visit({ name: value.name, span: value.span ?? memberSpan, role: RefRole.RefValue,
@@ -331,17 +350,20 @@ export function collectDefinitions(
   ns: string,
   defined: Set<string>,
   sourceNs: Map<string, string>,
-): void {
+): void
+{
   // Register one id: mark it defined AND remember which namespace declared it.
   const define = (id: string): void => { defined.add(id); sourceNs.set(id, ns); };
-  switch (decl.kind) {
+  switch (decl.kind)
+  {
     case DeclKind.Primitive:
     case DeclKind.Concept:
     case DeclKind.Annotation:
       // A single named type: it defines just its own name.
       define(decl.name);
       break;
-    case DeclKind.Taxonomy: {
+    case DeclKind.Taxonomy:
+    {
       // The taxonomy node, plus every term as a flat `<taxonomy>.<term>` id (this is
       // the flat form bare-term references rewrite to during resolution).
       define(decl.name);
@@ -375,7 +397,8 @@ export function collectDefinitions(
 
 /** Define an instance's id and recurse into its nested records. Value-assigned
  * inline objects are NOT defined here — their ids are minted later by the loader. */
-function defineInstance(decl: InstanceDecl, ns: string, defined: Set<string>, sourceNs: Map<string, string>): void {
+function defineInstance(decl: InstanceDecl, ns: string, defined: Set<string>, sourceNs: Map<string, string>): void
+{
   defined.add(decl.id);
   sourceNs.set(decl.id, ns);
   for (const child of decl.children) defineInstance(child, ns, defined, sourceNs);

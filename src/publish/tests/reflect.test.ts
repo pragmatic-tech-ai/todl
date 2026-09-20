@@ -6,7 +6,8 @@ import { deriveClasses, projectAnnotations } from "../reflect.js";
 
 // A compiled doc with one clabject `az` (class=true) carrying a label and an
 // `icon` annotation application `az@icon { path = "resources/az.svg" }`.
-function doc(): TodlDocument {
+function doc(): TodlDocument
+{
   return {
     nodes: [
       { id: "ms.az", tier: "Instance", type: "location", metaKind: null, namespace: null, localId: "az", isClass: true, class: null, storageId: null, fields: [], attrs: { label: "Azure" } },

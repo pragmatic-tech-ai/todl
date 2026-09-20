@@ -14,7 +14,8 @@ import { TableId } from "../../manifest/enums.js";
 // ComponentKinds has a term Surface (concept Surface) fixing color="red". Two
 // instances instantiate that term: header takes the class colour, footer
 // overrides it to "blue".
-function buildRepo(): Repository {
+function buildRepo(): Repository
+{
   const repo = new Repository();
   repo
     .builder()
@@ -41,7 +42,8 @@ function buildRepo(): Repository {
   return repo;
 }
 
-function emit() {
+function emit()
+{
   return new ManifestEmitter(buildRepo(), "shop", "1.0.0").emit();
 }
 

@@ -5,7 +5,8 @@ import { readFileSync, writeFileSync } from "node:fs";
 
 const line = /^[ \t]*operator[ \t]*=[ \t]*"[^"]*"[ \t]*;[ \t]*\r?\n/gm;
 
-for (const file of process.argv.slice(2)) {
+for (const file of process.argv.slice(2))
+{
   const before = readFileSync(file, "utf8");
   const matches = before.match(line);
   const after = before.replace(line, "");

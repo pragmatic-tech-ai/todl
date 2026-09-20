@@ -6,7 +6,8 @@ import { ManifestSchema } from "../schema.js";
 import { MetaKind, Cardinality, TableId } from "../enums.js";
 import { TypeDefOrRef } from "../token.js";
 
-function buildShop(): ManifestWriter {
+function buildShop(): ManifestWriter
+{
   const w = new ManifestWriter("shop", "1.2.0");
   const fName = w.addField({ name: w.internString("name"), type: 0, card: Cardinality.One });
   w.addField({ name: w.internString("size"), type: 0, card: Cardinality.Optional });

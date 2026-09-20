@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 
 import { tokenize, lex, TokenKind } from "../lexer.js";
 
-function kinds(source: string): TokenKind[] {
+function kinds(source: string): TokenKind[]
+{
   return tokenize(source).map((token) => token.kind);
 }
 

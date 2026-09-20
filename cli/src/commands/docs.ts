@@ -5,11 +5,13 @@ import { renderDocs } from "../../../shared/docs-markdown.js";
 import { header, green } from "../format.js";
 
 /** `todl-demo docs [--out <dir>]` — emit the corpus as static markdown. */
-export function docs(args: string[]): number {
+export function docs(args: string[]): number
+{
   const i = args.indexOf("--out");
   const outDir = i >= 0 && args[i + 1] ? args[i + 1] : "docs/showcase";
   const files = renderDocs(CORPUS);
-  for (const f of files) {
+  for (const f of files)
+  {
     const dest = join(outDir, f.path);
     mkdirSync(dirname(dest), { recursive: true });
     writeFileSync(dest, f.content, "utf8");

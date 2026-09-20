@@ -4,7 +4,8 @@ import { Tier, EdgeKind, type Node, type Edge, type NodeId } from "../graph.js";
 import { CypherGraphStore, type CypherSession, type CypherRow, type CypherOp } from "../cypher-store.js";
 import { describeGraphStore } from "./graph-store-conformance.js";
 
-function node(id: NodeId, type = "thing", attrs: Record<string, string> = {}): Node {
+function node(id: NodeId, type = "thing", attrs: Record<string, string> = {}): Node
+{
   return {
     id,
     tier: Tier.Instance,
@@ -19,13 +20,16 @@ function node(id: NodeId, type = "thing", attrs: Record<string, string> = {}): N
     attrs: new Map(Object.entries(attrs)),
   };
 }
-function edge(from: NodeId, to: NodeId, via: NodeId | null = "rel"): Edge {
+function edge(from: NodeId, to: NodeId, via: NodeId | null = "rel"): Edge
+{
   return { kind: EdgeKind.Relationship, via, from, to };
 }
 
-class RecordingSession implements CypherSession {
+class RecordingSession implements CypherSession
+{
   readonly calls: CypherOp[] = [];
-  async run(cypher: string, params: Record<string, unknown> = {}): Promise<CypherRow[]> {
+  async run(cypher: string, params: Record<string, unknown> = {}): Promise<CypherRow[]>
+  {
     this.calls.push({ cypher, params });
     return [];
   }
@@ -98,12 +102,14 @@ test("flush runs every pending op through the session in order, then clears", as
 });
 
 // A fake session that returns canned node/edge rows for the load queries.
-class DataSession implements CypherSession {
+class DataSession implements CypherSession
+{
   constructor(
     private readonly nodes: CypherRow[],
     private readonly edges: CypherRow[],
   ) {}
-  async run(cypher: string): Promise<CypherRow[]> {
+  async run(cypher: string): Promise<CypherRow[]>
+  {
     if (cypher.includes("properties(n)")) return this.nodes;
     if (cypher.includes("-[r:REL]->")) return this.edges;
     return [];

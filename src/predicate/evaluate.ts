@@ -11,27 +11,34 @@ import { ExprKind, BinaryOp, QuantifierKind, type Expr } from "./ast.js";
 
 export type EvalValue = boolean | string | number | Set<NodeId> | null;
 
-interface Env {
+interface Env
+{
   self: NodeId;
   vars: Map<string, NodeId>;
 }
 
-export function evaluate(model: Repository, expr: Expr, self: NodeId): EvalValue {
+export function evaluate(model: Repository, expr: Expr, self: NodeId): EvalValue
+{
   return evalExpr(model, expr, { self, vars: new Map() });
 }
 
-export function satisfies(model: Repository, expr: Expr, self: NodeId): boolean {
+export function satisfies(model: Repository, expr: Expr, self: NodeId): boolean
+{
   return toBool(evaluate(model, expr, self));
 }
 
-function evalExpr(model: Repository, expr: Expr, env: Env): EvalValue {
-  switch (expr.kind) {
+function evalExpr(model: Repository, expr: Expr, env: Env): EvalValue
+{
+  switch (expr.kind)
+  {
     case ExprKind.This:
       return new Set([env.self]);
 
-    case ExprKind.Var: {
+    case ExprKind.Var:
+    {
       const id = env.vars.get(expr.name);
-      if (id === undefined) {
+      if (id === undefined)
+      {
         throw new Error(`unbound variable "${expr.name}"`);
       }
       return new Set([id]);
@@ -46,17 +53,21 @@ function evalExpr(model: Repository, expr: Expr, env: Env): EvalValue {
     case ExprKind.Member:
       return evalMember(model, evalExpr(model, expr.target, env), expr.member);
 
-    case ExprKind.Comprehension: {
+    case ExprKind.Comprehension:
+    {
       const result = new Set<NodeId>();
-      for (const instance of model.instancesOf(expr.concept)) {
-        if (toBool(evalExpr(model, expr.body, bind(env, expr.variable, instance)))) {
+      for (const instance of model.instancesOf(expr.concept))
+      {
+        if (toBool(evalExpr(model, expr.body, bind(env, expr.variable, instance))))
+        {
           result.add(instance);
         }
       }
       return result;
     }
 
-    case ExprKind.Quantifier: {
+    case ExprKind.Quantifier:
+    {
       const instances = model.instancesOf(expr.concept);
       const holds = (instance: NodeId): boolean =>
         toBool(evalExpr(model, expr.body, bind(env, expr.variable, instance)));
@@ -71,21 +82,26 @@ function evalExpr(model: Repository, expr: Expr, env: Env): EvalValue {
   }
 }
 
-function evalBinary(model: Repository, op: BinaryOp, leftExpr: Expr, rightExpr: Expr, env: Env): EvalValue {
+function evalBinary(model: Repository, op: BinaryOp, leftExpr: Expr, rightExpr: Expr, env: Env): EvalValue
+{
   // Short-circuit the logical connectives.
-  if (op === BinaryOp.And) {
+  if (op === BinaryOp.And)
+  {
     return toBool(evalExpr(model, leftExpr, env)) && toBool(evalExpr(model, rightExpr, env));
   }
-  if (op === BinaryOp.Or) {
+  if (op === BinaryOp.Or)
+  {
     return toBool(evalExpr(model, leftExpr, env)) || toBool(evalExpr(model, rightExpr, env));
   }
-  if (op === BinaryOp.Implies) {
+  if (op === BinaryOp.Implies)
+  {
     return !toBool(evalExpr(model, leftExpr, env)) || toBool(evalExpr(model, rightExpr, env));
   }
 
   const left = evalExpr(model, leftExpr, env);
   const right = evalExpr(model, rightExpr, env);
-  switch (op) {
+  switch (op)
+  {
     case BinaryOp.Eq:
       return valuesEqual(left, right);
     case BinaryOp.Neq:
@@ -98,54 +114,68 @@ function evalBinary(model: Repository, op: BinaryOp, leftExpr: Expr, rightExpr: 
 }
 
 /** Field access: a scalar attr on a single node, else the union of relationship targets. */
-function evalMember(model: Repository, target: EvalValue, name: string): EvalValue {
+function evalMember(model: Repository, target: EvalValue, name: string): EvalValue
+{
   const nodes = asNodeSet(target);
-  if (nodes.size === 1) {
+  if (nodes.size === 1)
+  {
     const only = firstOf(nodes);
     const scalar = only === undefined ? undefined : model.resolve(only)?.attrs.get(name);
-    if (scalar !== undefined) {
+    if (scalar !== undefined)
+    {
       return scalar;
     }
   }
   const result = new Set<NodeId>();
-  for (const node of nodes) {
-    for (const targetId of model.related(node, EdgeKind.Relationship, Direction.Out, name)) {
+  for (const node of nodes)
+  {
+    for (const targetId of model.related(node, EdgeKind.Relationship, Direction.Out, name))
+    {
       result.add(targetId);
     }
   }
   return result;
 }
 
-function bind(env: Env, name: string, id: NodeId): Env {
+function bind(env: Env, name: string, id: NodeId): Env
+{
   return { self: env.self, vars: new Map(env.vars).set(name, id) };
 }
 
-function asNodeSet(value: EvalValue): Set<NodeId> {
+function asNodeSet(value: EvalValue): Set<NodeId>
+{
   return value instanceof Set ? value : new Set<NodeId>();
 }
 
-function isEmpty(value: EvalValue): boolean {
+function isEmpty(value: EvalValue): boolean
+{
   return value === null || (value instanceof Set && value.size === 0);
 }
 
-function valuesEqual(a: EvalValue, b: EvalValue): boolean {
-  if (a === null || b === null) {
+function valuesEqual(a: EvalValue, b: EvalValue): boolean
+{
+  if (a === null || b === null)
+  {
     return isEmpty(a) && isEmpty(b);
   }
-  if (a instanceof Set && b instanceof Set) {
+  if (a instanceof Set && b instanceof Set)
+  {
     return a.size === b.size && [...a].every((x) => b.has(x));
   }
   return a === b;
 }
 
-function isSubset(a: Set<NodeId>, b: Set<NodeId>): boolean {
-  for (const x of a) {
+function isSubset(a: Set<NodeId>, b: Set<NodeId>): boolean
+{
+  for (const x of a)
+  {
     if (!b.has(x)) return false;
   }
   return true;
 }
 
-function toBool(value: EvalValue): boolean {
+function toBool(value: EvalValue): boolean
+{
   if (typeof value === "boolean") return value;
   if (value === null) return false;
   if (value instanceof Set) return value.size > 0;
@@ -153,8 +183,10 @@ function toBool(value: EvalValue): boolean {
   return value.length > 0;
 }
 
-function firstOf(set: Set<NodeId>): NodeId | undefined {
-  for (const value of set) {
+function firstOf(set: Set<NodeId>): NodeId | undefined
+{
+  for (const value of set)
+  {
     return value;
   }
   return undefined;

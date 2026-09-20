@@ -4,7 +4,8 @@ import { ProjectFactoryRegistry } from '../project-factory-registry.js'
 import { type IProjectFactory } from '../project-factory.js'
 
 // A minimal IProjectFactory stand-in carrying just the type id the registry keys on.
-function fake(typeId: string): IProjectFactory {
+function fake(typeId: string): IProjectFactory
+{
     return {
         typeId, title: typeId, description: '', formats: [],
         createProject: async () => { throw new Error('unused') },

@@ -14,7 +14,8 @@ import { MetaKind } from "./kinds.js";
 export type NodeId = string;
 
 /** Which layer of the reflective tower a node lives in (spec §1). */
-export enum Tier {
+export enum Tier
+{
   Meta,
   Ontology,
   Instance,
@@ -25,7 +26,8 @@ export enum Tier {
  * *names* are data-driven (per-ontology) and cannot be enumerated, so they
  * are carried on {@link Edge.via} rather than baked into this enum.
  */
-export enum EdgeKind {
+export enum EdgeKind
+{
   TypeOf,
   Extends,
   Contains,
@@ -42,7 +44,8 @@ export enum EdgeKind {
 }
 
 /** Which way to walk an edge from a node. */
-export enum Direction {
+export enum Direction
+{
   Out,
   In,
 }
@@ -67,13 +70,15 @@ export type Scalar = string | number | boolean;
  * gone). Reference/relationship *members* keep their member nodes + `Targets`
  * edges (they carry a navigable target).
  */
-export interface FieldDecl {
+export interface FieldDecl
+{
   name: string;
   type: NodeId;
   cardinality: Cardinality;
 }
 
-export interface Node {
+export interface Node
+{
   id: NodeId;
   tier: Tier;
 
@@ -111,7 +116,8 @@ export interface Node {
   attrs: Map<string, Scalar>;
 }
 
-export interface Edge {
+export interface Edge
+{
   kind: EdgeKind;
   /** For {@link EdgeKind.Relationship} / {@link EdgeKind.Derived}: the member node it realises; else `null`. */
   via: NodeId | null;
@@ -120,7 +126,8 @@ export interface Edge {
 }
 
 /** The kind of mutation reported on {@link Graph.changed}. */
-export enum GraphChangeKind {
+export enum GraphChangeKind
+{
   NodeAdded,
   NodeRemoved,
   EdgeAdded,
@@ -133,7 +140,8 @@ export enum GraphChangeKind {
  * change → one event → façade re-raise, derived-cache invalidation, and
  * incremental validation all subscribe to the same stream.
  */
-export interface GraphChangeArgs {
+export interface GraphChangeArgs
+{
   kind: GraphChangeKind;
   /** The node the change is about; for an edge, its source. */
   node: NodeId;
@@ -143,51 +151,61 @@ export interface GraphChangeArgs {
   target: NodeId | null;
 }
 
-export class Graph {
+export class Graph
+{
   private readonly store: GraphStore;
 
   /** The mutation event bus (spec §R2): one event per applied change. */
   readonly changed = new Signal<GraphChangeArgs>();
 
   /** Storage is a swappable {@link GraphStore} (spec §9); defaults to in-memory. */
-  constructor(store: GraphStore = new InMemoryGraphStore()) {
+  constructor(store: GraphStore = new InMemoryGraphStore())
+  {
     this.store = store;
   }
 
-  addNode(node: Node): void {
+  addNode(node: Node): void
+  {
     this.store.addNode(node);
     this.changed.emit({ kind: GraphChangeKind.NodeAdded, node: node.id, property: null, target: null });
   }
 
-  getNode(id: NodeId): Node | undefined {
+  getNode(id: NodeId): Node | undefined
+  {
     return this.store.getNode(id);
   }
 
-  hasNode(id: NodeId): boolean {
+  hasNode(id: NodeId): boolean
+  {
     return this.store.hasNode(id);
   }
 
-  get nodeCount(): number {
+  get nodeCount(): number
+  {
     return this.store.nodeCount;
   }
 
   /** Every node in the graph. */
-  allNodes(): Node[] {
+  allNodes(): Node[]
+  {
     return this.store.allNodes();
   }
 
   /** Node ids whose `type` (instance tier) is `concept`. */
-  instancesOf(concept: NodeId): NodeId[] {
+  instancesOf(concept: NodeId): NodeId[]
+  {
     return this.store.instancesOf(concept);
   }
 
   /** Node ids whose `metaKind` (ontology tier) is `kind` — e.g. every concept
    *  declaration, taxonomy, or viewpoint. Replaces the old `instancesOf(<sentinel>)`. */
-  nodesOfMetaKind(kind: MetaKind): NodeId[] {
+  nodesOfMetaKind(kind: MetaKind): NodeId[]
+  {
     return this.store.nodesOfMetaKind(kind);
   }
 
-  addEdge(edge: Edge): void {
+  addEdge(edge: Edge): void
+  {
     this.store.addEdge(edge);
     const property =
       edge.kind === EdgeKind.Relationship || edge.kind === EdgeKind.Derived ? edge.via : null;
@@ -195,23 +213,27 @@ export class Graph {
   }
 
   /** Append a declared field to a concept/annotation node's schema (SPEC-01 #4). */
-  addFieldDecl(concept: NodeId, decl: FieldDecl): void {
+  addFieldDecl(concept: NodeId, decl: FieldDecl): void
+  {
     this.store.addFieldDecl(concept, decl);
   }
 
   /** Set a scalar field value on a node and emit {@link GraphChangeKind.AttrSet}. */
-  setAttr(id: NodeId, name: string, value: Scalar): void {
+  setAttr(id: NodeId, name: string, value: Scalar): void
+  {
     this.store.setAttr(id, name, value);
     this.changed.emit({ kind: GraphChangeKind.AttrSet, node: id, property: name, target: null });
   }
 
   /** All edges leaving `id` (forward adjacency). */
-  outEdges(id: NodeId): Edge[] {
+  outEdges(id: NodeId): Edge[]
+  {
     return this.store.outEdges(id);
   }
 
   /** All edges entering `id` (reverse adjacency). */
-  inEdges(id: NodeId): Edge[] {
+  inEdges(id: NodeId): Edge[]
+  {
     return this.store.inEdges(id);
   }
 
@@ -220,10 +242,12 @@ export class Graph {
    * is given, only domain-relationship / derived edges realising that member
    * match.
    */
-  related(id: NodeId, kind: EdgeKind, direction: Direction, via: NodeId | null = null): NodeId[] {
+  related(id: NodeId, kind: EdgeKind, direction: Direction, via: NodeId | null = null): NodeId[]
+  {
     const edges = direction === Direction.Out ? this.outEdges(id) : this.inEdges(id);
     const result: NodeId[] = [];
-    for (const edge of edges) {
+    for (const edge of edges)
+    {
       if (edge.kind !== kind) continue;
       if (via !== null && edge.via !== via) continue;
       result.push(direction === Direction.Out ? edge.to : edge.from);
@@ -241,21 +265,25 @@ export class Graph {
     direction: Direction,
     reflexive: boolean,
     via: NodeId | null = null,
-  ): NodeId[] {
+  ): NodeId[]
+  {
     const seen = new Set<NodeId>();
     const result: NodeId[] = [];
     const queue: NodeId[] = this.related(start, kind, direction, via);
     let head = 0;
-    while (head < queue.length) {
+    while (head < queue.length)
+    {
       const current = queue[head++];
       if (current === undefined || seen.has(current)) continue;
       seen.add(current);
       result.push(current);
-      for (const next of this.related(current, kind, direction, via)) {
+      for (const next of this.related(current, kind, direction, via))
+      {
         if (!seen.has(next)) queue.push(next);
       }
     }
-    if (reflexive && !seen.has(start)) {
+    if (reflexive && !seen.has(start))
+    {
       result.unshift(start);
     }
     return result;

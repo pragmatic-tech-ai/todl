@@ -1,5 +1,6 @@
 /** A seam for minting node ids. Injected at load so the parser stays pure. */
-export interface IdGenerator {
+export interface IdGenerator
+{
   next(): string;
 }
 
@@ -10,11 +11,13 @@ export interface IdGenerator {
  * comes from persisting the id (the emitter writes it back), not from the
  * generator. Tests inject a deterministic FakeIdGenerator instead.
  */
-export class SnowflakeIdGenerator implements IdGenerator {
+export class SnowflakeIdGenerator implements IdGenerator
+{
   private lastMs = 0;
   private seq = 0;
 
-  next(): string {
+  next(): string
+  {
     let ms = Date.now();
     if (ms <= this.lastMs) { this.seq += 1; ms = this.lastMs; }
     else { this.lastMs = ms; this.seq = 0; }

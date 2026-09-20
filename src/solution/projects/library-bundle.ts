@@ -6,7 +6,8 @@ import { type TodlDocument } from '../../emit/json.js'
 // model-derived fields (id/localId/label/icon/concept) come from TODL's PublishedClass;
 // the bundle adds the resource paths, attached later (present only when the
 // conventionally-named file exists).
-export interface PublishedClass extends TodlPublishedClass {
+export interface PublishedClass extends TodlPublishedClass
+{
     template?: string     // "visuals/<id>.mural"    — present only if the file exists
     thumbnail?: string    // "thumbnails/<id>.png"   — present only if the file exists
     doc?: string          // "docs/<id>.md"          — present only if the file exists
@@ -15,7 +16,8 @@ export interface PublishedClass extends TodlPublishedClass {
 // The library.json bundle manifest — the index a consumer reads to discover and mount a
 // published library. `classes` are the palette items; `assets`/`docs`/`samples` list
 // every file under those bundle folders.
-export interface LibraryBundleManifest {
+export interface LibraryBundleManifest
+{
     id: string
     version: string
     name: string
@@ -27,7 +29,8 @@ export interface LibraryBundleManifest {
     samples: string[]
 }
 
-export interface ScannedResources {
+export interface ScannedResources
+{
     byClass: Map<string, { template?: string; thumbnail?: string; doc?: string }>
     assets: string[]
     docs: string[]
@@ -36,12 +39,14 @@ export interface ScannedResources {
 }
 
 // Discovery of a library's instantiable classes + its reserved resource folders.
-export class LibraryResources {
+export class LibraryResources
+{
     // The instantiable classes a library provides. The derivation (Instance-tier
     // clabjects with `attrs.class === true`, label + annotation icon) lives in TODL core
     // (deriveClasses); this delegates and widens the result so resource paths can be
     // attached at publish time.
-    public static DeriveClasses(model: TodlDocument): PublishedClass[] {
+    public static DeriveClasses(model: TodlDocument): PublishedClass[]
+    {
         return todlDeriveClasses(model)
     }
 
@@ -50,7 +55,8 @@ export class LibraryResources {
     // known class; every asset/doc/sample file is also listed for the bundle manifest. A
     // visuals/thumbnails file whose stem is not a known class id is an orphan — warned,
     // never fatal. A missing folder lists as empty.
-    public static async Scan(storage: IStorage, classIds: readonly string[]): Promise<ScannedResources> {
+    public static async Scan(storage: IStorage, classIds: readonly string[]): Promise<ScannedResources>
+    {
         const known = new Set(classIds)
         const byClass = new Map<string, { template?: string; thumbnail?: string; doc?: string }>()
         const warnings: string[] = []
@@ -70,18 +76,21 @@ export class LibraryResources {
             return i > 0 ? name.slice(0, i) : name
         }
 
-        for (const name of await files('visuals')) {
+        for (const name of await files('visuals'))
+        {
             if (!name.endsWith('.mural')) continue
             const id = stem(name)
             if (known.has(id)) ensure(id).template = `visuals/${name}`
             else warnings.push(`visuals/${name} targets unknown class "${id}"`)
         }
-        for (const name of await files('thumbnails')) {
+        for (const name of await files('thumbnails'))
+        {
             const id = stem(name)
             if (known.has(id)) ensure(id).thumbnail = `thumbnails/${name}`
             else warnings.push(`thumbnails/${name} targets unknown class "${id}"`)
         }
-        for (const name of await files('docs')) {
+        for (const name of await files('docs'))
+        {
             const id = stem(name)
             if (name.endsWith('.md') && known.has(id)) ensure(id).doc = `docs/${name}`
         }

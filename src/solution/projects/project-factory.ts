@@ -20,7 +20,8 @@ import { type BaseBindings } from './base-binding.js'
 // content, but the `.plexus` name alone identifies it — no `.json` tail.)
 export const PROJECT_MANIFEST_FILENAME = 'project.plexus'
 
-export interface ProjectManifestEnvelope {
+export interface ProjectManifestEnvelope
+{
     type: string
     name?: string
     version?: number
@@ -33,13 +34,15 @@ export interface ProjectManifestEnvelope {
 // `kind` is the ProjectNode kind a matching file gets ('diagram' / 'todl' for
 // openable-in-app formats) — a routing token matched against a node's Kind, kept a
 // plain string so hosts can declare formats with string literals.
-export interface ProjectFileFormat {
+export interface ProjectFileFormat
+{
     extension: string           // leading dot, e.g. ".diagram"
     kind: string
     displayName: string
 }
 
-export interface IProjectFactory {
+export interface IProjectFactory
+{
     // Self-describing project-type metadata — the stable type id a manifest's
     // `type` field carries and the New-Project gallery's display strings. These
     // used to live in a mural `ProjectFactoryDefinition`; the factory now owns
@@ -69,7 +72,8 @@ export interface IProjectFactory {
 }
 
 // The outcome of a publish — surfaced verbatim by the explorer as its status.
-export interface PublishResult {
+export interface PublishResult
+{
     ok: boolean
     message: string
 }
@@ -78,12 +82,14 @@ export interface PublishResult {
 // from the project. The explorer feature-tests with isPublishable before offering
 // its Publish command — the same pattern as ILocalFileAccess. `provider` is passed
 // so publish can resolve a destination backend / services.
-export interface IPublishableProjectFactory {
+export interface IPublishableProjectFactory
+{
     publish(project: Project, storage: IStorage, provider: IServiceProvider): Promise<PublishResult>
 }
 
 // Type guard: does this factory support publishing?
-export function isPublishable(factory: IProjectFactory): factory is IProjectFactory & IPublishableProjectFactory {
+export function isPublishable(factory: IProjectFactory): factory is IProjectFactory & IPublishableProjectFactory
+{
     return typeof (factory as Partial<IPublishableProjectFactory>).publish === 'function'
 }
 
@@ -92,14 +98,16 @@ export function isPublishable(factory: IProjectFactory): factory is IProjectFact
 // icon mode (true → colorful IconDefinitions, false → monochrome geometry). The
 // explorer feature-tests with canGeneratePresentation before offering its Generate
 // Presentation submenu (Colorful / Monochrome) — same pattern as isPublishable.
-export interface IPresentationProjectFactory {
+export interface IPresentationProjectFactory
+{
     regeneratePresentation(storage: IStorage, colored: boolean): Promise<void>
 }
 
 // Type guard: can this factory (re)generate a presentation?
 export function canGeneratePresentation(
     factory: IProjectFactory,
-): factory is IProjectFactory & IPresentationProjectFactory {
+): factory is IProjectFactory & IPresentationProjectFactory
+{
     return typeof (factory as Partial<IPresentationProjectFactory>).regeneratePresentation === 'function'
 }
 
@@ -108,7 +116,8 @@ export function canGeneratePresentation(
 // feature-tests with isVersioned before offering it — same pattern as isPublishable.
 // Each producer knows its own manifest field (modelVersion / libVersion); this seam
 // hides that from the caller.
-export interface IVersionedProjectFactory {
+export interface IVersionedProjectFactory
+{
     getVersion(storage: IStorage): Promise<string>
     setVersion(storage: IStorage, version: string): Promise<void>
 }
@@ -116,14 +125,16 @@ export interface IVersionedProjectFactory {
 // Type guard: does this factory expose a bumpable version?
 export function isVersioned(
     factory: IProjectFactory,
-): factory is IProjectFactory & IVersionedProjectFactory {
+): factory is IProjectFactory & IVersionedProjectFactory
+{
     const f = factory as Partial<IVersionedProjectFactory>
     return typeof f.getVersion === 'function' && typeof f.setVersion === 'function'
 }
 
 // The producer kinds — a project type that publishes a base other projects consume.
 // Values match the corresponding factory `ProjectType` strings.
-export enum ProducerKind {
+export enum ProducerKind
+{
     MetaModel = 'meta-model',
     Library = 'library',
 }

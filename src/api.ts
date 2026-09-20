@@ -37,7 +37,8 @@ import { preludeDocument, preludeNames } from "./stdlib/prelude.js";
  * model.instancesOf("Component");     // ["web", "api"]
  * ```
  */
-export function check(sources: SourceFile[], idGenerator?: IdGenerator): { model: Repository; diagnostics: Diagnostic[]; provenance: Map<string, string> } {
+export function check(sources: SourceFile[], idGenerator?: IdGenerator): { model: Repository; diagnostics: Diagnostic[]; provenance: Map<string, string> }
+{
   return checkAgainst([], sources, idGenerator);
 }
 
@@ -78,7 +79,8 @@ export function checkAgainst(
   bases: TodlDocument[],
   sources: SourceFile[],
   idGenerator: IdGenerator = new SnowflakeIdGenerator(),
-): { model: Repository; diagnostics: Diagnostic[]; provenance: Map<string, string> } {
+): { model: Repository; diagnostics: Diagnostic[]; provenance: Map<string, string> }
+{
   const model = new Repository(mergeBases([preludeDocument(), ...bases]));
   const provenance = new Map<string, string>();
   const diagnostics = loadInto(model, sources, preludeNames(), idGenerator, provenance);
@@ -107,10 +109,13 @@ export function checkAgainst(
  * const model = new Repository(seed); // ready to load downstream sources into
  * ```
  */
-export function mergeBases(bases: TodlDocument[]): Graph {
+export function mergeBases(bases: TodlDocument[]): Graph
+{
   const graph = new Graph();
-  for (const base of bases) {
-    for (const node of base.nodes) {
+  for (const base of bases)
+  {
+    for (const node of base.nodes)
+    {
       if (graph.hasNode(node.id)) continue;
       graph.addNode({
         id: node.id,
@@ -127,8 +132,10 @@ export function mergeBases(bases: TodlDocument[]): Graph {
       });
     }
   }
-  for (const base of bases) {
-    for (const edge of base.edges) {
+  for (const base of bases)
+  {
+    for (const edge of base.edges)
+    {
       const kind = EdgeKind[edge.kind as keyof typeof EdgeKind];
       if (hasEdge(graph, kind, edge.via, edge.from, edge.to)) continue;
       graph.addEdge({ kind, via: edge.via, from: edge.from, to: edge.to });
@@ -138,8 +145,10 @@ export function mergeBases(bases: TodlDocument[]): Graph {
 }
 
 /** Is an identical edge (kind + via + from + to) already on the graph? */
-function hasEdge(graph: Graph, kind: EdgeKind, via: string | null, from: string, to: string): boolean {
-  for (const e of graph.outEdges(from)) {
+function hasEdge(graph: Graph, kind: EdgeKind, via: string | null, from: string, to: string): boolean
+{
+  for (const e of graph.outEdges(from))
+  {
     if (e.kind === kind && e.via === via && e.to === to) return true;
   }
   return false;

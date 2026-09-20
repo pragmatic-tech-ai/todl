@@ -12,7 +12,8 @@ import { type TodlDocument } from '../../emit/json.js'
 // How to bake: the resources block name and the icon-index key prefix differ per
 // producer (meta-model uses 'MetaModelPresentation' + 'mm:'; library uses
 // 'LibraryPresentation' + '').
-export interface BakeOptions {
+export interface BakeOptions
+{
     dictName: string
     iconPrefix: string
 }
@@ -23,7 +24,8 @@ export type BakeResult =
     | { ok: true; icons: number }
     | { ok: false; missing: string[] }
 
-export interface IPresentationBaker {
+export interface IPresentationBaker
+{
     // Bake `doc`'s presentation from icons read out of `project`, writing the
     // compiled artifact + icon index into `dest` under `<base>/presentation/`.
     Bake(project: IStorage, dest: IStorage, base: string, doc: TodlDocument, options: BakeOptions): Promise<BakeResult>

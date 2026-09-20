@@ -5,7 +5,8 @@ import { ManifestReader } from "../manifest-reader.js";
 import { MetaKind } from "../enums.js";
 import { TypeDefOrRef } from "../token.js";
 
-function reservedFlags(bytes: Uint8Array): number {
+function reservedFlags(bytes: Uint8Array): number
+{
   return bytes[6]! | (bytes[7]! << 8); // header reserved u16 at offset 6
 }
 
@@ -35,7 +36,8 @@ describe("index-width boundary at 65535 (SPEC-04 §11.6)", () => {
       extends: 0, fieldStart: 0, fieldCount: 0, relStart: 0, relCount: 0,
     });
     const extendsBase = new TypeDefOrRef(false, base).encode();
-    for (let i = 0; i < 32768; i++) {
+    for (let i = 0; i < 32768; i++)
+    {
       w.addTypeInfo({
         name: w.internString("T" + i), ns: 0, kind: MetaKind.Concept,
         extends: extendsBase, fieldStart: 0, fieldCount: 0, relStart: 0, relCount: 0,

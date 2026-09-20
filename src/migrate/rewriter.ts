@@ -15,7 +15,8 @@
  * migration report, not silently in the text.
  */
 
-export function rewrite(legacySource: string): string {
+export function rewrite(legacySource: string): string
+{
   let out = legacySource;
   out = rewriteReferences(out);
   out = rewriteListTypes(out);
@@ -25,13 +26,15 @@ export function rewrite(legacySource: string): string {
 }
 
 /** `enum X { values { … } }` → `taxonomy X { terms { … } }` (keyword swaps). */
-function rewriteEnumToTaxonomy(source: string): string {
+function rewriteEnumToTaxonomy(source: string): string
+{
   return source.replace(/\benum\b/g, "taxonomy").replace(/\bvalues\b/g, "terms");
 }
 
 /** `@m365` / `&m365` → `m365`. Strip the reference sigil before a lowercase
  * identifier start; the type-directed loader resolves bare names as references. */
-function rewriteReferences(source: string): string {
+function rewriteReferences(source: string): string
+{
   return source.replace(/[@&](?=[a-z])/g, "");
 }
 
@@ -41,10 +44,12 @@ function rewriteReferences(source: string): string {
  * looping to a fixpoint lowers them from the inside out. A trailing `[*]` /
  * `[1..*]` on the list is folded into the resulting cardinality.
  */
-function rewriteListTypes(source: string): string {
+function rewriteListTypes(source: string): string
+{
   let previous: string;
   let out = source;
-  do {
+  do
+  {
     previous = out;
     out = out
       .replace(/list<([^<>]+)>\s*\[1\.\.\*\]/g, "$1[+]")
@@ -57,7 +62,8 @@ function rewriteListTypes(source: string): string {
 }
 
 /** Legacy bracket cardinality → new suffix syntax. */
-function rewriteCardinality(source: string): string {
+function rewriteCardinality(source: string): string
+{
   return source
     .replace(/\s*\[0\.\.1\]/g, "?")
     .replace(/\s*\[1\.\.\*\]/g, "[+]")

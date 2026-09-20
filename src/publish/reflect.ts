@@ -12,7 +12,8 @@ const EXTENDS = "Extends";
 const NAMESPACE_ATTR = "namespace";
 
 /** One instantiable class a package provides — a palette item. */
-export interface PublishedClass {
+export interface PublishedClass
+{
   id: string; // qualified class NodeId, e.g. "Microsoft.Azure"
   concept: string; // node.typeOf — the meta concept it realises, e.g. "location"
   localId?: string; // attrs.id — the bare local name
@@ -31,18 +32,21 @@ export interface PublishedClass {
  * `Extends` chain — a consumer reading the base name finds specialized
  * applications. Two sub-annotations of one base on a target: last-wins.
  */
-export function projectAnnotations(model: TodlDocument, targetId: string): Record<string, Record<string, unknown>> {
+export function projectAnnotations(model: TodlDocument, targetId: string): Record<string, Record<string, unknown>>
+{
   // Annotation-declaration nodes and their direct base, to walk the is-a chain.
   const annIds = new Set(model.nodes.filter((n) => n.metaKind === MetaKind.Annotation).map((n) => n.id));
   const baseOf = new Map<string, string>();
-  for (const e of model.edges) {
+  for (const e of model.edges)
+  {
     if (e.kind === EXTENDS && annIds.has(String(e.from))) baseOf.set(String(e.from), String(e.to));
   }
   const chain = (name: string): string[] => {
     const names = [name];
     const seen = new Set([name]);
     let cur = baseOf.get(name);
-    while (cur !== undefined && !seen.has(cur)) {
+    while (cur !== undefined && !seen.has(cur))
+    {
       names.push(cur);
       seen.add(cur);
       cur = baseOf.get(cur);
@@ -51,12 +55,14 @@ export function projectAnnotations(model: TodlDocument, targetId: string): Recor
   };
 
   const out: Record<string, Record<string, unknown>> = {};
-  for (const edge of model.edges) {
+  for (const edge of model.edges)
+  {
     if (edge.kind !== ANNOTATED || edge.from !== targetId) continue;
     const appNode = model.nodes.find((n) => n.id === edge.to);
     if (appNode === undefined) continue;
     const params: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(appNode.attrs as Record<string, unknown>)) {
+    for (const [k, v] of Object.entries(appNode.attrs as Record<string, unknown>))
+    {
       if (k === NAMESPACE_ATTR) continue;
       params[k] = v;
     }
@@ -71,14 +77,16 @@ export function projectAnnotations(model: TodlDocument, targetId: string): Recor
  * further instantiation. `tier` compares to the "Instance" member-name string
  * because `toJSON` emits the Tier enum by name.
  */
-export function deriveClasses(model: TodlDocument, annotationsFrom?: TodlDocument): PublishedClass[] {
+export function deriveClasses(model: TodlDocument, annotationsFrom?: TodlDocument): PublishedClass[]
+{
   // Classes are enumerated from `model`, but annotations are projected from
   // `annotationsFrom` when given — so a caller can enumerate an OWN-only document
   // while still resolving icons that inherit from base annotation declarations in
   // the full closure (the special→icon chain).
   const annModel = annotationsFrom ?? model;
   const out: PublishedClass[] = [];
-  for (const n of model.nodes) {
+  for (const n of model.nodes)
+  {
     const attrs = n.attrs as Record<string, unknown>;
     if (n.tier !== "Instance" || !n.isClass) continue;
     const cls: PublishedClass = { id: n.id, concept: n.type ?? "" };

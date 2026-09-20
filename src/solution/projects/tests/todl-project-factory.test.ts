@@ -16,7 +16,8 @@ import { ProjectNodeKind } from '../project.js'
 import { TodlProjectFactory, isTodlProject, type ScaffoldFile } from '../todl-project-factory.js'
 
 // A real filesystem storage rooted at a throwaway temp dir, torn down after the test.
-async function tempStorage(t: TestContext): Promise<NodeFsStorage> {
+async function tempStorage(t: TestContext): Promise<NodeFsStorage>
+{
     const dir = await mkdtemp(join(tmpdir(), 'todl-factory-'))
     t.after(async () => { await rm(dir, { recursive: true, force: true }) })
     return new NodeFsStorage(dir)
@@ -25,7 +26,8 @@ async function tempStorage(t: TestContext): Promise<NodeFsStorage> {
 // A minimal concrete factory: one extra scaffold file, a manifest carrying an
 // unrelated field to prove saveProject preserves it, and two formats so the
 // kind-mapping is exercised (.todl → Todl, .diagram → Diagram).
-class FakeFactory extends TodlProjectFactory {
+class FakeFactory extends TodlProjectFactory
+{
     public readonly typeId = 'fake'
     public readonly title = 'Fake Project'
     public readonly description = ''
@@ -33,10 +35,12 @@ class FakeFactory extends TodlProjectFactory {
         { extension: '.diagram', kind: ProjectNodeKind.Diagram, displayName: 'Diagram' },
         { extension: '.todl', kind: ProjectNodeKind.Todl, displayName: 'TODL Definition' },
     ]
-    protected buildManifest(name: string, _bindings?: BaseBindings): ProjectManifestEnvelope {
+    protected buildManifest(name: string, _bindings?: BaseBindings): ProjectManifestEnvelope
+    {
         return { type: 'fake', name, version: 1, keep: 'me' } as ProjectManifestEnvelope & { keep: string }
     }
-    protected scaffoldContributions(): readonly ScaffoldFile[] {
+    protected scaffoldContributions(): readonly ScaffoldFile[]
+    {
         return [{ path: 'CLAUDE.md', content: 'FAKE ROOT' }]
     }
 }

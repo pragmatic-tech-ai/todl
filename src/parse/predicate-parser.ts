@@ -57,7 +57,8 @@ import {
  * complete expression and asserts nothing is left over (`expectEnd`), so a
  * malformed predicate throws rather than silently ignoring trailing tokens.
  */
-export function parsePredicate(tokens: Token[]): Expr {
+export function parsePredicate(tokens: Token[]): Expr
+{
   const parser = new PredicateParser(tokens);
   const expr = parser.parseExpression();
   parser.expectEnd();
@@ -68,14 +69,16 @@ export function parsePredicate(tokens: Token[]): Expr {
  * Cursor-driven recursive-descent parser over a predicate token slice. One
  * instance is spun up per predicate; `pos` is the read cursor into `tokens`.
  */
-class PredicateParser {
+class PredicateParser
+{
   /** Index of the next unconsumed token in `tokens`. */
   private pos = 0;
 
   constructor(private readonly tokens: Token[]) {}
 
   /** Parse a whole expression — the top of the precedence chain (`||`). */
-  parseExpression(): Expr {
+  parseExpression(): Expr
+  {
     return this.parseOr();
   }
 
@@ -86,27 +89,33 @@ class PredicateParser {
   // ───────────────────────────────────────────────────────────────────────
 
   /** `a || b || c` — logical OR, the loosest operator. Left-associative. */
-  private parseOr(): Expr {
+  private parseOr(): Expr
+  {
     let left = this.parseAnd();
-    while (this.match(TokenKind.Or)) {
+    while (this.match(TokenKind.Or))
+    {
       left = or(left, this.parseAnd());
     }
     return left;
   }
 
   /** `a && b && c` — logical AND, binds tighter than `||`. Left-associative. */
-  private parseAnd(): Expr {
+  private parseAnd(): Expr
+  {
     let left = this.parseImplies();
-    while (this.match(TokenKind.And)) {
+    while (this.match(TokenKind.And))
+    {
       left = and(left, this.parseImplies());
     }
     return left;
   }
 
   /** `a implies b` — material implication. Non-chaining (at most one). */
-  private parseImplies(): Expr {
+  private parseImplies(): Expr
+  {
     const left = this.parseComparison();
-    if (this.matchKeyword("implies")) {
+    if (this.matchKeyword("implies"))
+    {
       return implies(left, this.parseComparison());
     }
     return left;
@@ -116,7 +125,8 @@ class PredicateParser {
    * `a == b`, `a != b`, `a in b` — comparison / membership. Non-chaining: at
    * most one comparison operator per level (no `a == b == c`).
    */
-  private parseComparison(): Expr {
+  private parseComparison(): Expr
+  {
     const left = this.parsePostfix();
     if (this.matchSymbol("==")) return eq(left, this.parsePostfix());
     if (this.matchSymbol("!=")) return neq(left, this.parsePostfix());
@@ -129,9 +139,11 @@ class PredicateParser {
    * trailing `.empty` desugars to `== none` (an empty set equals `none`)
    * instead of producing a member access.
    */
-  private parsePostfix(): Expr {
+  private parsePostfix(): Expr
+  {
     let left = this.parsePrimary();
-    while (this.match(TokenKind.Dot)) {
+    while (this.match(TokenKind.Dot))
+    {
       const member_ = this.expectIdentifier();
       left = member_ === "empty" ? eq(left, NONE) : member(left, member_);
     }
@@ -143,28 +155,34 @@ class PredicateParser {
    * parenthesised sub-expression (which re-enters the top of the chain), an
    * `&name` reference, or a bare identifier. Anything else is a syntax error.
    */
-  private parsePrimary(): Expr {
+  private parsePrimary(): Expr
+  {
     if (this.matchKeyword("this")) return THIS;
     if (this.matchKeyword("none")) return NONE;
-    if (this.match(TokenKind.LParen)) {
+    if (this.match(TokenKind.LParen))
+    {
       // Parentheses reset precedence: parse a whole expression, then require `)`.
       const inner = this.parseExpression();
       this.expect(TokenKind.RParen);
       return inner;
     }
-    if (this.match(TokenKind.Amp)) {
+    if (this.match(TokenKind.Amp))
+    {
       // `&name` — an explicit name reference; the `&` is consumed, the ident kept.
       return name(this.expectIdentifier());
     }
-    if (this.check(TokenKind.Identifier)) {
+    if (this.check(TokenKind.Identifier))
+    {
       return name(this.advance().value);
     }
     throw this.error("expected an expression");
   }
 
   /** Assert the whole token slice was consumed — else the predicate is malformed. */
-  expectEnd(): void {
-    if (this.pos < this.tokens.length) {
+  expectEnd(): void
+  {
+    if (this.pos < this.tokens.length)
+    {
       throw this.error("unexpected trailing tokens in predicate");
     }
   }
@@ -177,24 +195,29 @@ class PredicateParser {
   // ───────────────────────────────────────────────────────────────────────
 
   /** The token under the cursor, or `undefined` past the end. */
-  private current(): Token | undefined {
+  private current(): Token | undefined
+  {
     return this.tokens[this.pos];
   }
 
   /** Is the current token of `kind`? (Peek only, no consume.) */
-  private check(kind: TokenKind): boolean {
+  private check(kind: TokenKind): boolean
+  {
     return this.current()?.kind === kind;
   }
 
   /** Is the current token the identifier `word`? Keywords are lexed as idents. */
-  private checkKeyword(word: string): boolean {
+  private checkKeyword(word: string): boolean
+  {
     const token = this.current();
     return token?.kind === TokenKind.Identifier && token.value === word;
   }
 
   /** Consume the current token if it is `kind`; report whether it did. */
-  private match(kind: TokenKind): boolean {
-    if (this.check(kind)) {
+  private match(kind: TokenKind): boolean
+  {
+    if (this.check(kind))
+    {
       this.pos += 1;
       return true;
     }
@@ -202,9 +225,11 @@ class PredicateParser {
   }
 
   /** Match a SymbolOp token with exactly `value` (e.g. `==`, `!=`). */
-  private matchSymbol(value: string): boolean {
+  private matchSymbol(value: string): boolean
+  {
     const token = this.current();
-    if (token?.kind === TokenKind.SymbolOp && token.value === value) {
+    if (token?.kind === TokenKind.SymbolOp && token.value === value)
+    {
       this.pos += 1;
       return true;
     }
@@ -212,8 +237,10 @@ class PredicateParser {
   }
 
   /** Consume the current token if it is the keyword `word`; report success. */
-  private matchKeyword(word: string): boolean {
-    if (this.checkKeyword(word)) {
+  private matchKeyword(word: string): boolean
+  {
+    if (this.checkKeyword(word))
+    {
       this.pos += 1;
       return true;
     }
@@ -221,7 +248,8 @@ class PredicateParser {
   }
 
   /** Consume and return the current token; throw if already at the end. */
-  private advance(): Token {
+  private advance(): Token
+  {
     const token = this.current();
     if (token === undefined) throw this.error("unexpected end of predicate");
     this.pos += 1;
@@ -229,18 +257,21 @@ class PredicateParser {
   }
 
   /** Consume the current token, requiring it to be `kind`; throw otherwise. */
-  private expect(kind: TokenKind): Token {
+  private expect(kind: TokenKind): Token
+  {
     if (!this.check(kind)) throw this.error(`expected "${kind}"`);
     return this.advance();
   }
 
   /** Consume an identifier token and return its text. */
-  private expectIdentifier(): string {
+  private expectIdentifier(): string
+  {
     return this.expect(TokenKind.Identifier).value;
   }
 
   /** Build a syntax Error pinned to the current token's line:column (or EOF). */
-  private error(message: string): Error {
+  private error(message: string): Error
+  {
     const token = this.current();
     if (token === undefined) return new Error(`${message} at end of predicate`);
     const got = token.value.length > 0 ? token.value : token.kind;

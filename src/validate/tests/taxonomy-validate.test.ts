@@ -6,7 +6,8 @@ import { MetaKind } from "../../model/kinds.js";
 import { Repository } from "../../model/model.js";
 import { DiagnosticCode } from "../../diagnostics/diagnostic.js";
 
-function codes(text: string): DiagnosticCode[] {
+function codes(text: string): DiagnosticCode[]
+{
   return load([{ uri: "t.todl", text: `namespace n {\n${text}\n}` }]).model.validate().map((d) => d.code);
 }
 

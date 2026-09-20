@@ -8,7 +8,8 @@ import { SymbolKind } from "./symbols.js";
 
 export interface Definition { symbol: string; uri: string; nameRange: Range; kind: SymbolKind }
 
-export interface DefinitionIndex {
+export interface DefinitionIndex
+{
   get(symbol: string): Definition | null;
   definitionAt(uri: string, pos: Position): Definition | null;
   all(): Definition[];
@@ -16,14 +17,16 @@ export interface DefinitionIndex {
 
 type Add = (uri: string, symbol: string, span: SourceSpan | undefined, kind: SymbolKind) => void;
 
-export function buildDefinitionIndex(files: Map<string, NamespaceNode>): DefinitionIndex {
+export function buildDefinitionIndex(files: Map<string, NamespaceNode>): DefinitionIndex
+{
   const defs: Definition[] = [];
   const add: Add = (uri, symbol, span, kind) => {
     if (span === undefined) return;
     defs.push({ symbol, uri, kind, nameRange: spanToRange(span) });
   };
 
-  for (const [uri, ns] of files) {
+  for (const [uri, ns] of files)
+  {
     for (const decl of ns.declarations) addDecl(uri, decl, add);
   }
 
@@ -37,8 +40,10 @@ export function buildDefinitionIndex(files: Map<string, NamespaceNode>): Definit
   };
 }
 
-function addDecl(uri: string, decl: Declaration, add: Add): void {
-  switch (decl.kind) {
+function addDecl(uri: string, decl: Declaration, add: Add): void
+{
+  switch (decl.kind)
+  {
     case DeclKind.Primitive: add(uri, decl.name, decl.nameSpan, SymbolKind.Primitive); break;
     case DeclKind.Concept:   add(uri, decl.name, decl.nameSpan, SymbolKind.Concept); break;
     case DeclKind.Taxonomy:
@@ -53,18 +58,21 @@ function addDecl(uri: string, decl: Declaration, add: Add): void {
   }
 }
 
-function addInstance(uri: string, inst: InstanceDecl, add: Add): void {
+function addInstance(uri: string, inst: InstanceDecl, add: Add): void
+{
   add(uri, inst.id, inst.idSpan, inst.isClass ? SymbolKind.Term : SymbolKind.Instance);
   for (const child of inst.children) addInstance(uri, child, add);
 }
 
-function addTerm(uri: string, term: Term, add: Add): void {
+function addTerm(uri: string, term: Term, add: Add): void
+{
   // Terms are keyed by bare id — how they are referenced from instances.
   add(uri, term.id, term.idSpan, SymbolKind.Term);
   for (const child of term.children) addTerm(uri, child, add);
 }
 
-function contains(range: Range, pos: Position): boolean {
+function contains(range: Range, pos: Position): boolean
+{
   const afterStart = pos.line > range.start.line ||
     (pos.line === range.start.line && pos.character >= range.start.character);
   const beforeEnd = pos.line < range.end.line ||

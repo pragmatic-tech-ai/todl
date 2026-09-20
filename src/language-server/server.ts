@@ -11,7 +11,8 @@ import {
 } from "@pragmatic-tech-ai/todl/language-service";
 import { ProjectRegistry, PushedSourceProvider, type SourceProvider } from "./workspace.js";
 
-export function createServer(connection: Connection, makeFsProvider?: () => SourceProvider): void {
+export function createServer(connection: Connection, makeFsProvider?: () => SourceProvider): void
+{
   const documents = new TextDocuments(TextDocument);
   const registry = new ProjectRegistry();
   let provider: SourceProvider = new PushedSourceProvider();
@@ -43,18 +44,22 @@ export function createServer(connection: Connection, makeFsProvider?: () => Sour
   });
 
   let timer: ReturnType<typeof setTimeout> | undefined;
-  function scheduleRevalidate(): void {
+  function scheduleRevalidate(): void
+  {
     if (timer !== undefined) clearTimeout(timer);
     timer = setTimeout(() => { timer = undefined; revalidate(); }, 200);
   }
 
-  function revalidate(): void {
-    for (const project of registry.dirtyProjects()) {
+  function revalidate(): void
+  {
+    for (const project of registry.dirtyProjects())
+    {
       project.dirty = false;
       const sources = provider.sourcesFor(project, documents);
       const analysis = analyze(sources, project.bases);
       project.analysis = analysis;
-      for (const [uri, diagnostics] of analysis.diagnosticsByUri) {
+      for (const [uri, diagnostics] of analysis.diagnosticsByUri)
+      {
         connection.sendDiagnostics({ uri, diagnostics });
       }
     }
@@ -126,7 +131,8 @@ export function createServer(connection: Connection, makeFsProvider?: () => Sour
   });
   connection.onWorkspaceSymbol((p) => {
     const out = [];
-    for (const project of registry.all()) {
+    for (const project of registry.all())
+    {
       if (project.analysis !== null) out.push(...workspaceSymbols(project.analysis, p.query));
     }
     return out;

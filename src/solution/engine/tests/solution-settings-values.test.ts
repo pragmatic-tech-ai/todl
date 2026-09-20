@@ -5,7 +5,8 @@ import { SettingDefinition, SettingKind } from '@pragmatic-tech-ai/mural/framewo
 import { SettingBagDefinition } from '../setting-bag-definition.js'
 import { Solution } from '../solution.js'
 
-function field(key: string, def: unknown): SettingDefinition {
+function field(key: string, def: unknown): SettingDefinition
+{
     const d = new SettingDefinition()
     d.Key = key; d.Kind = SettingKind.String; d.Default = def
     return d

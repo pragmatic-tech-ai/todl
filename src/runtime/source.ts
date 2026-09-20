@@ -8,15 +8,18 @@
 import type { TodlDocument } from "../emit/json.js";
 
 /** Something that yields a document of instances to merge into a graph. */
-export interface ModelSource {
+export interface ModelSource
+{
   Load(): Promise<TodlDocument>;
 }
 
 /** Population from an in-memory compiled document (P1 embedded / P3 snapshot). */
-export class DocumentSource implements ModelSource {
+export class DocumentSource implements ModelSource
+{
   constructor(private readonly document: TodlDocument) {}
 
-  Load(): Promise<TodlDocument> {
+  Load(): Promise<TodlDocument>
+  {
     return Promise.resolve(this.document);
   }
 }

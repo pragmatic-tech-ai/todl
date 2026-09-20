@@ -6,7 +6,8 @@ type SettingValues = Record<string, string | number | boolean>
 // references, and per-bag cross-project setting values. Parsed from / written to
 // `solution.json`. Mirrors the todl package's `parseManifest` convention:
 // JSON.parse + shape validation, not a schema library.
-export class SolutionManifest {
+export class SolutionManifest
+{
     static readonly KIND = 'todl-solution'
     static readonly VERSION = 1
 
@@ -16,17 +17,21 @@ export class SolutionManifest {
         public readonly settings: Record<string, SettingValues>,
     ) {}
 
-    static create(name: string): SolutionManifest {
+    static create(name: string): SolutionManifest
+    {
         return new SolutionManifest(name, [], {})
     }
 
-    static parse(text: string): SolutionManifest {
+    static parse(text: string): SolutionManifest
+    {
         const raw = JSON.parse(text) as Record<string, unknown>
-        if (raw.kind !== SolutionManifest.KIND) {
+        if (raw.kind !== SolutionManifest.KIND)
+        {
             throw new Error(`Not a solution file (kind="${String(raw.kind)}").`)
         }
         const version = typeof raw.version === 'number' ? raw.version : 0
-        if (version > SolutionManifest.VERSION) {
+        if (version > SolutionManifest.VERSION)
+        {
             throw new Error('Solution was made by a newer version of the app.')
         }
         const name = typeof raw.name === 'string' ? raw.name : 'Solution'
@@ -42,7 +47,8 @@ export class SolutionManifest {
         return new SolutionManifest(name, members, settings)
     }
 
-    stringify(): string {
+    stringify(): string
+    {
         return JSON.stringify({
             kind: SolutionManifest.KIND,
             version: SolutionManifest.VERSION,

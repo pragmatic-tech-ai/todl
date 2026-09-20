@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { Tier, EdgeKind, type Node, type Edge, type NodeId } from "../graph.js";
 import type { GraphStore } from "../graph-store.js";
 
-function node(id: NodeId, type = "thing"): Node {
+function node(id: NodeId, type = "thing"): Node
+{
   return {
     id,
     tier: Tier.Instance,
@@ -18,12 +19,14 @@ function node(id: NodeId, type = "thing"): Node {
     attrs: new Map(),
   };
 }
-function edge(from: NodeId, to: NodeId, via: NodeId | null = "rel"): Edge {
+function edge(from: NodeId, to: NodeId, via: NodeId | null = "rel"): Edge
+{
   return { kind: EdgeKind.Relationship, via, from, to };
 }
 
 /** Contract every GraphStore backend must satisfy (spec §9). Phase 7 reuses this. */
-export function describeGraphStore(name: string, make: () => GraphStore): void {
+export function describeGraphStore(name: string, make: () => GraphStore): void
+{
   test(`${name}: addNode / getNode / hasNode / nodeCount`, () => {
     const s = make();
     assert.equal(s.hasNode("a"), false);

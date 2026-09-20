@@ -4,7 +4,8 @@ import { check } from "../../api.js";
 import { ModelDraft } from "../model-draft.js";
 
 // A meta-model base: concepts + viewpoints the arch files draw on.
-function base() {
+function base()
+{
   return check([{
     uri: "mm.todl",
     text: `namespace mm {

@@ -7,7 +7,8 @@ import { EdgeKind, Direction } from "../../model/graph.js";
 import { Severity } from "../../diagnostics/diagnostic.js";
 
 /** Wrap a model body in a single-namespace source with the slot/component schema. */
-function loadModel(instances: string, gen = new FakeIdGenerator()) {
+function loadModel(instances: string, gen = new FakeIdGenerator())
+{
   const src = `namespace t {
     concept slot { environment : string; }
     concept component { slots : slot[]; primary : slot?; }

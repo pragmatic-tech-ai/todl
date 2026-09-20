@@ -16,13 +16,15 @@ export const DEFAULT_SCOPE = "@pragmatic-tech-ai";
 /** The `todl` block embedded in a generated package.json. The resolve/load adapter
  *  identifies a TODL package by THIS (kind + id), never by the npm scope — so the
  *  scope can change without breaking resolution. */
-export interface TodlPackageMeta {
+export interface TodlPackageMeta
+{
   kind: ProjectType;
   id: string;
 }
 
 /** The generated npm package.json for a published TODL package. */
-export interface PackageJson {
+export interface PackageJson
+{
   name: string;
   version: string;
   dependencies: Record<string, string>;
@@ -32,24 +34,29 @@ export interface PackageJson {
   files: string[];
 }
 
-export interface PackageJsonOptions {
+export interface PackageJsonOptions
+{
   /** The npm scope, including the leading `@`, without a trailing slash.
    *  Defaults to {@link DEFAULT_SCOPE}. */
   scope?: string;
 }
 
 /** The publishable id of a manifest (meta-models and libraries carry `id`). */
-function packageId(manifest: ProjectManifest): string {
-  if (manifest.id === undefined || manifest.id.length === 0) {
+function packageId(manifest: ProjectManifest): string
+{
+  if (manifest.id === undefined || manifest.id.length === 0)
+  {
     throw new Error(`project "${manifest.name}" (${manifest.type}) has no id to publish`);
   }
   return manifest.id;
 }
 
 /** The publishable version of a manifest, by kind. */
-function packageVersion(manifest: ProjectManifest): string {
+function packageVersion(manifest: ProjectManifest): string
+{
   const version = manifest.type === ProjectType.MetaModel ? manifest.modelVersion : manifest.libVersion;
-  if (version === undefined || version.length === 0) {
+  if (version === undefined || version.length === 0)
+  {
     throw new Error(`project "${manifest.name}" (${manifest.type}) has no publishable version`);
   }
   return version;
@@ -60,8 +67,10 @@ function packageVersion(manifest: ProjectManifest): string {
  * and library dependencies (`metaModel`, `libraries`) become npm `dependencies`,
  * each pinned to its exact version and prefixed with the configured scope.
  */
-export function toPackageJson(manifest: ProjectManifest, options: PackageJsonOptions = {}): PackageJson {
-  if (manifest.type === ProjectType.Architecture) {
+export function toPackageJson(manifest: ProjectManifest, options: PackageJsonOptions = {}): PackageJson
+{
+  if (manifest.type === ProjectType.Architecture)
+  {
     throw new Error(
       `architecture "${manifest.name}" is not published; it is built by the application build system`,
     );
@@ -71,10 +80,12 @@ export function toPackageJson(manifest: ProjectManifest, options: PackageJsonOpt
 
   const dependencies: Record<string, string> = {};
   // A library depends on its meta-model; a meta-model has no TODL dependency.
-  if (manifest.metaModel !== undefined) {
+  if (manifest.metaModel !== undefined)
+  {
     dependencies[`${scope}/${manifest.metaModel.id}`] = manifest.metaModel.version;
   }
-  for (const library of manifest.libraries ?? []) {
+  for (const library of manifest.libraries ?? [])
+  {
     dependencies[`${scope}/${library.id}`] = library.version;
   }
 
