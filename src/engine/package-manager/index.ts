@@ -33,6 +33,33 @@ export {
   type ResolvedClosure,
 } from "./resolve.js";
 export { readInstalledPackages } from "./node-loader.js";
+// The registry-engine abstraction (the type-keyed subsystem): the registry +
+// connection contracts, the two factory kinds, the catalog, the host seams, and
+// the PackageManagerService orchestrator.
+export {
+  type IPackageRegistry,
+  type PublishablePackage,
+  type ConnectionStatus,
+} from "./engine/package-registry.js";
+export {
+  ConnectionFieldKind,
+  type IPackageRegistryConnection,
+  type ConnectionSpec,
+  type ConnectionSettingField,
+  type ConnectionPreset,
+} from "./engine/registry-connection.js";
+export {
+  type IPackageRegistryFactory,
+  type IPackageRegistryConnectionFactory,
+} from "./engine/registry-factory.js";
+export {
+  PackageRegistryCatalog,
+  PackageRegistryCatalogKey,
+  type IPackageRegistryCatalog,
+} from "./engine/package-registry-catalog.js";
+export { ConnectionStoreKey, type IConnectionStore } from "./engine/connection-store.js";
+export { SecretStoreKey, type ISecretStore } from "./engine/secret-store.js";
+export { PackageManagerService, type PackageListing } from "./engine/package-manager-service.js";
 export { readProject, type Project } from "./project.js";
 export { resolveRegistryConfig, type RegistryCliOptions } from "./registry/config.js";
 export {
