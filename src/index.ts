@@ -99,7 +99,7 @@ export {
     type PackageSink,
 } from './publish/stores.js';
 export { deriveClasses, projectAnnotations, type PublishedClass } from './publish/reflect.js';
-export { StoragePackageSource } from './package-manager/storage-package-source.js';
+export { StoragePackageSource } from './engine/package-manager/storage-package-source.js';
 
 export {
     ExprKind,
@@ -155,38 +155,38 @@ export { tokenize, TokenKind, type Token } from './parse/lexer.js';
 // ── Solution (SolutionManager + cross-project settings) ──
 // The engine composition module is authored in .mu (a plain `module` → a headless
 // Module) and compiled to .mu.js by `npm run compile:mu`.
-export { SolutionServicesEngine } from './solution/solution-services-engine.mu.js';
-export { SolutionManagerService } from './solution/engine/solution-manager-service.js';
+export { SolutionServicesEngine } from './engine/solution-manager/solution-services-engine.mu.js';
+export { SolutionManagerService } from './engine/solution-manager/engine/solution-manager-service.js';
 export {
     ProjectFactoryRegistryKey,
     type IStorageProviderRegistry,
     type IProjectFactoryRegistry,
-} from './solution/engine/host-services.js';
-export { ProjectFactoryRegistry } from './solution/engine/project-factory-registry.js';
-export { type INotificationService } from './solution/engine/notification-service.js';
-export { SolutionSettingsRegistry } from './solution/engine/solution-settings-registry.js';
-export { SettingBagDefinition } from './solution/engine/setting-bag-definition.js';
-export { SolutionSettingBag } from './solution/engine/solution-setting-bag.js';
-export { Solution } from './solution/engine/solution.js';
-export { SolutionSession } from './solution/engine/solution-session.js';
-export { SolutionMember } from './solution/engine/solution-member.js';
-export { SolutionManifest } from './solution/engine/solution-manifest.js';
-export { type SolutionMemberRef, SolutionPath } from './solution/engine/solution-member-ref.js';
+} from './engine/solution-manager/engine/host-services.js';
+export { ProjectFactoryRegistry } from './engine/solution-manager/engine/project-factory-registry.js';
+export { type INotificationService } from './engine/solution-manager/engine/notification-service.js';
+export { SolutionSettingsRegistry } from './engine/solution-manager/engine/solution-settings-registry.js';
+export { SettingBagDefinition } from './engine/solution-manager/engine/setting-bag-definition.js';
+export { SolutionSettingBag } from './engine/solution-manager/engine/solution-setting-bag.js';
+export { Solution } from './engine/solution-manager/engine/solution.js';
+export { SolutionSession } from './engine/solution-manager/engine/solution-session.js';
+export { SolutionMember } from './engine/solution-manager/engine/solution-member.js';
+export { SolutionManifest } from './engine/solution-manager/engine/solution-manifest.js';
+export { type SolutionMemberRef, SolutionPath } from './engine/solution-manager/engine/solution-member-ref.js';
 export {
     SolutionTreeVM,
     SolutionNodeVM,
     SolutionMemberNodeVM,
     type MemberStorageFor,
-} from './solution/presentation/solution-tree-vm.js';
-export { SettingBagGrid } from './solution/presentation/setting-bag-grid.js';
+} from './engine/solution-manager/presentation/solution-tree-vm.js';
+export { SettingBagGrid } from './engine/solution-manager/presentation/setting-bag-grid.js';
 export {
     type IProjectFactory,
     type MemberStorageResolver,
     type ProjectFactoryResolver,
-} from './solution/engine/project-factory.js';
+} from './engine/solution-manager/engine/project-factory.js';
 
 // ── Projects (headless Project model + factory contracts + TODL-authoring base) ──
-export { Project, ProjectNode, ProjectNodeKind } from './solution/projects/project.js';
+export { Project, ProjectNode, ProjectNodeKind } from './engine/solution-manager/projects/project.js';
 export {
     PROJECT_MANIFEST_FILENAME,
     ProducerKind,
@@ -199,8 +199,8 @@ export {
     type IPublishableProjectFactory,
     type IPresentationProjectFactory,
     type IVersionedProjectFactory,
-} from './solution/projects/project-factory.js';
-export { type BaseRef, type BaseBindings } from './solution/projects/base-binding.js';
+} from './engine/solution-manager/projects/project-factory.js';
+export { type BaseRef, type BaseBindings } from './engine/solution-manager/projects/base-binding.js';
 export {
     TodlProjectFactory,
     isTodlProject,
@@ -208,39 +208,39 @@ export {
     CLAUDE_DIR,
     TODL_BASE_SCAFFOLD,
     type ScaffoldFile,
-} from './solution/projects/todl-project-factory.js';
-export { ArchitectureProjectFactory } from './solution/projects/architecture-project-factory.js';
-export { MetaModelProjectFactory } from './solution/projects/meta-model-project-factory.js';
-export { LibraryProjectFactory } from './solution/projects/library-project-factory.js';
-export { DefaultProjectFactoryRegistry } from './solution/projects/default-project-factory-registry.js';
+} from './engine/solution-manager/projects/todl-project-factory.js';
+export { ArchitectureProjectFactory } from './engine/solution-manager/projects/architecture-project-factory.js';
+export { MetaModelProjectFactory } from './engine/solution-manager/projects/meta-model-project-factory.js';
+export { LibraryProjectFactory } from './engine/solution-manager/projects/library-project-factory.js';
+export { DefaultProjectFactoryRegistry } from './engine/solution-manager/projects/default-project-factory-registry.js';
 export {
     isProducer,
     type IProducerProjectFactory,
-} from './solution/projects/producer-project-factory.js';
+} from './engine/solution-manager/projects/producer-project-factory.js';
 // Producer seams (concrete impls live app-side; todl owns the contracts + keys).
 export {
     PresentationBakerKey,
     type IPresentationBaker,
     type BakeOptions,
     type BakeResult,
-} from './solution/projects/presentation-baker.js';
+} from './engine/solution-manager/projects/presentation-baker.js';
 export {
     ProducerBackendsKey,
     type IProducerBackends,
-} from './solution/projects/producer-backends.js';
-export { BaseResolver } from './solution/projects/base-resolver.js';
+} from './engine/solution-manager/projects/producer-backends.js';
+export { BaseResolver } from './engine/solution-manager/projects/base-resolver.js';
 // Producer helpers (headless): source collection, package sink, presentation emitter, bundle scan.
-export { TodlSources } from './solution/projects/todl-sources.js';
-export { StoragePackageSink } from './solution/projects/storage-package-sink.js';
+export { TodlSources } from './engine/solution-manager/projects/todl-sources.js';
+export { StoragePackageSink } from './engine/solution-manager/projects/storage-package-sink.js';
 export {
     PresentationModel,
     OntologyKind,
     type PresentationFacets,
-} from './solution/projects/presentation-model.js';
+} from './engine/solution-manager/projects/presentation-model.js';
 export {
     LibraryResources,
     type LibraryBundleManifest,
     type ScannedResources,
     type PublishedClass as LibraryPublishedClass,
-} from './solution/projects/library-bundle.js';
-export { type MetaModelManifestFile } from './solution/projects/meta-model-manifest.js';
+} from './engine/solution-manager/projects/library-bundle.js';
+export { type MetaModelManifestFile } from './engine/solution-manager/projects/meta-model-manifest.js';

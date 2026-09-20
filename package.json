@@ -31,12 +31,12 @@
       "require": "./dist/language-server/index.js"
     },
     "./package-manager": {
-      "types": "./dist/package-manager/index.d.ts",
+      "types": "./dist/engine/package-manager/index.d.ts",
       "import": {
-        "development": "./src/package-manager/index.ts",
-        "default": "./dist/package-manager/index.js"
+        "development": "./src/engine/package-manager/index.ts",
+        "default": "./dist/engine/package-manager/index.js"
       },
-      "require": "./dist/package-manager/index.js"
+      "require": "./dist/engine/package-manager/index.js"
     },
     "./domain": {
       "types": "./dist/domain/index.d.ts",
@@ -49,7 +49,7 @@
   },
   "bin": {
     "todl-language-server": "./dist/language-server/stdio.js",
-    "todl": "./dist/package-manager/cli.js"
+    "todl": "./dist/engine/package-manager/cli.js"
   },
   "files": [
     "dist",
