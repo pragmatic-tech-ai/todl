@@ -2,7 +2,8 @@ import { ServiceBase, ServiceKey, type IServiceProvider } from '@pragmatic-tech-
 import { PackageRegistryCatalogKey, type IPackageRegistryCatalog } from './package-registry-catalog.js'
 import { ConnectionStoreKey, type IConnectionStore } from './connection-store.js'
 import { SecretStoreKey, type ISecretStore } from './secret-store.js'
-import { type ConnectionSpec } from './registry-connection.js'
+import { EnvironmentVariablesKey, type IEnvironmentVariables } from './environment-variables.js'
+import { TokenSource, type ConnectionSpec, type ConnectionView } from './registry-connection.js'
 import {
     type IPackageRegistry,
     type PublishablePackage,
@@ -33,10 +34,14 @@ export class PackageManagerService extends ServiceBase
         'no registry factory for connection type "{type}"'
     // Thrown when an operation names a connection the store does not hold.
     private static readonly UnknownConnectionMessage = 'no connection "{id}"'
+    // Thrown when a default-connection op runs with no connections configured.
+    private static readonly NoDefaultMessage = 'no default connection is configured'
 
     private readonly catalog: IPackageRegistryCatalog
     private readonly connectionStore: IConnectionStore
     private readonly secretStore: ISecretStore
+    // Optional — env-sourced tokens degrade to empty when no provider is registered.
+    private readonly environment: IEnvironmentVariables | undefined
     // Live clients, one per connection Id, built on first use and dropped when the
     // connection is added again (an update) or removed.
     private readonly registries = new Map<string, IPackageRegistry>()
@@ -47,6 +52,7 @@ export class PackageManagerService extends ServiceBase
         this.catalog = provider.getRequired(PackageRegistryCatalogKey)
         this.connectionStore = provider.getRequired(ConnectionStoreKey)
         this.secretStore = provider.getRequired(SecretStoreKey)
+        this.environment = provider.get(EnvironmentVariablesKey)
     }
 
     // Persist a connection (and its secret, if any), after checking the catalog can
@@ -68,6 +74,69 @@ export class PackageManagerService extends ServiceBase
     public Connections(): Promise<readonly ConnectionSpec[]>
     {
         return this.connectionStore.All()
+    }
+
+    // Merge a partial update into an existing connection and drop its cached client.
+    public async UpdateConnection(id: string, partial: Partial<ConnectionSpec>): Promise<void>
+    {
+        const existing = await this.connectionStore.Get(id)
+        if (existing === undefined)
+        {
+            throw new Error(PackageManagerService.UnknownConnectionMessage.replace('{id}', id))
+        }
+        await this.connectionStore.Save({ ...existing, ...partial, Id: id })
+        this.registries.delete(id)
+    }
+
+    // Store a typed secret for a connection and switch it to the Stored source.
+    public async SetToken(id: string, token: string): Promise<void>
+    {
+        await this.secretStore.Set(id, token)
+        await this.UpdateConnection(id, { TokenSource: TokenSource.Stored })
+    }
+
+    // Point a connection at an environment variable for its token.
+    public async UseEnvToken(id: string, varName: string): Promise<void>
+    {
+        await this.UpdateConnection(id, { TokenSource: TokenSource.Env, TokenEnvVar: varName })
+    }
+
+    public DefaultId(): Promise<string | undefined>
+    {
+        return this.connectionStore.DefaultId()
+    }
+
+    public SetDefault(id: string): Promise<void>
+    {
+        return this.connectionStore.SetDefault(id)
+    }
+
+    // The candidate environment-variable names for an env-sourced token.
+    public ListEnvVars(): string[]
+    {
+        return [...(this.environment?.Names() ?? [])]
+    }
+
+    // Host/renderer-facing view of every connection: spec fields plus derived state
+    // (whether a token resolves, and the default flag). Never exposes a token value.
+    public async ListViews(): Promise<ConnectionView[]>
+    {
+        const defaultId = await this.connectionStore.DefaultId()
+        const views: ConnectionView[] = []
+        for (const spec of await this.connectionStore.All())
+        {
+            views.push({
+                Id: spec.Id,
+                DisplayName: spec.DisplayName,
+                RegistryType: spec.RegistryType,
+                Settings: spec.Settings,
+                TokenSource: spec.TokenSource ?? TokenSource.Stored,
+                TokenEnvVar: spec.TokenEnvVar ?? '',
+                HasToken: (await this.ResolveSecret(spec)).length > 0,
+                IsDefault: spec.Id === defaultId,
+            })
+        }
+        return views
     }
 
     // Drop a connection everywhere it lives: the spec, its secret, and any cached
@@ -143,19 +212,23 @@ export class PackageManagerService extends ServiceBase
     }
 
     // Build (and cache) the live client for a connection: resolve its spec, resolve
-    // its secret, build the connection through the type's connection factory, then
-    // the client through the type's registry factory.
-    public async RegistryFor(connectionId: string): Promise<IPackageRegistry>
+    // its secret (stored or env), build the connection through the type's connection
+    // factory, then the client through the type's registry factory. With no id, the
+    // default connection is used.
+    public async RegistryFor(connectionId?: string): Promise<IPackageRegistry>
     {
-        const cached = this.registries.get(connectionId)
+        const id = connectionId ?? (await this.connectionStore.DefaultId())
+        if (id === undefined)
+        {
+            throw new Error(PackageManagerService.NoDefaultMessage)
+        }
+        const cached = this.registries.get(id)
         if (cached !== undefined) return cached
 
-        const spec = await this.connectionStore.Get(connectionId)
+        const spec = await this.connectionStore.Get(id)
         if (spec === undefined)
         {
-            throw new Error(
-                PackageManagerService.UnknownConnectionMessage.replace('{id}', connectionId),
-            )
+            throw new Error(PackageManagerService.UnknownConnectionMessage.replace('{id}', id))
         }
         const connectionFactory = this.catalog.ConnectionFactory(spec.RegistryType)
         const registryFactory = this.catalog.RegistryFactory(spec.RegistryType)
@@ -165,10 +238,21 @@ export class PackageManagerService extends ServiceBase
                 PackageManagerService.UnknownTypeMessage.replace('{type}', spec.RegistryType),
             )
         }
-        const secret = await this.secretStore.Get(connectionId)
-        const connection = connectionFactory.Create(spec, secret)
+        const connection = connectionFactory.Create(spec, await this.ResolveSecret(spec))
         const registry = registryFactory.Create(connection)
-        this.registries.set(connectionId, registry)
+        this.registries.set(id, registry)
         return registry
+    }
+
+    // Resolve a connection's token: an env-sourced connection reads the named
+    // variable (empty when unset or no env provider), a stored one reads the secret
+    // store. Empty string when neither yields a value.
+    private async ResolveSecret(spec: ConnectionSpec): Promise<string>
+    {
+        if (spec.TokenSource === TokenSource.Env)
+        {
+            return this.environment?.Get(spec.TokenEnvVar ?? '') ?? ''
+        }
+        return (await this.secretStore.Get(spec.Id)) ?? ''
     }
 }

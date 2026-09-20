@@ -11,6 +11,10 @@ export interface IConnectionStore
     Get(id: string): Promise<ConnectionSpec | undefined>
     Save(spec: ConnectionSpec): Promise<void>
     Delete(id: string): Promise<void>
+    // The default connection id (used by non-connection-scoped ops), or undefined
+    // when there are no connections. Persisted alongside the specs by the host.
+    DefaultId(): Promise<string | undefined>
+    SetDefault(id: string): Promise<void>
 }
 
 // The container key the connection store registers under. A standalone const (not

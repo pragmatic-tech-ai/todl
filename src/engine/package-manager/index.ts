@@ -48,11 +48,17 @@ export {
 } from "./engine/package-registry.js";
 export {
   ConnectionFieldKind,
+  TokenSource,
   type IPackageRegistryConnection,
   type ConnectionSpec,
+  type ConnectionView,
   type ConnectionSettingField,
   type ConnectionPreset,
 } from "./engine/registry-connection.js";
+export {
+  EnvironmentVariablesKey,
+  type IEnvironmentVariables,
+} from "./engine/environment-variables.js";
 export {
   type IPackageRegistryFactory,
   type IPackageRegistryConnectionFactory,

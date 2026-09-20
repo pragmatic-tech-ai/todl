@@ -37,15 +37,44 @@ export interface ConnectionPreset
     Settings: Record<string, string>
 }
 
+// Where a connection's auth token comes from: a value kept in ISecretStore
+// (Stored), or read live from an environment variable (Env). A real enum, not a
+// string union, so the service branches on a member.
+export enum TokenSource
+{
+    Stored = 'stored',
+    Env = 'env',
+}
+
 // The persisted, UI-round-trippable descriptor of a connection. Strings only, so
-// it crosses IPC and serializes cleanly; the secret lives in ISecretStore keyed by
-// this Id, never inline here.
+// it crosses IPC and serializes cleanly; a Stored secret lives in ISecretStore
+// keyed by this Id (never inline here), an Env secret is read from TokenEnvVar.
 export interface ConnectionSpec
 {
     Id: string
     DisplayName: string
     RegistryType: string
     Settings: Record<string, string>
+    // Undefined ⇒ Stored (the default). Set to Env to source the token from
+    // TokenEnvVar instead of the secret store.
+    TokenSource?: TokenSource
+    // The env-var name holding the token when TokenSource === Env.
+    TokenEnvVar?: string
+}
+
+// What the host / renderer sees for a connection: its spec fields plus derived
+// state — whether a token resolves (HasToken; never the value itself) and whether
+// it is the default connection.
+export interface ConnectionView
+{
+    Id: string
+    DisplayName: string
+    RegistryType: string
+    Settings: Record<string, string>
+    TokenSource: TokenSource
+    TokenEnvVar: string
+    HasToken: boolean
+    IsDefault: boolean
 }
 
 // A live connection to a registry backend, built from a ConnectionSpec by an

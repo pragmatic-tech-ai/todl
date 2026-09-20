@@ -3,6 +3,7 @@
 // these fakes, never a real network / disk registry.
 import { type IConnectionStore } from '../connection-store.js'
 import { type ISecretStore } from '../secret-store.js'
+import { type IEnvironmentVariables } from '../environment-variables.js'
 import {
     type IPackageRegistry,
     type PublishablePackage,
@@ -20,10 +21,12 @@ import {
     type ConnectionSpec,
 } from '../registry-connection.js'
 
-// An in-memory IConnectionStore.
+// An in-memory IConnectionStore. The first saved connection becomes the default;
+// deleting the default promotes the first remaining one (mirrors the host store).
 export class FakeConnectionStore implements IConnectionStore
 {
     private readonly specs = new Map<string, ConnectionSpec>()
+    private defaultId: string | undefined
 
     public async All(): Promise<readonly ConnectionSpec[]>
     {
@@ -38,11 +41,41 @@ export class FakeConnectionStore implements IConnectionStore
     public async Save(spec: ConnectionSpec): Promise<void>
     {
         this.specs.set(spec.Id, spec)
+        if (this.defaultId === undefined) this.defaultId = spec.Id
     }
 
     public async Delete(id: string): Promise<void>
     {
         this.specs.delete(id)
+        if (this.defaultId === id) this.defaultId = this.specs.keys().next().value
+    }
+
+    public async DefaultId(): Promise<string | undefined>
+    {
+        return this.defaultId
+    }
+
+    public async SetDefault(id: string): Promise<void>
+    {
+        this.defaultId = id
+    }
+}
+
+// An in-memory IEnvironmentVariables over a plain record.
+export class FakeEnvironmentVariables implements IEnvironmentVariables
+{
+    constructor(private readonly vars: Record<string, string> = {})
+    {
+    }
+
+    public Get(name: string): string | undefined
+    {
+        return this.vars[name]
+    }
+
+    public Names(): readonly string[]
+    {
+        return Object.keys(this.vars).sort()
     }
 }
 
