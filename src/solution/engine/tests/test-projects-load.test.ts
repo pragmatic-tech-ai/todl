@@ -1,7 +1,5 @@
-import { test, type TestContext } from 'node:test'
+import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { cp, mkdtemp, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { ServiceProvider, type IStorage } from '@pragmatic-tech-ai/todl-runtime'
@@ -15,9 +13,8 @@ import { type IProjectFactory } from '../../projects/project-factory.js'
 // Integration tests that load the REAL on-disk projects under TODL/test_projects
 // (a meta-model + two libraries) through the actual project factories and the
 // Solution member-open path — the same route a shell takes when it opens a
-// solution. openProject self-heals its .claude scaffold (it WRITES into the
-// project storage), so each fixture is copied into a throwaway temp dir first;
-// the repo's test_projects is never mutated.
+// solution. The fixtures ship a complete .claude scaffold, so openProject's
+// self-heal is a no-op and nothing is written back — they open in place.
 
 const TEST_PROJECTS = join(dirname(fileURLToPath(import.meta.url)), '../../../../test_projects')
 
@@ -25,17 +22,11 @@ const META_MODEL = 'meta-models/tech-architecture'
 const AWS_LIBRARY = 'libraries/aws'
 const MICROSOFT_LIBRARY = 'libraries/microsoft'
 
-// Copy one test_projects subfolder into a fresh temp dir and root a NodeFsStorage
-// at it, so opening the project (which writes scaffold) leaves the fixture intact.
-async function copyProject(t: TestContext, relPath: string): Promise<NodeFsStorage>
+// A storage rooted at a test_projects fixture (opened in place — the fixtures are
+// already scaffolded, so opening writes nothing).
+function projectStorage(relPath: string): NodeFsStorage
 {
-    const dir = await mkdtemp(join(tmpdir(), 'todl-testproj-'))
-    await cp(join(TEST_PROJECTS, relPath), dir, { recursive: true })
-    t.after(async () =>
-    {
-        await rm(dir, { recursive: true, force: true })
-    })
-    return new NodeFsStorage(dir)
+    return new NodeFsStorage(join(TEST_PROJECTS, relPath))
 }
 
 // Depth-first search of a project's node tree for the first node matching `match`.
@@ -56,32 +47,31 @@ function hasTodlSource(root: ProjectNode): boolean
     return findNode(root, (n) => n.Name.endsWith('.todl')) !== undefined
 }
 
-test('loads the meta-model and library projects from test_projects', async (t) =>
+test('loads the meta-model and library projects from test_projects', async () =>
 {
     const metaFactory = new MetaModelProjectFactory(new ServiceProvider())
     const libraryFactory = new LibraryProjectFactory(new ServiceProvider())
 
-    const metaModel = await metaFactory.openProject(await copyProject(t, META_MODEL))
+    const metaModel = await metaFactory.openProject(projectStorage(META_MODEL))
     assert.equal(metaModel.Type, 'meta-model')
     assert.ok(hasTodlSource(metaModel.Root), 'meta-model has .todl concepts')
 
-    const aws = await libraryFactory.openProject(await copyProject(t, AWS_LIBRARY))
+    const aws = await libraryFactory.openProject(projectStorage(AWS_LIBRARY))
     assert.equal(aws.Type, 'library')
     assert.ok(findNode(aws.Root, (n) => n.Name === 'aws.todl'), 'aws library has aws.todl')
 
-    const microsoft = await libraryFactory.openProject(await copyProject(t, MICROSOFT_LIBRARY))
+    const microsoft = await libraryFactory.openProject(projectStorage(MICROSOFT_LIBRARY))
     assert.equal(microsoft.Type, 'library')
     assert.ok(hasTodlSource(microsoft.Root), 'microsoft library has a .todl source')
 })
 
-test('loads the meta-model into a solution as a member', async (t) =>
+test('loads the meta-model into a solution as a member', async () =>
 {
     const metaFactory = new MetaModelProjectFactory(new ServiceProvider())
-    const metaStorage = await copyProject(t, META_MODEL)
+    const metaStorage = projectStorage(META_MODEL)
 
     const solution = new Solution('Test Solution')
     solution.AddMember('meta-model', 'meta-model')
-    solution.IsDirty = false
 
     await solution.OpenMembers(
         () => metaStorage,
@@ -93,14 +83,14 @@ test('loads the meta-model into a solution as a member', async (t) =>
     assert.equal((member.Project as Project).Type, 'meta-model')
 })
 
-test('loads the meta-model and its libraries into a solution', async (t) =>
+test('loads the meta-model and its libraries into a solution', async () =>
 {
     const metaFactory = new MetaModelProjectFactory(new ServiceProvider())
     const libraryFactory = new LibraryProjectFactory(new ServiceProvider())
 
-    const metaStorage = await copyProject(t, META_MODEL)
-    const awsStorage = await copyProject(t, AWS_LIBRARY)
-    const microsoftStorage = await copyProject(t, MICROSOFT_LIBRARY)
+    const metaStorage = projectStorage(META_MODEL)
+    const awsStorage = projectStorage(AWS_LIBRARY)
+    const microsoftStorage = projectStorage(MICROSOFT_LIBRARY)
     const storages = new Map<string, IStorage>([
         ['meta-model', metaStorage],
         ['aws', awsStorage],
