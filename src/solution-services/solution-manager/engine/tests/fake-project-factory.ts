@@ -1,7 +1,7 @@
 import { type IStorage } from '@pragmatic-tech-ai/todl-runtime'
 import { type IProjectFactory } from '../project-factory.js'
-import { type ProjectFileFormat } from '../../projects/project-factory.js'
-import { Project, ProjectNode, ProjectNodeKind } from '../../projects/project.js'
+import { type ProjectFileFormat } from '../../../project-services/core/project-factory.js'
+import { Project, ProjectNode, ProjectNodeKind } from '../../../project-services/core/project.js'
 
 // A test double for IProjectFactory: records how it was used and returns minimal
 // real Project handles (an empty root node) so it satisfies the canonical contract.

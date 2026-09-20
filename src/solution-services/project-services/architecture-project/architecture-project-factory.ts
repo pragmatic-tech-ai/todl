@@ -2,11 +2,11 @@ import { ServiceKey, type IServiceProvider } from '@pragmatic-tech-ai/todl-runti
 import {
     type ProjectFileFormat,
     type ProjectManifestEnvelope,
-} from './project-factory.js'
-import { type BaseBindings, type BaseRef } from './base-binding.js'
-import { ProjectNodeKind } from './project.js'
-import { TodlProjectFactory, CLAUDE_MD_FILENAME, type ScaffoldFile } from './todl-project-factory.js'
-import { ARCHITECTURE_CLAUDE_ROOT } from './scaffold.generated.js'
+} from '../core/project-factory.js'
+import { type BaseBindings, type BaseRef } from '../core/base-binding.js'
+import { ProjectNodeKind } from '../core/project.js'
+import { TodlProjectFactory, CLAUDE_MD_FILENAME, type ScaffoldFile } from '../core/todl-project-factory.js'
+import { ARCHITECTURE_CLAUDE_ROOT } from '../core/scaffold.generated.js'
 
 // The 'architecture' project type — a module's contribution to the generic project
 // explorer (declared via `.projectFactories:`, resolved through the factory

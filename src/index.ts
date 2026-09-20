@@ -155,7 +155,7 @@ export { tokenize, TokenKind, type Token } from './parse/lexer.js';
 // ── Solution (SolutionManager + cross-project settings) ──
 // The engine composition module is authored in .mu (a plain `module` → a headless
 // Module) and compiled to .mu.js by `npm run compile:mu`.
-export { SolutionServicesEngine } from './solution-services/solution-manager/solution-services-engine.mu.js';
+export { SolutionServicesEngine } from './solution-services/solution-services-module.mu.js';
 export { SolutionManagerService } from './solution-services/solution-manager/engine/solution-manager-service.js';
 export {
     ProjectFactoryRegistryKey,
@@ -186,7 +186,7 @@ export {
 } from './solution-services/solution-manager/engine/project-factory.js';
 
 // ── Projects (headless Project model + factory contracts + TODL-authoring base) ──
-export { Project, ProjectNode, ProjectNodeKind } from './solution-services/solution-manager/projects/project.js';
+export { Project, ProjectNode, ProjectNodeKind } from './solution-services/project-services/core/project.js';
 export {
     PROJECT_MANIFEST_FILENAME,
     ProducerKind,
@@ -199,8 +199,8 @@ export {
     type IPublishableProjectFactory,
     type IPresentationProjectFactory,
     type IVersionedProjectFactory,
-} from './solution-services/solution-manager/projects/project-factory.js';
-export { type BaseRef, type BaseBindings } from './solution-services/solution-manager/projects/base-binding.js';
+} from './solution-services/project-services/core/project-factory.js';
+export { type BaseRef, type BaseBindings } from './solution-services/project-services/core/base-binding.js';
 export {
     TodlProjectFactory,
     isTodlProject,
@@ -208,39 +208,39 @@ export {
     CLAUDE_DIR,
     TODL_BASE_SCAFFOLD,
     type ScaffoldFile,
-} from './solution-services/solution-manager/projects/todl-project-factory.js';
-export { ArchitectureProjectFactory } from './solution-services/solution-manager/projects/architecture-project-factory.js';
-export { MetaModelProjectFactory } from './solution-services/solution-manager/projects/meta-model-project-factory.js';
-export { LibraryProjectFactory } from './solution-services/solution-manager/projects/library-project-factory.js';
-export { DefaultProjectFactoryRegistry } from './solution-services/solution-manager/projects/default-project-factory-registry.js';
+} from './solution-services/project-services/core/todl-project-factory.js';
+export { ArchitectureProjectFactory } from './solution-services/project-services/architecture-project/architecture-project-factory.js';
+export { MetaModelProjectFactory } from './solution-services/project-services/meta-model-project/meta-model-project-factory.js';
+export { LibraryProjectFactory } from './solution-services/project-services/library-project/library-project-factory.js';
+export { DefaultProjectFactoryRegistry } from './solution-services/project-services/default-project-factory-registry.js';
 export {
     isProducer,
     type IProducerProjectFactory,
-} from './solution-services/solution-manager/projects/producer-project-factory.js';
+} from './solution-services/project-services/core/producer-project-factory.js';
 // Producer seams (concrete impls live app-side; todl owns the contracts + keys).
 export {
     PresentationBakerKey,
     type IPresentationBaker,
     type BakeOptions,
     type BakeResult,
-} from './solution-services/solution-manager/projects/presentation-baker.js';
+} from './solution-services/project-services/core/presentation-baker.js';
 export {
     ProducerBackendsKey,
     type IProducerBackends,
-} from './solution-services/solution-manager/projects/producer-backends.js';
-export { BaseResolver } from './solution-services/solution-manager/projects/base-resolver.js';
+} from './solution-services/project-services/core/producer-backends.js';
+export { BaseResolver } from './solution-services/project-services/core/base-resolver.js';
 // Producer helpers (headless): source collection, package sink, presentation emitter, bundle scan.
-export { TodlSources } from './solution-services/solution-manager/projects/todl-sources.js';
-export { StoragePackageSink } from './solution-services/solution-manager/projects/storage-package-sink.js';
+export { TodlSources } from './solution-services/project-services/core/todl-sources.js';
+export { StoragePackageSink } from './solution-services/project-services/core/storage-package-sink.js';
 export {
     PresentationModel,
     OntologyKind,
     type PresentationFacets,
-} from './solution-services/solution-manager/projects/presentation-model.js';
+} from './solution-services/project-services/core/presentation-model.js';
 export {
     LibraryResources,
     type LibraryBundleManifest,
     type ScannedResources,
     type PublishedClass as LibraryPublishedClass,
-} from './solution-services/solution-manager/projects/library-bundle.js';
-export { type MetaModelManifestFile } from './solution-services/solution-manager/projects/meta-model-manifest.js';
+} from './solution-services/project-services/library-project/library-bundle.js';
+export { type MetaModelManifestFile } from './solution-services/project-services/meta-model-project/meta-model-manifest.js';

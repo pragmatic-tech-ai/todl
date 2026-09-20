@@ -2,9 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ServiceProvider } from '@pragmatic-tech-ai/todl-runtime';
 import { DefaultProjectFactoryRegistry } from '../default-project-factory-registry.js';
-import { MetaModelProjectFactory } from '../meta-model-project-factory.js';
-import { LibraryProjectFactory } from '../library-project-factory.js';
-import { ArchitectureProjectFactory } from '../architecture-project-factory.js';
+import { MetaModelProjectFactory } from '../meta-model-project/meta-model-project-factory.js';
+import { LibraryProjectFactory } from '../library-project/library-project-factory.js';
+import { ArchitectureProjectFactory } from '../architecture-project/architecture-project-factory.js';
 
 // The registrar resolves the three built-in factories from the container by their
 // static Keys and indexes them by typeId — the exact set SolutionServicesEngine

@@ -1,9 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { ServiceProvider } from '@pragmatic-tech-ai/todl-runtime'
-import { MetaModelProjectFactory } from '../meta-model-project-factory.js'
-import { LibraryProjectFactory } from '../library-project-factory.js'
-import { ArchitectureProjectFactory } from '../architecture-project-factory.js'
+import { MetaModelProjectFactory } from '../../meta-model-project/meta-model-project-factory.js'
+import { LibraryProjectFactory } from '../../library-project/library-project-factory.js'
+import { ArchitectureProjectFactory } from '../../architecture-project/architecture-project-factory.js'
 
 // Every project factory is self-describing: it carries the stable type id and the
 // New-Project gallery display metadata (title + description) that used to live in a

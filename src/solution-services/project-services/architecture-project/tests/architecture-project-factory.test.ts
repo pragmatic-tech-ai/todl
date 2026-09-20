@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ServiceProvider } from '@pragmatic-tech-ai/todl-runtime'
 import { NodeFsStorage } from '@pragmatic-tech-ai/todl-runtime/node'
-import { ProjectNodeKind } from '../project.js'
+import { ProjectNodeKind } from '../../core/project.js'
 import { ArchitectureProjectFactory } from '../architecture-project-factory.js'
 
 async function tempStorage(t: TestContext): Promise<NodeFsStorage>

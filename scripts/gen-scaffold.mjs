@@ -1,4 +1,4 @@
-// Generate src/solution-services/solution-manager/projects/scaffold.generated.ts from the scaffold .md
+// Generate src/solution-services/project-services/core/scaffold.generated.ts from the scaffold .md
 // sources. Like the prelude, the agent-support docs must be string constants
 // embedded in the module so they survive bundling to a single file (esbuild/CJS),
 // where import.meta.url and sibling-file reads break. The .md files under
@@ -6,7 +6,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 
 // Each entry: the exported constant name ← its scaffold .md source (relative to
-// src/solution-services/solution-manager/projects/scaffold/). Shared TODL docs first, then per-project-type
+// src/solution-services/project-services/core/scaffold/). Shared TODL docs first, then per-project-type
 // CLAUDE.md roots and guides.
 const SOURCES = [
   { name: "TODL_MANUAL_SOURCE", file: "todl-manual.md" },
@@ -19,11 +19,11 @@ const SOURCES = [
 ];
 
 const read = (file) =>
-  readFileSync(new URL(`../src/solution-services/solution-manager/projects/scaffold/${file}`, import.meta.url), "utf8");
+  readFileSync(new URL(`../src/solution-services/project-services/core/scaffold/${file}`, import.meta.url), "utf8");
 
-let out = "// GENERATED from src/solution-services/solution-manager/projects/scaffold/*.md by scripts/gen-scaffold.mjs — do not edit by hand.\n";
+let out = "// GENERATED from src/solution-services/project-services/core/scaffold/*.md by scripts/gen-scaffold.mjs — do not edit by hand.\n";
 for (const { name, file } of SOURCES) {
   out += `export const ${name} = ${JSON.stringify(read(file))};\n`;
 }
-writeFileSync(new URL("../src/solution-services/solution-manager/projects/scaffold.generated.ts", import.meta.url), out);
-console.log("wrote src/solution-services/solution-manager/projects/scaffold.generated.ts");
+writeFileSync(new URL("../src/solution-services/project-services/core/scaffold.generated.ts", import.meta.url), out);
+console.log("wrote src/solution-services/project-services/core/scaffold.generated.ts");

@@ -13,19 +13,19 @@ import {
     type ProjectFileFormat,
     type ProjectManifestEnvelope,
     type PublishResult,
-} from './project-factory.js'
-import { type IProducerProjectFactory } from './producer-project-factory.js'
-import { TodlProjectFactory, CLAUDE_MD_FILENAME, type ScaffoldFile } from './todl-project-factory.js'
-import { type BaseBindings, type BaseRef } from './base-binding.js'
-import { type Project, ProjectNodeKind } from './project.js'
-import { TodlSources } from './todl-sources.js'
-import { StoragePackageSink } from './storage-package-sink.js'
-import { PresentationModel } from './presentation-model.js'
-import { BaseResolver } from './base-resolver.js'
+} from '../core/project-factory.js'
+import { type IProducerProjectFactory } from '../core/producer-project-factory.js'
+import { TodlProjectFactory, CLAUDE_MD_FILENAME, type ScaffoldFile } from '../core/todl-project-factory.js'
+import { type BaseBindings, type BaseRef } from '../core/base-binding.js'
+import { type Project, ProjectNodeKind } from '../core/project.js'
+import { TodlSources } from '../core/todl-sources.js'
+import { StoragePackageSink } from '../core/storage-package-sink.js'
+import { PresentationModel } from '../core/presentation-model.js'
+import { BaseResolver } from '../core/base-resolver.js'
 import { LibraryResources, type LibraryBundleManifest, type PublishedClass } from './library-bundle.js'
-import { PresentationBakerKey } from './presentation-baker.js'
-import { ProducerBackendsKey } from './producer-backends.js'
-import { LIBRARY_CLAUDE_ROOT } from './scaffold.generated.js'
+import { PresentationBakerKey } from '../core/presentation-baker.js'
+import { ProducerBackendsKey } from '../core/producer-backends.js'
+import { LIBRARY_CLAUDE_ROOT } from '../core/scaffold.generated.js'
 
 // The 'library' project type's factory. It mirrors MetaModelProjectFactory, but a
 // library is authored AGAINST a meta-model: creation binds a meta-model BaseRef, and

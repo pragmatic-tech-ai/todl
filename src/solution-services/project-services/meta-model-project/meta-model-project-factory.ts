@@ -14,17 +14,17 @@ import {
     type ProjectFileFormat,
     type ProjectManifestEnvelope,
     type PublishResult,
-} from './project-factory.js'
-import { type IProducerProjectFactory } from './producer-project-factory.js'
-import { TodlProjectFactory, CLAUDE_DIR, CLAUDE_MD_FILENAME, type ScaffoldFile } from './todl-project-factory.js'
-import { type Project, ProjectNodeKind } from './project.js'
-import { TodlSources } from './todl-sources.js'
-import { StoragePackageSink } from './storage-package-sink.js'
-import { PresentationModel } from './presentation-model.js'
-import { PresentationBakerKey } from './presentation-baker.js'
-import { ProducerBackendsKey } from './producer-backends.js'
+} from '../core/project-factory.js'
+import { type IProducerProjectFactory } from '../core/producer-project-factory.js'
+import { TodlProjectFactory, CLAUDE_DIR, CLAUDE_MD_FILENAME, type ScaffoldFile } from '../core/todl-project-factory.js'
+import { type Project, ProjectNodeKind } from '../core/project.js'
+import { TodlSources } from '../core/todl-sources.js'
+import { StoragePackageSink } from '../core/storage-package-sink.js'
+import { PresentationModel } from '../core/presentation-model.js'
+import { PresentationBakerKey } from '../core/presentation-baker.js'
+import { ProducerBackendsKey } from '../core/producer-backends.js'
 import { type MetaModelManifestFile } from './meta-model-manifest.js'
-import { META_MODEL_CLAUDE_ROOT, META_MODEL_GUIDE, META_MODEL_NEW_CONCEPT } from './scaffold.generated.js'
+import { META_MODEL_CLAUDE_ROOT, META_MODEL_GUIDE, META_MODEL_NEW_CONCEPT } from '../core/scaffold.generated.js'
 
 // The 'meta-model' project type's factory. It owns the project lifecycle; the `.todl`
 // FILE format is edited by its document factory (resolved by extension) — editors own

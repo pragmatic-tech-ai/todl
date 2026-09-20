@@ -1,8 +1,8 @@
 import { type IServiceProvider } from '@pragmatic-tech-ai/todl-runtime';
-import { ProjectFactoryRegistry } from '../engine/project-factory-registry.js';
-import { MetaModelProjectFactory } from './meta-model-project-factory.js';
-import { LibraryProjectFactory } from './library-project-factory.js';
-import { ArchitectureProjectFactory } from './architecture-project-factory.js';
+import { ProjectFactoryRegistry } from '../solution-manager/engine/project-factory-registry.js';
+import { MetaModelProjectFactory } from './meta-model-project/meta-model-project-factory.js';
+import { LibraryProjectFactory } from './library-project/library-project-factory.js';
+import { ArchitectureProjectFactory } from './architecture-project/architecture-project-factory.js';
 
 // The engine's built-in project-factory registrar: it indexes the three TODL
 // authoring project types todl ships — meta-model, library, architecture — each

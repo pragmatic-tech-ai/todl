@@ -5,10 +5,10 @@ import { fileURLToPath } from 'node:url'
 import { ServiceProvider, type IStorage } from '@pragmatic-tech-ai/todl-runtime'
 import { NodeFsStorage } from '@pragmatic-tech-ai/todl-runtime/node'
 import { Solution } from '../solution.js'
-import { MetaModelProjectFactory } from '../../projects/meta-model-project-factory.js'
-import { LibraryProjectFactory } from '../../projects/library-project-factory.js'
-import { type Project, type ProjectNode } from '../../projects/project.js'
-import { type IProjectFactory } from '../../projects/project-factory.js'
+import { MetaModelProjectFactory } from '../../../project-services/meta-model-project/meta-model-project-factory.js'
+import { LibraryProjectFactory } from '../../../project-services/library-project/library-project-factory.js'
+import { type Project, type ProjectNode } from '../../../project-services/core/project.js'
+import { type IProjectFactory } from '../../../project-services/core/project-factory.js'
 
 // Integration tests that load the REAL on-disk projects under TODL/test_projects
 // (a meta-model + two libraries) through the actual project factories and the
