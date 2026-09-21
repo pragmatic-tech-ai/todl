@@ -1,7 +1,7 @@
-import type { IBuildAction } from "../build-action.js";
+import type { IBuildAction } from "../../build-system-core/build-action.js";
 import type { TodlBuildContext } from "../todl-build-context.js";
-import type { ArtifactKey } from "../artifact-key.js";
-import { Severity } from "../diagnostic-sink.js";
+import type { ArtifactKey } from "../../build-system-core/artifact-key.js";
+import { Severity } from "../../build-system-core/diagnostic-sink.js";
 import { PresentationResourceEmitter } from "../../project-services/core/presentation-model.js";
 import type { IPresentationBaker, BakeOptions } from "../../project-services/core/presentation-baker.js";
 import { NpmArtifacts } from "./npm-artifacts.js";

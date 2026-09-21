@@ -20,7 +20,7 @@ import {
 } from "../../publish/publish.js";
 import type { PackageSink } from "../../publish/stores.js";
 import { RecursiveProjectReferencesResolver } from "../project-services/core/base-resolver.js";
-import type { IPackageSource } from "../build-services/package-source.js";
+import type { IPackageSource } from "../todl-build-system/package-source.js";
 import type { ProjectBaseModelBindings } from "../project-services/core/base-binding.js";
 import { FileSink } from "./sinks.js";
 import { readProject, type Project, type ResourceFile } from "./project.js";

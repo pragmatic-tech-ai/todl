@@ -10,8 +10,8 @@ import { parseManifest } from "../manifest.js";
 import { MemorySink } from "../sinks.js";
 import type { Project } from "../project.js";
 import { PackageCompiler, type ProjectReader } from "../package-compiler.js";
-import { StoragePackageStore } from "../../build-services/package-store.js";
-import type { IPackageSource } from "../../build-services/package-source.js";
+import { StoragePackageStore } from "../../todl-build-system/package-store.js";
+import type { IPackageSource } from "../../todl-build-system/package-source.js";
 
 const PROJECTS = join(dirname(fileURLToPath(import.meta.url)), "../../../../test_projects");
 type Src = { uri: string; text: string };

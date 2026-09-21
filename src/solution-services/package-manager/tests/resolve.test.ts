@@ -16,7 +16,7 @@ import {
   composeClosure,
   dependencyNames,
 } from "../index.js";
-import { StoragePackageStore } from "../../build-services/package-store.js";
+import { StoragePackageStore } from "../../todl-build-system/package-store.js";
 
 const PROJECTS = join(dirname(fileURLToPath(import.meta.url)), "../../../../test_projects");
 

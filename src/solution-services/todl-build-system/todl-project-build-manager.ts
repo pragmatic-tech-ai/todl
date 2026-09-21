@@ -1,6 +1,6 @@
-import type { BuildSystemRegistry } from "./build-system-registry.js";
-import type { IBuildStorageProvider } from "./build-storage-provider.js";
-import { ProjectBuildManager, type ProjectBuildOutput } from "./project-build-manager.js";
+import type { BuildSystemRegistry } from "../build-system-core/build-system-registry.js";
+import type { IBuildStorageProvider } from "../build-system-core/build-storage-provider.js";
+import { ProjectBuildManager, type ProjectBuildOutput } from "../build-system-core/project-build-manager.js";
 import type { ProjectManifest } from "../package-manager/manifest.js";
 import type { TodlBuildContext, TodlBuildRequest } from "./todl-build-context.js";
 

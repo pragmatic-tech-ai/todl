@@ -1,8 +1,8 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { FakeStorage } from "@pragmatic-tech-ai/todl-runtime";
-import { BuildArtifacts } from "../../build-artifacts.js";
-import { DiagnosticSink, Severity } from "../../diagnostic-sink.js";
+import { BuildArtifacts } from "../../../build-system-core/build-artifacts.js";
+import { DiagnosticSink, Severity } from "../../../build-system-core/diagnostic-sink.js";
 import { EmptyPackageSource, libraryManifest } from "../../tests/fakes.js";
 import type { TodlBuildContext } from "../../todl-build-context.js";
 import { NpmArtifacts } from "../npm-artifacts.js";

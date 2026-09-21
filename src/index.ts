@@ -229,11 +229,11 @@ export {
     PackageStoreKey,
     StoragePackageStore,
     type IPackageStore,
-} from './solution-services/build-services/package-store.js';
-export type { IPackageSource, SourcedPackage } from './solution-services/build-services/package-source.js';
-export { CompositePackageSource } from './solution-services/build-services/composite-package-source.js';
-export { CachingPackageSource } from './solution-services/build-services/caching-package-source.js';
-export { SolutionCacheSource, type IWritablePackageSource } from './solution-services/build-services/solution-cache-source.js';
+} from './solution-services/todl-build-system/package-store.js';
+export type { IPackageSource, SourcedPackage } from './solution-services/todl-build-system/package-source.js';
+export { CompositePackageSource } from './solution-services/todl-build-system/composite-package-source.js';
+export { CachingPackageSource } from './solution-services/todl-build-system/caching-package-source.js';
+export { SolutionCacheSource, type IWritablePackageSource } from './solution-services/todl-build-system/solution-cache-source.js';
 export { RecursiveProjectReferencesResolver } from './solution-services/project-services/core/base-resolver.js';
 // Producer helpers (headless): source collection, package sink, presentation emitter, bundle scan.
 export { TodlProjectSourceFiles } from './solution-services/project-services/core/todl-sources.js';

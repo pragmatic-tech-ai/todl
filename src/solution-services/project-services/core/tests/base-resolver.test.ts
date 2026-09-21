@@ -2,7 +2,7 @@ import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 import { PackageKind, type PackageRef } from '../../../../publish/publish.js'
 import type { TodlDocument } from '../../../../compiler-services/emit/json.js'
-import type { IPackageSource, SourcedPackage } from '../../../build-services/package-source.js'
+import type { IPackageSource, SourcedPackage } from '../../../todl-build-system/package-source.js'
 import { RecursiveProjectReferencesResolver } from '../base-resolver.js'
 
 // A source serving a fixed graph of compiled packages by id, so the resolver's uniform

@@ -7,14 +7,14 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { FakeStorage, type IStorage } from "@pragmatic-tech-ai/todl-runtime";
 import { NodeFsStorage } from "@pragmatic-tech-ai/todl-runtime/node";
-import { BuildSystemRegistry } from "../../build-system-registry.js";
+import { BuildSystemRegistry } from "../../../build-system-core/build-system-registry.js";
 import { NpmPackageBuildSystem } from "../../npm/npm-package-build-system.js";
 import { SolutionBuildManager } from "../solution-build-manager.js";
 import { EmptyPackageSource } from "../../tests/fakes.js";
-import { ProjectBuildStatus } from "../../build-result.js";
+import { ProjectBuildStatus } from "../../../build-system-core/build-result.js";
 import { parseManifest, type ProjectManifest } from "../../../package-manager/manifest.js";
-import type { IBuildStorageProvider, OpenedOutput } from "../../build-storage-provider.js";
-import type { BuildOptions } from "../../build-options.js";
+import type { IBuildStorageProvider, OpenedOutput } from "../../../build-system-core/build-storage-provider.js";
+import type { BuildOptions } from "../../../build-system-core/build-options.js";
 
 const PROJECTS = join(dirname(fileURLToPath(import.meta.url)), "../../../../../test_projects");
 

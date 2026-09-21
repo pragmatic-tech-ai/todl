@@ -1,4 +1,4 @@
-import { ArtifactKey } from "../artifact-key.js";
+import { ArtifactKey } from "../../build-system-core/artifact-key.js";
 import type { TodlDocument } from "../../../compiler-services/emit/json.js";
 import type { CompiledPackage } from "../../../publish/publish.js";
 

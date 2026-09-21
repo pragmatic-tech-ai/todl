@@ -1,7 +1,7 @@
-import type { IBuildAction } from "../build-action.js";
+import type { IBuildAction } from "../../build-system-core/build-action.js";
 import type { TodlBuildContext } from "../todl-build-context.js";
-import type { ArtifactKey } from "../artifact-key.js";
-import { Severity } from "../diagnostic-sink.js";
+import type { ArtifactKey } from "../../build-system-core/artifact-key.js";
+import { Severity } from "../../build-system-core/diagnostic-sink.js";
 import { RecursiveProjectReferencesResolver } from "../../project-services/core/base-resolver.js";
 import type { ProjectBaseModelBindings } from "../../project-services/core/base-binding.js";
 import { NpmArtifacts } from "./npm-artifacts.js";

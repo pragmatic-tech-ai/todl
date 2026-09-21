@@ -2,24 +2,24 @@ import type { IStorage } from "@pragmatic-tech-ai/todl-runtime";
 import type { ProjectManifest } from "../../package-manager/manifest.js";
 import { toPackageJson } from "../../package-manager/package-json.js";
 import type { PackageDocument } from "../../../publish/publish.js";
-import type { BuildSystemRegistry } from "../build-system-registry.js";
-import type { IBuildStorageProvider } from "../build-storage-provider.js";
-import type { IBuildSystem } from "../build-system.js";
-import type { IBuildProgress } from "../build-progress.js";
-import { NoOpBuildProgress } from "../build-progress.js";
-import type { BuildOptions } from "../build-options.js";
+import type { BuildSystemRegistry } from "../../build-system-core/build-system-registry.js";
+import type { IBuildStorageProvider } from "../../build-system-core/build-storage-provider.js";
+import type { IBuildSystem } from "../../build-system-core/build-system.js";
+import type { IBuildProgress } from "../../build-system-core/build-progress.js";
+import { NoOpBuildProgress } from "../../build-system-core/build-progress.js";
+import type { BuildOptions } from "../../build-system-core/build-options.js";
 import type { IPackageSource, SourcedPackage } from "../package-source.js";
 import type { TodlBuildContext } from "../todl-build-context.js";
 import { CompositePackageSource } from "../composite-package-source.js";
-import { DiagnosticSink, Severity } from "../diagnostic-sink.js";
+import { DiagnosticSink, Severity } from "../../build-system-core/diagnostic-sink.js";
 import { TodlProjectBuildManager } from "../todl-project-build-manager.js";
 import {
     ProjectBuildStatus,
     type ProjectId,
     type ProjectBuildOutcome,
     type SolutionBuildResult,
-} from "../build-result.js";
-import { SolutionDependencyGraph } from "./solution-dependency-graph.js";
+} from "../../build-system-core/build-result.js";
+import { SolutionDependencyGraph } from "../../build-system-core/solution/solution-dependency-graph.js";
 import { BuildOutputSource } from "./build-output-source.js";
 
 export interface SolutionProject

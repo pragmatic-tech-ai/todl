@@ -1,5 +1,5 @@
-import type { IBuildSystem } from "../build-system.js";
-import type { IBuildAction } from "../build-action.js";
+import type { IBuildSystem } from "../../build-system-core/build-system.js";
+import type { IBuildAction } from "../../build-system-core/build-action.js";
 import type { TodlBuildContext } from "../todl-build-context.js";
 import { ProjectType, type ProjectManifest } from "../../package-manager/manifest.js";
 import { ResolveBasesAction } from "./resolve-bases-action.js";

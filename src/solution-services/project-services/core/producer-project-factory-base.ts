@@ -22,7 +22,7 @@ import { StoragePackageSink } from './storage-package-sink.js'
 import { PresentationResourceEmitter } from './presentation-model.js'
 import { PresentationBakerKey } from './presentation-baker.js'
 import { RecursiveProjectReferencesResolver } from './base-resolver.js'
-import { PackageStoreKey } from '../../build-services/package-store.js'
+import { PackageStoreKey } from '../../todl-build-system/package-store.js'
 import { type PackageBundle, type PublishedClass, ProducerResources } from './package-bundle.js'
 
 // A producer project's persisted manifest. Meta-models and libraries share this exact

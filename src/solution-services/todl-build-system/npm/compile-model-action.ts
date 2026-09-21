@@ -1,7 +1,7 @@
-import type { IBuildAction } from "../build-action.js";
+import type { IBuildAction } from "../../build-system-core/build-action.js";
 import type { TodlBuildContext } from "../todl-build-context.js";
-import type { ArtifactKey } from "../artifact-key.js";
-import { Severity } from "../diagnostic-sink.js";
+import type { ArtifactKey } from "../../build-system-core/artifact-key.js";
+import { Severity } from "../../build-system-core/diagnostic-sink.js";
 import { compilePackage, PackageKind, type PackageRef, type PackageIdentity } from "../../../publish/publish.js";
 import { toPackageJson } from "../../package-manager/package-json.js";
 import type { ProjectManifest } from "../../package-manager/manifest.js";

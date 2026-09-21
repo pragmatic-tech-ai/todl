@@ -1,7 +1,7 @@
 import { PackageKind, type PackageRef } from '../../../publish/publish.js'
 import { type TodlDocument } from '../../../compiler-services/emit/json.js'
 import { type ProjectBaseModelBindings } from './base-binding.js'
-import { type IPackageSource } from '../../build-services/package-source.js'
+import { type IPackageSource } from '../../todl-build-system/package-source.js'
 
 // Resolves a project's declared bases into parsed TodlDocuments, walking each package's
 // recorded `dependencies` transitively. Reads through the single IPackageSource seam

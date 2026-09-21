@@ -1,7 +1,7 @@
 import type { IStorage } from "@pragmatic-tech-ai/todl-runtime";
-import type { CoreBuildContext } from "./build-action.js";
-import type { BuildOptions } from "./build-options.js";
-import type { IBuildProgress } from "./build-progress.js";
+import type { CoreBuildContext } from "../build-system-core/build-action.js";
+import type { BuildOptions } from "../build-system-core/build-options.js";
+import type { IBuildProgress } from "../build-system-core/build-progress.js";
 import type { ProjectManifest } from "../package-manager/manifest.js";
 import type { IPackageSource } from "./package-source.js";
 

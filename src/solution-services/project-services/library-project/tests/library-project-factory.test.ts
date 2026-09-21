@@ -7,7 +7,7 @@ import { ServiceProvider, type IStorage } from '@pragmatic-tech-ai/todl-runtime'
 import { NodeFsStorage } from '@pragmatic-tech-ai/todl-runtime/node'
 import { ProjectNodeKind } from '../../core/project.js'
 import { PresentationBakerKey } from '../../core/presentation-baker.js'
-import { PackageStoreKey, StoragePackageStore } from '../../../build-services/package-store.js'
+import { PackageStoreKey, StoragePackageStore } from '../../../todl-build-system/package-store.js'
 import { LibraryProjectFactory } from '../library-project-factory.js'
 import { FakePresentationBaker } from '../../core/tests/fake-producer-seams.js'
 

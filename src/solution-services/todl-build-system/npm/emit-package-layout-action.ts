@@ -1,8 +1,8 @@
-import type { IBuildAction } from "../build-action.js";
+import type { IBuildAction } from "../../build-system-core/build-action.js";
 import type { TodlBuildContext } from "../todl-build-context.js";
-import type { ArtifactKey } from "../artifact-key.js";
-import { Severity } from "../diagnostic-sink.js";
-import { StorageTree } from "../storage-tree.js";
+import type { ArtifactKey } from "../../build-system-core/artifact-key.js";
+import { Severity } from "../../build-system-core/diagnostic-sink.js";
+import { StorageTree } from "../../build-system-core/storage-tree.js";
 import type { TodlDocument } from "../../../compiler-services/emit/json.js";
 import { toPackageJson, type TodlPackageMeta } from "../../package-manager/package-json.js";
 import { PROJECT_MANIFEST_FILENAME } from "../../project-services/core/project-factory.js";

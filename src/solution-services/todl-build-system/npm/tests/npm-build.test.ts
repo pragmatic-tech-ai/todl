@@ -1,13 +1,13 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { FakeStorage } from "@pragmatic-tech-ai/todl-runtime";
-import { BuildSystemRegistry } from "../../build-system-registry.js";
+import { BuildSystemRegistry } from "../../../build-system-core/build-system-registry.js";
 import { TodlProjectBuildManager } from "../../todl-project-build-manager.js";
 import type { TodlBuildContext } from "../../todl-build-context.js";
 import { NpmPackageBuildSystem } from "../npm-package-build-system.js";
 import { FakeStorageProvider, EmptyPackageSource } from "../../tests/fakes.js";
 import { parseManifest, type ProjectManifest } from "../../../package-manager/manifest.js";
-import type { BuildResult } from "../../build-result.js";
+import type { BuildResult } from "../../../build-system-core/build-result.js";
 
 const META = "namespace acme { concept Widget { label : string?; } }";
 

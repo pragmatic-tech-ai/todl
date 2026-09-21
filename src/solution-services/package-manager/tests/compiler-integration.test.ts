@@ -7,8 +7,8 @@ import { dirname, join } from "node:path";
 import { FakeStorage } from "@pragmatic-tech-ai/todl-runtime";
 import { PackageCompiler } from "../index.js";
 import { MemorySink } from "../sinks.js";
-import { StoragePackageStore } from "../../build-services/package-store.js";
-import type { IPackageSource } from "../../build-services/package-source.js";
+import { StoragePackageStore } from "../../todl-build-system/package-store.js";
+import type { IPackageSource } from "../../todl-build-system/package-source.js";
 
 const PROJECTS = join(dirname(fileURLToPath(import.meta.url)), "../../../../test_projects");
 const emptyBackends = (): IPackageSource => new StoragePackageStore(new FakeStorage());

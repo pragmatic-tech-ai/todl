@@ -1,11 +1,11 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { ArtifactKey } from "../artifact-key.js";
-import { BuildSystemRegistry } from "../build-system-registry.js";
+import { ArtifactKey } from "../../build-system-core/artifact-key.js";
+import { BuildSystemRegistry } from "../../build-system-core/build-system-registry.js";
 import { TodlProjectBuildManager } from "../todl-project-build-manager.js";
 import type { TodlBuildContext } from "../todl-build-context.js";
-import { ActionStatus, BuildStatus, ProjectBuildStatus } from "../build-result.js";
-import { Severity } from "../diagnostic-sink.js";
+import { ActionStatus, BuildStatus, ProjectBuildStatus } from "../../build-system-core/build-result.js";
+import { Severity } from "../../build-system-core/diagnostic-sink.js";
 import {
     FakeAction,
     FakeSystem,
