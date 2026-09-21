@@ -34,6 +34,7 @@ export { NpmArtifacts } from "./npm/npm-artifacts.js";
 export { ResolveBasesAction } from "./npm/resolve-bases-action.js";
 export { CompileModelAction } from "./npm/compile-model-action.js";
 export { EmitPackageLayoutAction } from "./npm/emit-package-layout-action.js";
+export { GeneratePresentationAction } from "./npm/generate-presentation-action.js";
 export { NpmPackageBuildSystem } from "./npm/npm-package-build-system.js";
 // Solution builds (spec §9): dependency-ordered multi-project build.
 export { SolutionDependencyGraph, type SolutionOrder } from "./solution/solution-dependency-graph.js";

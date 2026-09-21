@@ -62,4 +62,11 @@ describe("NpmPackageBuildSystem", () =>
         assert.equal(system.AppliesTo({ type: "library", name: "l", version: 1 } as never), true);
         assert.equal(system.AppliesTo({ type: "architecture", name: "a", version: 1 } as never), false);
     });
+
+    test("inserts host content generators between compile and emit", () =>
+    {
+        const generator = { Name: "generate-presentation", Consumes: [], Produces: [], Execute: () => Promise.resolve() };
+        const names = new NpmPackageBuildSystem([generator]).Actions().map((a) => a.Name);
+        assert.deepEqual(names, ["resolve-bases", "compile-model", "generate-presentation", "emit-package-layout"]);
+    });
 });
