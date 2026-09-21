@@ -118,7 +118,7 @@ export class SolutionBuildManager
             }
 
             const options: BuildOptions = { OutputRootOverride: id };
-            const result = await this.projectManager.Build({
+            const { Result: result } = await this.projectManager.Build({
                 Project: project.Project,
                 Manifest: project.Manifest,
                 BuildSystemId: request.BuildSystemId,

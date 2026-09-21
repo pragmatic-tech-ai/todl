@@ -47,7 +47,7 @@ describe("ProjectBuildManager", () =>
         ], ProjectType.Library);
         const { manager, provider } = managerWith(system);
 
-        const result = await manager.Build(request());
+        const { Result: result } = await manager.Build(request());
 
         assert.equal(result.Ok, true);
         assert.equal(result.Status, BuildStatus.Succeeded);
@@ -55,6 +55,20 @@ describe("ProjectBuildManager", () =>
         assert.deepEqual(result.Artifacts, ["dist/model.json", "package.json"]);
         assert.equal(result.OutputPath, "/build/npm-package");
         assert.equal(await provider.Output.ReadText("package.json"), "{}");
+    });
+
+    test("exposes the produced artifact bag alongside the result", async () =>
+    {
+        const key = new ArtifactKey<string>("Compiled");
+        const system = new FakeSystem("npm", "npm-package", [
+            new FakeAction({ name: "compile", produces: [key], body: (ctx) => { ctx.Artifacts.Set(key, "MODEL"); return Promise.resolve(); } }),
+        ]);
+        const { manager } = managerWith(system);
+
+        const output = await manager.Build(request());
+
+        assert.equal(output.Result.Ok, true);
+        assert.equal(output.Artifacts.Get(key), "MODEL");
     });
 
     test("threads the artifact bag: a produced value reaches a later action", async () =>
@@ -124,7 +138,7 @@ describe("ProjectBuildManager", () =>
         const { manager, provider } = managerWith(system);
         const progress = new RecordingProgress();
 
-        const result = await manager.Build(request({ progress }));
+        const { Result: result } = await manager.Build(request({ progress }));
 
         assert.equal(result.Ok, false);
         assert.equal(result.Status, BuildStatus.Failed);
@@ -143,7 +157,7 @@ describe("ProjectBuildManager", () =>
         ]);
         const { manager } = managerWith(system);
 
-        const result = await manager.Build(request());
+        const { Result: result } = await manager.Build(request());
 
         assert.equal(result.Ok, false);
         assert.equal(result.Actions[0]!.Status, ActionStatus.Failed);

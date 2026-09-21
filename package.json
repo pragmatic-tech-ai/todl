@@ -46,6 +46,14 @@
       },
       "require": "./dist/solution-services/package-manager/engine/registry-connection.js"
     },
+    "./build-services": {
+      "types": "./dist/solution-services/build-services/index.d.ts",
+      "import": {
+        "development": "./src/solution-services/build-services/index.ts",
+        "default": "./dist/solution-services/build-services/index.js"
+      },
+      "require": "./dist/solution-services/build-services/index.js"
+    },
     "./domain": {
       "types": "./dist/domain/index.d.ts",
       "import": {

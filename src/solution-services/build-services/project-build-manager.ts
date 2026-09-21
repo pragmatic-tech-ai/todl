@@ -33,6 +33,16 @@ export interface ProjectBuildRequest
     Progress?: IBuildProgress;
 }
 
+// A finished build: the serializable settled report (written to report.json, threaded
+// into solution results) plus the LIVE produced-artifact bag. The bag stays out of the
+// report (it holds in-memory values like the compiled package a host registers locally,
+// not a serialization concern); a direct caller reads it, a serializing caller ignores it.
+export interface ProjectBuildOutput
+{
+    Result: BuildResult;
+    Artifacts: BuildArtifacts;
+}
+
 // Runs one project's build system: provision sandbox + open output, run the actions
 // over a shared context (diagnostics-driven stop, spec §3), promote on success, write
 // report.json (even on failure), delete the sandbox, and return the settled report.
@@ -50,7 +60,7 @@ export class ProjectBuildManager
     {
     }
 
-    public async Build(request: ProjectBuildRequest): Promise<BuildResult>
+    public async Build(request: ProjectBuildRequest): Promise<ProjectBuildOutput>
     {
         const system = this.registry.Get(request.BuildSystemId);
         if (system === undefined)
@@ -64,7 +74,7 @@ export class ProjectBuildManager
         return this.Run(system, request);
     }
 
-    private async Run(system: IBuildSystem, request: ProjectBuildRequest): Promise<BuildResult>
+    private async Run(system: IBuildSystem, request: ProjectBuildRequest): Promise<ProjectBuildOutput>
     {
         const progress = request.Progress ?? new NoOpBuildProgress();
         const options = request.Options ?? {};
@@ -105,7 +115,7 @@ export class ProjectBuildManager
         await output.Storage.WriteText(ProjectBuildManager.ReportFileName, JSON.stringify(result, null, 2));
         await this.storage.DeleteSandbox(sandbox);
         progress.ProjectFinished(projectId, ok ? ProjectBuildStatus.Built : ProjectBuildStatus.Failed);
-        return result;
+        return { Result: result, Artifacts: context.Artifacts };
     }
 
     private async RunActions(
