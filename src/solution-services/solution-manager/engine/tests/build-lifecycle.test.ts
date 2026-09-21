@@ -9,21 +9,23 @@ import { FakeStorage, type IStorage, type StorageEntry } from "@pragmatic-tech-a
 import { NodeFsStorage } from "@pragmatic-tech-ai/todl-runtime/node";
 import {
     BuildSystemRegistry,
+    ProjectBuildStatus,
+    type IBuildAction,
+    type ProjectBuildOutput,
+    type IBuildStorageProvider,
+    type OpenedOutput,
+    type BuildOptions,
+} from "../../../build-system-core/index.js";
+import {
     TodlProjectBuildManager,
     SolutionBuildManager,
     NpmPackageBuildSystem,
     GeneratePresentationAction,
     RegistrySource,
-    ProjectBuildStatus,
-    type IBuildAction,
     type TodlBuildContext,
     type IPackageSource,
     type SourcedPackage,
-    type ProjectBuildOutput,
-    type IBuildStorageProvider,
-    type OpenedOutput,
-    type BuildOptions,
-} from "../../../build-services/index.js";
+} from "../../../todl-build-system/index.js";
 import { PackageRegistryClient, parseManifest, type ProjectManifest } from "../../../package-manager/index.js";
 import { LocalNpmRegistry } from "../../../package-manager/registries/npm/local-npm-registry.js";
 import { PackageKind, type PackageRef } from "../../../../publish/publish.js";

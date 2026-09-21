@@ -46,13 +46,21 @@
       },
       "require": "./dist/solution-services/package-manager/engine/registry-connection.js"
     },
-    "./build-services": {
-      "types": "./dist/solution-services/build-services/index.d.ts",
+    "./build-system-core": {
+      "types": "./dist/solution-services/build-system-core/index.d.ts",
       "import": {
-        "development": "./src/solution-services/build-services/index.ts",
-        "default": "./dist/solution-services/build-services/index.js"
+        "development": "./src/solution-services/build-system-core/index.ts",
+        "default": "./dist/solution-services/build-system-core/index.js"
       },
-      "require": "./dist/solution-services/build-services/index.js"
+      "require": "./dist/solution-services/build-system-core/index.js"
+    },
+    "./todl-build-system": {
+      "types": "./dist/solution-services/todl-build-system/index.d.ts",
+      "import": {
+        "development": "./src/solution-services/todl-build-system/index.ts",
+        "default": "./dist/solution-services/todl-build-system/index.js"
+      },
+      "require": "./dist/solution-services/todl-build-system/index.js"
     },
     "./domain": {
       "types": "./dist/domain/index.d.ts",
