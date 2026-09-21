@@ -187,7 +187,7 @@ export class SolutionBuildManager
     private static BindingIds(manifest: ProjectManifest): readonly string[]
     {
         const ids: string[] = [];
-        if (manifest.metaModel !== undefined) ids.push(manifest.metaModel.id);
+        for (const meta of manifest.metaModels ?? []) ids.push(meta.id);
         for (const library of manifest.libraries ?? []) ids.push(library.id);
         return ids;
     }

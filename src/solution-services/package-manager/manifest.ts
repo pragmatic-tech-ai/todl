@@ -20,10 +20,10 @@ export interface DependencyRef
 }
 
 /**
- * A parsed `project.plexus`. Which fields are present depends on `type`:
- * a meta-model carries `id` + `modelVersion`; a library adds `libVersion` +
- * `metaModel`; an architecture carries `metaModel` + `libraries` (and is not
- * published — it is built by the application build system).
+ * A parsed `project.plexus`. Meta-models and libraries are the same internally: both
+ * carry `id` + `packageVersion` and may declare any number of `metaModels` + `libraries`
+ * base references. An architecture carries the same bindings but is not published (it is
+ * built by the application build system) and uses `name` as its id.
  */
 export interface ProjectManifest
 {
@@ -33,13 +33,11 @@ export interface ProjectManifest
   version: number;
   /** Package id. Meta-models and libraries carry it; an architecture uses `name`. */
   id?: string;
-  /** Published version of a meta-model. */
-  modelVersion?: string;
-  /** Published version of a library. */
-  libVersion?: string;
-  /** The meta-model a library (or architecture) is built against. */
-  metaModel?: DependencyRef;
-  /** The libraries an architecture depends on. */
+  /** Published version of the package (meta-model or library). */
+  packageVersion?: string;
+  /** The meta-models this project is authored against (any number). */
+  metaModels?: DependencyRef[];
+  /** The libraries this project draws on (any number). */
   libraries?: DependencyRef[];
 }
 

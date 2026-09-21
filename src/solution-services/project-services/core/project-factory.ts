@@ -130,11 +130,3 @@ export function isVersioned(
     const f = factory as Partial<IVersionedProjectFactory>
     return typeof f.getVersion === 'function' && typeof f.setVersion === 'function'
 }
-
-// The producer kinds — a project type that publishes a base other projects consume.
-// Values match the corresponding factory `ProjectType` strings.
-export enum ProducerKind
-{
-    MetaModel = 'meta-model',
-    Library = 'library',
-}

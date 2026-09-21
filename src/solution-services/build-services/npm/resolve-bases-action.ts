@@ -20,7 +20,7 @@ export class ResolveBasesAction implements IBuildAction
     {
         const manifest = ctx.Manifest;
         const bindings: ProjectBaseModelBindings = {
-            ...(manifest.metaModel !== undefined ? { metaModel: manifest.metaModel } : {}),
+            ...(manifest.metaModels !== undefined ? { metaModels: manifest.metaModels } : {}),
             ...(manifest.libraries !== undefined ? { libraries: manifest.libraries } : {}),
         };
         const { bases, problems } = await RecursiveProjectReferencesResolver.Resolve(ctx.Source, bindings);

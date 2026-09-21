@@ -23,7 +23,7 @@ export class RecursiveProjectReferencesResolver
         const visited = new Set<string>()
 
         const queue: PackageRef[] = []
-        if (bindings.metaModel !== undefined) queue.push({ kind: PackageKind.MetaModel, ...bindings.metaModel })
+        for (const meta of bindings.metaModels ?? []) queue.push({ kind: PackageKind.MetaModel, ...meta })
         for (const lib of bindings.libraries ?? []) queue.push({ kind: PackageKind.Library, ...lib })
 
         while (queue.length > 0)

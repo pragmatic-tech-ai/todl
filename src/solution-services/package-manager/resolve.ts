@@ -33,7 +33,7 @@ export interface ResolvedClosure
 export function dependencyNames(manifest: ProjectManifest, scope: string = DEFAULT_SCOPE): string[]
 {
   const names: string[] = [];
-  if (manifest.metaModel !== undefined) names.push(`${scope}/${manifest.metaModel.id}`);
+  for (const meta of manifest.metaModels ?? []) names.push(`${scope}/${meta.id}`);
   for (const library of manifest.libraries ?? []) names.push(`${scope}/${library.id}`);
   return names;
 }

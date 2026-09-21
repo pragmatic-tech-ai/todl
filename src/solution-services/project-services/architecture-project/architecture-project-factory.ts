@@ -24,7 +24,7 @@ import { ARCHITECTURE_CLAUDE_ROOT } from '../core/scaffold.generated.js'
 // factories (resolved by extension) — editors own files, this factory owns the project.
 interface ArchitectureManifest extends ProjectManifestEnvelope
 {
-    metaModel?: PublishedBaseModelReference                  // the meta-model this architecture conforms to
+    metaModels?: readonly PublishedBaseModelReference[]      // the meta-models this architecture conforms to
     libraries?: readonly PublishedBaseModelReference[]       // the technology libraries it draws on
     diagrams?: { [path: string]: { viewpoints: string[] } }   // per-diagram viewpoint selection
 }
@@ -52,7 +52,8 @@ export class ArchitectureProjectFactory extends TodlProjectFactory
     {
         const manifest: ArchitectureManifest = {
             type: ArchitectureProjectFactory.ProjectType, name, version: 1,
-            ...(bindings?.metaModel !== undefined ? { metaModel: bindings.metaModel } : {}),
+            ...(bindings?.metaModels !== undefined && bindings.metaModels.length > 0
+                ? { metaModels: bindings.metaModels } : {}),
             ...(bindings?.libraries !== undefined && bindings.libraries.length > 0
                 ? { libraries: bindings.libraries } : {}),
         }

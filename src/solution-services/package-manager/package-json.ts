@@ -51,10 +51,10 @@ function packageId(manifest: ProjectManifest): string
   return manifest.id;
 }
 
-/** The publishable version of a manifest, by kind. */
+/** The publishable version of a manifest (unified across meta-models and libraries). */
 function packageVersion(manifest: ProjectManifest): string
 {
-  const version = manifest.type === ProjectType.MetaModel ? manifest.modelVersion : manifest.libVersion;
+  const version = manifest.packageVersion;
   if (version === undefined || version.length === 0)
   {
     throw new Error(`project "${manifest.name}" (${manifest.type}) has no publishable version`);
@@ -63,9 +63,9 @@ function packageVersion(manifest: ProjectManifest): string
 }
 
 /**
- * Transform an authored manifest into its generated npm package.json. Meta-model
- * and library dependencies (`metaModel`, `libraries`) become npm `dependencies`,
- * each pinned to its exact version and prefixed with the configured scope.
+ * Transform an authored manifest into its generated npm package.json. Every base
+ * reference (`metaModels`, `libraries`) becomes an npm `dependency`, each pinned to its
+ * exact version and prefixed with the configured scope.
  */
 export function toPackageJson(manifest: ProjectManifest, options: PackageJsonOptions = {}): PackageJson
 {
@@ -79,10 +79,9 @@ export function toPackageJson(manifest: ProjectManifest, options: PackageJsonOpt
   const id = packageId(manifest);
 
   const dependencies: Record<string, string> = {};
-  // A library depends on its meta-model; a meta-model has no TODL dependency.
-  if (manifest.metaModel !== undefined)
+  for (const meta of manifest.metaModels ?? [])
   {
-    dependencies[`${scope}/${manifest.metaModel.id}`] = manifest.metaModel.version;
+    dependencies[`${scope}/${meta.id}`] = meta.version;
   }
   for (const library of manifest.libraries ?? [])
   {

@@ -98,7 +98,7 @@ export {
     type PackageStore,
     type PackageSink,
 } from './publish/stores.js';
-export { deriveClasses, projectAnnotations, type PublishedClass } from './publish/reflect.js';
+export { deriveClasses, projectAnnotations } from './publish/reflect.js';
 export { StoragePackageSource } from './solution-services/package-manager/storage-package-source.js';
 
 export {
@@ -189,7 +189,6 @@ export {
 export { Project, ProjectNode, ProjectNodeKind } from './solution-services/project-services/core/project.js';
 export {
     PROJECT_MANIFEST_FILENAME,
-    ProducerKind,
     isPublishable,
     canGeneratePresentation,
     isVersioned,
@@ -217,6 +216,7 @@ export {
     isBaseProducing,
     type IBaseProducingProjectFactory,
 } from './solution-services/project-services/core/producer-project-factory.js';
+export { ProducerProjectFactory, type ProducerManifest } from './solution-services/project-services/core/producer-project-factory-base.js';
 // Producer seams (concrete impls live app-side; todl owns the contracts + keys).
 export {
     PresentationBakerKey,
@@ -243,9 +243,8 @@ export {
     type PresentationFacets,
 } from './solution-services/project-services/core/presentation-model.js';
 export {
-    LibraryResources,
-    type LibraryBundleManifest,
+    ProducerResources,
+    type PackageBundle,
     type ScannedResources,
-    type PublishedClass as LibraryPublishedClass,
-} from './solution-services/project-services/library-project/library-bundle.js';
-export { type MetaModelManifestFile } from './solution-services/project-services/meta-model-project/meta-model-manifest.js';
+    type PublishedClass,
+} from './solution-services/project-services/core/package-bundle.js';

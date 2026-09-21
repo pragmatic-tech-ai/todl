@@ -127,6 +127,6 @@ test('loads the meta-model and its libraries into a solution', async () =>
     for (const libStorage of [awsStorage, microsoftStorage])
     {
         const libManifest = JSON.parse(await libStorage.ReadText('project.plexus'))
-        assert.equal(libManifest.metaModel.id, metaId)
+        assert.equal(libManifest.metaModels[0].id, metaId)
     }
 })

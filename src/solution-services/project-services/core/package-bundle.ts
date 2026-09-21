@@ -1,8 +1,9 @@
 import { type IStorage } from '@pragmatic-tech-ai/todl-runtime'
 import { deriveClasses as todlDeriveClasses, type PublishedClass as TodlPublishedClass } from '../../../publish/reflect.js'
 import { type TodlDocument } from '../../../compiler-services/emit/json.js'
+import { type PublishedBaseModelReference } from './base-binding.js'
 
-// One instantiable class a published library provides — a palette item. The
+// One instantiable class a published package provides — a palette item. The
 // model-derived fields (id/localId/label/icon/concept) come from TODL's PublishedClass;
 // the bundle adds the resource paths, attached later (present only when the
 // conventionally-named file exists).
@@ -13,20 +14,24 @@ export interface PublishedClass extends TodlPublishedClass
     doc?: string          // "docs/<id>.md"          — present only if the file exists
 }
 
-// The library.json bundle manifest — the index a consumer reads to discover and mount a
-// published library. `classes` are the palette items; `assets`/`docs`/`samples` list
-// every file under those bundle folders.
-export interface LibraryBundleManifest
+// The unified bundle.json — the index a consumer reads to discover and mount a published
+// package. Meta-models and libraries emit the same shape (a meta-model simply tends to
+// have empty bindings/classes): identity + the base references it was authored against +
+// palette classes + resource-folder listings + package-level annotations (so a consumer
+// understands a package without parsing model.json).
+export interface PackageBundle
 {
     id: string
     version: string
     name: string
     description?: string
-    metaModel: { id: string; version: string }
-    classes: PublishedClass[]
-    assets: string[]
-    docs: string[]
-    samples: string[]
+    metaModels: readonly PublishedBaseModelReference[]
+    libraries: readonly PublishedBaseModelReference[]
+    classes: readonly PublishedClass[]
+    assets: readonly string[]
+    docs: readonly string[]
+    samples: readonly string[]
+    annotations: Record<string, Record<string, unknown>>
 }
 
 export interface ScannedResources
@@ -38,10 +43,11 @@ export interface ScannedResources
     warnings: string[]
 }
 
-// Discovery of a library's instantiable classes + its reserved resource folders.
-export class LibraryResources
+// Discovery of a producer package's instantiable classes + its reserved resource folders.
+// Shared by every producer project (meta-model and library are the same internally).
+export class ProducerResources
 {
-    // The instantiable classes a library provides. The derivation (Instance-tier
+    // The instantiable classes a package provides. The derivation (Instance-tier
     // clabjects with `attrs.class === true`, label + annotation icon) lives in TODL core
     // (deriveClasses); this delegates and widens the result so resource paths can be
     // attached at publish time.
@@ -52,7 +58,7 @@ export class LibraryResources
 
     // Scan the reserved resource folders and bind files to classes by filename convention
     // (stem = class id): visuals/<id>.mural, thumbnails/<id>.png, docs/<id>.md attach to a
-    // known class; every asset/doc/sample file is also listed for the bundle manifest. A
+    // known class; every asset/doc/sample file is also listed for the bundle. A
     // visuals/thumbnails file whose stem is not a known class id is an orphan — warned,
     // never fatal. A missing folder lists as empty.
     public static async Scan(storage: IStorage, classIds: readonly string[]): Promise<ScannedResources>

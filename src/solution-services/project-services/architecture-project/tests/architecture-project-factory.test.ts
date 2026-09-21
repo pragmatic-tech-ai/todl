@@ -30,24 +30,24 @@ test('declares the architecture type, base needs, and .diagram/.todl formats', (
     assert.equal(kinds.get('.todl'), ProjectNodeKind.Todl)
 })
 
-test('createProject writes the bound meta-model and libraries into the manifest', async (t) => {
+test('createProject writes the bound meta-models and libraries into the manifest', async (t) => {
     const storage = await tempStorage(t)
     await factory().createProject(storage, 'Acme', {
-        metaModel: { id: 'tech-architecture', version: '1.2.0' },
+        metaModels: [{ id: 'tech-architecture', version: '1.2.0' }],
         libraries: [{ id: 'aws', version: '3.0.0' }, { id: 'microsoft', version: '2.1.0' }],
     })
     const m = JSON.parse(await storage.ReadText('project.plexus'))
     assert.equal(m.type, 'architecture')
     assert.equal(m.name, 'Acme')
-    assert.deepEqual(m.metaModel, { id: 'tech-architecture', version: '1.2.0' })
+    assert.deepEqual(m.metaModels, [{ id: 'tech-architecture', version: '1.2.0' }])
     assert.deepEqual(m.libraries, [{ id: 'aws', version: '3.0.0' }, { id: 'microsoft', version: '2.1.0' }])
 })
 
 test('createProject omits empty base bindings from the manifest', async (t) => {
     const storage = await tempStorage(t)
-    await factory().createProject(storage, 'Bare', { libraries: [] })
+    await factory().createProject(storage, 'Bare', { metaModels: [], libraries: [] })
     const m = JSON.parse(await storage.ReadText('project.plexus'))
-    assert.equal('metaModel' in m, false)
+    assert.equal('metaModels' in m, false)
     assert.equal('libraries' in m, false)
 })
 

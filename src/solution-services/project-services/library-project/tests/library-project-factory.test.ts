@@ -34,29 +34,29 @@ function factory(provider: ServiceProvider = new ServiceProvider()): LibraryProj
     return new LibraryProjectFactory(provider)
 }
 
-test('declares the library type, meta-model need, .todl format, producer kind', () => {
+test('declares the library type, meta-model need, and .todl format', () => {
     const f = factory()
     assert.equal(LibraryProjectFactory.ProjectType, 'library')
     assert.equal(f.requiresMetaModel, true)
     assert.equal(f.formats[0]!.kind, ProjectNodeKind.Todl)
-    assert.equal(f.producerKind, 'library')
+    assert.equal(f.typeId, 'library')
 })
 
-test('createProject binds the meta-model and writes id/libVersion + scaffold', async (t) => {
+test('createProject binds the meta-models and writes id/packageVersion + scaffold', async (t) => {
     const storage = await tempDir(t)
-    await factory().createProject(storage, 'AWS Lib', { metaModel: META_REF })
+    await factory().createProject(storage, 'AWS Lib', { metaModels: [META_REF] })
     const m = JSON.parse(await storage.ReadText('project.plexus'))
     assert.equal(m.type, 'library')
     assert.equal(m.id, 'aws-lib')
-    assert.equal(m.libVersion, '0.1.0')
-    assert.deepEqual(m.metaModel, META_REF)
+    assert.equal(m.packageVersion, '0.1.0')
+    assert.deepEqual(m.metaModels, [META_REF])
     assert.match(await storage.ReadText('CLAUDE.md'), /library/i)
 })
 
 test('getVersion / setVersion round-trip through the manifest', async (t) => {
     const storage = await tempDir(t)
     const f = factory()
-    await f.createProject(storage, 'L', { metaModel: META_REF })
+    await f.createProject(storage, 'L', { metaModels: [META_REF] })
     assert.equal(await f.getVersion(storage), '0.1.0')
     await f.setVersion(storage, '9.9.9')
     assert.equal(await f.getVersion(storage), '9.9.9')
@@ -78,14 +78,14 @@ test('publish is blocked when the bound meta-model is not published', async (t) 
     const store = await tempDir(t)      // empty — the base cannot resolve
     const provider = providerWith(new FakePresentationBaker(), store)
     const f = factory(provider)
-    await f.createProject(project, 'L', { metaModel: META_REF })
+    await f.createProject(project, 'L', { metaModels: [META_REF] })
     await project.WriteText('taxonomy.todl', LIB)
     const result = await f.publish(await f.openProject(project), project, provider)
     assert.equal(result.ok, false)
     assert.match(result.message, /not published/i)
 })
 
-test('publish bakes, persists model.json + library.json, and writes the generated presentation', async (t) => {
+test('publish bakes, persists model.json + bundle.json, and writes the generated presentation', async (t) => {
     const project = await tempDir(t)
     const store = await tempDir(t)
     // Seed the bound meta-model so RecursiveProjectReferencesResolver resolves it.
@@ -94,7 +94,7 @@ test('publish bakes, persists model.json + library.json, and writes the generate
     const baker = new FakePresentationBaker({ ok: true, icons: 2 })
     const provider = providerWith(baker, store)
     const f = factory(provider)
-    await f.createProject(project, 'AWS', { metaModel: META_REF })
+    await f.createProject(project, 'AWS', { metaModels: [META_REF] })
     await project.WriteText('taxonomy.todl', LIB)
     const result = await f.publish(await f.openProject(project), project, provider)
 
@@ -103,6 +103,6 @@ test('publish bakes, persists model.json + library.json, and writes the generate
     assert.equal(baker.calls[0]!.options.dictName, 'LibraryPresentation')
     assert.equal(baker.calls[0]!.options.iconPrefix, '')
     assert.equal(await store.Exists('aws/0.1.0/model.json'), true)
-    assert.equal(await store.Exists('aws/0.1.0/library.json'), true)
+    assert.equal(await store.Exists('aws/0.1.0/bundle.json'), true)
     assert.equal(await project.Exists('presentation.generated.mu'), true)
 })

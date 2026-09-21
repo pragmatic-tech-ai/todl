@@ -34,21 +34,21 @@ function factory(provider: ServiceProvider = new ServiceProvider()): MetaModelPr
     return new MetaModelProjectFactory(provider)
 }
 
-test('declares the meta-model type, .todl format, and producer kind', () => {
+test('declares the meta-model type and .todl format', () => {
     const f = factory()
     assert.equal(MetaModelProjectFactory.ProjectType, 'meta-model')
     assert.equal(f.formats[0]!.extension, '.todl')
     assert.equal(f.formats[0]!.kind, ProjectNodeKind.Todl)
-    assert.equal(f.producerKind, 'meta-model')
+    assert.equal(f.typeId, 'meta-model')
 })
 
-test('createProject writes id/modelVersion and the meta-model scaffold', async (t) => {
+test('createProject writes id/packageVersion and the meta-model scaffold', async (t) => {
     const storage = await tempDir(t)
     await factory().createProject(storage, 'My Model')
     const m = JSON.parse(await storage.ReadText('project.plexus'))
     assert.equal(m.type, 'meta-model')
     assert.equal(m.id, 'my-model')
-    assert.equal(m.modelVersion, '0.1.0')
+    assert.equal(m.packageVersion, '0.1.0')
     assert.match(await storage.ReadText('CLAUDE.md'), /meta-model/i)
     assert.equal(await storage.Exists('.claude/meta-model-guide.md'), true)
     assert.equal(await storage.Exists('.claude/commands/new-concept.md'), true)
@@ -72,7 +72,7 @@ test('compileToDocument compiles the project .todl into a document', async (t) =
     assert.ok(doc.nodes.some((n) => n.id.includes('Widget')))
 })
 
-test('publish bakes, persists model.json + manifest.json, and writes the generated presentation', async (t) => {
+test('publish bakes, persists model.json + bundle.json, and writes the generated presentation', async (t) => {
     const project = await tempDir(t)
     const store = await tempDir(t)
     const baker = new FakePresentationBaker({ ok: true, icons: 3 })
@@ -89,7 +89,7 @@ test('publish bakes, persists model.json + manifest.json, and writes the generat
     assert.equal(baker.calls[0]!.options.dictName, 'MetaModelPresentation')
     assert.equal(baker.calls[0]!.options.iconPrefix, 'mm:')
     assert.equal(await store.Exists('widgets/0.1.0/model.json'), true)
-    assert.equal(await store.Exists('widgets/0.1.0/manifest.json'), true)
+    assert.equal(await store.Exists('widgets/0.1.0/bundle.json'), true)
     assert.equal(await project.Exists('presentation.generated.mu'), true)
 })
 

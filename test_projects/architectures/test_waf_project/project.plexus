@@ -2,10 +2,12 @@
   "type": "architecture",
   "name": "todl-test-waf",
   "version": 1,
-  "metaModel": {
-    "id": "todl-test-tech-architecture",
-    "version": "0.1.0"
-  },
+  "metaModels": [
+    {
+      "id": "todl-test-tech-architecture",
+      "version": "0.1.0"
+    }
+  ],
   "libraries": [
     {
       "id": "todl-test-microsoft",

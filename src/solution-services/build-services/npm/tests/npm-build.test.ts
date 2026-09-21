@@ -13,7 +13,7 @@ const META = "namespace acme { concept Widget { label : string?; } }";
 async function metaProject(): Promise<FakeStorage>
 {
     const storage = new FakeStorage();
-    await storage.WriteText("project.plexus", JSON.stringify({ type: "meta-model", name: "widgets", version: 1, id: "widgets", modelVersion: "0.1.0" }));
+    await storage.WriteText("project.plexus", JSON.stringify({ type: "meta-model", name: "widgets", version: 1, id: "widgets", packageVersion: "0.1.0" }));
     await storage.WriteText("model.todl", META);
     await storage.WriteText("README.md", "# widgets");
     return storage;

@@ -1,6 +1,6 @@
 import { type IServiceProvider } from '@pragmatic-tech-ai/todl-runtime'
 import { type TodlDocument } from '../../../compiler-services/emit/json.js'
-import { ProducerKind, type IProjectFactory } from './project-factory.js'
+import { type IProjectFactory } from './project-factory.js'
 
 // Optional capability a producer factory (meta-model, library) implements: compile the
 // project's sources into its base TodlDocument — exactly as publish would, given
@@ -9,7 +9,6 @@ import { ProducerKind, type IProjectFactory } from './project-factory.js'
 // WorkspaceBaseResolver share this one pipeline.
 export interface IBaseProducingProjectFactory
 {
-    readonly producerKind: ProducerKind
     compileToDocument(
         storage: import('@pragmatic-tech-ai/todl-runtime').IStorage,
         bases: TodlDocument[],

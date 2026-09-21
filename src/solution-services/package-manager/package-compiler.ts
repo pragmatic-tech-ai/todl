@@ -92,7 +92,7 @@ export class PackageCompiler
     const packageJson = toPackageJson(project.manifest, { scope }); // throws on an architecture
 
     const bindings: ProjectBaseModelBindings = {
-      ...(project.manifest.metaModel !== undefined ? { metaModel: project.manifest.metaModel } : {}),
+      ...(project.manifest.metaModels !== undefined ? { metaModels: project.manifest.metaModels } : {}),
       ...(project.manifest.libraries !== undefined ? { libraries: project.manifest.libraries } : {}),
     };
     const { bases, problems } = await RecursiveProjectReferencesResolver.Resolve(this.source, bindings);
@@ -117,9 +117,9 @@ export class PackageCompiler
   private dependencyRefs(manifest: ProjectManifest): PackageRef[]
   {
     const refs: PackageRef[] = [];
-    if (manifest.metaModel !== undefined)
+    for (const meta of manifest.metaModels ?? [])
     {
-      refs.push({ kind: PackageKind.MetaModel, id: manifest.metaModel.id, version: manifest.metaModel.version });
+      refs.push({ kind: PackageKind.MetaModel, id: meta.id, version: meta.version });
     }
     for (const library of manifest.libraries ?? [])
     {

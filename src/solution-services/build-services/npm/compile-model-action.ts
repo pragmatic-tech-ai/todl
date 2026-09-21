@@ -41,9 +41,9 @@ export class CompileModelAction implements IBuildAction
     private static DependencyRefs(manifest: ProjectManifest): PackageRef[]
     {
         const refs: PackageRef[] = [];
-        if (manifest.metaModel !== undefined)
+        for (const meta of manifest.metaModels ?? [])
         {
-            refs.push({ kind: PackageKind.MetaModel, id: manifest.metaModel.id, version: manifest.metaModel.version });
+            refs.push({ kind: PackageKind.MetaModel, id: meta.id, version: meta.version });
         }
         for (const library of manifest.libraries ?? [])
         {
