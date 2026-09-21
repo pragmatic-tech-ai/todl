@@ -33,3 +33,11 @@ export { ResolveBasesAction } from "./npm/resolve-bases-action.js";
 export { CompileModelAction } from "./npm/compile-model-action.js";
 export { EmitPackageLayoutAction } from "./npm/emit-package-layout-action.js";
 export { NpmPackageBuildSystem } from "./npm/npm-package-build-system.js";
+// Solution builds (spec §9): dependency-ordered multi-project build.
+export { SolutionDependencyGraph, type SolutionOrder } from "./solution/solution-dependency-graph.js";
+export { BuildOutputSource } from "./solution/build-output-source.js";
+export {
+    SolutionBuildManager,
+    type SolutionProject,
+    type SolutionBuildRequest,
+} from "./solution/solution-build-manager.js";
