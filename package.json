@@ -1,6 +1,6 @@
 {
   "name": "@pragmatic-tech-ai/todl",
-  "version": "0.34.0",
+  "version": "0.35.0",
   "description": "Typed substrate for authoring and reasoning over ontologies and taxonomies",
   "type": "module",
   "main": "dist/index.js",
@@ -95,7 +95,7 @@
   "license": "Apache-2.0",
   "dependencies": {
     "@pragmatic-tech-ai/mural": "^0.55.13",
-    "@pragmatic-tech-ai/todl-runtime": "^0.5.4",
+    "@pragmatic-tech-ai/todl-runtime": "^0.5.7",
     "vscode-languageserver": "^9.0.1",
     "vscode-languageserver-textdocument": "^1.0.12",
     "vscode-languageserver-types": "3.17.5"
