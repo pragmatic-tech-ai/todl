@@ -189,6 +189,7 @@ export {
 export { Project, ProjectNode, ProjectNodeKind } from './solution-services/project-services/core/project.js';
 export {
     PROJECT_MANIFEST_FILENAME,
+    ProducerKind,
     isPublishable,
     canGeneratePresentation,
     isVersioned,

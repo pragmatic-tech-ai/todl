@@ -146,6 +146,7 @@ export abstract class ProducerProjectFactory extends TodlProjectFactory
         }
 
         const bundle: PackageBundle = {
+            type: this.typeId,
             id: manifest.id, version: manifest.packageVersion, name: manifest.name ?? manifest.id,
             ...(manifest.description !== undefined ? { description: manifest.description } : {}),
             metaModels, libraries,

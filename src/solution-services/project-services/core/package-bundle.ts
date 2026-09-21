@@ -21,6 +21,11 @@ export interface PublishedClass extends TodlPublishedClass
 // understands a package without parsing model.json).
 export interface PackageBundle
 {
+    // The user-facing project type this package was published from ('meta-model' |
+    // 'library'). Meta-models and libraries are identical internally, so a single
+    // bundle.json is emitted for both; this field is the discriminator a consumer uses to
+    // present them in their (separately-managed) surfaces.
+    type: string
     id: string
     version: string
     name: string
