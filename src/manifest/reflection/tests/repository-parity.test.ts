@@ -1,8 +1,8 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { Repository } from "../../../model/model.js";
-import { Cardinality } from "../../../model/graph.js";
-import { ManifestEmitter } from "../../../emit/manifest.js";
+import { Repository } from "../../../compiler-services/model/model.js";
+import { Cardinality } from "../../../compiler-services/model/graph.js";
+import { ManifestEmitter } from "../../../compiler-services/emit/manifest.js";
 import { ManifestWriter } from "../../manifest-writer.js";
 import { Manifest } from "../reflection.js";
 import type { ReflectedNode } from "../reflection.js";

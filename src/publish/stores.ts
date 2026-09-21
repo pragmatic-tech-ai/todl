@@ -6,8 +6,8 @@
  * blob sink and the graph store are injected by the consumer.
  */
 
-import { graphFromJSON } from "../emit/json.js";
-import type { GraphStore } from "../model/graph-store.js";
+import { graphFromJSON } from "../compiler-services/emit/json.js";
+import type { GraphStore } from "../compiler-services/model/graph-store.js";
 import type { CompiledPackage } from "./publish.js";
 
 /** Where and how a compiled package is persisted. */

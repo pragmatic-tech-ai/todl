@@ -1,5 +1,5 @@
 import { Domain, type PackageSource, type PackageRef } from "../../../domain/domain.js";
-import { Severity, DiagnosticCode, type Diagnostic } from "../../../diagnostics/diagnostic.js";
+import { Severity, DiagnosticCode, type Diagnostic } from "../../../compiler-services/diagnostics/diagnostic.js";
 
 // The headless composition engine (renderer-side): loads each member package
 // into one Domain via the injected PackageSource and collects load/bind failures

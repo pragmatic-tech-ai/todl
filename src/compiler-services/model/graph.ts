@@ -56,7 +56,7 @@ export enum Direction
  * `enums.ts` is the single canonical owner (frozen codes One=0 … OneOrMore=3);
  * the model re-exports it so both tiers share one enum. `T[+]` = `OneOrMore`.
  */
-import { Cardinality } from "../manifest/enums.js";
+import { Cardinality } from "../../manifest/enums.js";
 export { Cardinality };
 
 /** A literal field value. Enum selections and references are edges, not attrs. */

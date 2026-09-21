@@ -1,7 +1,7 @@
 import { ServiceKey, type IServiceProvider, type IStorage } from '@pragmatic-tech-ai/todl-runtime'
-import { checkAgainst } from '../../../api.js'
-import { toJSON, type TodlDocument } from '../../../emit/json.js'
-import { Severity } from '../../../diagnostics/diagnostic.js'
+import { checkAgainst } from '../../../compiler-services/api.js'
+import { toJSON, type TodlDocument } from '../../../compiler-services/emit/json.js'
+import { Severity } from '../../../compiler-services/diagnostics/diagnostic.js'
 import { compilePackage, PackageKind, type PackageRef } from '../../../publish/publish.js'
 import { BlobPackageStore } from '../../../publish/stores.js'
 import {

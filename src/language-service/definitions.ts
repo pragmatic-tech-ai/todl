@@ -1,8 +1,8 @@
 import type { Range, Position } from "vscode-languageserver-types";
-import type { SourceSpan } from "../diagnostics/span.js";
+import type { SourceSpan } from "../compiler-services/diagnostics/span.js";
 import {
   DeclKind, type NamespaceNode, type Declaration, type InstanceDecl, type Term,
-} from "../parse/ast.js";
+} from "../compiler-services/parse/ast.js";
 import { spanToRange } from "./position.js";
 import { SymbolKind } from "./symbols.js";
 

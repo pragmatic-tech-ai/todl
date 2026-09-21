@@ -1,11 +1,11 @@
 import type { Diagnostic } from "vscode-languageserver-types";
-import { parse } from "../parse/parser.js";
-import { tokenize, type Token } from "../parse/lexer.js";
-import { checkAgainst } from "../api.js";
-import type { SourceFile } from "../diagnostics/span.js";
-import type { TodlDocument } from "../emit/json.js";
-import type { Repository } from "../model/model.js";
-import type { NamespaceNode } from "../parse/ast.js";
+import { parse } from "../compiler-services/parse/parser.js";
+import { tokenize, type Token } from "../compiler-services/parse/lexer.js";
+import { checkAgainst } from "../compiler-services/api.js";
+import type { SourceFile } from "../compiler-services/diagnostics/span.js";
+import type { TodlDocument } from "../compiler-services/emit/json.js";
+import type { Repository } from "../compiler-services/model/model.js";
+import type { NamespaceNode } from "../compiler-services/parse/ast.js";
 import { buildReferenceIndex, type ReferenceIndex } from "./reference-index.js";
 import { buildDefinitionIndex, type DefinitionIndex } from "./definitions.js";
 import { mapDiagnostics, mapDiagnostic } from "./diagnostics.js";

@@ -1,5 +1,5 @@
 import type { SignatureHelp, SignatureInformation, Position } from "vscode-languageserver-types";
-import { Cardinality } from "../model/graph.js";
+import { Cardinality } from "../compiler-services/model/graph.js";
 import type { Analysis } from "./analysis.js";
 import { assignmentContextAt } from "./schema-context.js";
 

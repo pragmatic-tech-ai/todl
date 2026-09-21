@@ -6,7 +6,7 @@
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { TodlDocument } from "../../emit/json.js";
+import type { TodlDocument } from "../../compiler-services/emit/json.js";
 import type { TodlPackageMeta } from "./package-json.js";
 import type { InstalledPackage } from "./resolve.js";
 

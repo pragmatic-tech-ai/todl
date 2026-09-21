@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { check, checkAgainst } from "../../api.js";
-import { toJSON } from "../../emit/json.js";
+import { check, checkAgainst } from "../../compiler-services/api.js";
+import { toJSON } from "../../compiler-services/emit/json.js";
 import { TODL, DocumentSource, type TodlDefinition } from "../index.js";
 
 // Stand-ins for the compiled `tech-architecture` meta-model and `Microsoft`

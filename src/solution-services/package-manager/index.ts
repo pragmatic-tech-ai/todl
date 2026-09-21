@@ -18,7 +18,6 @@ export {
   type CompileResult,
   type PackageCompilerDeps,
 } from "./package-compiler.js";
-export { RegistryBaseResolver, type BaseResolver, type RegistryFactory } from "./base-resolver.js";
 export { PackageManager } from "./package-manager.js";
 export {
   PackageRegistryClient,

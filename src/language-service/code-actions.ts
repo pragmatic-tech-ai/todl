@@ -1,9 +1,9 @@
 import {
   CodeActionKind, type CodeAction, type Diagnostic, type Range, type Position, type TextEdit,
 } from "vscode-languageserver-types";
-import { DiagnosticCode } from "../diagnostics/diagnostic.js";
-import { TokenKind } from "../parse/lexer.js";
-import { DeclKind, type Declaration, type InstanceDecl } from "../parse/ast.js";
+import { DiagnosticCode } from "../compiler-services/diagnostics/diagnostic.js";
+import { TokenKind } from "../compiler-services/parse/lexer.js";
+import { DeclKind, type Declaration, type InstanceDecl } from "../compiler-services/parse/ast.js";
 import type { Analysis } from "./analysis.js";
 
 export function codeActions(a: Analysis, uri: string, _range: Range, diagnostics: Diagnostic[]): CodeAction[]

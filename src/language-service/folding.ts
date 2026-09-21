@@ -1,4 +1,4 @@
-import { TokenKind, type Token } from "../parse/lexer.js";
+import { TokenKind, type Token } from "../compiler-services/parse/lexer.js";
 import type { FoldingRange } from "vscode-languageserver-types";
 import type { Analysis } from "./analysis.js";
 

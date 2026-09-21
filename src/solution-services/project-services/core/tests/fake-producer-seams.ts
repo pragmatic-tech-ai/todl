@@ -1,6 +1,6 @@
 import { type IStorage } from '@pragmatic-tech-ai/todl-runtime'
 import { PackageKind } from '../../../../publish/publish.js'
-import { type TodlDocument } from '../../../../emit/json.js'
+import { type TodlDocument } from '../../../../compiler-services/emit/json.js'
 import { type IPresentationBaker, type BakeOptions, type BakeResult } from '../presentation-baker.js'
 import { type IProducerStorageBackends } from '../producer-backends.js'
 

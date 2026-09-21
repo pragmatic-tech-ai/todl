@@ -25,7 +25,7 @@ import {
     type RelationshipDef,
     type FieldDef,
     type TaxonomyDef,
-} from "../manifest/logical.js";
+} from "../../manifest/logical.js";
 
 /** The manifest version a data graph is pinned to. */
 export interface ManifestRef

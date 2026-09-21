@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DiagnosticSeverity } from "vscode-languageserver-types";
-import { Severity, DiagnosticCode } from "../../diagnostics/diagnostic.js";
+import { Severity, DiagnosticCode } from "../../compiler-services/diagnostics/diagnostic.js";
 import { mapDiagnostic } from "../diagnostics.js";
 
 test("mapDiagnostic maps severity + span and preserves the code", () => {

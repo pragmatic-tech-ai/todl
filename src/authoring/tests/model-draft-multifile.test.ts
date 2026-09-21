@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { check } from "../../api.js";
+import { check } from "../../compiler-services/api.js";
 import { ModelDraft } from "../model-draft.js";
 
 // A meta-model base: concepts + viewpoints the arch files draw on.

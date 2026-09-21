@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { check } from "../../index.js";
+import { check } from "../../../index.js";
 import { DiagnosticCode } from "../../diagnostics/diagnostic.js";
 
 // icon : MuralResource { key : resourceKey? } — the inherited `key` param is a

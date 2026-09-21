@@ -4,7 +4,7 @@
 // Usage: npx tsx --conditions=development scripts/check-project.ts <metaModelDir> <dataDir> <libFile...>
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { check } from "../src/api.js";
+import { check } from "../src/compiler-services/api.js";
 
 function todlFiles(dir: string): string[]
 {

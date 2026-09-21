@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { check, checkAgainst } from "../api.js";
-import { toJSON } from "../emit/json.js";
+import { check, checkAgainst } from "../compiler-services/api.js";
+import { toJSON } from "../compiler-services/emit/json.js";
 
 test("a migrated-style library compiles clean: bare siblings + uses cross-refs", () => {
   const base = toJSON(check([{ uri: "ea.todl", text:

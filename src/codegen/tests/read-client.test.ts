@@ -2,9 +2,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { Repository } from "../../model/model.js";
-import { Cardinality } from "../../model/graph.js";
-import { toJSON } from "../../emit/json.js";
+import { Repository } from "../../compiler-services/model/model.js";
+import { Cardinality } from "../../compiler-services/model/graph.js";
+import { toJSON } from "../../compiler-services/emit/json.js";
 import { generateReadClient } from "../read-client.js";
 import { TechCatalog } from "./fixtures/tech-catalog.generated.js";
 

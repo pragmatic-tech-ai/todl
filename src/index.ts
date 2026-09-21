@@ -25,16 +25,16 @@ export {
     type Node,
     type Edge,
     type GraphChangeArgs,
-} from './model/graph.js';
+} from './compiler-services/model/graph.js';
 
-export { InMemoryGraphStore, type GraphStore } from './model/graph-store.js';
+export { InMemoryGraphStore, type GraphStore } from './compiler-services/model/graph-store.js';
 
 export {
     CypherGraphStore,
     type CypherSession,
     type CypherOp,
     type CypherRow,
-} from './model/cypher-store.js';
+} from './compiler-services/model/cypher-store.js';
 
 export {
     ReactiveNode,
@@ -44,19 +44,19 @@ export {
     type CollectionChangedArgs,
     type INotifyPropertyChanged,
     type INotifyCollectionChanged,
-} from './model/reactive.js';
+} from './compiler-services/model/reactive.js';
 
-export { Builder, type TermInput } from './model/builder.js';
-export { MetaKind } from './model/kinds.js';
+export { Builder, type TermInput } from './compiler-services/model/builder.js';
+export { MetaKind } from './compiler-services/model/kinds.js';
 
 export {
     Repository,
     type FieldSchema,
     type RelationshipSchema,
     type ConceptSchema,
-} from './model/model.js';
+} from './compiler-services/model/model.js';
 
-export { EntityBase, type Entity } from './model/entity.js';
+export { EntityBase, type Entity } from './compiler-services/model/entity.js';
 
 export {
     toElement,
@@ -66,9 +66,9 @@ export {
     type IncomingRef,
     type PresentationHint,
     type ToElementOptions,
-} from './model/element.js';
+} from './compiler-services/model/element.js';
 
-export { FrozenRepository } from './model/frozen.js';
+export { FrozenRepository } from './compiler-services/model/frozen.js';
 
 export {
     generateReadClient,
@@ -79,7 +79,7 @@ export {
 export { ModelDraft, type InstanceDescriptor } from './authoring/model-draft.js';
 
 export { TodlFileStore, type FileIO } from './authoring/file-store.js';
-export { deriveBindings, emitModelTodl, type ModelBindings } from './emit/todl.js';
+export { deriveBindings, emitModelTodl, type ModelBindings } from './compiler-services/emit/todl.js';
 
 export {
     compilePackage,
@@ -121,14 +121,14 @@ export {
     isIn,
     not,
     type Expr,
-} from './predicate/ast.js';
+} from './compiler-services/predicate/ast.js';
 
-export { evaluate, satisfies, type EvalValue } from './predicate/evaluate.js';
+export { evaluate, satisfies, type EvalValue } from './compiler-services/predicate/evaluate.js';
 
-export { validate } from './validate/validate.js';
-export { Severity, DiagnosticCode, type Diagnostic } from './diagnostics/diagnostic.js';
-export type { Position, SourceSpan, SourceFile } from './diagnostics/span.js';
-export { check, checkAgainst } from './api.js';
+export { validate } from './compiler-services/validate/validate.js';
+export { Severity, DiagnosticCode, type Diagnostic } from './compiler-services/diagnostics/diagnostic.js';
+export type { Position, SourceSpan, SourceFile } from './compiler-services/diagnostics/span.js';
+export { check, checkAgainst } from './compiler-services/api.js';
 
 export {
     toJSON,
@@ -141,16 +141,16 @@ export {
     type EmitOptions,
     type NodeDebug,
     type EdgeDebug,
-} from './emit/json.js';
+} from './compiler-services/emit/json.js';
 
-export { toMetaModule, type MetaModuleOptions } from './emit/js-module.js';
+export { toMetaModule, type MetaModuleOptions } from './compiler-services/emit/js-module.js';
 
 export { rewrite } from './migrate/rewriter.js';
 
-export { load, type LoadResult } from './parse/loader.js';
-export { parse, type ParseResult } from './parse/parser.js';
-export { parsePredicate } from './parse/predicate-parser.js';
-export { tokenize, TokenKind, type Token } from './parse/lexer.js';
+export { load, type LoadResult } from './compiler-services/parse/loader.js';
+export { parse, type ParseResult } from './compiler-services/parse/parser.js';
+export { parsePredicate } from './compiler-services/parse/predicate-parser.js';
+export { tokenize, TokenKind, type Token } from './compiler-services/parse/lexer.js';
 
 // ── Solution (SolutionManager + cross-project settings) ──
 // The engine composition module is authored in .mu (a plain `module` → a headless

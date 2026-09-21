@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { InMemoryGraphStore } from "../../model/graph-store.js";
+import { InMemoryGraphStore } from "../../compiler-services/model/graph-store.js";
 import type { CompiledPackage } from "../publish.js";
 import { GraphPackageStore } from "../stores.js";
 

@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { check, checkAgainst } from "../api.js";
-import { DiagnosticCode } from "../diagnostics/diagnostic.js";
+import { check, checkAgainst } from "../compiler-services/api.js";
+import { DiagnosticCode } from "../compiler-services/diagnostics/diagnostic.js";
 
 test("a standalone source resolves the prelude primitive `identifier` unqualified", () => {
   const { diagnostics } = check([{ uri: "a.todl", text: `namespace a { concept Thing { key : identifier; } }` }]);

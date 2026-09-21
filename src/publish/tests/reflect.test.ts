@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import type { TodlDocument } from "../../emit/json.js";
-import { MetaKind } from "../../model/kinds.js";
+import type { TodlDocument } from "../../compiler-services/emit/json.js";
+import { MetaKind } from "../../compiler-services/model/kinds.js";
 import { deriveClasses, projectAnnotations } from "../reflect.js";
 
 // A compiled doc with one clabject `az` (class=true) carrying a label and an

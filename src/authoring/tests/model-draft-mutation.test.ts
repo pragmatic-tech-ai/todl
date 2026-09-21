@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { Repository } from "../../model/model.js";
+import { Repository } from "../../compiler-services/model/model.js";
 import { ModelDraft } from "../model-draft.js";
 
 // Meta-model base : concept `component { label : string; impl : Technology }`.

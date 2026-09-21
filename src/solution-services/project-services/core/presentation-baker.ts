@@ -1,5 +1,5 @@
 import { ServiceKey, type IStorage } from '@pragmatic-tech-ai/todl-runtime'
-import { type TodlDocument } from '../../../emit/json.js'
+import { type TodlDocument } from '../../../compiler-services/emit/json.js'
 
 // The seam a producer factory (meta-model, library) bakes its presentation through.
 // Baking compiles the model's icons into a self-contained presentation.compiled.json

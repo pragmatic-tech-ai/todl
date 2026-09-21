@@ -3,11 +3,11 @@ import assert from "node:assert/strict";
 import { Repository } from "../../model/model.js";
 import { Cardinality } from "../../model/graph.js";
 import { ManifestEmitter } from "../manifest.js";
-import { ManifestModel, SELF_ORIGIN } from "../../manifest/logical.js";
-import { ManifestWriter } from "../../manifest/manifest-writer.js";
-import { ManifestReader } from "../../manifest/manifest-reader.js";
-import { ManifestValidator } from "../../manifest/manifest-validator.js";
-import { TableId } from "../../manifest/enums.js";
+import { ManifestModel, SELF_ORIGIN } from "../../../manifest/logical.js";
+import { ManifestWriter } from "../../../manifest/manifest-writer.js";
+import { ManifestReader } from "../../../manifest/manifest-reader.js";
+import { ManifestValidator } from "../../../manifest/manifest-validator.js";
+import { TableId } from "../../../manifest/enums.js";
 
 // Fixture: Element <- Component <- Surface; Component declares name + color and
 // a dependsOn relationship; Surface overrides color (subtype wins). A taxonomy

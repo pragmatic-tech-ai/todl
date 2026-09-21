@@ -1,5 +1,5 @@
 import { type IStorage } from '@pragmatic-tech-ai/todl-runtime'
-import { type SourceFile } from '../../../diagnostics/span.js'
+import { type SourceFile } from '../../../compiler-services/diagnostics/span.js'
 
 // Shared TODL source-collection + project-relative path helpers, used by the producer
 // factories (publish/compile) and validation. Static methods on one type rather than

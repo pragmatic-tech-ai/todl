@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parse } from "../../parse/parser.js";
+import { parse } from "../../compiler-services/parse/parser.js";
 import { buildDefinitionIndex } from "../definitions.js";
 import { SymbolKind } from "../symbols.js";
 

@@ -7,7 +7,7 @@
  */
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import type { SourceFile } from "../../diagnostics/span.js";
+import type { SourceFile } from "../../compiler-services/diagnostics/span.js";
 import { parseManifest, type ProjectManifest } from "./manifest.js";
 
 /** A non-`.todl` project file, carried into the package verbatim (bytes). */

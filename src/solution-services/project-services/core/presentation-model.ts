@@ -4,7 +4,7 @@
 // rather than free functions — the OOP counterpart of the former functional module.
 
 import { projectAnnotations } from '../../../publish/reflect.js'
-import { type TodlDocument, type JsonNode } from '../../../emit/json.js'
+import { type TodlDocument, type JsonNode } from '../../../compiler-services/emit/json.js'
 
 // The ontology-tier typeOf values presented as first-class entities. `field` (concept
 // attributes) is intentionally excluded.

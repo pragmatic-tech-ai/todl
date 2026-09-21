@@ -10,11 +10,11 @@
  * retained on the outcome for presentation / annotation baking.
  */
 
-import { checkAgainst } from "../api.js";
-import { toJSON, toJSONOwn, type TodlDocument, type EmitOptions } from "../emit/json.js";
-import { Severity, type Diagnostic } from "../diagnostics/diagnostic.js";
-import type { SourceFile } from "../diagnostics/span.js";
-import { preludeDocument } from "../stdlib/prelude.js";
+import { checkAgainst } from "../compiler-services/api.js";
+import { toJSON, toJSONOwn, type TodlDocument, type EmitOptions } from "../compiler-services/emit/json.js";
+import { Severity, type Diagnostic } from "../compiler-services/diagnostics/diagnostic.js";
+import type { SourceFile } from "../compiler-services/diagnostics/span.js";
+import { preludeDocument } from "../compiler-services/stdlib/prelude.js";
 import { deriveClasses, type PublishedClass } from "./reflect.js";
 import type { PackageStore } from "./stores.js";
 

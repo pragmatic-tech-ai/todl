@@ -1,4 +1,4 @@
-import { type Diagnostic } from '../../../diagnostics/diagnostic.js'
+import { type Diagnostic } from '../../../compiler-services/diagnostics/diagnostic.js'
 
 // Ambient feedback the engine emits and the host displays — status/progress/
 // diagnostics that are NOT a change to a Manager's own model. A UI host renders

@@ -5,12 +5,12 @@
  * `Graph` is a façade over a {@link Repository} (the internal engine) — composition
  * reuses the same first-wins `mergeBases` dedup the compiler uses.
  */
-import { mergeBases } from "../api.js";
-import { preludeDocument } from "../stdlib/prelude.js";
-import { Repository } from "../model/model.js";
-import { MetaKind } from "../model/kinds.js";
-import type { NodeId } from "../model/graph.js";
-import type { TodlDocument } from "../emit/json.js";
+import { mergeBases } from "../compiler-services/api.js";
+import { preludeDocument } from "../compiler-services/stdlib/prelude.js";
+import { Repository } from "../compiler-services/model/model.js";
+import { MetaKind } from "../compiler-services/model/kinds.js";
+import type { NodeId } from "../compiler-services/model/graph.js";
+import type { TodlDocument } from "../compiler-services/emit/json.js";
 import type { ModelSource } from "./source.js";
 import { Model, TodlDefinition } from "./handles.js";
 

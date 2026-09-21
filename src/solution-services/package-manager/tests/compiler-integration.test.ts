@@ -1,47 +1,49 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, mkdtempSync, mkdirSync, copyFileSync } from "node:fs";
+import { readFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { FakeStorage } from "@pragmatic-tech-ai/todl-runtime";
 import { PackageCompiler } from "../index.js";
+import { MemorySink } from "../sinks.js";
+import { FakeProducerBackends } from "../../project-services/core/tests/fake-producer-seams.js";
+import type { IProducerStorageBackends } from "../../project-services/core/producer-backends.js";
 
 const PROJECTS = join(dirname(fileURLToPath(import.meta.url)), "../../../../test_projects");
+const emptyBackends = (): IProducerStorageBackends => new FakeProducerBackends(new FakeStorage(), new FakeStorage());
 
-/** A temp copy of the microsoft library project with its meta-model dependency
- *  installed into node_modules under `scope` — a realistic "ready to pack" project.
- *  The dependency is installed under the SAME scope the project will pack with,
- *  as it would be in real usage. */
-async function setupLibraryProject(scope = "@pragmatic-tech-ai"): Promise<string>
+/** Compile the meta-model (no deps) and publish its model.json into a fresh
+ *  producer backend — the storage-backed equivalent of installing the dependency,
+ *  so a library resolves its base from it. */
+async function backendsWithMetaModel(): Promise<IProducerStorageBackends>
 {
-  const dir = join(mkdtempSync(join(tmpdir(), "todl-cli-")), "microsoft");
-  mkdirSync(dir, { recursive: true });
-  copyFileSync(join(PROJECTS, "libraries/microsoft/project.plexus"), join(dir, "project.plexus"));
-  copyFileSync(join(PROJECTS, "libraries/microsoft/microsoft.todl"), join(dir, "microsoft.todl"));
-  const dep = join(dir, "node_modules", scope, "todl-test-tech-architecture");
-  // Compile the meta-model project straight into the library's node_modules (it has
-  // no deps of its own, so this is offline). Mirrors a real `npm install` of the dep.
-  await new PackageCompiler().compile(join(PROJECTS, "meta-models/tech-architecture"), { scope, outDir: dep });
-  return dir;
+  const sink = new MemorySink();
+  const r = await new PackageCompiler(emptyBackends(), { createSink: () => sink }).compile(join(PROJECTS, "meta-models/tech-architecture"));
+  assert.ok(r.ok, `meta-model compiles: ${r.errors.map((e) => e.message).join(", ")}`);
+  const metaModels = new FakeStorage();
+  await metaModels.WriteText("todl-test-tech-architecture/0.1.0/model.json", sink.files.get("model.json") as string);
+  return new FakeProducerBackends(metaModels, new FakeStorage());
 }
 
-test("compile builds against installed deps and writes dist/", async () => {
-  const dir = await setupLibraryProject();
-  const result = await new PackageCompiler().compile(dir);
+test("compile builds against published bases and writes dist/", async () => {
+  const backends = await backendsWithMetaModel();
+  const outDir = join(mkdtempSync(join(tmpdir(), "todl-pc-")), "dist");
+  const result = await new PackageCompiler(backends).compile(join(PROJECTS, "libraries/microsoft"), { outDir });
   assert.ok(result.ok, `expected clean pack; errors: ${result.errors.map((e) => e.message).join(", ")}`);
 
-  const pkg = JSON.parse(readFileSync(join(dir, "dist", "package.json"), "utf8"));
+  const pkg = JSON.parse(readFileSync(join(outDir, "package.json"), "utf8"));
   assert.equal(pkg.name, "@pragmatic-tech-ai/todl-test-microsoft");
   assert.deepEqual(pkg.dependencies, { "@pragmatic-tech-ai/todl-test-tech-architecture": "0.1.0" });
-  // model.json + the embedded handle were written alongside it.
-  assert.match(readFileSync(join(dir, "dist", "index.js"), "utf8"), /export const document =/);
+  assert.match(readFileSync(join(outDir, "index.js"), "utf8"), /export const document =/);
 });
 
-test("compile honors a scope override end-to-end (name + resolution)", async () => {
-  const dir = await setupLibraryProject("@acme");
-  const result = await new PackageCompiler().compile(dir, { scope: "@acme" });
+test("compile honors a scope override for the package + dependency names", async () => {
+  const backends = await backendsWithMetaModel();
+  const outDir = join(mkdtempSync(join(tmpdir(), "todl-pc-")), "dist");
+  const result = await new PackageCompiler(backends).compile(join(PROJECTS, "libraries/microsoft"), { scope: "@acme", outDir });
   assert.ok(result.ok, `expected clean pack; errors: ${result.errors.map((e) => e.message).join(", ")}`);
-  const pkg = JSON.parse(readFileSync(join(dir, "dist", "package.json"), "utf8"));
+  const pkg = JSON.parse(readFileSync(join(outDir, "package.json"), "utf8"));
   assert.equal(pkg.name, "@acme/todl-test-microsoft");
   assert.deepEqual(pkg.dependencies, { "@acme/todl-test-tech-architecture": "0.1.0" });
 });

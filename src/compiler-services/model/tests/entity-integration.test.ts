@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { Repository, EntityBase, type Entity } from "../../index.js";
+import { Repository, EntityBase, type Entity } from "../../../index.js";
 
 // A meta-model-ish graph: concept `component`, taxonomy `component-category`
 // (represents component) with term `ai-agent`, and an instance `gw` whose

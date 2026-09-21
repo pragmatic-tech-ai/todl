@@ -6,9 +6,9 @@
  * (scalar + reference getters). Output is deterministic — everything sorted by id.
  */
 
-import { MetaKind } from "../model/kinds.js";
-import { Cardinality, type NodeId } from "../model/graph.js";
-import { Repository } from "../model/model.js";
+import { MetaKind } from "../compiler-services/model/kinds.js";
+import { Cardinality, type NodeId } from "../compiler-services/model/graph.js";
+import { Repository } from "../compiler-services/model/model.js";
 import { pascalCase, camelCase, pluralize, allocateNames } from "./naming.js";
 
 export interface ReadClientOptions

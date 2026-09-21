@@ -1,5 +1,5 @@
 import { DiagnosticSeverity, type Diagnostic } from "vscode-languageserver-types";
-import { Severity, type Diagnostic as TodlDiagnostic } from "../diagnostics/diagnostic.js";
+import { Severity, type Diagnostic as TodlDiagnostic } from "../compiler-services/diagnostics/diagnostic.js";
 import { spanToRange } from "./position.js";
 
 const SEVERITY: Record<Severity, DiagnosticSeverity> = {

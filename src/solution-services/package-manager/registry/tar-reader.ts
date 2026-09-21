@@ -8,7 +8,7 @@
  * the sibling writer `createTgz` predates the rule and is left as-is.
  */
 import { gunzipSync } from "node:zlib";
-import type { TodlDocument } from "../../../emit/json.js";
+import type { TodlDocument } from "../../../compiler-services/emit/json.js";
 import type { TodlPackageMeta } from "../package-json.js";
 import type { InstalledPackage } from "../resolve.js";
 

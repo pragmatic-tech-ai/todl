@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { Repository } from "../model.js";
 import { toJSON, graphFromJSON } from "../../emit/json.js";
 import { load } from "../../parse/loader.js";
-import { ModelDraft } from "../../authoring/model-draft.js";
+import { ModelDraft } from "../../../authoring/model-draft.js";
 import { toElement } from "../element.js";
 
 const MM = `namespace t {

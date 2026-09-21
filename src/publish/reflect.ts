@@ -4,8 +4,8 @@
  * traversal over a compiled `TodlDocument`; no I/O.
  */
 
-import { MetaKind } from "../model/kinds.js";
-import type { TodlDocument } from "../emit/json.js";
+import { MetaKind } from "../compiler-services/model/kinds.js";
+import type { TodlDocument } from "../compiler-services/emit/json.js";
 
 const ANNOTATED = "Annotated";
 const EXTENDS = "Extends";

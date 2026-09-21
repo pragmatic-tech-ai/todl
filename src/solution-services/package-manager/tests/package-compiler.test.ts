@@ -3,13 +3,15 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { check } from "../../../api.js";
-import { toJSON, type TodlDocument } from "../../../emit/json.js";
+import { FakeStorage } from "@pragmatic-tech-ai/todl-runtime";
+import { check } from "../../../compiler-services/api.js";
+import { toJSON, type TodlDocument } from "../../../compiler-services/emit/json.js";
 import { parseManifest } from "../manifest.js";
 import { MemorySink } from "../sinks.js";
 import type { Project } from "../project.js";
 import { PackageCompiler, type ProjectReader } from "../package-compiler.js";
-import type { BaseResolver } from "../base-resolver.js";
+import { FakeProducerBackends } from "../../project-services/core/tests/fake-producer-seams.js";
+import type { IProducerStorageBackends } from "../../project-services/core/producer-backends.js";
 
 const PROJECTS = join(dirname(fileURLToPath(import.meta.url)), "../../../../test_projects");
 type Src = { uri: string; text: string };
@@ -31,10 +33,14 @@ function reader(project: Project): ProjectReader
 {
   return { read: () => project };
 }
-/** A resolver returning fixed bases (dependency resolution, faked). */
-function resolver(bases: readonly TodlDocument[]): BaseResolver
+/** Empty producer backends — for projects that declare no bases. */
+const emptyBackends = (): IProducerStorageBackends => new FakeProducerBackends(new FakeStorage(), new FakeStorage());
+/** Backends with one meta-model published at `<id>/<version>/model.json`. */
+async function backendsWith(id: string, version: string, doc: TodlDocument): Promise<IProducerStorageBackends>
 {
-  return { resolve: () => Promise.resolve(bases) };
+  const metaModels = new FakeStorage();
+  await metaModels.WriteText(`${id}/${version}/model.json`, JSON.stringify(doc));
+  return new FakeProducerBackends(metaModels, new FakeStorage());
 }
 
 const metaDoc = toJSON(check(sources("meta-models/tech-architecture")).model);
@@ -42,7 +48,7 @@ const metaDoc = toJSON(check(sources("meta-models/tech-architecture")).model);
 test("compiles a meta-model into the npm package layout", async () => {
   const sink = new MemorySink();
   const project: Project = { directory: "/x", manifest: manifest("meta-models/tech-architecture"), sources: sources("meta-models/tech-architecture"), resources: [] };
-  const compiler = new PackageCompiler({ reader: reader(project), resolver: resolver([]), createSink: () => sink });
+  const compiler = new PackageCompiler(emptyBackends(), { reader: reader(project), createSink: () => sink });
 
   const result = await compiler.compile("/x");
   assert.ok(result.ok, result.errors.map((e) => e.message).join(", "));
@@ -54,15 +60,22 @@ test("compiles a meta-model into the npm package layout", async () => {
   assert.ok(result.package, "returns the in-memory package");
 });
 
-test("compiles a library against injected bases + records the dep", async () => {
+test("compiles a library against published bases + records the dep", async () => {
   const sink = new MemorySink();
   const project: Project = { directory: "/x", manifest: manifest("libraries/microsoft"), sources: sources("libraries/microsoft"), resources: [] };
-  const compiler = new PackageCompiler({ reader: reader(project), resolver: resolver([metaDoc]), createSink: () => sink });
+  const backends = await backendsWith("todl-test-tech-architecture", "0.1.0", metaDoc);
+  const compiler = new PackageCompiler(backends, { reader: reader(project), createSink: () => sink });
 
   const result = await compiler.compile("/x");
   assert.ok(result.ok, result.errors.map((e) => e.message).join(", "));
   const pkg = JSON.parse(sink.files.get("package.json") as string);
   assert.deepEqual(pkg.dependencies, { "@pragmatic-tech-ai/todl-test-tech-architecture": "0.1.0" });
+});
+
+test("blocks the compile when a declared base is not published", async () => {
+  const project: Project = { directory: "/x", manifest: manifest("libraries/microsoft"), sources: sources("libraries/microsoft"), resources: [] };
+  const compiler = new PackageCompiler(emptyBackends(), { reader: reader(project), createSink: () => new MemorySink() });
+  await assert.rejects(compiler.compile("/x"), /cannot resolve dependencies/);
 });
 
 test("packs non-.todl resources verbatim under resources/", async () => {
@@ -77,7 +90,7 @@ test("packs non-.todl resources verbatim under resources/", async () => {
       { path: "img/logo.svg", bytes: enc.encode("<svg/>") },
     ],
   };
-  const compiler = new PackageCompiler({ reader: reader(project), resolver: resolver([]), createSink: () => sink });
+  const compiler = new PackageCompiler(emptyBackends(), { reader: reader(project), createSink: () => sink });
 
   const result = await compiler.compile("/x");
   assert.ok(result.ok, result.errors.map((e) => e.message).join(", "));
@@ -89,7 +102,7 @@ test("packs non-.todl resources verbatim under resources/", async () => {
 test("a failing compile writes nothing and returns errors", async () => {
   const sink = new MemorySink();
   const bad: Project = { directory: "/x", manifest: manifest("meta-models/tech-architecture"), sources: [{ uri: "bad.todl", text: "element Broken : DoesNotExist;\n" }], resources: [] };
-  const compiler = new PackageCompiler({ reader: reader(bad), resolver: resolver([]), createSink: () => sink });
+  const compiler = new PackageCompiler(emptyBackends(), { reader: reader(bad), createSink: () => sink });
 
   const result = await compiler.compile("/x");
   assert.equal(result.ok, false);
@@ -99,6 +112,6 @@ test("a failing compile writes nothing and returns errors", async () => {
 
 test("refuses to compile an architecture (not published)", async () => {
   const project: Project = { directory: "/x", manifest: manifest("architectures/test_architecture"), sources: [], resources: [] };
-  const compiler = new PackageCompiler({ reader: reader(project), resolver: resolver([]), createSink: () => new MemorySink() });
+  const compiler = new PackageCompiler(emptyBackends(), { reader: reader(project), createSink: () => new MemorySink() });
   await assert.rejects(compiler.compile("/x"), /not published/);
 });

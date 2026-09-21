@@ -1,5 +1,5 @@
 import type { Position } from "vscode-languageserver-types";
-import { TokenKind, type Token } from "../parse/lexer.js";
+import { TokenKind, type Token } from "../compiler-services/parse/lexer.js";
 import type { Analysis } from "./analysis.js";
 import { positionToTodl } from "./position.js";
 

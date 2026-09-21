@@ -1,6 +1,6 @@
 import type { Range, Position } from "vscode-languageserver-types";
-import type { NamespaceNode } from "../parse/ast.js";
-import { visitReferences, RefRole } from "../parse/references.js";
+import type { NamespaceNode } from "../compiler-services/parse/ast.js";
+import { visitReferences, RefRole } from "../compiler-services/parse/references.js";
 import { spanToRange } from "./position.js";
 
 // Occurrence roles for the editor — the language-service's view of a reference's

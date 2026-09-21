@@ -1,8 +1,8 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { check } from "../../api.js";
-import { toJSON } from "../../emit/json.js";
-import type { SourceFile } from "../../diagnostics/span.js";
+import { check } from "../../compiler-services/api.js";
+import { toJSON } from "../../compiler-services/emit/json.js";
+import type { SourceFile } from "../../compiler-services/diagnostics/span.js";
 import { compilePackage, PackageKind } from "../publish.js";
 
 const META_SRC = `namespace ea {

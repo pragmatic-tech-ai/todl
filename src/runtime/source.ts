@@ -5,7 +5,7 @@
  * instances"); the store-backed loader (P2, DB/HTTP) is the same seam with a
  * different implementation and lands later.
  */
-import type { TodlDocument } from "../emit/json.js";
+import type { TodlDocument } from "../compiler-services/emit/json.js";
 
 /** Something that yields a document of instances to merge into a graph. */
 export interface ModelSource

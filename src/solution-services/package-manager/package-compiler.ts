@@ -1,13 +1,16 @@
 /**
  * `PackageCompiler` — the full pack pipeline as one class (design:
- * package-compiler): read a project directory, resolve its declared dependencies
+ * package-compiler): read a project directory, resolve its declared base bindings
  * into base documents, compile against them (the pure `compilePackage`), and emit
- * the npm package layout through a sink. I/O and dependency resolution are
- * injected seams (node/registry defaults) so the class is unit-testable.
+ * the npm package layout through a sink. Base resolution goes through the single
+ * `RecursiveProjectReferencesResolver`, reading published `model.json`s from the
+ * host-supplied `IProducerStorageBackends`; the app decides what that backend is
+ * (a storage root, or — in devUI — an adapter over `node_modules`). I/O (reader,
+ * sink) stays injectable so the class is unit-testable.
  */
 import { join } from "node:path";
-import type { Diagnostic } from "../../diagnostics/diagnostic.js";
-import type { TodlDocument } from "../../emit/json.js";
+import type { Diagnostic } from "../../compiler-services/diagnostics/diagnostic.js";
+import type { TodlDocument } from "../../compiler-services/emit/json.js";
 import {
   compilePackage,
   PackageKind,
@@ -16,11 +19,13 @@ import {
   type CompiledPackage,
 } from "../../publish/publish.js";
 import type { PackageSink } from "../../publish/stores.js";
+import { RecursiveProjectReferencesResolver } from "../project-services/core/base-resolver.js";
+import type { IProducerStorageBackends } from "../project-services/core/producer-backends.js";
+import type { ProjectBaseModelBindings } from "../project-services/core/base-binding.js";
 import { FileSink } from "./sinks.js";
 import { readProject, type Project, type ResourceFile } from "./project.js";
 import type { ProjectManifest } from "./manifest.js";
 import { toPackageJson, DEFAULT_SCOPE, type PackageJson, type TodlPackageMeta } from "./package-json.js";
-import { RegistryBaseResolver, type BaseResolver } from "./base-resolver.js";
 
 /** Reads a project directory → manifest + .todl sources. */
 export interface ProjectReader
@@ -62,31 +67,40 @@ export interface CompileResult
 export interface PackageCompilerDeps
 {
   reader?: ProjectReader;
-  resolver?: BaseResolver;
   createSink?: SinkFactory;
 }
 
 export class PackageCompiler
 {
   private readonly reader: ProjectReader;
-  private readonly resolver: BaseResolver;
   private readonly createSink: SinkFactory;
 
-  constructor(deps: PackageCompilerDeps = {})
+  /** `backends` supplies the published `model.json`s a project's bases resolve
+   *  from (the recursive resolver's storage seam). `reader`/`createSink` default
+   *  to node:fs. */
+  constructor(private readonly backends: IProducerStorageBackends, deps: PackageCompilerDeps = {})
   {
     this.reader = deps.reader ?? new NodeProjectReader();
-    this.resolver = deps.resolver ?? new RegistryBaseResolver();
     this.createSink = deps.createSink ?? ((dir) => new FileSink(dir));
   }
 
-  /** Read → resolve deps → compile → emit. Writes nothing on a failing compile.
+  /** Read → resolve bases → compile → emit. Writes nothing on a failing compile.
    *  Throws for an architecture manifest and for an unresolvable dependency. */
   async compile(directory: string, options: CompileOptions = {}): Promise<CompileResult>
   {
     const project = this.reader.read(directory);
     const scope = options.scope ?? DEFAULT_SCOPE;
     const packageJson = toPackageJson(project.manifest, { scope }); // throws on an architecture
-    const bases = await this.resolver.resolve(directory, project.manifest, scope);
+
+    const bindings: ProjectBaseModelBindings = {
+      ...(project.manifest.metaModel !== undefined ? { metaModel: project.manifest.metaModel } : {}),
+      ...(project.manifest.libraries !== undefined ? { libraries: project.manifest.libraries } : {}),
+    };
+    const { bases, problems } = await RecursiveProjectReferencesResolver.Resolve(this.backends, bindings);
+    if (problems.length > 0)
+    {
+      throw new Error(`cannot resolve dependencies: ${problems.join("; ")}`);
+    }
 
     const identity: PackageIdentity = { id: packageJson.todl.id, version: packageJson.version, name: project.manifest.name };
     const outcome = compilePackage(bases, project.sources, identity, this.dependencyRefs(project.manifest));

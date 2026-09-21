@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { check, checkAgainst } from "../api.js";
-import { toJSON } from "../emit/json.js";
-import { Severity, DiagnosticCode, type Diagnostic } from "../diagnostics/diagnostic.js";
-import type { SourceFile } from "../diagnostics/span.js";
+import { check, checkAgainst } from "../compiler-services/api.js";
+import { toJSON } from "../compiler-services/emit/json.js";
+import { Severity, DiagnosticCode, type Diagnostic } from "../compiler-services/diagnostics/diagnostic.js";
+import type { SourceFile } from "../compiler-services/diagnostics/span.js";
 
 // A base meta-model: concepts + a base taxonomy the library will reference.
 const META: SourceFile = {

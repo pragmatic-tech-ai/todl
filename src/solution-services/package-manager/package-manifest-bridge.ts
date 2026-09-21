@@ -1,10 +1,10 @@
-import { Repository } from "../../model/model.js";
-import { graphFromJSON } from "../../emit/json.js";
-import { ManifestEmitter, type DataNode } from "../../emit/manifest.js";
+import { Repository } from "../../compiler-services/model/model.js";
+import { graphFromJSON } from "../../compiler-services/emit/json.js";
+import { ManifestEmitter, type DataNode } from "../../compiler-services/emit/manifest.js";
 import { ManifestWriter } from "../../manifest/manifest-writer.js";
 import { type LogicalManifest } from "../../manifest/logical.js";
 import { type ReflectedNode } from "../../manifest/reflection/reflection.js";
-import type { TodlDocument } from "../../emit/json.js";
+import type { TodlDocument } from "../../compiler-services/emit/json.js";
 import type { CompiledPackage } from "../../publish/publish.js";
 import type { ResolvedPackage, PackageRef as DomainPackageRef, SeedGraph } from "../../domain/domain.js";
 

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parse } from "../../parse/parser.js";
+import { parse } from "../../compiler-services/parse/parser.js";
 import { buildReferenceIndex, Role } from "../reference-index.js";
 
 function indexOf(src: string, uri = "d.todl")

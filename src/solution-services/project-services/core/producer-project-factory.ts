@@ -1,5 +1,5 @@
 import { type IServiceProvider } from '@pragmatic-tech-ai/todl-runtime'
-import { type TodlDocument } from '../../../emit/json.js'
+import { type TodlDocument } from '../../../compiler-services/emit/json.js'
 import { ProducerKind, type IProjectFactory } from './project-factory.js'
 
 // Optional capability a producer factory (meta-model, library) implements: compile the

@@ -1,9 +1,9 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { FakeStorage, type IStorage } from "@pragmatic-tech-ai/todl-runtime";
-import { Repository } from "../../../model/model.js";
-import { Cardinality } from "../../../model/graph.js";
-import { toJSON } from "../../../emit/json.js";
+import { Repository } from "../../../compiler-services/model/model.js";
+import { Cardinality } from "../../../compiler-services/model/graph.js";
+import { toJSON } from "../../../compiler-services/emit/json.js";
 import { BlobPackageStore, type PackageSink } from "../../../publish/stores.js";
 import { PackageKind, type CompiledPackage, type PackageDocument } from "../../../publish/publish.js";
 import { Domain } from "../../../domain/domain.js";

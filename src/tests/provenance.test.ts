@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { check, checkAgainst } from "../api.js";
-import { toJSON } from "../emit/json.js";
+import { check, checkAgainst } from "../compiler-services/api.js";
+import { toJSON } from "../compiler-services/emit/json.js";
 
 // Meta-model with a reified `~>` connector; an arch model authors `a ~> b`.
 const meta = { uri: "mm.todl", text: `namespace mm {

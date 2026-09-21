@@ -1,5 +1,5 @@
 import type { Range, Position } from "vscode-languageserver-types";
-import type { SourceSpan, Position as TodlPosition } from "../diagnostics/span.js";
+import type { SourceSpan, Position as TodlPosition } from "../compiler-services/diagnostics/span.js";
 
 // TODL positions are 1-based line/column; LSP positions are 0-based
 // line/character. Both use an exclusive end. This module is the ONLY place in

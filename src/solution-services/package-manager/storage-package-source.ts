@@ -7,8 +7,8 @@ import {
     type DomainEdge,
 } from "../../domain/domain.js";
 import { type ReflectedNode } from "../../manifest/reflection/reflection.js";
-import { fromJSON } from "../../emit/json.js";
-import { ManifestEmitter, type DataGraph } from "../../emit/manifest.js";
+import { fromJSON } from "../../compiler-services/emit/json.js";
+import { ManifestEmitter, type DataGraph } from "../../compiler-services/emit/manifest.js";
 import { ManifestWriter } from "../../manifest/manifest-writer.js";
 import { type PackageDocument } from "../../publish/publish.js";
 

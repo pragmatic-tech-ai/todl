@@ -5,7 +5,7 @@
  * consumes. Pure over an in-memory `InstalledPackage[]`; the host-specific
  * discovery (Node node_modules, browser bundled handles) lives in loaders.
  */
-import type { TodlDocument } from "../../emit/json.js";
+import type { TodlDocument } from "../../compiler-services/emit/json.js";
 import { ProjectType, type ProjectManifest } from "./manifest.js";
 import { DEFAULT_SCOPE, type TodlPackageMeta } from "./package-json.js";
 import { TODL, type Graph } from "../../runtime/index.js";

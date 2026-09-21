@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { Repository } from "../model.js";
 import { toJSON } from "../../emit/json.js";
 import { FrozenRepository } from "../frozen.js";
-import { FrozenRepository as FrozenFromRoot, type Entity } from "../../index.js";
+import { FrozenRepository as FrozenFromRoot, type Entity } from "../../../index.js";
 
 // Build a small graph with the mutable Repository, serialize it, and reload it
 // frozen. gw --implemented-by--> copilot; a <-> b via `peer` (a cycle).

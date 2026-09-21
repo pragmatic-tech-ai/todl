@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { Repository } from "../../model/model.js";
-import { Cardinality } from "../../model/graph.js";
-import { toJSON } from "../../emit/json.js";
+import { Repository } from "../../compiler-services/model/model.js";
+import { Cardinality } from "../../compiler-services/model/graph.js";
+import { toJSON } from "../../compiler-services/emit/json.js";
 import { ModelDraft } from "../../authoring/model-draft.js";
 import { TechCatalog } from "./fixtures/tech-catalog.generated.js";
 

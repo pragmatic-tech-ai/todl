@@ -5,10 +5,10 @@
  * consumer concern, so TODL stays environment-agnostic.
  */
 
-import { Repository } from "../model/model.js";
-import { toJSON } from "../emit/json.js";
-import { checkAgainst } from "../api.js";
-import type { Diagnostic } from "../diagnostics/diagnostic.js";
+import { Repository } from "../compiler-services/model/model.js";
+import { toJSON } from "../compiler-services/emit/json.js";
+import { checkAgainst } from "../compiler-services/api.js";
+import type { Diagnostic } from "../compiler-services/diagnostics/diagnostic.js";
 import type { ModelDraft } from "./model-draft.js";
 
 /** Read/write the underlying file. Back it with node:fs, Plexus IStorage, etc. */

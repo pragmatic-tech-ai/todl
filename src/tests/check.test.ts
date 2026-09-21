@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { check } from "../api.js";
+import { check } from "../compiler-services/api.js";
 
 const CONCEPTS = `namespace ea { concept Component { label : string; } }`;
 // One syntax error (in bad.todl) + one semantic error (missing required label).

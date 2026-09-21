@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { check } from "../../api.js";
+import { check } from "../../compiler-services/api.js";
 import { SymbolKind, symbolKindOf } from "../symbols.js";
 
 test("symbolKindOf distinguishes concepts, primitives, and instances", () => {

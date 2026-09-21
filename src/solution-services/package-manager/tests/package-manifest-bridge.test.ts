@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { PackageManifestBridge } from "../package-manifest-bridge.js";
-import { check } from "../../../api.js";
+import { check } from "../../../compiler-services/api.js";
 import { compilePackage } from "../../../publish/publish.js";
 import { ManifestWriter } from "../../../manifest/manifest-writer.js";
 import { Manifest } from "../../../manifest/reflection/reflection.js";

@@ -4,8 +4,9 @@ import { readFileSync, readdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { check, checkAgainst } from "../../../api.js";
-import { toJSON } from "../../../emit/json.js";
+import { check, checkAgainst } from "../../../compiler-services/api.js";
+import { toJSON } from "../../../compiler-services/emit/json.js";
+import { FakeStorage } from "@pragmatic-tech-ai/todl-runtime";
 import { DocumentSource, TODL } from "../../../runtime/index.js";
 import {
   parseManifest,
@@ -15,6 +16,7 @@ import {
   composeClosure,
   dependencyNames,
 } from "../index.js";
+import { FakeProducerBackends } from "../../project-services/core/tests/fake-producer-seams.js";
 
 const PROJECTS = join(dirname(fileURLToPath(import.meta.url)), "../../../../test_projects");
 
@@ -38,19 +40,24 @@ const metaDoc = toJSON(check(sources("meta-models/tech-architecture")).model);
 const msDoc = toJSON(checkAgainst([metaDoc], sources("libraries/microsoft")).model);
 const awsDoc = toJSON(checkAgainst([metaDoc], sources("libraries/aws")).model);
 
-/** Pack the three schema packages into a fresh temp node_modules and return it. */
+/** Pack the three schema packages into a fresh temp node_modules and return it.
+ *  Bases resolve from a producer backend seeded with the compiled meta-model —
+ *  the storage-backed equivalent of an installed dependency. */
 async function installFixture(): Promise<string>
 {
   const nodeModules = join(mkdtempSync(join(tmpdir(), "todl-pm-")), "node_modules");
-  const packInto = async (project: string, bases: ReturnType<typeof toJSON>[]): Promise<void> => {
+  const metaModels = new FakeStorage();
+  await metaModels.WriteText("todl-test-tech-architecture/0.1.0/model.json", JSON.stringify(metaDoc));
+  const withMeta = new FakeProducerBackends(metaModels, new FakeStorage());
+  const empty = new FakeProducerBackends(new FakeStorage(), new FakeStorage());
+  const packInto = async (project: string, backends: FakeProducerBackends): Promise<void> => {
     const m = manifest(project);
     const dir = join(nodeModules, "@pragmatic-tech-ai", m.id as string);
-    // Inject the bases the fixture already compiled, instead of resolving from disk.
-    await new PackageCompiler({ resolver: { resolve: () => Promise.resolve(bases) } }).compile(join(PROJECTS, project), { outDir: dir });
+    await new PackageCompiler(backends).compile(join(PROJECTS, project), { outDir: dir });
   };
-  await packInto("meta-models/tech-architecture", []);
-  await packInto("libraries/microsoft", [metaDoc]);
-  await packInto("libraries/aws", [metaDoc]);
+  await packInto("meta-models/tech-architecture", empty);
+  await packInto("libraries/microsoft", withMeta);
+  await packInto("libraries/aws", withMeta);
   return nodeModules;
 }
 

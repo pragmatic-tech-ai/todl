@@ -1,5 +1,5 @@
 import { PackageKind, type PackageRef } from '../../../publish/publish.js'
-import { type TodlDocument } from '../../../emit/json.js'
+import { type TodlDocument } from '../../../compiler-services/emit/json.js'
 import { type ProjectBaseModelBindings } from './base-binding.js'
 import { type IProducerStorageBackends } from './producer-backends.js'
 

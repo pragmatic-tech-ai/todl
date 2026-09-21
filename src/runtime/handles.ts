@@ -5,9 +5,9 @@
  * `Instance` is the domain tier, and `Model` is an instance container. Reads
  * delegate to the repository, so `EdgeKind`/`Tier`/attrs never leak to a caller.
  */
-import { MetaKind } from "../model/kinds.js";
-import { EdgeKind, Direction, Tier, type NodeId } from "../model/graph.js";
-import type { Repository } from "../model/model.js";
+import { MetaKind } from "../compiler-services/model/kinds.js";
+import { EdgeKind, Direction, Tier, type NodeId } from "../compiler-services/model/graph.js";
+import type { Repository } from "../compiler-services/model/model.js";
 
 /** A node's readable name: its `name` attr, else its `id` attr, else the raw id. */
 function nameOf(repo: Repository, id: NodeId): string

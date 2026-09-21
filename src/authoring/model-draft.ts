@@ -10,14 +10,14 @@
  * are frozen — mutators touch own instances only.
  */
 
-import { Tier, EdgeKind, type NodeId, type Scalar, type Node } from "../model/graph.js";
-import { Repository, type FieldSchema } from "../model/model.js";
-import { type Entity } from "../model/entity.js";
-import { toJSON, fromJSON, type TodlDocument } from "../emit/json.js";
-import { checkAgainst } from "../api.js";
-import { preludeDocument } from "../stdlib/prelude.js";
-import { collectOperators, deriveBindings, emitModelTodl } from "../emit/todl.js";
-import type { Diagnostic } from "../diagnostics/diagnostic.js";
+import { Tier, EdgeKind, type NodeId, type Scalar, type Node } from "../compiler-services/model/graph.js";
+import { Repository, type FieldSchema } from "../compiler-services/model/model.js";
+import { type Entity } from "../compiler-services/model/entity.js";
+import { toJSON, fromJSON, type TodlDocument } from "../compiler-services/emit/json.js";
+import { checkAgainst } from "../compiler-services/api.js";
+import { preludeDocument } from "../compiler-services/stdlib/prelude.js";
+import { collectOperators, deriveBindings, emitModelTodl } from "../compiler-services/emit/todl.js";
+import type { Diagnostic } from "../compiler-services/diagnostics/diagnostic.js";
 
 const INSTANCE_TIER = Tier[Tier.Instance];
 const RELATIONSHIP = EdgeKind[EdgeKind.Relationship];

@@ -1,7 +1,7 @@
-import type { NodeId } from "../model/graph.js";
-import { Tier } from "../model/graph.js";
-import { MetaKind } from "../model/kinds.js";
-import type { Repository } from "../model/model.js";
+import type { NodeId } from "../compiler-services/model/graph.js";
+import { Tier } from "../compiler-services/model/graph.js";
+import { MetaKind } from "../compiler-services/model/kinds.js";
+import type { Repository } from "../compiler-services/model/model.js";
 
 // The kind of a resolved symbol, from the reflective graph. Ontology nodes stamp
 // their MetaKind on `typeOf` (see Builder); instances live in the Instance tier,
