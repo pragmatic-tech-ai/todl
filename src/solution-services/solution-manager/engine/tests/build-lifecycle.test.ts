@@ -9,13 +9,14 @@ import { FakeStorage, type IStorage, type StorageEntry } from "@pragmatic-tech-a
 import { NodeFsStorage } from "@pragmatic-tech-ai/todl-runtime/node";
 import {
     BuildSystemRegistry,
-    ProjectBuildManager,
+    TodlProjectBuildManager,
     SolutionBuildManager,
     NpmPackageBuildSystem,
     GeneratePresentationAction,
     RegistrySource,
     ProjectBuildStatus,
     type IBuildAction,
+    type TodlBuildContext,
     type IPackageSource,
     type SourcedPackage,
     type ProjectBuildOutput,
@@ -190,9 +191,9 @@ class BuildHarness
         return new RegistrySource(this.Registry);
     }
 
-    public Build(project: FixtureProject, source: IPackageSource, generators: readonly IBuildAction[] = []): Promise<ProjectBuildOutput>
+    public Build(project: FixtureProject, source: IPackageSource, generators: readonly IBuildAction<TodlBuildContext>[] = []): Promise<ProjectBuildOutput>
     {
-        return new ProjectBuildManager(this.registryWith(generators), this.provider).Build({
+        return new TodlProjectBuildManager(this.registryWith(generators), this.provider).Build({
             Project: project.Project,
             Manifest: project.Manifest,
             BuildSystemId: "npm-package",
@@ -216,15 +217,15 @@ class BuildHarness
         return this.Registry.ListPackages();
     }
 
-    private registryWith(generators: readonly IBuildAction[]): BuildSystemRegistry
+    private registryWith(generators: readonly IBuildAction<TodlBuildContext>[]): BuildSystemRegistry<TodlBuildContext, ProjectManifest>
     {
-        const registry = new BuildSystemRegistry();
+        const registry = new BuildSystemRegistry<TodlBuildContext, ProjectManifest>();
         registry.Register(new NpmPackageBuildSystem(generators));
         return registry;
     }
 }
 
-function presentationGenerator(): IBuildAction
+function presentationGenerator(): IBuildAction<TodlBuildContext>
 {
     return new GeneratePresentationAction(new TestPresentationBaker(), LIBRARY_BAKE);
 }

@@ -12,9 +12,11 @@ export { RegistrySource } from "./registry-source.js";
 export { SolutionRestore, type RestoreResult } from "./solution-restore.js";
 export { PackageStoreKey, StoragePackageStore, type IPackageStore } from "./package-store.js";
 export type { BuildOptions } from "./build-options.js";
-export type { IBuildAction, BuildActionContext } from "./build-action.js";
+export type { CoreBuildContext, IBuildAction } from "./build-action.js";
 export type { IBuildSystem } from "./build-system.js";
 export { BuildSystemRegistry } from "./build-system-registry.js";
+export type { TodlBuildContext, TodlBuildRequest } from "./todl-build-context.js";
+export { TodlProjectBuildManager } from "./todl-project-build-manager.js";
 export { NoOpBuildProgress, type IBuildProgress } from "./build-progress.js";
 export { type IBuildStorageProvider, type OpenedOutput } from "./build-storage-provider.js";
 export { StorageTree } from "./storage-tree.js";
@@ -28,7 +30,7 @@ export {
     type ProjectBuildOutcome,
     type SolutionBuildResult,
 } from "./build-result.js";
-export { ProjectBuildManager, type ProjectBuildRequest, type ProjectBuildOutput } from "./project-build-manager.js";
+export { ProjectBuildManager, type ProjectBuildRequest, type ProjectBuildOutput, type BuildContextFactory } from "./project-build-manager.js";
 // npm-package build system (spec §4): resolve -> compile -> emit.
 export { NpmArtifacts } from "./npm/npm-artifacts.js";
 export { ResolveBasesAction } from "./npm/resolve-bases-action.js";

@@ -1,4 +1,5 @@
-import type { IBuildAction, BuildActionContext } from "../build-action.js";
+import type { IBuildAction } from "../build-action.js";
+import type { TodlBuildContext } from "../todl-build-context.js";
 import type { ArtifactKey } from "../artifact-key.js";
 import { Severity } from "../diagnostic-sink.js";
 import { StorageTree } from "../storage-tree.js";
@@ -10,7 +11,7 @@ import { NpmArtifacts } from "./npm-artifacts.js";
 // Stages the npm package layout into the Sandbox: package.json, model.json (own-only +
 // deps), the raw .todl under src/, the browser-safe handle module (index.js/.d.ts), and
 // every non-.todl project file packed verbatim under resources/.
-export class EmitPackageLayoutAction implements IBuildAction
+export class EmitPackageLayoutAction implements IBuildAction<TodlBuildContext>
 {
     private static readonly ActionName = "emit-package-layout";
     private static readonly TodlExtension = ".todl";
@@ -22,7 +23,7 @@ export class EmitPackageLayoutAction implements IBuildAction
     public readonly Consumes: readonly ArtifactKey<unknown>[] = [NpmArtifacts.CompiledModel];
     public readonly Produces: readonly ArtifactKey<unknown>[] = [];
 
-    public async Execute(ctx: BuildActionContext): Promise<void>
+    public async Execute(ctx: TodlBuildContext): Promise<void>
     {
         const pkg = ctx.Artifacts.Get(NpmArtifacts.CompiledModel);
         if (pkg === undefined)
@@ -42,7 +43,7 @@ export class EmitPackageLayoutAction implements IBuildAction
 
     // Every non-.todl project file (except the manifest + build/vcs dirs) packed
     // verbatim under resources/, so the package carries what it needs to work.
-    private static async PackResources(ctx: BuildActionContext): Promise<void>
+    private static async PackResources(ctx: TodlBuildContext): Promise<void>
     {
         for (const path of await StorageTree.Files(ctx.Project))
         {

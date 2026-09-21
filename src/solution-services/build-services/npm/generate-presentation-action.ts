@@ -1,4 +1,5 @@
-import type { IBuildAction, BuildActionContext } from "../build-action.js";
+import type { IBuildAction } from "../build-action.js";
+import type { TodlBuildContext } from "../todl-build-context.js";
 import type { ArtifactKey } from "../artifact-key.js";
 import { Severity } from "../diagnostic-sink.js";
 import { PresentationResourceEmitter } from "../../project-services/core/presentation-model.js";
@@ -14,7 +15,7 @@ import { NpmArtifacts } from "./npm-artifacts.js";
 // the emit action — those keys reach the written model.json and consumers link icon
 // applications to the baked resources. A referenced icon with no readable project file is
 // reported as an error, stopping the pipeline before promotion.
-export class GeneratePresentationAction implements IBuildAction
+export class GeneratePresentationAction implements IBuildAction<TodlBuildContext>
 {
     private static readonly ActionName = "generate-presentation";
     private static readonly OutputBase = "";
@@ -31,7 +32,7 @@ export class GeneratePresentationAction implements IBuildAction
     {
     }
 
-    public async Execute(ctx: BuildActionContext): Promise<void>
+    public async Execute(ctx: TodlBuildContext): Promise<void>
     {
         const pkg = ctx.Artifacts.Get(NpmArtifacts.CompiledModel);
         if (pkg === undefined) return; // the compile gate did not produce a model

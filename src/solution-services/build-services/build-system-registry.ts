@@ -1,18 +1,20 @@
 import type { ArtifactKey } from "./artifact-key.js";
+import type { CoreBuildContext } from "./build-action.js";
 import type { IBuildSystem } from "./build-system.js";
-import type { ProjectManifest } from "../package-manager/manifest.js";
 
 // The module-contributed registry of build systems (spec §5). Registration validates
-// the action list's consume-before-produce ordering (spec §10 I/O decision) and
-// rejects duplicate ids. `For` filters to the systems applicable to a project.
-export class BuildSystemRegistry
+// the action list's consume-before-produce ordering (spec §10 I/O decision) and rejects
+// duplicate ids. `For` filters to the systems applicable to a build target. Generic over
+// the action-context type C and the build-target type T, so the registry names no todl
+// type; a host binds both (todl uses TodlBuildContext + ProjectManifest).
+export class BuildSystemRegistry<C extends CoreBuildContext, T>
 {
     private static readonly DuplicateIdPrefix = "build system already registered:";
     private static readonly UnsatisfiedConsumePrefix = "invalid build system";
 
-    private readonly systems = new Map<string, IBuildSystem>();
+    private readonly systems = new Map<string, IBuildSystem<C, T>>();
 
-    public Register(system: IBuildSystem): void
+    public Register(system: IBuildSystem<C, T>): void
     {
         if (this.systems.has(system.Id))
         {
@@ -22,23 +24,23 @@ export class BuildSystemRegistry
         this.systems.set(system.Id, system);
     }
 
-    public Get(id: string): IBuildSystem | undefined
+    public Get(id: string): IBuildSystem<C, T> | undefined
     {
         return this.systems.get(id);
     }
 
-    public Systems(): readonly IBuildSystem[]
+    public Systems(): readonly IBuildSystem<C, T>[]
     {
         return [...this.systems.values()];
     }
 
-    public For(manifest: ProjectManifest): readonly IBuildSystem[]
+    public For(target: T): readonly IBuildSystem<C, T>[]
     {
-        return this.Systems().filter((s) => s.AppliesTo(manifest));
+        return this.Systems().filter((s) => s.AppliesTo(target));
     }
 
     // Every action's Consumes key must be Produced by an earlier action in the list.
-    private static Validate(system: IBuildSystem): void
+    private static Validate<C extends CoreBuildContext, T>(system: IBuildSystem<C, T>): void
     {
         const produced = new Set<ArtifactKey<unknown>>();
         for (const action of system.Actions())

@@ -1,5 +1,6 @@
 import type { IBuildSystem } from "../build-system.js";
 import type { IBuildAction } from "../build-action.js";
+import type { TodlBuildContext } from "../todl-build-context.js";
 import { ProjectType, type ProjectManifest } from "../../package-manager/manifest.js";
 import { ResolveBasesAction } from "./resolve-bases-action.js";
 import { CompileModelAction } from "./compile-model-action.js";
@@ -13,7 +14,7 @@ import { EmitPackageLayoutAction } from "./emit-package-layout-action.js";
 // the model + handle + resources on its own. Generators run after compile (they read the
 // compiled model) and before emit (they may stamp the document emit serializes, or stage
 // extra files for promotion).
-export class NpmPackageBuildSystem implements IBuildSystem
+export class NpmPackageBuildSystem implements IBuildSystem<TodlBuildContext, ProjectManifest>
 {
     private static readonly SystemId = "npm-package";
     private static readonly Display = "npm package";
@@ -23,9 +24,9 @@ export class NpmPackageBuildSystem implements IBuildSystem
     public readonly DisplayName = NpmPackageBuildSystem.Display;
     public readonly OutputName = NpmPackageBuildSystem.Output;
 
-    private readonly actions: readonly IBuildAction[];
+    private readonly actions: readonly IBuildAction<TodlBuildContext>[];
 
-    constructor(generators: readonly IBuildAction[] = [])
+    constructor(generators: readonly IBuildAction<TodlBuildContext>[] = [])
     {
         this.actions = [
             new ResolveBasesAction(),
@@ -40,7 +41,7 @@ export class NpmPackageBuildSystem implements IBuildSystem
         return manifest.type === ProjectType.MetaModel || manifest.type === ProjectType.Library;
     }
 
-    public Actions(): readonly IBuildAction[]
+    public Actions(): readonly IBuildAction<TodlBuildContext>[]
     {
         return this.actions;
     }

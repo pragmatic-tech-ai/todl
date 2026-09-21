@@ -1,4 +1,5 @@
-import type { IBuildAction, BuildActionContext } from "../build-action.js";
+import type { IBuildAction } from "../build-action.js";
+import type { TodlBuildContext } from "../todl-build-context.js";
 import type { ArtifactKey } from "../artifact-key.js";
 import { Severity } from "../diagnostic-sink.js";
 import { compilePackage, PackageKind, type PackageRef, type PackageIdentity } from "../../../publish/publish.js";
@@ -10,7 +11,7 @@ import { NpmArtifacts } from "./npm-artifacts.js";
 // Compiles the project's .todl sources against the resolved bases (the pure
 // compilePackage), recording the declared deps on the own-only document, and publishes
 // the CompiledPackage. Compile errors are reported as diagnostics (stopping the pipeline).
-export class CompileModelAction implements IBuildAction
+export class CompileModelAction implements IBuildAction<TodlBuildContext>
 {
     private static readonly ActionName = "compile-model";
 
@@ -18,7 +19,7 @@ export class CompileModelAction implements IBuildAction
     public readonly Consumes: readonly ArtifactKey<unknown>[] = [NpmArtifacts.ResolvedBases];
     public readonly Produces: readonly ArtifactKey<unknown>[] = [NpmArtifacts.CompiledModel];
 
-    public async Execute(ctx: BuildActionContext): Promise<void>
+    public async Execute(ctx: TodlBuildContext): Promise<void>
     {
         const bases = ctx.Artifacts.Get(NpmArtifacts.ResolvedBases) ?? [];
         const sources = await TodlProjectSourceFiles.Collect(ctx.Project);

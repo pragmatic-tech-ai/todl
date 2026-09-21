@@ -2,7 +2,8 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { ArtifactKey } from "../artifact-key.js";
 import { BuildSystemRegistry } from "../build-system-registry.js";
-import { ProjectBuildManager } from "../project-build-manager.js";
+import { TodlProjectBuildManager } from "../todl-project-build-manager.js";
+import type { TodlBuildContext } from "../todl-build-context.js";
 import { ActionStatus, BuildStatus, ProjectBuildStatus } from "../build-result.js";
 import { Severity } from "../diagnostic-sink.js";
 import {
@@ -13,17 +14,17 @@ import {
     EmptyPackageSource,
     libraryManifest,
 } from "./fakes.js";
-import { ProjectType } from "../../package-manager/manifest.js";
+import { ProjectType, type ProjectManifest } from "../../package-manager/manifest.js";
 import { FakeStorage } from "@pragmatic-tech-ai/todl-runtime";
 
 function managerWith(system: FakeSystem, provider = new FakeStorageProvider()): {
-    manager: ProjectBuildManager;
+    manager: TodlProjectBuildManager;
     provider: FakeStorageProvider;
 }
 {
-    const registry = new BuildSystemRegistry();
+    const registry = new BuildSystemRegistry<TodlBuildContext, ProjectManifest>();
     registry.Register(system);
-    return { manager: new ProjectBuildManager(registry, provider), provider };
+    return { manager: new TodlProjectBuildManager(registry, provider), provider };
 }
 
 function request(overrides: { progress?: RecordingProgress } = {})

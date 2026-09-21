@@ -4,7 +4,7 @@ import { FakeStorage } from "@pragmatic-tech-ai/todl-runtime";
 import { BuildArtifacts } from "../../build-artifacts.js";
 import { DiagnosticSink, Severity } from "../../diagnostic-sink.js";
 import { EmptyPackageSource, libraryManifest } from "../../tests/fakes.js";
-import type { BuildActionContext } from "../../build-action.js";
+import type { TodlBuildContext } from "../../todl-build-context.js";
 import { NpmArtifacts } from "../npm-artifacts.js";
 import { GeneratePresentationAction } from "../generate-presentation-action.js";
 import { FakePresentationBaker } from "../../../project-services/core/tests/fake-producer-seams.js";
@@ -13,7 +13,7 @@ import type { CompiledPackage } from "../../../../publish/publish.js";
 
 const OPTIONS: BakeOptions = { dictName: "LibraryPresentation", iconPrefix: "" };
 
-function contextWith(pkg: CompiledPackage): BuildActionContext
+function contextWith(pkg: CompiledPackage): TodlBuildContext
 {
     const artifacts = new BuildArtifacts();
     artifacts.Set(NpmArtifacts.CompiledModel, pkg);

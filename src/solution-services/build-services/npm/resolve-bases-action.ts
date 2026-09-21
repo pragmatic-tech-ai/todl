@@ -1,4 +1,5 @@
-import type { IBuildAction, BuildActionContext } from "../build-action.js";
+import type { IBuildAction } from "../build-action.js";
+import type { TodlBuildContext } from "../todl-build-context.js";
 import type { ArtifactKey } from "../artifact-key.js";
 import { Severity } from "../diagnostic-sink.js";
 import { RecursiveProjectReferencesResolver } from "../../project-services/core/base-resolver.js";
@@ -8,7 +9,7 @@ import { NpmArtifacts } from "./npm-artifacts.js";
 // Resolves the project's declared base bindings (metaModel + libraries) into base
 // documents through the composite IPackageSource, and publishes them as ResolvedBases.
 // An unresolvable binding is reported as an error diagnostic (which stops the pipeline).
-export class ResolveBasesAction implements IBuildAction
+export class ResolveBasesAction implements IBuildAction<TodlBuildContext>
 {
     private static readonly ActionName = "resolve-bases";
 
@@ -16,7 +17,7 @@ export class ResolveBasesAction implements IBuildAction
     public readonly Consumes: readonly ArtifactKey<unknown>[] = [];
     public readonly Produces: readonly ArtifactKey<unknown>[] = [NpmArtifacts.ResolvedBases];
 
-    public async Execute(ctx: BuildActionContext): Promise<void>
+    public async Execute(ctx: TodlBuildContext): Promise<void>
     {
         const manifest = ctx.Manifest;
         const bindings: ProjectBaseModelBindings = {

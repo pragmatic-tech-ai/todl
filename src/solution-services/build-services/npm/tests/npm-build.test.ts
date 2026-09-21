@@ -2,10 +2,11 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { FakeStorage } from "@pragmatic-tech-ai/todl-runtime";
 import { BuildSystemRegistry } from "../../build-system-registry.js";
-import { ProjectBuildManager } from "../../project-build-manager.js";
+import { TodlProjectBuildManager } from "../../todl-project-build-manager.js";
+import type { TodlBuildContext } from "../../todl-build-context.js";
 import { NpmPackageBuildSystem } from "../npm-package-build-system.js";
 import { FakeStorageProvider, EmptyPackageSource } from "../../tests/fakes.js";
-import { parseManifest } from "../../../package-manager/manifest.js";
+import { parseManifest, type ProjectManifest } from "../../../package-manager/manifest.js";
 import type { BuildResult } from "../../build-result.js";
 
 const META = "namespace acme { concept Widget { label : string?; } }";
@@ -22,10 +23,10 @@ async function metaProject(): Promise<FakeStorage>
 async function runNpm(project: FakeStorage): Promise<{ result: BuildResult; provider: FakeStorageProvider }>
 {
     const manifest = parseManifest(await project.ReadText("project.plexus"));
-    const registry = new BuildSystemRegistry();
+    const registry = new BuildSystemRegistry<TodlBuildContext, ProjectManifest>();
     registry.Register(new NpmPackageBuildSystem());
     const provider = new FakeStorageProvider();
-    const manager = new ProjectBuildManager(registry, provider);
+    const manager = new TodlProjectBuildManager(registry, provider);
     const { Result: result } = await manager.Build({ Project: project, Manifest: manifest, BuildSystemId: "npm-package", Source: new EmptyPackageSource() });
     return { result, provider };
 }

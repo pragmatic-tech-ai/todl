@@ -1,6 +1,7 @@
 import { FakeStorage, type IStorage } from "@pragmatic-tech-ai/todl-runtime";
 import type { ArtifactKey } from "../artifact-key.js";
-import type { IBuildAction, BuildActionContext } from "../build-action.js";
+import type { IBuildAction } from "../build-action.js";
+import type { TodlBuildContext } from "../todl-build-context.js";
 import type { IBuildSystem } from "../build-system.js";
 import type { IBuildProgress } from "../build-progress.js";
 import type { IBuildStorageProvider, OpenedOutput } from "../build-storage-provider.js";
@@ -18,15 +19,15 @@ export interface FakeActionOptions
     name: string;
     consumes?: readonly ArtifactKey<unknown>[];
     produces?: readonly ArtifactKey<unknown>[];
-    body?: (ctx: BuildActionContext) => Promise<void>;
+    body?: (ctx: TodlBuildContext) => Promise<void>;
 }
 
-export class FakeAction implements IBuildAction
+export class FakeAction implements IBuildAction<TodlBuildContext>
 {
     public readonly Name: string;
     public readonly Consumes: readonly ArtifactKey<unknown>[];
     public readonly Produces: readonly ArtifactKey<unknown>[];
-    private readonly body: ((ctx: BuildActionContext) => Promise<void>) | undefined;
+    private readonly body: ((ctx: TodlBuildContext) => Promise<void>) | undefined;
 
     constructor(options: FakeActionOptions)
     {
@@ -36,18 +37,18 @@ export class FakeAction implements IBuildAction
         this.body = options.body;
     }
 
-    public async Execute(ctx: BuildActionContext): Promise<void>
+    public async Execute(ctx: TodlBuildContext): Promise<void>
     {
         if (this.body !== undefined) await this.body(ctx);
     }
 }
 
-export class FakeSystem implements IBuildSystem
+export class FakeSystem implements IBuildSystem<TodlBuildContext, ProjectManifest>
 {
     constructor(
         public readonly Id: string,
         public readonly OutputName: string,
-        private readonly actions: readonly IBuildAction[],
+        private readonly actions: readonly IBuildAction<TodlBuildContext>[],
         private readonly appliesTo: ProjectType | undefined = undefined,
     )
     {
@@ -63,7 +64,7 @@ export class FakeSystem implements IBuildSystem
         return this.appliesTo === undefined || manifest.type === this.appliesTo;
     }
 
-    public Actions(): readonly IBuildAction[]
+    public Actions(): readonly IBuildAction<TodlBuildContext>[]
     {
         return this.actions;
     }

@@ -9,9 +9,10 @@ import type { IBuildProgress } from "../build-progress.js";
 import { NoOpBuildProgress } from "../build-progress.js";
 import type { BuildOptions } from "../build-options.js";
 import type { IPackageSource, SourcedPackage } from "../package-source.js";
+import type { TodlBuildContext } from "../todl-build-context.js";
 import { CompositePackageSource } from "../composite-package-source.js";
 import { DiagnosticSink, Severity } from "../diagnostic-sink.js";
-import { ProjectBuildManager } from "../project-build-manager.js";
+import { TodlProjectBuildManager } from "../todl-project-build-manager.js";
 import {
     ProjectBuildStatus,
     type ProjectId,
@@ -53,14 +54,14 @@ export class SolutionBuildManager
     private static readonly UnknownSystemPrefix = "unknown build system:";
     private static readonly CyclePrefix = "dependency cycle:";
 
-    private readonly projectManager: ProjectBuildManager;
+    private readonly projectManager: TodlProjectBuildManager;
 
     constructor(
-        private readonly registry: BuildSystemRegistry,
+        private readonly registry: BuildSystemRegistry<TodlBuildContext, ProjectManifest>,
         private readonly storage: IBuildStorageProvider,
     )
     {
-        this.projectManager = new ProjectBuildManager(registry, storage);
+        this.projectManager = new TodlProjectBuildManager(registry, storage);
     }
 
     public async Build(request: SolutionBuildRequest): Promise<SolutionBuildResult>
@@ -101,7 +102,7 @@ export class SolutionBuildManager
     private async RunProjects(
         order: readonly ProjectId[],
         byId: ReadonlyMap<ProjectId, SolutionProject>,
-        system: IBuildSystem,
+        system: IBuildSystem<TodlBuildContext, ProjectManifest>,
         request: SolutionBuildRequest,
         buildOutput: BuildOutputSource,
     ): Promise<readonly ProjectBuildOutcome[]>
@@ -143,7 +144,7 @@ export class SolutionBuildManager
 
     // Read the project's just-built model.json from its output and register it in the
     // build-output source so dependents resolve the fresh sibling.
-    private async CaptureOutput(project: SolutionProject, system: IBuildSystem, options: BuildOptions, buildOutput: BuildOutputSource): Promise<void>
+    private async CaptureOutput(project: SolutionProject, system: IBuildSystem<TodlBuildContext, ProjectManifest>, options: BuildOptions, buildOutput: BuildOutputSource): Promise<void>
     {
         const output = await this.storage.OpenOutput(system.OutputName, options);
         if (!(await output.Storage.Exists(SolutionBuildManager.ModelFileName))) return;
@@ -192,7 +193,7 @@ export class SolutionBuildManager
         return ids;
     }
 
-    private static Applies(system: IBuildSystem, project: SolutionProject | undefined): boolean
+    private static Applies(system: IBuildSystem<TodlBuildContext, ProjectManifest>, project: SolutionProject | undefined): boolean
     {
         return project !== undefined && system.AppliesTo(project.Manifest);
     }
