@@ -27,3 +27,9 @@ export {
     type SolutionBuildResult,
 } from "./build-result.js";
 export { ProjectBuildManager, type ProjectBuildRequest } from "./project-build-manager.js";
+// npm-package build system (spec §4): resolve -> compile -> emit.
+export { NpmArtifacts } from "./npm/npm-artifacts.js";
+export { ResolveBasesAction } from "./npm/resolve-bases-action.js";
+export { CompileModelAction } from "./npm/compile-model-action.js";
+export { EmitPackageLayoutAction } from "./npm/emit-package-layout-action.js";
+export { NpmPackageBuildSystem } from "./npm/npm-package-build-system.js";
