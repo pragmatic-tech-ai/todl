@@ -225,9 +225,14 @@ export {
     type BakeResult,
 } from './solution-services/project-services/core/presentation-baker.js';
 export {
-    ProducerStorageBackendsKey,
-    type IProducerStorageBackends,
-} from './solution-services/project-services/core/producer-backends.js';
+    PackageStoreKey,
+    StoragePackageStore,
+    type IPackageStore,
+} from './solution-services/build-services/package-store.js';
+export type { IPackageSource, SourcedPackage } from './solution-services/build-services/package-source.js';
+export { CompositePackageSource } from './solution-services/build-services/composite-package-source.js';
+export { CachingPackageSource } from './solution-services/build-services/caching-package-source.js';
+export { SolutionCacheSource, type IWritablePackageSource } from './solution-services/build-services/solution-cache-source.js';
 export { RecursiveProjectReferencesResolver } from './solution-services/project-services/core/base-resolver.js';
 // Producer helpers (headless): source collection, package sink, presentation emitter, bundle scan.
 export { TodlProjectSourceFiles } from './solution-services/project-services/core/todl-sources.js';

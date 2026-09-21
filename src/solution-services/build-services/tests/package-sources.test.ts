@@ -4,7 +4,7 @@ import { FakeStorage } from "@pragmatic-tech-ai/todl-runtime";
 import { CompositePackageSource } from "../composite-package-source.js";
 import { CachingPackageSource } from "../caching-package-source.js";
 import { SolutionCacheSource } from "../solution-cache-source.js";
-import type { IPackageSource, CompiledPackage } from "../package-source.js";
+import type { IPackageSource, SourcedPackage } from "../package-source.js";
 import { PackageKind, type PackageRef } from "../../../publish/publish.js";
 
 function ref(id: string, version = "1.0.0"): PackageRef
@@ -12,7 +12,7 @@ function ref(id: string, version = "1.0.0"): PackageRef
     return { kind: PackageKind.Library, id, version };
 }
 
-function pkg(dependencies: readonly PackageRef[] = []): CompiledPackage
+function pkg(dependencies: readonly PackageRef[] = []): SourcedPackage
 {
     return { Document: { nodes: [], edges: [] }, Dependencies: dependencies };
 }
@@ -21,14 +21,14 @@ function pkg(dependencies: readonly PackageRef[] = []): CompiledPackage
 class MapPackageSource implements IPackageSource
 {
     public Calls = 0;
-    private readonly map = new Map<string, CompiledPackage>();
+    private readonly map = new Map<string, SourcedPackage>();
 
-    public Add(id: string, version: string, value: CompiledPackage): void
+    public Add(id: string, version: string, value: SourcedPackage): void
     {
         this.map.set(`${id}@${version}`, value);
     }
 
-    public TryGet(reference: PackageRef): Promise<CompiledPackage | undefined>
+    public TryGet(reference: PackageRef): Promise<SourcedPackage | undefined>
     {
         this.Calls += 1;
         return Promise.resolve(this.map.get(`${reference.id}@${reference.version}`));

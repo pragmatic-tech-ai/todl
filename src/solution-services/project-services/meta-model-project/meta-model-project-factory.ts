@@ -2,7 +2,7 @@ import { ServiceKey, type IServiceProvider, type IStorage } from '@pragmatic-tec
 import { check, checkAgainst } from '../../../compiler-services/api.js'
 import { toJSON, type TodlDocument } from '../../../compiler-services/emit/json.js'
 import { Severity } from '../../../compiler-services/diagnostics/diagnostic.js'
-import { compilePackage, PackageKind } from '../../../publish/publish.js'
+import { compilePackage } from '../../../publish/publish.js'
 import { BlobPackageStore } from '../../../publish/stores.js'
 import { projectAnnotations } from '../../../publish/reflect.js'
 import {
@@ -22,7 +22,7 @@ import { TodlProjectSourceFiles } from '../core/todl-sources.js'
 import { StoragePackageSink } from '../core/storage-package-sink.js'
 import { PresentationResourceEmitter } from '../core/presentation-model.js'
 import { PresentationBakerKey } from '../core/presentation-baker.js'
-import { ProducerStorageBackendsKey } from '../core/producer-backends.js'
+import { PackageStoreKey } from '../../build-services/package-store.js'
 import { type MetaModelManifestFile } from './meta-model-manifest.js'
 import { META_MODEL_CLAUDE_ROOT, META_MODEL_GUIDE, META_MODEL_NEW_CONCEPT } from '../core/scaffold.generated.js'
 
@@ -32,9 +32,9 @@ import { META_MODEL_CLAUDE_ROOT, META_MODEL_GUIDE, META_MODEL_NEW_CONCEPT } from
 //
 // It is publishable (IPublishableProjectFactory): publish validates every `.todl` with
 // TODL's check(), and — if clean — writes the compiled TodlDocument JSON plus the raw
-// sources into the shared meta-models backend under `<id>/<modelVersion>/`, where other
-// project types consume it. The presentation bake (mural-coupled) and the backend
-// resolution (app-coupled) are reached through the IPresentationBaker / IProducerStorageBackends
+// sources into the shared package store under `<id>/<modelVersion>/`, where other
+// project types consume it. The presentation bake (mural-coupled) and the package
+// resolution (app-coupled) are reached through the IPresentationBaker / IPackageStore
 // seams, resolved from the container — todl stays free of both. All persistence flows
 // through the project's rooted IStorage.
 interface MetaModelManifest extends ProjectManifestEnvelope
@@ -140,7 +140,7 @@ export class MetaModelProjectFactory extends TodlProjectFactory
         // BlobPackageStore persists, so the key reaches model.json.
         PresentationResourceEmitter.StampResourceKeys(doc)
 
-        const dest = provider.getRequired(ProducerStorageBackendsKey).Backend(PackageKind.MetaModel)
+        const dest = provider.getRequired(PackageStoreKey).Storage
         const base = `${manifest.id}/${manifest.modelVersion}`
 
         // Bake the presentation first — a missing icon blocks the publish before

@@ -7,9 +7,9 @@ import { ServiceProvider, type IStorage } from '@pragmatic-tech-ai/todl-runtime'
 import { NodeFsStorage } from '@pragmatic-tech-ai/todl-runtime/node'
 import { ProjectNodeKind } from '../../core/project.js'
 import { PresentationBakerKey } from '../../core/presentation-baker.js'
-import { ProducerStorageBackendsKey } from '../../core/producer-backends.js'
+import { PackageStoreKey, StoragePackageStore } from '../../../build-services/package-store.js'
 import { MetaModelProjectFactory } from '../meta-model-project-factory.js'
-import { FakePresentationBaker, FakeProducerBackends } from '../../core/tests/fake-producer-seams.js'
+import { FakePresentationBaker } from '../../core/tests/fake-producer-seams.js'
 
 const META = 'namespace acme { concept Widget { label : string?; } }'
 
@@ -20,12 +20,12 @@ async function tempDir(t: TestContext): Promise<NodeFsStorage>
     return new NodeFsStorage(dir)
 }
 
-// A provider wiring the two producer seams to the given fakes.
-function providerWith(baker: FakePresentationBaker, metaBackend: IStorage, libBackend: IStorage): ServiceProvider
+// A provider wiring the baker + unified package store to the given fakes.
+function providerWith(baker: FakePresentationBaker, store: IStorage): ServiceProvider
 {
     const p = new ServiceProvider()
     p.registerInstance(PresentationBakerKey, baker)
-    p.registerInstance(ProducerStorageBackendsKey, new FakeProducerBackends(metaBackend, libBackend))
+    p.registerInstance(PackageStoreKey, new StoragePackageStore(store))
     return p
 }
 
@@ -74,10 +74,9 @@ test('compileToDocument compiles the project .todl into a document', async (t) =
 
 test('publish bakes, persists model.json + manifest.json, and writes the generated presentation', async (t) => {
     const project = await tempDir(t)
-    const metaBackend = await tempDir(t)
-    const libBackend = await tempDir(t)
+    const store = await tempDir(t)
     const baker = new FakePresentationBaker({ ok: true, icons: 3 })
-    const provider = providerWith(baker, metaBackend, libBackend)
+    const provider = providerWith(baker, store)
 
     const f = factory(provider)
     await f.createProject(project, 'Widgets')
@@ -89,16 +88,16 @@ test('publish bakes, persists model.json + manifest.json, and writes the generat
     assert.equal(baker.calls.length, 1)
     assert.equal(baker.calls[0]!.options.dictName, 'MetaModelPresentation')
     assert.equal(baker.calls[0]!.options.iconPrefix, 'mm:')
-    assert.equal(await metaBackend.Exists('widgets/0.1.0/model.json'), true)
-    assert.equal(await metaBackend.Exists('widgets/0.1.0/manifest.json'), true)
+    assert.equal(await store.Exists('widgets/0.1.0/model.json'), true)
+    assert.equal(await store.Exists('widgets/0.1.0/manifest.json'), true)
     assert.equal(await project.Exists('presentation.generated.mu'), true)
 })
 
 test('publish is blocked (nothing written) when a referenced icon is missing', async (t) => {
     const project = await tempDir(t)
-    const metaBackend = await tempDir(t)
+    const store = await tempDir(t)
     const baker = new FakePresentationBaker({ ok: false, missing: ['resources/x.svg'] })
-    const provider = providerWith(baker, metaBackend, await tempDir(t))
+    const provider = providerWith(baker, store)
 
     const f = factory(provider)
     await f.createProject(project, 'Widgets')
@@ -107,12 +106,12 @@ test('publish is blocked (nothing written) when a referenced icon is missing', a
 
     assert.equal(result.ok, false)
     assert.match(result.message, /missing icon/i)
-    assert.equal(await metaBackend.Exists('widgets/0.1.0/model.json'), false)   // nothing persisted
+    assert.equal(await store.Exists('widgets/0.1.0/model.json'), false)   // nothing persisted
 })
 
 test('publish refuses an empty project', async (t) => {
     const project = await tempDir(t)
-    const provider = providerWith(new FakePresentationBaker(), await tempDir(t), await tempDir(t))
+    const provider = providerWith(new FakePresentationBaker(), await tempDir(t))
     const f = factory(provider)
     await f.createProject(project, 'Empty')
     // createProject lays down no .todl; remove none — the project has only scaffold.

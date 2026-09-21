@@ -24,17 +24,17 @@ import { PresentationResourceEmitter } from '../core/presentation-model.js'
 import { RecursiveProjectReferencesResolver } from '../core/base-resolver.js'
 import { LibraryResources, type LibraryBundleManifest, type PublishedClass } from './library-bundle.js'
 import { PresentationBakerKey } from '../core/presentation-baker.js'
-import { ProducerStorageBackendsKey } from '../core/producer-backends.js'
+import { PackageStoreKey } from '../../build-services/package-store.js'
 import { LIBRARY_CLAUDE_ROOT } from '../core/scaffold.generated.js'
 
 // The 'library' project type's factory. It mirrors MetaModelProjectFactory, but a
 // library is authored AGAINST a meta-model: creation binds a meta-model PublishedBaseModelReference, and
 // publish validates every `.todl` with TODL's checkAgainst(base, …) before emitting the
-// compiled TodlDocument + sources into the shared libraries backend under
+// compiled TodlDocument + sources into the shared package store under
 // `<id>/<libVersion>/`, where architecture projects consume it. The presentation bake
-// (mural-coupled) and backend resolution (app-coupled) are reached through the
-// IPresentationBaker / IProducerStorageBackends seams. All persistence flows through the
-// project's rooted IStorage.
+// (mural-coupled) and package resolution (app-coupled) are reached through the
+// IPresentationBaker / IPackageStore seams. All persistence flows through the project's
+// rooted IStorage.
 interface LibraryManifest extends ProjectManifestEnvelope
 {
     id: string             // stable publish identity, defaults to slugify(name)
@@ -122,8 +122,8 @@ export class LibraryProjectFactory extends TodlProjectFactory
         if (manifest.metaModel === undefined)
             return { ok: false, message: 'Set a meta-model binding before publishing.' }
 
-        const backends = provider.getRequired(ProducerStorageBackendsKey)
-        const { bases, problems } = await RecursiveProjectReferencesResolver.Resolve(backends, { metaModel: manifest.metaModel })
+        const store = provider.getRequired(PackageStoreKey)
+        const { bases, problems } = await RecursiveProjectReferencesResolver.Resolve(store, { metaModel: manifest.metaModel })
         if (problems.length > 0) return { ok: false, message: `Publish blocked: ${problems.join('; ')}.` }
 
         const sources = await TodlProjectSourceFiles.CollectTaxonomy(storage)
@@ -170,7 +170,7 @@ export class LibraryProjectFactory extends TodlProjectFactory
             samples: scanned.samples,
         }
 
-        const dest = backends.Backend(PackageKind.Library)
+        const dest = store.Storage
         const base = `${manifest.id}/${manifest.libVersion}`
 
         // Bake the compiled presentation first — a missing icon blocks the publish
@@ -215,8 +215,8 @@ export class LibraryProjectFactory extends TodlProjectFactory
         if (sources.length === 0) return
         const manifest = JSON.parse(await storage.ReadText(PROJECT_MANIFEST_FILENAME)) as LibraryManifest
         if (manifest.metaModel === undefined) return
-        const backends = this.Provider.getRequired(ProducerStorageBackendsKey)
-        const { bases, problems } = await RecursiveProjectReferencesResolver.Resolve(backends, { metaModel: manifest.metaModel })
+        const store = this.Provider.getRequired(PackageStoreKey)
+        const { bases, problems } = await RecursiveProjectReferencesResolver.Resolve(store, { metaModel: manifest.metaModel })
         if (problems.length > 0) return
         const { model, diagnostics } = checkAgainst(bases, sources)
         if (diagnostics.some((d) => d.severity === Severity.Error)) return

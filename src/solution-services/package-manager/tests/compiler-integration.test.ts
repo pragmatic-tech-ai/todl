@@ -7,23 +7,23 @@ import { dirname, join } from "node:path";
 import { FakeStorage } from "@pragmatic-tech-ai/todl-runtime";
 import { PackageCompiler } from "../index.js";
 import { MemorySink } from "../sinks.js";
-import { FakeProducerBackends } from "../../project-services/core/tests/fake-producer-seams.js";
-import type { IProducerStorageBackends } from "../../project-services/core/producer-backends.js";
+import { StoragePackageStore } from "../../build-services/package-store.js";
+import type { IPackageSource } from "../../build-services/package-source.js";
 
 const PROJECTS = join(dirname(fileURLToPath(import.meta.url)), "../../../../test_projects");
-const emptyBackends = (): IProducerStorageBackends => new FakeProducerBackends(new FakeStorage(), new FakeStorage());
+const emptyBackends = (): IPackageSource => new StoragePackageStore(new FakeStorage());
 
-/** Compile the meta-model (no deps) and publish its model.json into a fresh
- *  producer backend — the storage-backed equivalent of installing the dependency,
- *  so a library resolves its base from it. */
-async function backendsWithMetaModel(): Promise<IProducerStorageBackends>
+/** Compile the meta-model (no deps) and publish its model.json into a fresh package
+ *  store — the storage-backed equivalent of installing the dependency, so a library
+ *  resolves its base from it. */
+async function backendsWithMetaModel(): Promise<IPackageSource>
 {
   const sink = new MemorySink();
   const r = await new PackageCompiler(emptyBackends(), { createSink: () => sink }).compile(join(PROJECTS, "meta-models/tech-architecture"));
   assert.ok(r.ok, `meta-model compiles: ${r.errors.map((e) => e.message).join(", ")}`);
-  const metaModels = new FakeStorage();
-  await metaModels.WriteText("todl-test-tech-architecture/0.1.0/model.json", sink.files.get("model.json") as string);
-  return new FakeProducerBackends(metaModels, new FakeStorage());
+  const store = new FakeStorage();
+  await store.WriteText("todl-test-tech-architecture/0.1.0/model.json", sink.files.get("model.json") as string);
+  return new StoragePackageStore(store);
 }
 
 test("compile builds against published bases and writes dist/", async () => {

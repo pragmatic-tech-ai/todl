@@ -3,10 +3,10 @@
  * package-compiler): read a project directory, resolve its declared base bindings
  * into base documents, compile against them (the pure `compilePackage`), and emit
  * the npm package layout through a sink. Base resolution goes through the single
- * `RecursiveProjectReferencesResolver`, reading published `model.json`s from the
- * host-supplied `IProducerStorageBackends`; the app decides what that backend is
- * (a storage root, or — in devUI — an adapter over `node_modules`). I/O (reader,
- * sink) stays injectable so the class is unit-testable.
+ * `RecursiveProjectReferencesResolver`, reading published packages from the
+ * host-supplied `IPackageSource`; the app decides what that source is (a store over
+ * a storage root, or — in devUI — a source over `node_modules`). I/O (reader, sink)
+ * stays injectable so the class is unit-testable.
  */
 import { join } from "node:path";
 import type { Diagnostic } from "../../compiler-services/diagnostics/diagnostic.js";
@@ -20,7 +20,7 @@ import {
 } from "../../publish/publish.js";
 import type { PackageSink } from "../../publish/stores.js";
 import { RecursiveProjectReferencesResolver } from "../project-services/core/base-resolver.js";
-import type { IProducerStorageBackends } from "../project-services/core/producer-backends.js";
+import type { IPackageSource } from "../build-services/package-source.js";
 import type { ProjectBaseModelBindings } from "../project-services/core/base-binding.js";
 import { FileSink } from "./sinks.js";
 import { readProject, type Project, type ResourceFile } from "./project.js";
@@ -75,10 +75,9 @@ export class PackageCompiler
   private readonly reader: ProjectReader;
   private readonly createSink: SinkFactory;
 
-  /** `backends` supplies the published `model.json`s a project's bases resolve
-   *  from (the recursive resolver's storage seam). `reader`/`createSink` default
-   *  to node:fs. */
-  constructor(private readonly backends: IProducerStorageBackends, deps: PackageCompilerDeps = {})
+  /** `source` supplies the published packages a project's bases resolve from (the
+   *  recursive resolver's read seam). `reader`/`createSink` default to node:fs. */
+  constructor(private readonly source: IPackageSource, deps: PackageCompilerDeps = {})
   {
     this.reader = deps.reader ?? new NodeProjectReader();
     this.createSink = deps.createSink ?? ((dir) => new FileSink(dir));
@@ -96,7 +95,7 @@ export class PackageCompiler
       ...(project.manifest.metaModel !== undefined ? { metaModel: project.manifest.metaModel } : {}),
       ...(project.manifest.libraries !== undefined ? { libraries: project.manifest.libraries } : {}),
     };
-    const { bases, problems } = await RecursiveProjectReferencesResolver.Resolve(this.backends, bindings);
+    const { bases, problems } = await RecursiveProjectReferencesResolver.Resolve(this.source, bindings);
     if (problems.length > 0)
     {
       throw new Error(`cannot resolve dependencies: ${problems.join("; ")}`);

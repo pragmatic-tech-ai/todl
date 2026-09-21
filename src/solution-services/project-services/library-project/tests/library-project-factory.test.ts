@@ -7,9 +7,9 @@ import { ServiceProvider, type IStorage } from '@pragmatic-tech-ai/todl-runtime'
 import { NodeFsStorage } from '@pragmatic-tech-ai/todl-runtime/node'
 import { ProjectNodeKind } from '../../core/project.js'
 import { PresentationBakerKey } from '../../core/presentation-baker.js'
-import { ProducerStorageBackendsKey } from '../../core/producer-backends.js'
+import { PackageStoreKey, StoragePackageStore } from '../../../build-services/package-store.js'
 import { LibraryProjectFactory } from '../library-project-factory.js'
-import { FakePresentationBaker, FakeProducerBackends } from '../../core/tests/fake-producer-seams.js'
+import { FakePresentationBaker } from '../../core/tests/fake-producer-seams.js'
 
 const LIB = 'namespace lib { concept Foo { label : string?; } }'
 const META_REF = { id: 'mm', version: '0.1.0' }
@@ -21,11 +21,11 @@ async function tempDir(t: TestContext): Promise<NodeFsStorage>
     return new NodeFsStorage(dir)
 }
 
-function providerWith(baker: FakePresentationBaker, metaBackend: IStorage, libBackend: IStorage): ServiceProvider
+function providerWith(baker: FakePresentationBaker, store: IStorage): ServiceProvider
 {
     const p = new ServiceProvider()
     p.registerInstance(PresentationBakerKey, baker)
-    p.registerInstance(ProducerStorageBackendsKey, new FakeProducerBackends(metaBackend, libBackend))
+    p.registerInstance(PackageStoreKey, new StoragePackageStore(store))
     return p
 }
 
@@ -64,7 +64,7 @@ test('getVersion / setVersion round-trip through the manifest', async (t) => {
 
 test('publish is blocked when no meta-model is bound', async (t) => {
     const project = await tempDir(t)
-    const provider = providerWith(new FakePresentationBaker(), await tempDir(t), await tempDir(t))
+    const provider = providerWith(new FakePresentationBaker(), await tempDir(t))
     const f = factory(provider)
     await f.createProject(project, 'L')      // no bindings
     await project.WriteText('taxonomy.todl', LIB)
@@ -75,8 +75,8 @@ test('publish is blocked when no meta-model is bound', async (t) => {
 
 test('publish is blocked when the bound meta-model is not published', async (t) => {
     const project = await tempDir(t)
-    const metaBackend = await tempDir(t)      // empty — the base cannot resolve
-    const provider = providerWith(new FakePresentationBaker(), metaBackend, await tempDir(t))
+    const store = await tempDir(t)      // empty — the base cannot resolve
+    const provider = providerWith(new FakePresentationBaker(), store)
     const f = factory(provider)
     await f.createProject(project, 'L', { metaModel: META_REF })
     await project.WriteText('taxonomy.todl', LIB)
@@ -87,13 +87,12 @@ test('publish is blocked when the bound meta-model is not published', async (t) 
 
 test('publish bakes, persists model.json + library.json, and writes the generated presentation', async (t) => {
     const project = await tempDir(t)
-    const metaBackend = await tempDir(t)
-    const libBackend = await tempDir(t)
+    const store = await tempDir(t)
     // Seed the bound meta-model so RecursiveProjectReferencesResolver resolves it.
-    await metaBackend.WriteText('mm/0.1.0/model.json', JSON.stringify({ nodes: [], edges: [] }))
+    await store.WriteText('mm/0.1.0/model.json', JSON.stringify({ nodes: [], edges: [] }))
 
     const baker = new FakePresentationBaker({ ok: true, icons: 2 })
-    const provider = providerWith(baker, metaBackend, libBackend)
+    const provider = providerWith(baker, store)
     const f = factory(provider)
     await f.createProject(project, 'AWS', { metaModel: META_REF })
     await project.WriteText('taxonomy.todl', LIB)
@@ -103,7 +102,7 @@ test('publish bakes, persists model.json + library.json, and writes the generate
     assert.match(result.message, /Published aws@0\.1\.0/)
     assert.equal(baker.calls[0]!.options.dictName, 'LibraryPresentation')
     assert.equal(baker.calls[0]!.options.iconPrefix, '')
-    assert.equal(await libBackend.Exists('aws/0.1.0/model.json'), true)
-    assert.equal(await libBackend.Exists('aws/0.1.0/library.json'), true)
+    assert.equal(await store.Exists('aws/0.1.0/model.json'), true)
+    assert.equal(await store.Exists('aws/0.1.0/library.json'), true)
     assert.equal(await project.Exists('presentation.generated.mu'), true)
 })

@@ -10,8 +10,8 @@ import { parseManifest } from "../manifest.js";
 import { MemorySink } from "../sinks.js";
 import type { Project } from "../project.js";
 import { PackageCompiler, type ProjectReader } from "../package-compiler.js";
-import { FakeProducerBackends } from "../../project-services/core/tests/fake-producer-seams.js";
-import type { IProducerStorageBackends } from "../../project-services/core/producer-backends.js";
+import { StoragePackageStore } from "../../build-services/package-store.js";
+import type { IPackageSource } from "../../build-services/package-source.js";
 
 const PROJECTS = join(dirname(fileURLToPath(import.meta.url)), "../../../../test_projects");
 type Src = { uri: string; text: string };
@@ -33,14 +33,14 @@ function reader(project: Project): ProjectReader
 {
   return { read: () => project };
 }
-/** Empty producer backends — for projects that declare no bases. */
-const emptyBackends = (): IProducerStorageBackends => new FakeProducerBackends(new FakeStorage(), new FakeStorage());
-/** Backends with one meta-model published at `<id>/<version>/model.json`. */
-async function backendsWith(id: string, version: string, doc: TodlDocument): Promise<IProducerStorageBackends>
+/** An empty package source — for projects that declare no bases. */
+const emptyBackends = (): IPackageSource => new StoragePackageStore(new FakeStorage());
+/** A source with one meta-model published at `<id>/<version>/model.json`. */
+async function backendsWith(id: string, version: string, doc: TodlDocument): Promise<IPackageSource>
 {
-  const metaModels = new FakeStorage();
-  await metaModels.WriteText(`${id}/${version}/model.json`, JSON.stringify(doc));
-  return new FakeProducerBackends(metaModels, new FakeStorage());
+  const store = new FakeStorage();
+  await store.WriteText(`${id}/${version}/model.json`, JSON.stringify(doc));
+  return new StoragePackageStore(store);
 }
 
 const metaDoc = toJSON(check(sources("meta-models/tech-architecture")).model);

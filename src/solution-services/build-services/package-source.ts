@@ -3,7 +3,7 @@ import type { PackageRef } from "../../publish/publish.js";
 
 // A compiled package as a source returns it: the model.json document plus the base
 // deps it recorded, for the recursive base walk.
-export interface CompiledPackage
+export interface SourcedPackage
 {
     Document: TodlDocument;
     Dependencies: readonly PackageRef[];
@@ -16,5 +16,5 @@ export interface CompiledPackage
 // migrates the resolver onto it.
 export interface IPackageSource
 {
-    TryGet(ref: PackageRef): Promise<CompiledPackage | undefined>;
+    TryGet(ref: PackageRef): Promise<SourcedPackage | undefined>;
 }

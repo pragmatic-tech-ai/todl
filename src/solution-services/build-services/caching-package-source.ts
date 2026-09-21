@@ -1,5 +1,5 @@
 import type { PackageRef } from "../../publish/publish.js";
-import type { IPackageSource, CompiledPackage } from "./package-source.js";
+import type { IPackageSource, SourcedPackage } from "./package-source.js";
 import type { IWritablePackageSource } from "./solution-cache-source.js";
 
 // Read-through cache (spec §8.3): checks its backing cache, and on a miss delegates
@@ -14,7 +14,7 @@ export class CachingPackageSource implements IPackageSource
     {
     }
 
-    public async TryGet(reference: PackageRef): Promise<CompiledPackage | undefined>
+    public async TryGet(reference: PackageRef): Promise<SourcedPackage | undefined>
     {
         const cached = await this.cache.TryGet(reference);
         if (cached !== undefined) return cached;

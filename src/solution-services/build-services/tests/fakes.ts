@@ -7,7 +7,7 @@ import type { IBuildStorageProvider, OpenedOutput } from "../build-storage-provi
 import type { BuildOptions } from "../build-options.js";
 import type { BuildDiagnostic } from "../diagnostic-sink.js";
 import type { ActionStatus, ProjectBuildStatus, ProjectId } from "../build-result.js";
-import type { IPackageSource, CompiledPackage } from "../package-source.js";
+import type { IPackageSource, SourcedPackage } from "../package-source.js";
 import { ProjectType, type ProjectManifest } from "../../package-manager/manifest.js";
 import type { PackageRef } from "../../../publish/publish.js";
 
@@ -136,7 +136,7 @@ export class RecordingProgress implements IBuildProgress
 
 export class EmptyPackageSource implements IPackageSource
 {
-    public TryGet(_ref: PackageRef): Promise<CompiledPackage | undefined>
+    public TryGet(_ref: PackageRef): Promise<SourcedPackage | undefined>
     {
         return Promise.resolve(undefined);
     }

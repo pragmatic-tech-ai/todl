@@ -1,11 +1,11 @@
 import type { IStorage } from "@pragmatic-tech-ai/todl-runtime";
 import type { PackageRef, PackageDocument } from "../../publish/publish.js";
-import type { IPackageSource, CompiledPackage } from "./package-source.js";
+import type { IPackageSource, SourcedPackage } from "./package-source.js";
 
 // A writable package source: TryGet returns the miss/next signal, Put stores.
 export interface IWritablePackageSource extends IPackageSource
 {
-    Put(reference: PackageRef, pkg: CompiledPackage): Promise<void>;
+    Put(reference: PackageRef, pkg: SourcedPackage): Promise<void>;
 }
 
 // An IStorage-backed cache of compiled packages, laid out as
@@ -19,7 +19,7 @@ export class SolutionCacheSource implements IWritablePackageSource
     {
     }
 
-    public async TryGet(reference: PackageRef): Promise<CompiledPackage | undefined>
+    public async TryGet(reference: PackageRef): Promise<SourcedPackage | undefined>
     {
         const path = SolutionCacheSource.PathOf(reference);
         if (!(await this.storage.Exists(path))) return undefined;
@@ -30,7 +30,7 @@ export class SolutionCacheSource implements IWritablePackageSource
         };
     }
 
-    public async Put(reference: PackageRef, pkg: CompiledPackage): Promise<void>
+    public async Put(reference: PackageRef, pkg: SourcedPackage): Promise<void>
     {
         const document: PackageDocument = {
             nodes: pkg.Document.nodes,
