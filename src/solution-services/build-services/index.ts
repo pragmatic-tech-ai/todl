@@ -1,0 +1,25 @@
+// build-services — a unified build-action pipeline (spec: build-services design).
+// Phase 1: the single-project framework core + status/progress. Phases 2-4 add the
+// package-source implementations, the npm build system, and solution builds.
+export { ArtifactKey } from "./artifact-key.js";
+export { BuildArtifacts } from "./build-artifacts.js";
+export { DiagnosticSink, Severity, type BuildDiagnostic } from "./diagnostic-sink.js";
+export type { IPackageSource, CompiledPackage } from "./package-source.js";
+export type { BuildOptions } from "./build-options.js";
+export type { IBuildAction, BuildActionContext } from "./build-action.js";
+export type { IBuildSystem } from "./build-system.js";
+export { BuildSystemRegistry } from "./build-system-registry.js";
+export { NoOpBuildProgress, type IBuildProgress } from "./build-progress.js";
+export { type IBuildStorageProvider, type OpenedOutput } from "./build-storage-provider.js";
+export { StorageTree } from "./storage-tree.js";
+export {
+    BuildStatus,
+    ActionStatus,
+    ProjectBuildStatus,
+    type ProjectId,
+    type ActionOutcome,
+    type BuildResult,
+    type ProjectBuildOutcome,
+    type SolutionBuildResult,
+} from "./build-result.js";
+export { ProjectBuildManager, type ProjectBuildRequest } from "./project-build-manager.js";
