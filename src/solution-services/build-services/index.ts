@@ -8,6 +8,8 @@ export type { IPackageSource, SourcedPackage } from "./package-source.js";
 export { CompositePackageSource } from "./composite-package-source.js";
 export { CachingPackageSource } from "./caching-package-source.js";
 export { SolutionCacheSource, type IWritablePackageSource } from "./solution-cache-source.js";
+export { RegistrySource } from "./registry-source.js";
+export { SolutionRestore, type RestoreResult } from "./solution-restore.js";
 export { PackageStoreKey, StoragePackageStore, type IPackageStore } from "./package-store.js";
 export type { BuildOptions } from "./build-options.js";
 export type { IBuildAction, BuildActionContext } from "./build-action.js";
