@@ -10,6 +10,10 @@ export { SolutionRestore, type RestoreResult } from "./solution-restore.js";
 export { PackageStoreKey, StoragePackageStore, type IPackageStore } from "./package-store.js";
 export type { TodlBuildContext, TodlBuildRequest } from "./todl-build-context.js";
 export { TodlProjectBuildManager } from "./todl-project-build-manager.js";
+// Composition: the pre-populated registry, the build settings bag, and the module.
+export { TodlBuildSystemRegistry } from "./todl-build-system-registry.js";
+export { TodlBuildSettings } from "./todl-build-settings.js";
+export { TodlBuildSystemEngine } from "./todl-build-system-module.mu.js";
 // npm-package build system (spec §4): resolve -> compile -> emit.
 export { NpmArtifacts } from "./npm/npm-artifacts.js";
 export { ResolveBasesAction } from "./npm/resolve-bases-action.js";
