@@ -4,7 +4,7 @@ import { type SourceFile } from '../../../diagnostics/span.js'
 // Shared TODL source-collection + project-relative path helpers, used by the producer
 // factories (publish/compile) and validation. Static methods on one type rather than
 // free functions — pure walks over an IStorage, no state.
-export class TodlSources
+export class TodlProjectSourceFiles
 {
     public static JoinRel(dir: string, name: string): string
     {
@@ -25,9 +25,9 @@ export class TodlSources
         const walk = async (dir: string): Promise<void> => {
             for (const e of await storage.List(dir))
             {
-                const path = TodlSources.JoinRel(dir, e.Name)
+                const path = TodlProjectSourceFiles.JoinRel(dir, e.Name)
                 if (e.IsDirectory) await walk(path)
-                else if (TodlSources.Extname(e.Name) === '.todl') out.push({ uri: path, text: await storage.ReadText(path) })
+                else if (TodlProjectSourceFiles.Extname(e.Name) === '.todl') out.push({ uri: path, text: await storage.ReadText(path) })
             }
         }
         await walk('')
@@ -49,9 +49,9 @@ export class TodlSources
             for (const e of await storage.List(dir))
             {
                 if (dir === '' && e.IsDirectory && exclude.has(e.Name)) continue
-                const path = TodlSources.JoinRel(dir, e.Name)
+                const path = TodlProjectSourceFiles.JoinRel(dir, e.Name)
                 if (e.IsDirectory) await walk(path)
-                else if (TodlSources.Extname(e.Name) === '.todl') out.push({ uri: path, text: await storage.ReadText(path) })
+                else if (TodlProjectSourceFiles.Extname(e.Name) === '.todl') out.push({ uri: path, text: await storage.ReadText(path) })
             }
         }
         await walk('')

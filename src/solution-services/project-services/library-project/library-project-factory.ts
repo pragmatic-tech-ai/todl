@@ -14,37 +14,37 @@ import {
     type ProjectManifestEnvelope,
     type PublishResult,
 } from '../core/project-factory.js'
-import { type IProducerProjectFactory } from '../core/producer-project-factory.js'
+import { type IBaseProducingProjectFactory } from '../core/producer-project-factory.js'
 import { TodlProjectFactory, CLAUDE_MD_FILENAME, type ScaffoldFile } from '../core/todl-project-factory.js'
-import { type BaseBindings, type BaseRef } from '../core/base-binding.js'
+import { type ProjectBaseModelBindings, type PublishedBaseModelReference } from '../core/base-binding.js'
 import { type Project, ProjectNodeKind } from '../core/project.js'
-import { TodlSources } from '../core/todl-sources.js'
+import { TodlProjectSourceFiles } from '../core/todl-sources.js'
 import { StoragePackageSink } from '../core/storage-package-sink.js'
-import { PresentationModel } from '../core/presentation-model.js'
-import { BaseResolver } from '../core/base-resolver.js'
+import { PresentationResourceEmitter } from '../core/presentation-model.js'
+import { RecursiveProjectReferencesResolver } from '../core/base-resolver.js'
 import { LibraryResources, type LibraryBundleManifest, type PublishedClass } from './library-bundle.js'
 import { PresentationBakerKey } from '../core/presentation-baker.js'
-import { ProducerBackendsKey } from '../core/producer-backends.js'
+import { ProducerStorageBackendsKey } from '../core/producer-backends.js'
 import { LIBRARY_CLAUDE_ROOT } from '../core/scaffold.generated.js'
 
 // The 'library' project type's factory. It mirrors MetaModelProjectFactory, but a
-// library is authored AGAINST a meta-model: creation binds a meta-model BaseRef, and
+// library is authored AGAINST a meta-model: creation binds a meta-model PublishedBaseModelReference, and
 // publish validates every `.todl` with TODL's checkAgainst(base, …) before emitting the
 // compiled TodlDocument + sources into the shared libraries backend under
 // `<id>/<libVersion>/`, where architecture projects consume it. The presentation bake
 // (mural-coupled) and backend resolution (app-coupled) are reached through the
-// IPresentationBaker / IProducerBackends seams. All persistence flows through the
+// IPresentationBaker / IProducerStorageBackends seams. All persistence flows through the
 // project's rooted IStorage.
 interface LibraryManifest extends ProjectManifestEnvelope
 {
     id: string             // stable publish identity, defaults to slugify(name)
     libVersion: string     // published version, defaults to '0.1.0'
-    metaModel?: BaseRef    // the meta-model this library is authored against
+    metaModel?: PublishedBaseModelReference    // the meta-model this library is authored against
     description?: string   // optional human description, carried into library.json
 }
 
 export class LibraryProjectFactory extends TodlProjectFactory
-    implements IPublishableProjectFactory, IProducerProjectFactory, IPresentationProjectFactory, IVersionedProjectFactory
+    implements IPublishableProjectFactory, IBaseProducingProjectFactory, IPresentationProjectFactory, IVersionedProjectFactory
     {
     public static readonly Key = new ServiceKey<LibraryProjectFactory>('LibraryProjectFactory')
     public static readonly ProjectType = 'library'
@@ -67,7 +67,7 @@ export class LibraryProjectFactory extends TodlProjectFactory
 
     constructor(provider: IServiceProvider) { super(provider) }
 
-    protected buildManifest(name: string, bindings?: BaseBindings): ProjectManifestEnvelope
+    protected buildManifest(name: string, bindings?: ProjectBaseModelBindings): ProjectManifestEnvelope
     {
         const manifest: LibraryManifest = {
             type: LibraryProjectFactory.ProjectType, name, version: 1,
@@ -105,7 +105,7 @@ export class LibraryProjectFactory extends TodlProjectFactory
         _provider: IServiceProvider,
     ): Promise<{ doc: TodlDocument; problems: string[] }>
     {
-        const sources = await TodlSources.CollectTaxonomy(storage)
+        const sources = await TodlProjectSourceFiles.CollectTaxonomy(storage)
         const { model, diagnostics } = checkAgainst(bases, sources)
         const problems = diagnostics
             .filter((d) => d.severity === Severity.Error)
@@ -122,11 +122,11 @@ export class LibraryProjectFactory extends TodlProjectFactory
         if (manifest.metaModel === undefined)
             return { ok: false, message: 'Set a meta-model binding before publishing.' }
 
-        const backends = provider.getRequired(ProducerBackendsKey)
-        const { bases, problems } = await BaseResolver.Resolve(backends, { metaModel: manifest.metaModel })
+        const backends = provider.getRequired(ProducerStorageBackendsKey)
+        const { bases, problems } = await RecursiveProjectReferencesResolver.Resolve(backends, { metaModel: manifest.metaModel })
         if (problems.length > 0) return { ok: false, message: `Publish blocked: ${problems.join('; ')}.` }
 
-        const sources = await TodlSources.CollectTaxonomy(storage)
+        const sources = await TodlProjectSourceFiles.CollectTaxonomy(storage)
         if (sources.length === 0) return { ok: false, message: 'Nothing to publish — the project has no .todl files.' }
 
         // Record the bound meta-model as a pinned dependency so consumers resolve it
@@ -146,7 +146,7 @@ export class LibraryProjectFactory extends TodlProjectFactory
 
         // Write mural resource keys onto icon apps before persist (same shared
         // pkg.document object), so the key lands in the library's model.json.
-        PresentationModel.StampResourceKeys(doc)
+        PresentationResourceEmitter.StampResourceKeys(doc)
 
         const classes: PublishedClass[] = pkg.classes.map((c) => ({ ...c }))
         const scanned = await LibraryResources.Scan(storage, classes.map((c) => c.id))
@@ -211,12 +211,12 @@ export class LibraryProjectFactory extends TodlProjectFactory
     // No .todl / unbound or unresolvable base / TODL error → no-op.
     public async regeneratePresentation(storage: IStorage, colored: boolean): Promise<void>
     {
-        const sources = await TodlSources.CollectTaxonomy(storage)
+        const sources = await TodlProjectSourceFiles.CollectTaxonomy(storage)
         if (sources.length === 0) return
         const manifest = JSON.parse(await storage.ReadText(PROJECT_MANIFEST_FILENAME)) as LibraryManifest
         if (manifest.metaModel === undefined) return
-        const backends = this.Provider.getRequired(ProducerBackendsKey)
-        const { bases, problems } = await BaseResolver.Resolve(backends, { metaModel: manifest.metaModel })
+        const backends = this.Provider.getRequired(ProducerStorageBackendsKey)
+        const { bases, problems } = await RecursiveProjectReferencesResolver.Resolve(backends, { metaModel: manifest.metaModel })
         if (problems.length > 0) return
         const { model, diagnostics } = checkAgainst(bases, sources)
         if (diagnostics.some((d) => d.severity === Severity.Error)) return
@@ -227,7 +227,7 @@ export class LibraryProjectFactory extends TodlProjectFactory
     {
         await storage.WriteText(
             LibraryProjectFactory.PRESENTATION_FILE,
-            PresentationModel.GenerateAssets(doc, LibraryProjectFactory.DICT_NAME, colored))
+            PresentationResourceEmitter.GenerateAssets(doc, LibraryProjectFactory.DICT_NAME, colored))
     }
 
     // Recursively copy one resource folder from the project storage into the bundle at
@@ -255,7 +255,7 @@ export class LibraryProjectFactory extends TodlProjectFactory
     // Text resource formats copy as text; all others (images) as bytes.
     private static isTextResource(name: string): boolean
     {
-        const ext = TodlSources.Extname(name)
+        const ext = TodlProjectSourceFiles.Extname(name)
         return ext === '.mural' || ext === '.md' || ext === '.todl'
     }
 

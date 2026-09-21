@@ -7,7 +7,7 @@ import { ProducerKind, type IProjectFactory } from './project-factory.js'
 // already-resolved bases. `problems` carries compile-error messages so callers decide
 // whether to block (publish) or surface (the workspace resolver). Publish and the
 // WorkspaceBaseResolver share this one pipeline.
-export interface IProducerProjectFactory
+export interface IBaseProducingProjectFactory
 {
     readonly producerKind: ProducerKind
     compileToDocument(
@@ -18,7 +18,7 @@ export interface IProducerProjectFactory
 }
 
 // Type guard: does this factory produce a consumable base?
-export function isProducer(factory: IProjectFactory): factory is IProjectFactory & IProducerProjectFactory
+export function isBaseProducing(factory: IProjectFactory): factory is IProjectFactory & IBaseProducingProjectFactory
 {
-    return typeof (factory as Partial<IProducerProjectFactory>).compileToDocument === 'function'
+    return typeof (factory as Partial<IBaseProducingProjectFactory>).compileToDocument === 'function'
 }

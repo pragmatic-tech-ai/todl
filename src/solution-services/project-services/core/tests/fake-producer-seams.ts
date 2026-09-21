@@ -2,7 +2,7 @@ import { type IStorage } from '@pragmatic-tech-ai/todl-runtime'
 import { PackageKind } from '../../../../publish/publish.js'
 import { type TodlDocument } from '../../../../emit/json.js'
 import { type IPresentationBaker, type BakeOptions, type BakeResult } from '../presentation-baker.js'
-import { type IProducerBackends } from '../producer-backends.js'
+import { type IProducerStorageBackends } from '../producer-backends.js'
 
 // A baker test double: records every call and returns a scripted result (ok by
 // default). Standing in for the mural-compiler-backed concrete baker, so a publish
@@ -21,7 +21,7 @@ export class FakePresentationBaker implements IPresentationBaker
 
 // A backends test double: hands back the storages it was constructed with, keyed by
 // producer kind, so a publish writes into real (temp-dir) backends a test can read.
-export class FakeProducerBackends implements IProducerBackends
+export class FakeProducerBackends implements IProducerStorageBackends
 {
     constructor(private readonly metaModels: IStorage, private readonly libraries: IStorage) {}
 

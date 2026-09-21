@@ -1,6 +1,6 @@
 import { type IStorage, type IServiceProvider } from '@pragmatic-tech-ai/todl-runtime'
 import { type Project } from './project.js'
-import { type BaseBindings } from './base-binding.js'
+import { type ProjectBaseModelBindings } from './base-binding.js'
 
 // The contract a module's project factory implements — the behavior the generic
 // project explorer delegates to. A module declares a project-factory definition
@@ -66,7 +66,7 @@ export interface IProjectFactory
     // openProject reads the manifest + builds the file tree; saveProject persists
     // project-level state (the manifest). All operate on a rooted IStorage
     // (project-relative paths).
-    createProject(storage: IStorage, name: string, bindings?: BaseBindings): Promise<Project>
+    createProject(storage: IStorage, name: string, bindings?: ProjectBaseModelBindings): Promise<Project>
     openProject(storage: IStorage): Promise<Project>
     saveProject(project: Project, storage: IStorage): Promise<void>
 }

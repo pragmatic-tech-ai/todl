@@ -11,7 +11,7 @@ import {
     type ProjectManifestEnvelope,
     type IProjectFactory,
 } from '../project-factory.js'
-import { type BaseBindings } from '../base-binding.js'
+import { type ProjectBaseModelBindings } from '../base-binding.js'
 import { ProjectNodeKind } from '../project.js'
 import { TodlProjectFactory, isTodlProject, type ScaffoldFile } from '../todl-project-factory.js'
 
@@ -35,7 +35,7 @@ class FakeFactory extends TodlProjectFactory
         { extension: '.diagram', kind: ProjectNodeKind.Diagram, displayName: 'Diagram' },
         { extension: '.todl', kind: ProjectNodeKind.Todl, displayName: 'TODL Definition' },
     ]
-    protected buildManifest(name: string, _bindings?: BaseBindings): ProjectManifestEnvelope
+    protected buildManifest(name: string, _bindings?: ProjectBaseModelBindings): ProjectManifestEnvelope
     {
         return { type: 'fake', name, version: 1, keep: 'me' } as ProjectManifestEnvelope & { keep: string }
     }

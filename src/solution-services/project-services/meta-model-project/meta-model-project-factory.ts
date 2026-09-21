@@ -15,14 +15,14 @@ import {
     type ProjectManifestEnvelope,
     type PublishResult,
 } from '../core/project-factory.js'
-import { type IProducerProjectFactory } from '../core/producer-project-factory.js'
+import { type IBaseProducingProjectFactory } from '../core/producer-project-factory.js'
 import { TodlProjectFactory, CLAUDE_DIR, CLAUDE_MD_FILENAME, type ScaffoldFile } from '../core/todl-project-factory.js'
 import { type Project, ProjectNodeKind } from '../core/project.js'
-import { TodlSources } from '../core/todl-sources.js'
+import { TodlProjectSourceFiles } from '../core/todl-sources.js'
 import { StoragePackageSink } from '../core/storage-package-sink.js'
-import { PresentationModel } from '../core/presentation-model.js'
+import { PresentationResourceEmitter } from '../core/presentation-model.js'
 import { PresentationBakerKey } from '../core/presentation-baker.js'
-import { ProducerBackendsKey } from '../core/producer-backends.js'
+import { ProducerStorageBackendsKey } from '../core/producer-backends.js'
 import { type MetaModelManifestFile } from './meta-model-manifest.js'
 import { META_MODEL_CLAUDE_ROOT, META_MODEL_GUIDE, META_MODEL_NEW_CONCEPT } from '../core/scaffold.generated.js'
 
@@ -34,7 +34,7 @@ import { META_MODEL_CLAUDE_ROOT, META_MODEL_GUIDE, META_MODEL_NEW_CONCEPT } from
 // TODL's check(), and — if clean — writes the compiled TodlDocument JSON plus the raw
 // sources into the shared meta-models backend under `<id>/<modelVersion>/`, where other
 // project types consume it. The presentation bake (mural-coupled) and the backend
-// resolution (app-coupled) are reached through the IPresentationBaker / IProducerBackends
+// resolution (app-coupled) are reached through the IPresentationBaker / IProducerStorageBackends
 // seams, resolved from the container — todl stays free of both. All persistence flows
 // through the project's rooted IStorage.
 interface MetaModelManifest extends ProjectManifestEnvelope
@@ -44,7 +44,7 @@ interface MetaModelManifest extends ProjectManifestEnvelope
 }
 
 export class MetaModelProjectFactory extends TodlProjectFactory
-    implements IPublishableProjectFactory, IPresentationProjectFactory, IProducerProjectFactory, IVersionedProjectFactory
+    implements IPublishableProjectFactory, IPresentationProjectFactory, IBaseProducingProjectFactory, IVersionedProjectFactory
     {
     public static readonly Key = new ServiceKey<MetaModelProjectFactory>('MetaModelProjectFactory')
     public static readonly ProjectType = 'meta-model'
@@ -109,7 +109,7 @@ export class MetaModelProjectFactory extends TodlProjectFactory
         _provider: IServiceProvider,
     ): Promise<{ doc: TodlDocument; problems: string[] }>
     {
-        const sources = await TodlSources.Collect(storage)
+        const sources = await TodlProjectSourceFiles.Collect(storage)
         const { model, diagnostics } = checkAgainst(bases, sources)
         const problems = diagnostics
             .filter((d) => d.severity === Severity.Error)
@@ -122,7 +122,7 @@ export class MetaModelProjectFactory extends TodlProjectFactory
     public async publish(_project: Project, storage: IStorage, provider: IServiceProvider): Promise<PublishResult>
     {
         const manifest = JSON.parse(await storage.ReadText(PROJECT_MANIFEST_FILENAME)) as MetaModelManifest
-        const sources = await TodlSources.Collect(storage)
+        const sources = await TodlProjectSourceFiles.Collect(storage)
         if (sources.length === 0) return { ok: false, message: 'Nothing to publish — the project has no .todl files.' }
 
         const outcome = compilePackage([], sources, {
@@ -138,9 +138,9 @@ export class MetaModelProjectFactory extends TodlProjectFactory
         // Assign + write mural resource keys onto icon apps before either the
         // presentation or model.json is written — pkg.document is the same object
         // BlobPackageStore persists, so the key reaches model.json.
-        PresentationModel.StampResourceKeys(doc)
+        PresentationResourceEmitter.StampResourceKeys(doc)
 
-        const dest = provider.getRequired(ProducerBackendsKey).Backend(PackageKind.MetaModel)
+        const dest = provider.getRequired(ProducerStorageBackendsKey).Backend(PackageKind.MetaModel)
         const base = `${manifest.id}/${manifest.modelVersion}`
 
         // Bake the presentation first — a missing icon blocks the publish before
@@ -173,7 +173,7 @@ export class MetaModelProjectFactory extends TodlProjectFactory
     // error → leave the file untouched (the Problems dock already surfaces the errors).
     public async regeneratePresentation(storage: IStorage, colored: boolean): Promise<void>
     {
-        const sources = await TodlSources.Collect(storage)
+        const sources = await TodlProjectSourceFiles.Collect(storage)
         if (sources.length === 0) return
         const { model, diagnostics } = check(sources)
         if (diagnostics.some((d) => d.severity === Severity.Error)) return
@@ -186,7 +186,7 @@ export class MetaModelProjectFactory extends TodlProjectFactory
     {
         await storage.WriteText(
             MetaModelProjectFactory.PRESENTATION_FILE,
-            PresentationModel.GenerateAssets(doc, MetaModelProjectFactory.DICT_NAME, colored))
+            PresentationResourceEmitter.GenerateAssets(doc, MetaModelProjectFactory.DICT_NAME, colored))
     }
 
     private static slugify(name: string): string

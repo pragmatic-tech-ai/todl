@@ -3,7 +3,7 @@ import {
     type ProjectFileFormat,
     type ProjectManifestEnvelope,
 } from '../core/project-factory.js'
-import { type BaseBindings, type BaseRef } from '../core/base-binding.js'
+import { type ProjectBaseModelBindings, type PublishedBaseModelReference } from '../core/base-binding.js'
 import { ProjectNodeKind } from '../core/project.js'
 import { TodlProjectFactory, CLAUDE_MD_FILENAME, type ScaffoldFile } from '../core/todl-project-factory.js'
 import { ARCHITECTURE_CLAUDE_ROOT } from '../core/scaffold.generated.js'
@@ -24,8 +24,8 @@ import { ARCHITECTURE_CLAUDE_ROOT } from '../core/scaffold.generated.js'
 // factories (resolved by extension) — editors own files, this factory owns the project.
 interface ArchitectureManifest extends ProjectManifestEnvelope
 {
-    metaModel?: BaseRef                  // the meta-model this architecture conforms to
-    libraries?: readonly BaseRef[]       // the technology libraries it draws on
+    metaModel?: PublishedBaseModelReference                  // the meta-model this architecture conforms to
+    libraries?: readonly PublishedBaseModelReference[]       // the technology libraries it draws on
     diagrams?: { [path: string]: { viewpoints: string[] } }   // per-diagram viewpoint selection
 }
 
@@ -48,7 +48,7 @@ export class ArchitectureProjectFactory extends TodlProjectFactory
 
     constructor(provider: IServiceProvider) { super(provider) }
 
-    protected buildManifest(name: string, bindings?: BaseBindings): ProjectManifestEnvelope
+    protected buildManifest(name: string, bindings?: ProjectBaseModelBindings): ProjectManifestEnvelope
     {
         const manifest: ArchitectureManifest = {
             type: ArchitectureProjectFactory.ProjectType, name, version: 1,

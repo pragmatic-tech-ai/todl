@@ -200,7 +200,7 @@ export {
     type IPresentationProjectFactory,
     type IVersionedProjectFactory,
 } from './solution-services/project-services/core/project-factory.js';
-export { type BaseRef, type BaseBindings } from './solution-services/project-services/core/base-binding.js';
+export { type PublishedBaseModelReference, type ProjectBaseModelBindings } from './solution-services/project-services/core/base-binding.js';
 export {
     TodlProjectFactory,
     isTodlProject,
@@ -214,8 +214,8 @@ export { MetaModelProjectFactory } from './solution-services/project-services/me
 export { LibraryProjectFactory } from './solution-services/project-services/library-project/library-project-factory.js';
 export { DefaultProjectFactoryRegistry } from './solution-services/project-services/default-project-factory-registry.js';
 export {
-    isProducer,
-    type IProducerProjectFactory,
+    isBaseProducing,
+    type IBaseProducingProjectFactory,
 } from './solution-services/project-services/core/producer-project-factory.js';
 // Producer seams (concrete impls live app-side; todl owns the contracts + keys).
 export {
@@ -225,15 +225,15 @@ export {
     type BakeResult,
 } from './solution-services/project-services/core/presentation-baker.js';
 export {
-    ProducerBackendsKey,
-    type IProducerBackends,
+    ProducerStorageBackendsKey,
+    type IProducerStorageBackends,
 } from './solution-services/project-services/core/producer-backends.js';
-export { BaseResolver } from './solution-services/project-services/core/base-resolver.js';
+export { RecursiveProjectReferencesResolver } from './solution-services/project-services/core/base-resolver.js';
 // Producer helpers (headless): source collection, package sink, presentation emitter, bundle scan.
-export { TodlSources } from './solution-services/project-services/core/todl-sources.js';
+export { TodlProjectSourceFiles } from './solution-services/project-services/core/todl-sources.js';
 export { StoragePackageSink } from './solution-services/project-services/core/storage-package-sink.js';
 export {
-    PresentationModel,
+    PresentationResourceEmitter,
     OntologyKind,
     type PresentationFacets,
 } from './solution-services/project-services/core/presentation-model.js';

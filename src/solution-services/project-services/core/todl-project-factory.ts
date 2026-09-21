@@ -8,7 +8,7 @@ import {
     type ProjectFileFormat,
     type ProjectManifestEnvelope,
 } from './project-factory.js'
-import { type BaseBindings } from './base-binding.js'
+import { type ProjectBaseModelBindings } from './base-binding.js'
 import { Project, ProjectNode, ProjectNodeKind } from './project.js'
 import { TODL_MANUAL_SOURCE, TODL_RULES_SOURCE } from './scaffold.generated.js'
 
@@ -52,13 +52,13 @@ export abstract class TodlProjectFactory extends ServiceBase implements IProject
 
     // Build the initial manifest object to serialize on create — the subclass's
     // extended shape (id/modelVersion, id/libVersion/metaModel, metaModel/libraries).
-    protected abstract buildManifest(name: string, bindings?: BaseBindings): ProjectManifestEnvelope
+    protected abstract buildManifest(name: string, bindings?: ProjectBaseModelBindings): ProjectManifestEnvelope
 
     // The subclass's own scaffold files (its CLAUDE.md + any type-specific guides),
     // unioned with TODL_BASE_SCAFFOLD by ensureScaffold.
     protected abstract scaffoldContributions(): readonly ScaffoldFile[]
 
-    public async createProject(storage: IStorage, name: string, bindings?: BaseBindings): Promise<Project>
+    public async createProject(storage: IStorage, name: string, bindings?: ProjectBaseModelBindings): Promise<Project>
     {
         const manifest = this.buildManifest(name, bindings)
         await storage.WriteText(PROJECT_MANIFEST_FILENAME, JSON.stringify(manifest, null, 2))

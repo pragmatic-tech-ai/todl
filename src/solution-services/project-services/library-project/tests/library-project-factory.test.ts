@@ -7,7 +7,7 @@ import { ServiceProvider, type IStorage } from '@pragmatic-tech-ai/todl-runtime'
 import { NodeFsStorage } from '@pragmatic-tech-ai/todl-runtime/node'
 import { ProjectNodeKind } from '../../core/project.js'
 import { PresentationBakerKey } from '../../core/presentation-baker.js'
-import { ProducerBackendsKey } from '../../core/producer-backends.js'
+import { ProducerStorageBackendsKey } from '../../core/producer-backends.js'
 import { LibraryProjectFactory } from '../library-project-factory.js'
 import { FakePresentationBaker, FakeProducerBackends } from '../../core/tests/fake-producer-seams.js'
 
@@ -25,7 +25,7 @@ function providerWith(baker: FakePresentationBaker, metaBackend: IStorage, libBa
 {
     const p = new ServiceProvider()
     p.registerInstance(PresentationBakerKey, baker)
-    p.registerInstance(ProducerBackendsKey, new FakeProducerBackends(metaBackend, libBackend))
+    p.registerInstance(ProducerStorageBackendsKey, new FakeProducerBackends(metaBackend, libBackend))
     return p
 }
 
@@ -89,7 +89,7 @@ test('publish bakes, persists model.json + library.json, and writes the generate
     const project = await tempDir(t)
     const metaBackend = await tempDir(t)
     const libBackend = await tempDir(t)
-    // Seed the bound meta-model so BaseResolver resolves it.
+    // Seed the bound meta-model so RecursiveProjectReferencesResolver resolves it.
     await metaBackend.WriteText('mm/0.1.0/model.json', JSON.stringify({ nodes: [], edges: [] }))
 
     const baker = new FakePresentationBaker({ ok: true, icons: 2 })

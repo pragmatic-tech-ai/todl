@@ -7,7 +7,7 @@ import { ServiceProvider, type IStorage } from '@pragmatic-tech-ai/todl-runtime'
 import { NodeFsStorage } from '@pragmatic-tech-ai/todl-runtime/node'
 import { ProjectNodeKind } from '../../core/project.js'
 import { PresentationBakerKey } from '../../core/presentation-baker.js'
-import { ProducerBackendsKey } from '../../core/producer-backends.js'
+import { ProducerStorageBackendsKey } from '../../core/producer-backends.js'
 import { MetaModelProjectFactory } from '../meta-model-project-factory.js'
 import { FakePresentationBaker, FakeProducerBackends } from '../../core/tests/fake-producer-seams.js'
 
@@ -25,7 +25,7 @@ function providerWith(baker: FakePresentationBaker, metaBackend: IStorage, libBa
 {
     const p = new ServiceProvider()
     p.registerInstance(PresentationBakerKey, baker)
-    p.registerInstance(ProducerBackendsKey, new FakeProducerBackends(metaBackend, libBackend))
+    p.registerInstance(ProducerStorageBackendsKey, new FakeProducerBackends(metaBackend, libBackend))
     return p
 }
 
