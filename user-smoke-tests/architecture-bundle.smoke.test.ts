@@ -1,0 +1,162 @@
+import { test, describe, type TestContext } from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+import { FakeStorage, type IStorage } from "@pragmatic-tech-ai/todl-runtime";
+import { NodeFsStorage } from "@pragmatic-tech-ai/todl-runtime/node";
+import {
+    ProjectBuildStatus,
+    type IBuildStorageProvider,
+    type OpenedOutput,
+    type BuildOptions,
+} from "../src/solution-services/build-system-core/index.js";
+import {
+    SolutionBuildManager,
+    TodlBuildSystemRegistry,
+    RegistrySource,
+    type SolutionProject,
+    type IPackageSource,
+    type SourcedPackage,
+} from "../src/solution-services/todl-build-system/index.js";
+import { PackageRegistryClient, parseManifest } from "../src/solution-services/package-manager/index.js";
+import { LocalNpmRegistry } from "../src/solution-services/package-manager/registries/npm/local-npm-registry.js";
+import type { PackageRef } from "../src/publish/publish.js";
+import type { TodlDocument } from "../src/compiler-services/emit/json.js";
+
+// USER SMOKE TEST — builds the real on-disk architecture project (TODL/test_projects/
+// architectures/test_architecture) into a single-page HTML application by driving the
+// full solution-manager build stack: TodlBuildSystemRegistry (npm-package + html-bundle),
+// SolutionBuildManager (dependency-ordered multi-project build), an in-memory package
+// store (LocalNpmRegistry) for the bases, and cross-project base resolution through a
+// RegistrySource. Because html-bundle is architecture-only, the bases (meta-model + two
+// libraries) are built and published as npm packages first, then the architecture is
+// built as an html-bundle resolving those bases from the registry.
+
+const TEST_PROJECTS = join(dirname(fileURLToPath(import.meta.url)), "../test_projects");
+const META_MODEL = "meta-models/tech-architecture";
+const MICROSOFT = "libraries/microsoft";
+const AWS = "libraries/aws";
+const ARCHITECTURE = "architectures/test_architecture";
+
+function fsProject(rel: string): SolutionProject
+{
+    const manifest = parseManifest(readFileSync(join(TEST_PROJECTS, rel, "project.plexus"), "utf8"));
+    return { Id: manifest.id ?? manifest.name, Project: new NodeFsStorage(join(TEST_PROJECTS, rel)), Manifest: manifest };
+}
+
+async function tempRoot(t: TestContext): Promise<string>
+{
+    const root = await mkdtemp(join(tmpdir(), "todl-smoke-"));
+    t.after(async () => { await rm(root, { recursive: true, force: true }); });
+    return root;
+}
+
+// Resolves nothing, so the bases can only come from the registry / accumulating output.
+class EmptySource implements IPackageSource
+{
+    public TryGet(_ref: PackageRef): Promise<SourcedPackage | undefined>
+    {
+        return Promise.resolve(undefined);
+    }
+}
+
+// Backs sandboxes + outputs with real filesystem temp dirs, keyed per project
+// (OutputRootOverride), so the manager reads a built model.json back and the test can
+// read the produced index.html.
+class TempBuildStorage implements IBuildStorageProvider
+{
+    private readonly outputs = new Map<string, string>();
+    private counter = 0;
+
+    constructor(private readonly root: string) {}
+
+    public async CreateSandbox(): Promise<IStorage>
+    {
+        const storage = new NodeFsStorage(join(this.root, `sandbox-${this.counter++}`));
+        await storage.CreateDirectory("");
+        return storage;
+    }
+
+    public async DeleteSandbox(sandbox: IStorage): Promise<void>
+    {
+        await sandbox.Delete("");
+    }
+
+    public async OpenOutput(outputName: string, options: BuildOptions): Promise<OpenedOutput>
+    {
+        const key = `${options.OutputRootOverride ?? "main"}--${outputName}`;
+        const dir = join(this.root, "out", key);
+        if (!this.outputs.has(key))
+        {
+            await new NodeFsStorage(dir).CreateDirectory("");
+            this.outputs.set(key, dir);
+        }
+        return { Storage: new NodeFsStorage(dir), Path: dir };
+    }
+}
+
+// Pull the inlined model out of the generated page so we can prove what it carries.
+function inlinedDocument(html: string): TodlDocument
+{
+    const match = /window\.__TODL_DOCUMENT__ = (.+);<\/script>/.exec(html);
+    assert.notEqual(match, null, "the page inlines window.__TODL_DOCUMENT__");
+    return JSON.parse(match![1]!) as TodlDocument;
+}
+
+describe("user smoke: build test_architecture into a bundled application", () =>
+{
+    test("full solution-manager stack produces a self-contained HTML app carrying the meta-model + libraries", async (t) =>
+    {
+        const provider = new TempBuildStorage(await tempRoot(t));
+        const registry = new LocalNpmRegistry(new FakeStorage());
+        const client = new PackageRegistryClient(registry);
+        const solution = new SolutionBuildManager(new TodlBuildSystemRegistry(), provider);
+
+        // Phase 1 — build the bases (meta-model + libraries) as npm packages in dependency
+        // order, then publish each to the in-memory registry. Libraries are listed before
+        // the meta-model to prove the manager reorders; the external source is empty, so the
+        // libraries resolve their base only from the meta-model's just-built output.
+        const meta = fsProject(META_MODEL);
+        const microsoft = fsProject(MICROSOFT);
+        const aws = fsProject(AWS);
+        const bases = await solution.Build({
+            Projects: [microsoft, aws, meta],
+            BuildSystemId: "npm-package",
+            ExternalSource: new EmptySource(),
+        });
+        assert.equal(bases.Ok, true, JSON.stringify(bases.Projects.map((p) => ({ p: p.ProjectId, d: p.Result?.Diagnostics }))));
+        for (const outcome of bases.Projects) await client.publish(outcome.Result!.OutputPath!);
+
+        // Phase 2 — build the architecture as an html-bundle, resolving its meta-model +
+        // libraries from the registry (html-bundle is architecture-only, so it is the only
+        // project the manager builds here).
+        const architecture = fsProject(ARCHITECTURE);
+        const bundle = await solution.Build({
+            Projects: [architecture],
+            BuildSystemId: "html-bundle",
+            ExternalSource: new RegistrySource(registry),
+        });
+        assert.equal(bundle.Ok, true, JSON.stringify(bundle.Projects.map((p) => ({ p: p.ProjectId, d: p.Result?.Diagnostics }))));
+
+        const built = bundle.Projects.find((p) => p.ProjectId === architecture.Id)!;
+        assert.equal(built.Status, ProjectBuildStatus.Built);
+        assert.ok(built.Result!.Artifacts.includes("index.html"), "produced index.html");
+
+        // The page is a self-contained app: mount point + inlined model + graph-app bundle.
+        const html = readFileSync(join(built.Result!.OutputPath!, "index.html"), "utf8");
+        assert.match(html, /id="todl-app-root"/);
+        assert.match(html, /__TODL_DOCUMENT__/);
+        assert.match(html, /FromDocument/); // the GraphApi app bundle is inlined
+
+        // The bundle carries the whole closure — the meta-model AND both libraries — not
+        // just the architecture's own instances.
+        const doc = inlinedDocument(html);
+        assert.ok(doc.nodes.some((n) => n.metaKind === "concept"), "meta-model concepts bundled");
+        assert.ok(doc.nodes.some((n) => n.namespace === "tech_architecture"), "meta-model namespace bundled");
+        assert.ok(doc.nodes.some((n) => n.namespace === "libraries.microsoft"), "microsoft library bundled");
+        assert.ok(doc.nodes.some((n) => n.namespace === "libraries.aws"), "aws library bundled");
+    });
+});

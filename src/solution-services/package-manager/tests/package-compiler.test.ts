@@ -111,7 +111,8 @@ test("a failing compile writes nothing and returns errors", async () => {
 });
 
 test("refuses to compile a project with no publishable id", async () => {
-  const project: Project = { directory: "/x", manifest: manifest("architectures/test_architecture"), sources: [], resources: [] };
+  const idless = parseManifest(JSON.stringify({ type: "architecture", name: "todl-test-arch", version: 1 }));
+  const project: Project = { directory: "/x", manifest: idless, sources: [], resources: [] };
   const compiler = new PackageCompiler(emptyBackends(), { reader: reader(project), createSink: () => new MemorySink() });
   await assert.rejects(compiler.compile("/x"), /no id to publish/);
 });
