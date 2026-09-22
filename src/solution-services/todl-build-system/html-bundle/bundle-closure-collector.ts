@@ -7,7 +7,7 @@ import type { ResolvedPackage, PackageRef as DomainPackageRef } from "../../../d
 // Walks an architecture's base closure deps-first over the build-tier IPackageSource,
 // bridging each package (own document) to a JSON ResolvedPackage, and appends the
 // architecture's own compiled package. The result is the inlined package set a
-// BundledDomainHost composes in the page; `entry` is the architecture ref.
+// DomainHost + BundledContributor composes in the page; `entry` is the architecture ref.
 export class BundleClosureCollector
 {
     public static async Collect(

@@ -7,8 +7,8 @@ import { GraphAppBundle } from "../../../graph-api/generated/graph-app-bundle.js
 import { HtmlShell } from "./html-shell.js";
 
 // Stages a single self-contained index.html: the inlined package set (packages + entry)
-// on a window global plus the bundled-host app. The page composes a BundledDomainHost
-// over the packages and mounts the explorer over host.Query().
+// on a window global plus the bundled-host app. The page composes a DomainHost +
+// BundledContributor over the packages and mounts the explorer over host.Query().
 export class EmitBundledHostAction implements IBuildAction<TodlBuildContext>
 {
     private static readonly ActionName = "emit-bundled-host";
