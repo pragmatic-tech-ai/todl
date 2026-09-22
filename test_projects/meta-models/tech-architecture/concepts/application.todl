@@ -16,7 +16,6 @@ namespace tech_architecture
             result back to the user.
             """;
 
-        id          : identifier;
         label       : label;
 
         containers  : container[];

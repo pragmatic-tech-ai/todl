@@ -18,7 +18,6 @@ namespace tech_architecture
 
         annotate wiki { path = "wiki/subscription.md"; }
 
-        id     : identifier;
         label  : label;
         region : string?;
 

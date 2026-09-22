@@ -11,7 +11,6 @@ namespace tech_architecture
             a `technology` (`billing : billing?`).
             """;
 
-        id       : identifier;
         hosting  : billing_models?;
         per_call : billing_models?;
         per_seat : billing_models?;

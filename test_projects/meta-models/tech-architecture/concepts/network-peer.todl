@@ -9,7 +9,6 @@ namespace tech_architecture
             whichever side is the more active participant.
             """;
 
-        id      : identifier;
         network : network;
 
         invariant

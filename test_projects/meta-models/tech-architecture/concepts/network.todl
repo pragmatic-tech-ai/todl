@@ -16,7 +16,6 @@ namespace tech_architecture
             participant.
             """;
 
-        id     : identifier;
         label  : label;
         region : string;
         cidr   : string?;

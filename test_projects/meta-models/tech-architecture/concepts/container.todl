@@ -15,7 +15,6 @@ namespace tech_architecture
             Docker/OCI containers, though the two often coincide in practice.
             """;
 
-        id             : identifier;
         label          : label;
 
         app_components : app_component[];

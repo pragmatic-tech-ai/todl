@@ -15,7 +15,6 @@ namespace tech_architecture
         // path) honors this — see Plexus arch-drop-resolver.ts step 0c.
         annotate materialize {}
 
-        id : identifier;
         label : label;
 
         invariant

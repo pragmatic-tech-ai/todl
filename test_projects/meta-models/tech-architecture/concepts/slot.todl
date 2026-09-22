@@ -10,7 +10,6 @@ namespace tech_architecture
             `<component_id>.<slot_id>`.
             """;
 
-        id                : identifier;
         label             : string;
         environment       : environment;
         in_resource_group : resource_group?;

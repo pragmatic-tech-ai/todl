@@ -9,7 +9,6 @@ namespace tech_architecture
             dev / test / staging / prod / sandbox) and optional glyph.
             """;
 
-        id     : identifier;
         swatch : string;
 
         invariant

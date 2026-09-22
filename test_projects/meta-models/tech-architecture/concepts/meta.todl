@@ -8,7 +8,6 @@ namespace tech_architecture
             (`meta : meta`). The record id equals the model id.
             """;
 
-        id         : identifier;
         title      : string;
         meta_model : identifier;
     }

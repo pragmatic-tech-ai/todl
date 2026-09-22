@@ -16,7 +16,6 @@ namespace tech_architecture
             `app_component` is accepted by the parser.
             """;
 
-        id    : identifier;
         label : label;
 
         invariant "App-component ids are globally unique within the model.";

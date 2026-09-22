@@ -10,7 +10,6 @@ namespace tech_architecture
             application_portfolio views.
             """;
 
-        id     : identifier;
         swatch : string;
 
         invariant

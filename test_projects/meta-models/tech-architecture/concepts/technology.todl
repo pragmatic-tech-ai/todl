@@ -9,7 +9,6 @@ namespace tech_architecture
             categories). Lives in libraries or as project_custom entries.
             """;
 
-        id : identifier;
         label : string;
         available_in : location[];
         applicable_to : categories[];

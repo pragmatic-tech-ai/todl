@@ -10,7 +10,6 @@ namespace tech_architecture
             and VPN edges in the C4 Deployment view.
             """;
 
-        id         : identifier;
         edge_style : string;
 
         invariant

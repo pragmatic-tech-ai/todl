@@ -20,7 +20,6 @@ namespace tech_architecture
             that lists one RG.
             """;
 
-        id     : identifier;
         label  : label;
         region : string?;
 

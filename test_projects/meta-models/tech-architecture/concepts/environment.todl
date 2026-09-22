@@ -28,7 +28,6 @@ namespace tech_architecture
             override per_instance.
             """;
 
-        id        : identifier;
         label     : label;
         region    : string?;
 

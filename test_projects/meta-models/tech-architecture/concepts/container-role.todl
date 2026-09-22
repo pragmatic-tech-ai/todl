@@ -9,7 +9,6 @@ namespace tech_architecture
             used in C4 Container views.
             """;
 
-        id     : identifier;
         swatch : string?;
 
         invariant

@@ -10,7 +10,6 @@ namespace tech_architecture
             views.
             """;
 
-        id              : identifier;
         edge_decoration : string?;
 
         invariant

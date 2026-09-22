@@ -9,7 +9,6 @@ namespace tech_architecture
             label rendered next to the meter in cost_dimension views.
             """;
 
-        id         : identifier;
         unit_label : label?;
 
         invariant

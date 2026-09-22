@@ -13,7 +13,6 @@ namespace tech_architecture
             `&<block_id>` to denote "any component in the block".
             """;
 
-        id         : identifier;
         label      : label;
         components : component[];
 

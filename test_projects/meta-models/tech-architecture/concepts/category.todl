@@ -9,7 +9,6 @@ namespace tech_architecture
             that category has no `implemented_by` technology icon.
             """;
 
-        id : identifier;
 
         invariant
         {
