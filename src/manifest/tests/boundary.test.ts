@@ -17,6 +17,7 @@ describe("index-width boundary at 65535 (SPEC-04 §11.6)", () => {
     const t = w.addTypeInfo({
       name: w.internString("marker"), ns: 0, kind: MetaKind.Concept,
       extends: 0, fieldStart: 0, fieldCount: 0, relStart: 0, relCount: 0,
+      annotStart: 0, annotCount: 0,
     });
     w.setRoot(t);
     const bytes = w.toBinary();
@@ -34,6 +35,7 @@ describe("index-width boundary at 65535 (SPEC-04 §11.6)", () => {
     const base = w.addTypeInfo({
       name: w.internString("Base"), ns: 0, kind: MetaKind.Concept,
       extends: 0, fieldStart: 0, fieldCount: 0, relStart: 0, relCount: 0,
+      annotStart: 0, annotCount: 0,
     });
     const extendsBase = new TypeDefOrRef(false, base).encode();
     for (let i = 0; i < 32768; i++)
@@ -41,10 +43,11 @@ describe("index-width boundary at 65535 (SPEC-04 §11.6)", () => {
       w.addTypeInfo({
         name: w.internString("T" + i), ns: 0, kind: MetaKind.Concept,
         extends: extendsBase, fieldStart: 0, fieldCount: 0, relStart: 0, relCount: 0,
+        annotStart: 0, annotCount: 0,
       });
     }
     const bytes = w.toBinary();
-    assert.equal((reservedFlags(bytes) & (1 << 11)) !== 0, true); // coded widened
+    assert.equal((reservedFlags(bytes) & (1 << 13)) !== 0, true); // coded widened
     // TypeInfo has 32769 rows (< 65536) so its own row-index stays u16
     assert.equal((reservedFlags(bytes) & (1 << 2)) !== 0, false);
 

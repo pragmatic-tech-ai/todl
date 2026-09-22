@@ -7,6 +7,7 @@ const EMPTY = {
   strings: 1, consts: 1,
   typeInfo: 0, field: 0, rel: 0, target: 0, class: 0,
   fixed: 0, taxonomy: 0, imports: 0, typeRef: 0,
+  annotation: 0, annotationArg: 0,
 };
 
 describe("IndexWidths — u16/u32 selection + reserved flags (SPEC-04 §7.4)", () => {
@@ -41,13 +42,13 @@ describe("IndexWidths — u16/u32 selection + reserved flags (SPEC-04 §7.4)", (
     assert.equal(w.rowWidth(TableId.TypeInfo), 2);
   });
 
-  test("TypeDefOrRef coded widens when max(TypeInfo,TypeRef) row > 32767 (bit 11)", () => {
+  test("TypeDefOrRef coded widens when max(TypeInfo,TypeRef) row > 32767 (bit 13)", () => {
     // 32767 rows: max coded = 32767*2+1 = 65535 -> still u16
     assert.equal(IndexWidths.fromCounts({ ...EMPTY, typeInfo: 32767 }).codedWidth(), 2);
     // 32768 rows: max coded = 65537 -> u32
     const w = IndexWidths.fromCounts({ ...EMPTY, typeInfo: 32768 });
     assert.equal(w.codedWidth(), 4);
-    assert.equal((w.reserved & (1 << 11)) !== 0, true);
+    assert.equal((w.reserved & (1 << 13)) !== 0, true);
     // driven by TypeRef too
     assert.equal(IndexWidths.fromCounts({ ...EMPTY, typeRef: 40000 }).codedWidth(), 4);
   });

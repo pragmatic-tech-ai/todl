@@ -17,6 +17,8 @@ export interface TypeInfoRec
     fieldCount: number;
     relStart: number; // Rel row
     relCount: number;
+    annotStart: number; // Annotation row (ignored when count 0)
+    annotCount: number;
 }
 
 /** §5.2 Field. `type` is an encoded TypeDefOrRef. */
@@ -35,6 +37,8 @@ export interface RelRec
     targetCount: number;
     card: Cardinality;
     inverse: number; // #Strings (0 = none)
+    annotStart: number; // Annotation row (ignored when count 0)
+    annotCount: number;
 }
 
 /** §5.4 Target. */
@@ -52,6 +56,8 @@ export interface ClassRec
     broader: number; // Class row (0 = root)
     fixedStart: number; // Fixed row
     fixedCount: number;
+    annotStart: number; // Annotation row (ignored when count 0)
+    annotCount: number;
 }
 
 /** §5.6 Fixed. */
@@ -83,6 +89,21 @@ export interface TypeRefRec
     name: number; // #Strings (fully-qualified name in the dep)
 }
 
+/** §5.10 Annotation (an applied annotation on a type / member / term). */
+export interface AnnotationRec
+{
+    annotation: number; // TypeDefOrRef coded (the annotation type)
+    argStart: number; // AnnotationArg row
+    argCount: number;
+}
+
+/** §5.11 AnnotationArg (one argument of an applied annotation). */
+export interface AnnotationArgRec
+{
+    name: number; // #Strings
+    value: number; // #Const index
+}
+
 /**
  * The JSON debug view (§8): a positional 1:1 mirror of the binary — same
  * column order, same numeric indices (NOT names, NOT resolved values). Rows
@@ -107,5 +128,7 @@ export interface ManifestJson
         Taxonomy: number[][];
         Imports: number[][];
         TypeRef: number[][];
+        Annotation: number[][];
+        AnnotationArg: number[][];
     };
 }

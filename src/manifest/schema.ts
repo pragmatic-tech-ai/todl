@@ -57,6 +57,7 @@ export class ManifestSchema
     static readonly order: readonly TableId[] = [
         TableId.TypeInfo, TableId.Field, TableId.Rel, TableId.Target,
         TableId.Class, TableId.Fixed, TableId.Taxonomy, TableId.Imports, TableId.TypeRef,
+        TableId.Annotation, TableId.AnnotationArg,
     ];
 
     /** Columns of `table`, in binary column order (matches §8 JSON order). */
@@ -74,6 +75,8 @@ export class ManifestSchema
                     new Column("fieldCount", ColKind.U16),
                     new Column("relStart", ColKind.Row, TableId.Rel),
                     new Column("relCount", ColKind.U16),
+                    new Column("annotStart", ColKind.Row, TableId.Annotation),
+                    new Column("annotCount", ColKind.U16),
                 ];
             case TableId.Field:
                 return [
@@ -88,6 +91,8 @@ export class ManifestSchema
                     new Column("targetCount", ColKind.U16),
                     new Column("card", ColKind.U8),
                     new Column("inverse", ColKind.Str),
+                    new Column("annotStart", ColKind.Row, TableId.Annotation),
+                    new Column("annotCount", ColKind.U16),
                 ];
             case TableId.Target:
                 return [new Column("type", ColKind.Coded)];
@@ -99,6 +104,8 @@ export class ManifestSchema
                     new Column("broader", ColKind.Row, TableId.Class),
                     new Column("fixedStart", ColKind.Row, TableId.Fixed),
                     new Column("fixedCount", ColKind.U16),
+                    new Column("annotStart", ColKind.Row, TableId.Annotation),
+                    new Column("annotCount", ColKind.U16),
                 ];
             case TableId.Fixed:
                 return [
@@ -120,6 +127,17 @@ export class ManifestSchema
                 return [
                     new Column("import", ColKind.Row, TableId.Imports),
                     new Column("name", ColKind.Str),
+                ];
+            case TableId.Annotation:
+                return [
+                    new Column("annotation", ColKind.Coded),
+                    new Column("argStart", ColKind.Row, TableId.AnnotationArg),
+                    new Column("argCount", ColKind.U16),
+                ];
+            case TableId.AnnotationArg:
+                return [
+                    new Column("name", ColKind.Str),
+                    new Column("value", ColKind.Const),
                 ];
         }
     }

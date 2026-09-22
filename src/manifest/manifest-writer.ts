@@ -24,6 +24,8 @@ import type {
     TaxonomyRec,
     ImportsRec,
     TypeRefRec,
+    AnnotationRec,
+    AnnotationArgRec,
     ManifestJson,
 } from "./records.js";
 
@@ -41,6 +43,8 @@ export class ManifestWriter
     private readonly taxonomies: TaxonomyRec[] = [];
     private readonly imports: ImportsRec[] = [];
     private readonly typeRefs: TypeRefRec[] = [];
+    private readonly annotations: AnnotationRec[] = [];
+    private readonly annotationArgs: AnnotationArgRec[] = [];
 
     private rootRow = 0;
 
@@ -120,6 +124,18 @@ export class ManifestWriter
         return this.typeRefs.length;
     }
 
+    addAnnotation(rec: AnnotationRec): number
+    {
+        this.annotations.push(rec);
+        return this.annotations.length;
+    }
+
+    addAnnotationArg(rec: AnnotationArgRec): number
+    {
+        this.annotationArgs.push(rec);
+        return this.annotationArgs.length;
+    }
+
     setRoot(typeInfoRow: number): void
     {
         this.rootRow = typeInfoRow;
@@ -148,6 +164,10 @@ export class ManifestWriter
                 return this.imports.length;
             case TableId.TypeRef:
                 return this.typeRefs.length;
+            case TableId.Annotation:
+                return this.annotations.length;
+            case TableId.AnnotationArg:
+                return this.annotationArgs.length;
         }
     }
 
@@ -160,18 +180,21 @@ export class ManifestWriter
                 return this.typeInfos.map((r) => [
                     r.name, r.ns, r.kind, r.extends,
                     r.fieldStart, r.fieldCount, r.relStart, r.relCount,
+                    r.annotStart, r.annotCount,
                 ]);
             case TableId.Field:
                 return this.fields.map((r) => [r.name, r.type, r.card]);
             case TableId.Rel:
                 return this.rels.map((r) => [
                     r.name, r.targetStart, r.targetCount, r.card, r.inverse,
+                    r.annotStart, r.annotCount,
                 ]);
             case TableId.Target:
                 return this.targets.map((r) => [r.type]);
             case TableId.Class:
                 return this.classes.map((r) => [
                     r.name, r.type, r.taxonomy, r.broader, r.fixedStart, r.fixedCount,
+                    r.annotStart, r.annotCount,
                 ]);
             case TableId.Fixed:
                 return this.fixeds.map((r) => [r.field, r.value]);
@@ -183,6 +206,10 @@ export class ManifestWriter
                 return this.imports.map((r) => [r.model, r.version]);
             case TableId.TypeRef:
                 return this.typeRefs.map((r) => [r.import, r.name]);
+            case TableId.Annotation:
+                return this.annotations.map((r) => [r.annotation, r.argStart, r.argCount]);
+            case TableId.AnnotationArg:
+                return this.annotationArgs.map((r) => [r.name, r.value]);
         }
     }
 
@@ -209,6 +236,8 @@ export class ManifestWriter
                 Taxonomy: this.rowsOf(TableId.Taxonomy),
                 Imports: this.rowsOf(TableId.Imports),
                 TypeRef: this.rowsOf(TableId.TypeRef),
+                Annotation: this.rowsOf(TableId.Annotation),
+                AnnotationArg: this.rowsOf(TableId.AnnotationArg),
             },
         };
     }
@@ -296,6 +325,8 @@ export class ManifestWriter
                     targetCount: rdef.targets.length,
                     card: CardinalityGlyph.fromGlyph(rdef.card),
                     inverse: rdef.inverse !== undefined ? w.internString(rdef.inverse) : 0,
+                    annotStart: 0,
+                    annotCount: 0,
                 });
             }
             w.addTypeInfo({
@@ -307,6 +338,8 @@ export class ManifestWriter
                 fieldCount: fieldEntries.length,
                 relStart,
                 relCount: relEntries.length,
+                annotStart: 0,
+                annotCount: 0,
             });
         }
         // Synthesized primitive TypeInfo rows (kind Primitive, no members).
@@ -315,6 +348,7 @@ export class ManifestWriter
             w.addTypeInfo({
                 name: w.internString(pid), ns: 0, kind: MetaKind.Primitive,
                 extends: 0, fieldStart: 0, fieldCount: 0, relStart: 0, relCount: 0,
+                annotStart: 0, annotCount: 0,
             });
         }
 
@@ -350,6 +384,8 @@ export class ManifestWriter
                 broader: cls.broader !== undefined ? classRow.get(cls.broader) ?? 0 : 0,
                 fixedStart,
                 fixedCount: fixedEntries.length,
+                annotStart: 0,
+                annotCount: 0,
             });
         }
 

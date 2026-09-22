@@ -13,7 +13,8 @@ import { ManifestSchema, ColKind } from "./schema.js";
 import { BinarySerializer } from "./binary-codec.js";
 import type {
     TypeInfoRec, FieldRec, RelRec, TargetRec, ClassRec,
-    FixedRec, TaxonomyRec, ImportsRec, TypeRefRec, ManifestJson,
+    FixedRec, TaxonomyRec, ImportsRec, TypeRefRec,
+    AnnotationRec, AnnotationArgRec, ManifestJson,
 } from "./records.js";
 
 export class ManifestReader
@@ -117,6 +118,8 @@ export class ManifestReader
         tables.set(TableId.Taxonomy, json.tables.Taxonomy.map((r) => r.slice()));
         tables.set(TableId.Imports, json.tables.Imports.map((r) => r.slice()));
         tables.set(TableId.TypeRef, json.tables.TypeRef.map((r) => r.slice()));
+        tables.set(TableId.Annotation, json.tables.Annotation.map((r) => r.slice()));
+        tables.set(TableId.AnnotationArg, json.tables.AnnotationArg.map((r) => r.slice()));
         const formatVersion = Number(json.format.split("/")[1] ?? ManifestSchema.FORMAT_VERSION);
         return new ManifestReader(json.model, json.version, formatVersion, json.root, strings, consts, tables);
     }
@@ -164,6 +167,7 @@ export class ManifestReader
         return {
             name: v[0]!, ns: v[1]!, kind: v[2]!, extends: v[3]!,
             fieldStart: v[4]!, fieldCount: v[5]!, relStart: v[6]!, relCount: v[7]!,
+            annotStart: v[8]!, annotCount: v[9]!,
         };
     }
 
@@ -176,7 +180,10 @@ export class ManifestReader
     rel(row: number): RelRec
     {
         const v = this.row(TableId.Rel, row);
-        return { name: v[0]!, targetStart: v[1]!, targetCount: v[2]!, card: v[3]!, inverse: v[4]! };
+        return {
+            name: v[0]!, targetStart: v[1]!, targetCount: v[2]!, card: v[3]!, inverse: v[4]!,
+            annotStart: v[5]!, annotCount: v[6]!,
+        };
     }
 
     target(row: number): TargetRec
@@ -191,6 +198,7 @@ export class ManifestReader
         return {
             name: v[0]!, type: v[1]!, taxonomy: v[2]!, broader: v[3]!,
             fixedStart: v[4]!, fixedCount: v[5]!,
+            annotStart: v[6]!, annotCount: v[7]!,
         };
     }
 
@@ -216,6 +224,18 @@ export class ManifestReader
     {
         const v = this.row(TableId.TypeRef, row);
         return { import: v[0]!, name: v[1]! };
+    }
+
+    annotation(row: number): AnnotationRec
+    {
+        const v = this.row(TableId.Annotation, row);
+        return { annotation: v[0]!, argStart: v[1]!, argCount: v[2]! };
+    }
+
+    annotationArg(row: number): AnnotationArgRec
+    {
+        const v = this.row(TableId.AnnotationArg, row);
+        return { name: v[0]!, value: v[1]! };
     }
 
     // ---- slice iterators (member ranges captured as [start, count]) ----
@@ -255,6 +275,19 @@ export class ManifestReader
         for (let i = 0; i < t.representsCount; i++) yield this.target(t.representsStart + i);
     }
 
+    /** Applied annotations over a parent's `[annotStart, annotCount]` slice. */
+    *annotationsAt(start: number, count: number): IterableIterator<AnnotationRec>
+    {
+        for (let i = 0; i < count; i++) yield this.annotation(start + i);
+    }
+
+    /** Arguments of an Annotation row. */
+    *argsOf(annotationRow: number): IterableIterator<AnnotationArgRec>
+    {
+        const a = this.annotation(annotationRow);
+        for (let i = 0; i < a.argCount; i++) yield this.annotationArg(a.argStart + i);
+    }
+
     /** Re-serialise this loaded manifest to the binary container (§7). */
     toBinary(): Uint8Array
     {
@@ -285,6 +318,8 @@ export class ManifestReader
                 Taxonomy: t(TableId.Taxonomy),
                 Imports: t(TableId.Imports),
                 TypeRef: t(TableId.TypeRef),
+                Annotation: t(TableId.Annotation),
+                AnnotationArg: t(TableId.AnnotationArg),
             },
         };
     }

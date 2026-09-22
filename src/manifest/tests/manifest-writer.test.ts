@@ -40,6 +40,8 @@ describe("ManifestWriter — heap interning + row appenders (SPEC-04 §9.2)", ()
       fieldCount: count,
       relStart: 0,
       relCount: 0,
+      annotStart: 0,
+      annotCount: 0,
     });
     assert.equal(t, 1);
     assert.equal(start, 1);
@@ -51,11 +53,13 @@ describe("ManifestWriter — heap interning + row appenders (SPEC-04 §9.2)", ()
     const base = w.addTypeInfo({
       name: w.internString("Element"), ns: 0, kind: MetaKind.Concept,
       extends: 0, fieldStart: 0, fieldCount: 0, relStart: 0, relCount: 0,
+      annotStart: 0, annotCount: 0,
     });
     const derived = w.addTypeInfo({
       name: w.internString("Component"), ns: 0, kind: MetaKind.Concept,
       extends: new TypeDefOrRef(false, base).encode(),
       fieldStart: 0, fieldCount: 0, relStart: 0, relCount: 0,
+      annotStart: 0, annotCount: 0,
     });
     assert.equal(base, 1);
     assert.equal(derived, 2);
@@ -67,6 +71,7 @@ describe("ManifestWriter — heap interning + row appenders (SPEC-04 §9.2)", ()
     const t = w.addTypeInfo({
       name: w.internString("Root"), ns: 0, kind: MetaKind.Concept,
       extends: 0, fieldStart: 0, fieldCount: 0, relStart: 0, relCount: 0,
+      annotStart: 0, annotCount: 0,
     });
     w.setRoot(t);
     assert.equal(w.root, t);

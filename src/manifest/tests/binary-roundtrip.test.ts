@@ -14,17 +14,20 @@ function buildShop(): ManifestWriter
   const base = w.addTypeInfo({
     name: w.internString("Element"), ns: 0, kind: MetaKind.Concept,
     extends: 0, fieldStart: 0, fieldCount: 0, relStart: 0, relCount: 0,
+    annotStart: 0, annotCount: 0,
   });
   const comp = w.addTypeInfo({
     name: w.internString("Component"), ns: w.internString("shop"), kind: MetaKind.Concept,
     extends: new TypeDefOrRef(false, base).encode(),
     fieldStart: fName, fieldCount: 2, relStart: 0, relCount: 0,
+    annotStart: 0, annotCount: 0,
   });
   // a class pinning a fixed value → exercises Class/Fixed/#Const
   const fx = w.addFixed({ field: fName, value: w.internConst("widget") });
   w.addClass({
     name: w.internString("Widget"), type: new TypeDefOrRef(false, comp).encode(),
     taxonomy: 0, broader: 0, fixedStart: fx, fixedCount: 1,
+    annotStart: 0, annotCount: 0,
   });
   w.setRoot(comp);
   return w;

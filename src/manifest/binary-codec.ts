@@ -39,6 +39,8 @@ export class BinarySerializer
             taxonomy: rowsOf(TableId.Taxonomy).length,
             imports: rowsOf(TableId.Imports).length,
             typeRef: rowsOf(TableId.TypeRef).length,
+            annotation: rowsOf(TableId.Annotation).length,
+            annotationArg: rowsOf(TableId.AnnotationArg).length,
         };
         const widths = IndexWidths.fromCounts(counts);
         const strBytes = strings.toBytes();

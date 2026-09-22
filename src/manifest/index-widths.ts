@@ -19,6 +19,8 @@ export interface ManifestCounts
     taxonomy: number;
     imports: number;
     typeRef: number;
+    annotation: number;
+    annotationArg: number;
 }
 
 // Flag bit positions (§7.4). Heaps 0..1, table rows 2..10, coded 11.
@@ -35,7 +37,9 @@ enum WidthFlag
     TaxonomyRow = 8,
     ImportsRow = 9,
     TypeRefRow = 10,
-    Coded = 11,
+    AnnotationRow = 11,
+    AnnotationArgRow = 12,
+    Coded = 13,
 }
 
 export class IndexWidths
@@ -60,6 +64,8 @@ export class IndexWidths
         wide(c.taxonomy > 0xffff, WidthFlag.TaxonomyRow);
         wide(c.imports > 0xffff, WidthFlag.ImportsRow);
         wide(c.typeRef > 0xffff, WidthFlag.TypeRefRow);
+        wide(c.annotation > 0xffff, WidthFlag.AnnotationRow);
+        wide(c.annotationArg > 0xffff, WidthFlag.AnnotationArgRow);
         // coded = row*2 + tag; widen when the largest possible coded value
         // over TypeInfo|TypeRef exceeds 0xFFFF.
         const maxRow = Math.max(c.typeInfo, c.typeRef);
@@ -118,6 +124,10 @@ export class IndexWidths
                 return WidthFlag.ImportsRow;
             case TableId.TypeRef:
                 return WidthFlag.TypeRefRow;
+            case TableId.Annotation:
+                return WidthFlag.AnnotationRow;
+            case TableId.AnnotationArg:
+                return WidthFlag.AnnotationArgRow;
         }
     }
 }

@@ -12,6 +12,7 @@ describe("manifest module barrel (SPEC-04)", () => {
     const t = w.addTypeInfo({
       name: w.internString("T"), ns: 0, kind: MetaKind.Concept,
       extends: 0, fieldStart: f, fieldCount: 1, relStart: 0, relCount: 0,
+      annotStart: 0, annotCount: 0,
     });
     w.setRoot(t);
 

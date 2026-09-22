@@ -44,6 +44,8 @@ export enum TableId
     Taxonomy = 6,
     Imports = 7,
     TypeRef = 8,
+    Annotation = 9,     // Applied annotations (target → annotation type + args)
+    AnnotationArg = 10, // One annotation argument (name + const value)
 }
 
 /** Stable heap ids (SPEC-04 §7.2). */

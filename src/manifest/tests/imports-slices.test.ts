@@ -20,6 +20,7 @@ describe("Imports / TypeRef cross-manifest references (SPEC-04 §5.8–5.9)", ()
     const t = w.addTypeInfo({
       name: w.internString("Product"), ns: 0, kind: MetaKind.Concept,
       extends: 0, fieldStart: fPrice, fieldCount: 1, relStart: 0, relCount: 0,
+      annotStart: 0, annotCount: 0,
     });
     w.setRoot(t);
 
@@ -47,16 +48,19 @@ describe("slice iterators (SPEC-04 §9.3)", () => {
     const concept = w.addTypeInfo({
       name: w.internString("Widget"), ns: 0, kind: MetaKind.Concept,
       extends: 0, fieldStart: 0, fieldCount: 0, relStart: 0, relCount: 0,
+      annotStart: 0, annotCount: 0,
     });
     const tStart = w.addTarget({ type: new TypeDefOrRef(false, concept).encode() });
     w.addTarget({ type: new TypeDefOrRef(false, concept).encode() });
     const relRow = w.addRel({
       name: w.internString("uses"), targetStart: tStart, targetCount: 2,
       card: Cardinality.Many, inverse: 0,
+      annotStart: 0, annotCount: 0,
     });
     const owner = w.addTypeInfo({
       name: w.internString("Comp"), ns: 0, kind: MetaKind.Concept,
       extends: 0, fieldStart: fStart, fieldCount: 2, relStart: relRow, relCount: 1,
+      annotStart: 0, annotCount: 0,
     });
     // a taxonomy representing one concept + a class with two fixed values
     const rStart = w.addTarget({ type: new TypeDefOrRef(false, concept).encode() });
@@ -68,6 +72,7 @@ describe("slice iterators (SPEC-04 §9.3)", () => {
     w.addClass({
       name: w.internString("Special"), type: new TypeDefOrRef(false, owner).encode(),
       taxonomy: tax, broader: 0, fixedStart: fxStart, fixedCount: 2,
+      annotStart: 0, annotCount: 0,
     });
     w.setRoot(owner);
     return ManifestReader.fromBinary(w.toBinary());

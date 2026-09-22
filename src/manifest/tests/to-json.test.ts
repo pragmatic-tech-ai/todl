@@ -13,6 +13,7 @@ function buildShop(): ManifestWriter
   const base = w.addTypeInfo({
     name: w.internString("Element"), ns: 0, kind: MetaKind.Concept,
     extends: 0, fieldStart: 0, fieldCount: 0, relStart: 0, relCount: 0,
+    annotStart: 0, annotCount: 0,
   });
   const comp = w.addTypeInfo({
     name: w.internString("Component"),
@@ -20,6 +21,7 @@ function buildShop(): ManifestWriter
     kind: MetaKind.Concept,
     extends: new TypeDefOrRef(false, base).encode(),
     fieldStart: fSize, fieldCount: 1, relStart: 0, relCount: 0,
+    annotStart: 0, annotCount: 0,
   });
   w.setRoot(comp);
   // one pinned value to exercise #Const
