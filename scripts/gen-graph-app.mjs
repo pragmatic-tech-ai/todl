@@ -5,7 +5,7 @@ import { build } from "esbuild";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-const entry = fileURLToPath(new URL("../src/graph-api/browser/app.ts", import.meta.url));
+const entry = fileURLToPath(new URL("../src/graph-api/browser/bundled-host.ts", import.meta.url));
 const result = await build({
   entryPoints: [entry],
   bundle: true,

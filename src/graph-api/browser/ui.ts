@@ -1,4 +1,4 @@
-import type { GraphApi } from "../graph-api.js";
+import type { IGraphQuery } from "../graph-query.js";
 import type { EntitySummary } from "../dto.js";
 
 // A deliberately minimal three-pane explorer: concepts -> instances -> entity detail.
@@ -12,7 +12,7 @@ export class GraphExplorer
     private readonly instances: HTMLElement;
     private readonly detail: HTMLElement;
 
-    constructor(private readonly api: GraphApi, private readonly host: HTMLElement)
+    constructor(private readonly api: IGraphQuery, private readonly host: HTMLElement)
     {
         this.host.innerHTML = "";
         this.host.appendChild(this.Column(GraphExplorer.ConceptsTitle, this.ConceptsList()));
