@@ -35,7 +35,8 @@ import type { TodlDocument } from "../src/compiler-services/emit/json.js";
 // libraries) are built and published as npm packages first, then the architecture is
 // built as an html-bundle resolving those bases from the registry.
 
-const TEST_PROJECTS = join(dirname(fileURLToPath(import.meta.url)), "../test_projects");
+const HERE = dirname(fileURLToPath(import.meta.url));
+const TEST_PROJECTS = join(HERE, "../test_projects");
 const META_MODEL = "meta-models/tech-architecture";
 const MICROSOFT = "libraries/microsoft";
 const AWS = "libraries/aws";
@@ -47,7 +48,21 @@ function fsProject(rel: string): SolutionProject
     return { Id: manifest.id ?? manifest.name, Project: new NodeFsStorage(join(TEST_PROJECTS, rel)), Manifest: manifest };
 }
 
-async function tempRoot(t: TestContext): Promise<string>
+// A stable, filename-safe timestamp for the run directory: 2026-09-22T14-30-05.
+function runStamp(): string
+{
+    return new Date().toISOString().replace(/\.\d+Z$/, "").replace(/:/g, "-");
+}
+
+// The persisted run directory: user-smoke-tests/<run_date_time>/. Its output/ subtree
+// (where OpenOutput writes) is KEPT so the built HTML app can be opened afterwards.
+function runDir(): string
+{
+    return join(HERE, runStamp());
+}
+
+// Scratch sandbox root — real temp dir, cleaned up after the run so only results persist.
+async function sandboxRoot(t: TestContext): Promise<string>
 {
     const root = await mkdtemp(join(tmpdir(), "todl-smoke-"));
     t.after(async () => { await rm(root, { recursive: true, force: true }); });
@@ -63,19 +78,20 @@ class EmptySource implements IPackageSource
     }
 }
 
-// Backs sandboxes + outputs with real filesystem temp dirs, keyed per project
-// (OutputRootOverride), so the manager reads a built model.json back and the test can
-// read the produced index.html.
+// Backs sandboxes and outputs with real filesystem dirs. Sandboxes go under a
+// throwaway temp root; outputs go under <runDir>/output, keyed per project
+// (OutputRootOverride), and are KEPT so the manager reads a built model.json back and
+// the produced index.html survives for inspection.
 class TempBuildStorage implements IBuildStorageProvider
 {
     private readonly outputs = new Map<string, string>();
     private counter = 0;
 
-    constructor(private readonly root: string) {}
+    constructor(private readonly outputRoot: string, private readonly sandboxRoot: string) {}
 
     public async CreateSandbox(): Promise<IStorage>
     {
-        const storage = new NodeFsStorage(join(this.root, `sandbox-${this.counter++}`));
+        const storage = new NodeFsStorage(join(this.sandboxRoot, `sandbox-${this.counter++}`));
         await storage.CreateDirectory("");
         return storage;
     }
@@ -88,7 +104,7 @@ class TempBuildStorage implements IBuildStorageProvider
     public async OpenOutput(outputName: string, options: BuildOptions): Promise<OpenedOutput>
     {
         const key = `${options.OutputRootOverride ?? "main"}--${outputName}`;
-        const dir = join(this.root, "out", key);
+        const dir = join(this.outputRoot, "output", key);
         if (!this.outputs.has(key))
         {
             await new NodeFsStorage(dir).CreateDirectory("");
@@ -110,7 +126,8 @@ describe("user smoke: build test_architecture into a bundled application", () =>
 {
     test("full solution-manager stack produces a self-contained HTML app carrying the meta-model + libraries", async (t) =>
     {
-        const provider = new TempBuildStorage(await tempRoot(t));
+        const output = runDir();
+        const provider = new TempBuildStorage(output, await sandboxRoot(t));
         const registry = new LocalNpmRegistry(new FakeStorage());
         const client = new PackageRegistryClient(registry);
         const solution = new SolutionBuildManager(new TodlBuildSystemRegistry(), provider);
@@ -158,5 +175,8 @@ describe("user smoke: build test_architecture into a bundled application", () =>
         assert.ok(doc.nodes.some((n) => n.namespace === "tech_architecture"), "meta-model namespace bundled");
         assert.ok(doc.nodes.some((n) => n.namespace === "libraries.microsoft"), "microsoft library bundled");
         assert.ok(doc.nodes.some((n) => n.namespace === "libraries.aws"), "aws library bundled");
+
+        t.diagnostic(`run output kept at ${built.Result!.OutputPath!}`);
+        t.diagnostic(`open the app: ${join(built.Result!.OutputPath!, "index.html")}`);
     });
 });

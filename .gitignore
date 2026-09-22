@@ -7,3 +7,6 @@ dist/
 
 # SDD scratch workspace
 .superpowers/
+
+# User smoke-test run outputs (per-run <date-time> dirs)
+user-smoke-tests/*/
