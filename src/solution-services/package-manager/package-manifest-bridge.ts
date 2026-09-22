@@ -34,6 +34,45 @@ export class PackageManifestBridge
     return resolved;
   }
 
+  // A compiled package as a JSON Domain ResolvedPackage (manifest as ManifestJson),
+  // for inlining into a page. Emits the manifest from the FULL closure (self-contained);
+  // document is the own-only document.
+  static toResolvedJson(pkg: CompiledPackage): ResolvedPackage
+  {
+    const dependencies: DomainPackageRef[] = (pkg.document.dependencies ?? []).map(
+      (d) => ({ model: d.id, version: d.version }),
+    );
+    const resolved = PackageManifestBridge.toResolvedJsonDocument(pkg.fullDocument, pkg.id, pkg.version, dependencies);
+    resolved.document = pkg.document;
+    return resolved;
+  }
+
+  // The JSON sibling of toResolvedDocument: manifest emitted as ManifestJson, document set.
+  static toResolvedJsonDocument(
+    doc: TodlDocument,
+    model: string,
+    version: string,
+    dependencies: DomainPackageRef[],
+  ): ResolvedPackage
+  {
+    const repo = new Repository(graphFromJSON(doc));
+    const { manifest, graph } = new ManifestEmitter(repo, model, version).emit();
+    const resolved: ResolvedPackage = {
+      ref: { model, version },
+      manifest: ManifestWriter.fromLogical(manifest).toJSON(),
+      dependencies,
+    };
+    resolved.document = doc;
+    if (graph.nodes.length > 0)
+    {
+      resolved.seed = {
+        nodes: graph.nodes.map((n) => PackageManifestBridge.toReflected(n)),
+        edges: graph.edges.map((e) => ({ from: e.from, rel: e.rel, to: e.to })),
+      };
+    }
+    return resolved;
+  }
+
   // The shared primitive: a TodlDocument + identity + already-mapped Domain deps
   // -> a ResolvedPackage (manifest bytes + seed). Callers pass a full closure for
   // a self-contained manifest, or an own-only document when deps are resolved
