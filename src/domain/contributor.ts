@@ -104,13 +104,28 @@ export class PackagesContributor implements Contributor
 
     private async visit(ref: PackageRef, seen: Set<string>, out: Contribution[]): Promise<void>
     {
-        const pinned = await this.pin(ref);
-        const id = `${pinned.model}@${pinned.version}`;
+        // Skip refs this contributor cannot resolve: the host's load loop composes
+        // the roots and turns any unresolvable one into a single diagnostic, so a
+        // missing sibling must not abort the whole closure here.
+        const resolved = await this.tryResolve(ref);
+        if (resolved === undefined) return;
+        const id = `${resolved.ref.model}@${resolved.ref.version}`;
         if (seen.has(id)) return;
         seen.add(id);
-        const resolved = await this.source.resolve(pinned);
         for (const d of resolved.dependencies) await this.visit(d, seen, out); // deps-first
         out.push(Contributions.from(resolved));
+    }
+
+    private async tryResolve(ref: PackageRef): Promise<ResolvedPackage | undefined>
+    {
+        try
+        {
+            return await this.source.resolve(await this.pin(ref));
+        }
+        catch
+        {
+            return undefined;
+        }
     }
 
     private async pin(ref: PackageRef): Promise<Required<PackageRef>>
