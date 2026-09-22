@@ -82,6 +82,12 @@ export interface PublishResult
 // from the project. The explorer feature-tests with isPublishable before offering
 // its Publish command — the same pattern as ILocalFileAccess. `provider` is passed
 // so publish can resolve a destination backend / services.
+/**
+ * @deprecated The factory publish path is obsolete. Package a project through the
+ * build-system pipeline instead — NpmPackageBuildSystem via TodlProjectBuildManager,
+ * which handles meta-model, library, and architecture projects uniformly. This
+ * interface remains only for the legacy Plexus "Publish" command.
+ */
 export interface IPublishableProjectFactory
 {
     publish(project: Project, storage: IStorage, provider: IServiceProvider): Promise<PublishResult>

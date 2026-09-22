@@ -102,6 +102,11 @@ export abstract class ProducerProjectFactory extends TodlProjectFactory
     // Validate every taxonomy `.todl` against the resolved bases; if clean, emit model.json
     // + bundle.json + sources, bake presentation, and copy the resource folders into the
     // shared package store under `<id>/<packageVersion>/`.
+    /**
+     * @deprecated Use the build-system pipeline (NpmPackageBuildSystem via
+     * TodlProjectBuildManager) to package a project. Retained for the legacy
+     * Plexus "Publish" command only.
+     */
     public async publish(_project: Project, storage: IStorage, provider: IServiceProvider): Promise<PublishResult>
     {
         const manifest = await this.readManifest(storage)
