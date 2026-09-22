@@ -7,8 +7,8 @@ import { CompileModelAction } from "./compile-model-action.js";
 import { EmitPackageLayoutAction } from "./emit-package-layout-action.js";
 
 // The npm-package output (spec §4): resolve bases -> compile model -> [host generators]
-// -> emit the package layout. Applies to the publishable project types (meta-model +
-// library); an architecture is not published as an npm package. Presentation baking is a
+// -> emit the package layout. Applies to every publishable project type — meta-model,
+// library, and architecture (each carries a graph fragment). Presentation baking is a
 // mural-coupled project content generator the host (Plexus) supplies via the constructor
 // when a baker is available (GeneratePresentationAction); the headless pipeline produces
 // the model + handle + resources on its own. Generators run after compile (they read the
@@ -38,7 +38,9 @@ export class NpmPackageBuildSystem implements IBuildSystem<TodlBuildContext, Pro
 
     public AppliesTo(manifest: ProjectManifest): boolean
     {
-        return manifest.type === ProjectType.MetaModel || manifest.type === ProjectType.Library;
+        return manifest.type === ProjectType.MetaModel
+            || manifest.type === ProjectType.Library
+            || manifest.type === ProjectType.Architecture;
     }
 
     public Actions(): readonly IBuildAction<TodlBuildContext>[]

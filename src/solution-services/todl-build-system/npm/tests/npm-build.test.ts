@@ -56,12 +56,12 @@ describe("NpmPackageBuildSystem", () =>
         assert.equal(await provider.Output.Exists("resources/model.todl"), false);
     });
 
-    test("applies to meta-model and library projects, not architecture", () =>
+    test("applies to meta-model, library, and architecture projects", () =>
     {
         const system = new NpmPackageBuildSystem();
         assert.equal(system.AppliesTo({ type: "meta-model", name: "m", version: 1 } as never), true);
         assert.equal(system.AppliesTo({ type: "library", name: "l", version: 1 } as never), true);
-        assert.equal(system.AppliesTo({ type: "architecture", name: "a", version: 1 } as never), false);
+        assert.equal(system.AppliesTo({ type: "architecture", name: "a", version: 1 } as never), true);
     });
 
     test("inserts host content generators between compile and emit", () =>
