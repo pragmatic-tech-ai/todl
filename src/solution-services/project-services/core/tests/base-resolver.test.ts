@@ -62,6 +62,35 @@ describe('RecursiveProjectReferencesResolver — multiple base references', () =
         assert.equal(bases.length, 3)
     })
 
+    test('resolves an architecture binding, transitively', async () =>
+    {
+        const source = new MapSource(new Map([
+            ['child', pkg('ChildInstance')],
+            ['parent', pkg('ParentInstance', [{ kind: PackageKind.Architecture, ...ref('child') }])],
+        ]))
+
+        const { bases, problems } = await RecursiveProjectReferencesResolver.Resolve(source, {
+            architectures: [ref('parent')],
+        })
+
+        assert.deepEqual(problems, [])
+        assert.equal(bases.length, 2)
+        const ids = bases.flatMap((b) => b.nodes.map((n) => n.id))
+        assert.ok(ids.includes('ParentInstance') && ids.includes('ChildInstance'))
+    })
+
+    test('labels an unresolved architecture as architecture, not meta-model', async () =>
+    {
+        const source = new MapSource(new Map())
+
+        const { problems } = await RecursiveProjectReferencesResolver.Resolve(source, {
+            architectures: [ref('ghost')],
+        })
+
+        assert.equal(problems.length, 1)
+        assert.match(problems[0]!, /architecture "ghost@1\.0\.0" is not published/)
+    })
+
     test('reports each unresolved reference without failing the others', async () =>
     {
         const source = new MapSource(new Map([['core', pkg('CoreConcept')]]))

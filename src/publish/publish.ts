@@ -23,6 +23,7 @@ export enum PackageKind
 {
   MetaModel = "meta-model",
   Library = "library",
+  Architecture = "architecture",
 }
 
 /** A pinned reference to a base package this one was compiled against. */

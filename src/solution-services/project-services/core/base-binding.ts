@@ -15,4 +15,5 @@ export interface ProjectBaseModelBindings
 {
     metaModels?: readonly PublishedBaseModelReference[]
     libraries?: readonly PublishedBaseModelReference[]
+    architectures?: readonly PublishedBaseModelReference[]
 }

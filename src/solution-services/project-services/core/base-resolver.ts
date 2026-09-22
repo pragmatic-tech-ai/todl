@@ -25,6 +25,7 @@ export class RecursiveProjectReferencesResolver
         const queue: PackageRef[] = []
         for (const meta of bindings.metaModels ?? []) queue.push({ kind: PackageKind.MetaModel, ...meta })
         for (const lib of bindings.libraries ?? []) queue.push({ kind: PackageKind.Library, ...lib })
+        for (const arch of bindings.architectures ?? []) queue.push({ kind: PackageKind.Architecture, ...arch })
 
         while (queue.length > 0)
         {
@@ -36,7 +37,9 @@ export class RecursiveProjectReferencesResolver
             const pkg = await source.TryGet(ref)
             if (pkg === undefined)
             {
-                const kind = ref.kind === PackageKind.Library ? 'library' : 'meta-model'
+                const kind = ref.kind === PackageKind.Library ? 'library'
+                    : ref.kind === PackageKind.Architecture ? 'architecture'
+                    : 'meta-model'
                 problems.push(`${kind} "${ref.id}@${ref.version}" is not published`)
                 continue
             }
