@@ -103,6 +103,30 @@ export class PackageManifestBridge
     return resolved;
   }
 
+  // A JSON ResolvedPackage whose manifest is emitted (schema-only, no seed) from a
+  // SELF-CONTAINED source document, while `document` is what the host merges for its
+  // query. Used for bundling, where each base's own document is NOT self-contained (its
+  // edges point at base nodes): the manifest is emitted from the full closure so
+  // Repository construction never sees a dangling edge, and the heap-populating seed is
+  // omitted because the bundled host queries documents, not the heap.
+  static toResolvedJsonManifest(
+    manifestSource: TodlDocument,
+    document: TodlDocument,
+    model: string,
+    version: string,
+    dependencies: DomainPackageRef[],
+  ): ResolvedPackage
+  {
+    const repo = new Repository(graphFromJSON(manifestSource));
+    const manifest = new ManifestEmitter(repo, model, version).emitManifest();
+    return {
+      ref: { model, version },
+      manifest: ManifestWriter.fromLogical(manifest).toJSON(),
+      dependencies,
+      document,
+    };
+  }
+
   // A flattened DataNode -> a self-contained ReflectedNode (edges become refs
   // during Domain.bindGraph, so refs are left off here).
   private static toReflected(n: DataNode): ReflectedNode

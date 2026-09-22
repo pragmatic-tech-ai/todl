@@ -20,6 +20,11 @@ export class BundleClosureCollector
         const problems: string[] = [];
         const visited = new Set<string>();
 
+        // The architecture's full closure is the self-contained universe (prelude + all
+        // bases + own). Every package's manifest is emitted from it, so Repository
+        // construction never chokes on a base own-document's edges into other bases.
+        const universe = compiled.fullDocument;
+
         const queue: PackageRef[] = [];
         for (const meta of bindings.metaModels ?? []) queue.push({ kind: PackageKind.MetaModel, ...meta });
         for (const lib of bindings.libraries ?? []) queue.push({ kind: PackageKind.Library, ...lib });
@@ -39,11 +44,14 @@ export class BundleClosureCollector
                 continue;
             }
             const deps: DomainPackageRef[] = pkg.Dependencies.map((d) => ({ model: d.id, version: d.version }));
-            packages.push(PackageManifestBridge.toResolvedJsonDocument(pkg.Document, ref.id, ref.version, deps));
+            packages.push(PackageManifestBridge.toResolvedJsonManifest(universe, pkg.Document, ref.id, ref.version, deps));
             for (const dep of pkg.Dependencies) queue.push(dep);
         }
 
-        packages.push(PackageManifestBridge.toResolvedJson(compiled));
+        // The architecture package carries the full closure as its document, so the host's
+        // merged query graph is self-contained regardless of the bases' own documents.
+        const archDeps: DomainPackageRef[] = (compiled.document.dependencies ?? []).map((d) => ({ model: d.id, version: d.version }));
+        packages.push(PackageManifestBridge.toResolvedJsonManifest(universe, universe, compiled.id, compiled.version, archDeps));
         return { packages, entry: { model: compiled.id, version: compiled.version }, problems };
     }
 }

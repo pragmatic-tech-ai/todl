@@ -114,12 +114,16 @@ class TempBuildStorage implements IBuildStorageProvider
     }
 }
 
-// Pull the inlined model out of the generated page so we can prove what it carries.
-function inlinedDocument(html: string): TodlDocument
+// Pull the inlined package set out of the generated page and union every package
+// document's node namespaces, to prove what the bundle carries.
+function inlinedNamespaces(html: string): Set<string>
 {
-    const match = /window\.__TODL_DOCUMENT__ = (.+);<\/script>/.exec(html);
-    assert.notEqual(match, null, "the page inlines window.__TODL_DOCUMENT__");
-    return JSON.parse(match![1]!) as TodlDocument;
+    const match = /window\.__TODL_PACKAGES__ = (.+);<\/script>/.exec(html);
+    assert.notEqual(match, null, "the page inlines window.__TODL_PACKAGES__");
+    const payload = JSON.parse(match![1]!) as { packages: { document: TodlDocument }[] };
+    const namespaces = new Set<string>();
+    for (const pkg of payload.packages) for (const node of pkg.document.nodes) if (node.namespace) namespaces.add(node.namespace);
+    return namespaces;
 }
 
 describe("user smoke: build test_architecture into a bundled application", () =>
@@ -162,19 +166,18 @@ describe("user smoke: build test_architecture into a bundled application", () =>
         assert.equal(built.Status, ProjectBuildStatus.Built);
         assert.ok(built.Result!.Artifacts.includes("index.html"), "produced index.html");
 
-        // The page is a self-contained app: mount point + inlined model + graph-app bundle.
+        // The page is a self-contained app: mount point + inlined package set + app bundle.
         const html = readFileSync(join(built.Result!.OutputPath!, "index.html"), "utf8");
         assert.match(html, /id="todl-app-root"/);
-        assert.match(html, /__TODL_DOCUMENT__/);
-        assert.match(html, /FromDocument/); // the GraphApi app bundle is inlined
+        assert.match(html, /__TODL_PACKAGES__/);
+        assert.match(html, /BundledHostBootstrap/); // the bundled-host app bundle is inlined
 
         // The bundle carries the whole closure — the meta-model AND both libraries — not
         // just the architecture's own instances.
-        const doc = inlinedDocument(html);
-        assert.ok(doc.nodes.some((n) => n.metaKind === "concept"), "meta-model concepts bundled");
-        assert.ok(doc.nodes.some((n) => n.namespace === "tech_architecture"), "meta-model namespace bundled");
-        assert.ok(doc.nodes.some((n) => n.namespace === "libraries.microsoft"), "microsoft library bundled");
-        assert.ok(doc.nodes.some((n) => n.namespace === "libraries.aws"), "aws library bundled");
+        const namespaces = inlinedNamespaces(html);
+        assert.ok(namespaces.has("tech_architecture"), "meta-model namespace bundled");
+        assert.ok(namespaces.has("libraries.microsoft"), "microsoft library bundled");
+        assert.ok(namespaces.has("libraries.aws"), "aws library bundled");
 
         t.diagnostic(`run output kept at ${built.Result!.OutputPath!}`);
         t.diagnostic(`open the app: ${join(built.Result!.OutputPath!, "index.html")}`);
