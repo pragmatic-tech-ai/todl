@@ -78,3 +78,50 @@ export class BundledContributor implements Contributor
         return Promise.resolve(undefined); // no asset store in the pipeline yet (see spec)
     }
 }
+
+/** A contributor that resolves its libraries' closure from live package sources. */
+export class PackagesContributor implements Contributor
+{
+    private readonly source: CompositePackageSource;
+
+    constructor(sources: readonly PackageSource[], readonly Roots: readonly PackageRef[])
+    {
+        this.source = new CompositePackageSource(sources);
+    }
+
+    async Contributions(): Promise<readonly Contribution[]>
+    {
+        const out: Contribution[] = [];
+        const seen = new Set<string>();
+        for (const root of this.Roots) await this.visit(root, seen, out);
+        return out;
+    }
+
+    Resource(_uri: string): Promise<ResourceContent | undefined>
+    {
+        return Promise.resolve(undefined); // no asset store in the pipeline yet (see spec)
+    }
+
+    private async visit(ref: PackageRef, seen: Set<string>, out: Contribution[]): Promise<void>
+    {
+        const pinned = await this.pin(ref);
+        const id = `${pinned.model}@${pinned.version}`;
+        if (seen.has(id)) return;
+        seen.add(id);
+        const resolved = await this.source.resolve(pinned);
+        for (const d of resolved.dependencies) await this.visit(d, seen, out); // deps-first
+        out.push(Contributions.from(resolved));
+    }
+
+    private async pin(ref: PackageRef): Promise<Required<PackageRef>>
+    {
+        if (ref.version !== undefined) return { model: ref.model, version: ref.version };
+        if (this.source.versions !== undefined)
+        {
+            const versions = await this.source.versions(ref.model);
+            const latest = versions[versions.length - 1];
+            if (latest !== undefined) return { model: ref.model, version: latest };
+        }
+        throw new Error(`cannot pin a version for "${ref.model}" (no version given, no versions())`);
+    }
+}

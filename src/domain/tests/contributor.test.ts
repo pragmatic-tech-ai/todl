@@ -1,6 +1,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { BundledContributor } from "../contributor.js";
+import { BundledContributor, PackagesContributor } from "../contributor.js";
+import { MemoryPackageSource } from "../memory-package-source.js";
 import type { ResolvedPackage } from "../domain.js";
 import type { ManifestJson } from "../../manifest/records.js";
 import { ManifestWriter } from "../../manifest/manifest-writer.js";
@@ -40,5 +41,37 @@ describe("BundledContributor", () =>
     {
         const c = new BundledContributor([pkg("acme.meta")], []);
         assert.equal(await c.Resource("resources/x.svg"), undefined);
+    });
+});
+
+function dep(model: string, deps: { model: string; version: string }[]): ResolvedPackage
+{
+    return { ref: { model, version: "1.0.0" }, manifest: soloManifest(model, "Widget"), dependencies: deps };
+}
+
+describe("PackagesContributor", () =>
+{
+    test("resolves a deps-first, deduped closure from its sources", async () =>
+    {
+        // a → b, c → b (diamond): b appears once, before a and c.
+        const source = new MemoryPackageSource([
+            dep("b", []),
+            dep("a", [{ model: "b", version: "1.0.0" }]),
+            dep("c", [{ model: "b", version: "1.0.0" }]),
+        ]);
+        const c = new PackagesContributor([source], [
+            { model: "a", version: "1.0.0" },
+            { model: "c", version: "1.0.0" },
+        ]);
+        const ids = (await c.Contributions()).map((x) => x.identity.model);
+        assert.deepEqual(ids, ["b", "a", "c"]); // deps-first, b deduped
+    });
+
+    test("pins an unversioned root via the source's versions()", async () =>
+    {
+        const source = new MemoryPackageSource([dep("solo", [])]);
+        const c = new PackagesContributor([source], [{ model: "solo" }]);
+        const contributions = await c.Contributions();
+        assert.equal(contributions[0]!.identity.version, "1.0.0");
     });
 });
