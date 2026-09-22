@@ -69,6 +69,14 @@
         "default": "./dist/domain/index.js"
       },
       "require": "./dist/domain/index.js"
+    },
+    "./graph-api": {
+      "types": "./dist/graph-api/index.d.ts",
+      "import": {
+        "development": "./src/graph-api/index.ts",
+        "default": "./dist/graph-api/index.js"
+      },
+      "require": "./dist/graph-api/index.js"
     }
   },
   "bin": {
