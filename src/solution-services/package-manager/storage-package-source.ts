@@ -39,6 +39,7 @@ export class StoragePackageSource implements PackageSource
         const dependencies = (doc.dependencies ?? []).map((d) => ({ model: d.id, version: d.version }));
 
         const resolved: ResolvedPackage = { ref: { model: ref.model, version }, manifest, dependencies };
+        resolved.document = doc;
         const seed = StoragePackageSource.toSeed(graph);
         if (seed.nodes.length > 0) resolved.seed = seed;
         return resolved;

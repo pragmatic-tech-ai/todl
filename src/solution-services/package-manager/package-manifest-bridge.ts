@@ -29,7 +29,9 @@ export class PackageManifestBridge
     const dependencies: DomainPackageRef[] = (pkg.document.dependencies ?? []).map(
       (d) => ({ model: d.id, version: d.version }),
     );
-    return PackageManifestBridge.toResolvedDocument(pkg.fullDocument, pkg.id, pkg.version, dependencies);
+    const resolved = PackageManifestBridge.toResolvedDocument(pkg.fullDocument, pkg.id, pkg.version, dependencies);
+    resolved.document = pkg.document;
+    return resolved;
   }
 
   // The shared primitive: a TodlDocument + identity + already-mapped Domain deps
