@@ -21,6 +21,15 @@ export interface FieldDef
     card: CardGlyph;
 }
 
+/** An applied annotation (annotation type id + its argument values). */
+export interface AnnotationApp
+{
+    /** The annotation type id (e.g. "icon"). */
+    annotation: string;
+    /** The annotation's argument values, keyed by parameter name. */
+    args: Record<string, Scalar>;
+}
+
 export interface RelationshipDef
 {
     /** One or more target concept ids (union). */
@@ -28,6 +37,8 @@ export interface RelationshipDef
     card: CardGlyph;
     /** Inverse relationship name on the target, or omitted if none. */
     inverse?: string;
+    /** Annotations applied to this relationship member. */
+    annotations: AnnotationApp[];
 }
 
 export interface ConceptDef
@@ -40,6 +51,8 @@ export interface ConceptDef
     relationships: Record<string, RelationshipDef>;
     /** Opaque invariant expressions for v1. */
     invariants: string[];
+    /** Annotations applied to this concept. */
+    annotations: AnnotationApp[];
 }
 
 export interface ClassDef
@@ -54,6 +67,8 @@ export interface ClassDef
     narrower: string[];
     /** The field values this class pins — the Axis-2 value-origin authority. */
     fixed: Record<string, Scalar>;
+    /** Annotations applied to this class/term. */
+    annotations: AnnotationApp[];
 }
 
 export interface TaxonomyDef

@@ -25,6 +25,7 @@ import {
     type RelationshipDef,
     type FieldDef,
     type TaxonomyDef,
+    type AnnotationApp,
 } from "../../manifest/logical.js";
 
 /** The manifest version a data graph is pinned to. */
@@ -115,7 +116,11 @@ export class ManifestEmitter
             const relationships: Record<string, RelationshipDef> = {};
             for (const r of schema.relationships)
             {
-                const def: RelationshipDef = { targets: r.targets, card: CardinalityGlyph.toGlyph(r.cardinality) };
+                const def: RelationshipDef = {
+                    targets: r.targets,
+                    card: CardinalityGlyph.toGlyph(r.cardinality),
+                    annotations: this.annotationsOf(`${id}.${r.name}`),
+                };
                 if (r.inverse !== null) def.inverse = r.inverse;
                 relationships[r.name] = def;
             }
@@ -123,7 +128,10 @@ export class ManifestEmitter
                 .invariantsFor(id)
                 .map((inv) => inv.description)
                 .filter((s) => s.length > 0);
-            out[id] = { extends: schema.extends, fields, relationships, invariants };
+            out[id] = {
+                extends: schema.extends, fields, relationships, invariants,
+                annotations: this.annotationsOf(id),
+            };
         }
         return out;
     }
@@ -137,7 +145,12 @@ export class ManifestEmitter
             const fixed: Record<string, Scalar> = {};
             for (const [key, value] of node.attrs)
                 if (!ManifestEmitter.MARKERS.has(key)) fixed[key] = value;
-            const def: ClassDef = { concept: node.type ?? "", narrower: this.repo.narrowerOf(node.id), fixed };
+            const def: ClassDef = {
+                concept: node.type ?? "",
+                narrower: this.repo.narrowerOf(node.id),
+                fixed,
+                annotations: this.annotationsOf(node.id),
+            };
             const taxonomy = this.repo.related(node.id, EdgeKind.Contains, Direction.In)[0];
             if (taxonomy !== undefined) def.taxonomy = taxonomy;
             const broader = this.repo.broaderOf(node.id)[0];
@@ -154,6 +167,22 @@ export class ManifestEmitter
         {
             const roots = this.repo.termsOf(id).filter((t) => this.repo.broaderOf(t).length === 0);
             out[id] = { represents: this.repo.represents(id), roots };
+        }
+        return out;
+    }
+
+    /** The annotations applied to `nodeId` (via Annotated edges → application nodes). */
+    private annotationsOf(nodeId: NodeId): AnnotationApp[]
+    {
+        const out: AnnotationApp[] = [];
+        for (const appId of this.repo.related(nodeId, EdgeKind.Annotated, Direction.Out))
+        {
+            const app = this.repo.resolve(appId);
+            if (app === undefined || app.type === null) continue;
+            const args: Record<string, Scalar> = {};
+            for (const [key, value] of app.attrs)
+                if (!ManifestEmitter.MARKERS.has(key)) args[key] = value;
+            out.push({ annotation: app.type, args });
         }
         return out;
     }
