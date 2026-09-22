@@ -34,6 +34,24 @@ test("scope is parametrised (name + dependency prefixes)", () => {
   assert.deepEqual(pkg.dependencies, { "@acme/todl-test-tech-architecture": "0.1.0" });
 });
 
-test("an architecture is not publishable", () => {
-  assert.throws(() => toPackageJson(manifest("architectures/test_architecture")), /not published/);
+test("architecture manifest → package.json with architecture kind + arch deps", () => {
+  const m = parseManifest(JSON.stringify({
+    type: "architecture", name: "My Arch", version: 1,
+    id: "my-arch", packageVersion: "0.2.0",
+    metaModels: [{ id: "tech-architecture", version: "0.1.0" }],
+    architectures: [{ id: "base-arch", version: "0.1.0" }],
+  }));
+  const pkg = toPackageJson(m);
+  assert.equal(pkg.name, "@pragmatic-tech-ai/my-arch");
+  assert.equal(pkg.version, "0.2.0");
+  assert.deepEqual(pkg.todl, { kind: ProjectType.Architecture, id: "my-arch" });
+  assert.deepEqual(pkg.dependencies, {
+    "@pragmatic-tech-ai/tech-architecture": "0.1.0",
+    "@pragmatic-tech-ai/base-arch": "0.1.0",
+  });
+});
+
+test("architecture manifest with no id still reports the id error", () => {
+  const m = parseManifest(JSON.stringify({ type: "architecture", name: "x", version: 1 }));
+  assert.throws(() => toPackageJson(m), /no id to publish/);
 });

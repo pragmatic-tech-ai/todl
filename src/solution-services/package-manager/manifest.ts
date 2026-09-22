@@ -39,6 +39,8 @@ export interface ProjectManifest
   metaModels?: DependencyRef[];
   /** The libraries this project draws on (any number). */
   libraries?: DependencyRef[];
+  /** Other architectures this architecture composes (nested sub-graphs). */
+  architectures?: DependencyRef[];
 }
 
 /** Parse a `project.plexus` JSON string into a typed manifest. */

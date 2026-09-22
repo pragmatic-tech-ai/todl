@@ -69,12 +69,6 @@ function packageVersion(manifest: ProjectManifest): string
  */
 export function toPackageJson(manifest: ProjectManifest, options: PackageJsonOptions = {}): PackageJson
 {
-  if (manifest.type === ProjectType.Architecture)
-  {
-    throw new Error(
-      `architecture "${manifest.name}" is not published; it is built by the application build system`,
-    );
-  }
   const scope = options.scope ?? DEFAULT_SCOPE;
   const id = packageId(manifest);
 
@@ -86,6 +80,10 @@ export function toPackageJson(manifest: ProjectManifest, options: PackageJsonOpt
   for (const library of manifest.libraries ?? [])
   {
     dependencies[`${scope}/${library.id}`] = library.version;
+  }
+  for (const architecture of manifest.architectures ?? [])
+  {
+    dependencies[`${scope}/${architecture.id}`] = architecture.version;
   }
 
   return {
