@@ -21,6 +21,9 @@ export { CompileModelAction } from "./npm/compile-model-action.js";
 export { EmitPackageLayoutAction } from "./npm/emit-package-layout-action.js";
 export { GeneratePresentationAction } from "./npm/generate-presentation-action.js";
 export { NpmPackageBuildSystem } from "./npm/npm-package-build-system.js";
+// html-bundle build system (spec: single-page app for architecture projects).
+export { HtmlBundleBuildSystem } from "./html-bundle/html-bundle-build-system.js";
+export { EmitHtmlBundleAction } from "./html-bundle/emit-html-bundle-action.js";
 // Solution builds (spec §9): dependency-ordered multi-project build.
 export { BuildOutputSource } from "./solution/build-output-source.js";
 export {
