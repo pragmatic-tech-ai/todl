@@ -2,12 +2,13 @@ import { FrozenRepository } from "../compiler-services/model/frozen.js";
 import { MetaKind } from "../compiler-services/model/kinds.js";
 import { Tier } from "../compiler-services/model/graph.js";
 import { toElement, type Element, type ElementSchema } from "../compiler-services/model/element.js";
-import type { TodlDocument } from "../compiler-services/emit/json.js";
+import type { TodlDocument, JsonEdge, JsonNode } from "../compiler-services/emit/json.js";
 import type { ConceptSummary, EntitySummary } from "./dto.js";
+import type { IGraphQuery } from "./graph-query.js";
 
 // Read-only, browser-safe façade over a compiled TODL document. Every method is a thin
 // projection over FrozenRepository — no query engine of its own — returning plain DTOs.
-export class GraphApi
+export class GraphApi implements IGraphQuery
 {
     private static readonly LabelField = "label";
     private static readonly NameField = "name";
@@ -19,6 +20,30 @@ export class GraphApi
     public static FromDocument(document: TodlDocument): GraphApi
     {
         return new GraphApi(FrozenRepository.fromJSON(document));
+    }
+
+    // Merge several documents (deps-first order) into one queryable graph. Nodes union
+    // by id (later wins), edges union by identity, so overlapping closures collapse.
+    public static FromDocuments(documents: readonly TodlDocument[]): GraphApi
+    {
+        return GraphApi.FromDocument(GraphApi.Merge(documents));
+    }
+
+    private static Merge(documents: readonly TodlDocument[]): TodlDocument
+    {
+        const nodes = new Map<string, JsonNode>();
+        const edges = new Map<string, JsonEdge>();
+        for (const doc of documents)
+        {
+            for (const node of doc.nodes) nodes.set(node.id, node);
+            for (const edge of doc.edges) edges.set(GraphApi.EdgeKey(edge), edge);
+        }
+        return { nodes: [...nodes.values()], edges: [...edges.values()] };
+    }
+
+    private static EdgeKey(edge: JsonEdge): string
+    {
+        return `${edge.from} ${edge.to} ${edge.kind} ${edge.via ?? ""}`;
     }
 
     public Concepts(): ConceptSummary[]
