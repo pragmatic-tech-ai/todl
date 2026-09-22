@@ -46,8 +46,9 @@ describe("HtmlBundleBuildSystem", () =>
 
         const html = await provider.Output.ReadText("index.html");
         assert.match(html, /id="todl-app-root"/);
-        assert.match(html, /__TODL_DOCUMENT__/);
-        assert.match(html, /FromDocument/);              // the graph-app bundle is inlined
-        assert.match(html, /App/);                        // the compiled document is inlined
+        assert.match(html, /__TODL_PACKAGES__/);
+        assert.match(html, /BundledHostBootstrap/);      // the bundled-host bootstrap is inlined
+        assert.match(html, /"entry"/);                    // the entry ref is present
+        assert.match(html, /App/);                        // the compiled document is inlined (my-arch's concept)
     });
 });
