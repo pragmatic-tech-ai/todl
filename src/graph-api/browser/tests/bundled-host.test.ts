@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { BundledDomainHost } from "../bundled-host.js";
+import { DomainHost } from "../../../domain/domain-host.js";
+import { BundledContributor } from "../../../domain/contributor.js";
 import { compilePackage, PackageKind } from "../../../publish/publish.js";
 import { PackageManifestBridge } from "../../../solution-services/package-manager/package-manifest-bridge.js";
 import type { ResolvedPackage } from "../../../domain/domain.js";
@@ -23,10 +24,14 @@ function inlined(): ResolvedPackage[]
     return [PackageManifestBridge.toResolvedJson(meta.package!), lib("acme.ms", "msWidget"), lib("acme.aws", "awsWidget")];
 }
 
-test("BundledDomainHost composes the inlined set; Query sees all packages", async () =>
+test("BundledContributor composes the inlined set; Query sees all packages", async () =>
 {
-    const host = new BundledDomainHost(inlined());
-    await host.Compose([{ model: "acme.ms", version: "1.0.0" }, { model: "acme.aws", version: "1.0.0" }]);
+    const host = await DomainHost.Compose([
+        new BundledContributor(inlined(), [
+            { model: "acme.ms", version: "1.0.0" },
+            { model: "acme.aws", version: "1.0.0" },
+        ]),
+    ]);
     assert.deepEqual(host.Diagnostics, []);
     const query = host.Query();
     assert.ok(query.Concepts().some((c) => c.id === "Widget"));

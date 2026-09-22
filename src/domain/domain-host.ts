@@ -1,34 +1,33 @@
-import { Domain, type PackageSource, type PackageRef } from "./domain.js";
-import { CapturingPackageSource } from "./capturing-package-source.js";
-import { CompositePackageSource } from "./composite-package-source.js";
+import { Domain, type PackageRef, type ResolvedPackage } from "./domain.js";
+import { MemoryPackageSource } from "./memory-package-source.js";
+import type { Contributor, Contribution } from "./contributor.js";
 import { GraphApi } from "../graph-api/graph-api.js";
 import type { IGraphQuery } from "../graph-api/graph-query.js";
 import type { TodlDocument } from "../compiler-services/emit/json.js";
 import { Severity, DiagnosticCode, type Diagnostic } from "../compiler-services/diagnostics/diagnostic.js";
 
-// The base abstraction's read/compose contract (also the type a caller holds).
+// The host's read/compose contract (also the type a caller holds).
 export interface IDomainHost
 {
     readonly Domain: Domain;
     readonly Diagnostics: readonly Diagnostic[];
-    Compose(libraries: readonly PackageRef[]): Promise<void>;
+    Compose(): Promise<void>;
     Query(): IGraphQuery;
 }
 
-// The base abstraction: composes a set of libraries into one Domain over an injected
-// PackageSource, collecting per-library diagnostics, and exposes a GraphApi-shaped
-// query over the composed (deps-first) document closure. Subclasses supply the source.
-export abstract class DomainHostBase implements IDomainHost
+// Composes a set of contributors into one Domain: gathers their deps-first
+// contributions, dedupes by identity, feeds them to the Domain through an
+// in-memory package source, loads each contributor's roots, and exposes a
+// document-backed query over the composed set. Contributors hide packages; the
+// graph only ever sees manifests + seeds via the unchanged Domain.
+export class DomainHost implements IDomainHost
 {
-    private readonly capturing: CapturingPackageSource;
-    private readonly domain: Domain;
+    private readonly source = new MemoryPackageSource();
+    private readonly domain = new Domain(this.source);
+    private contributions: Contribution[] = [];
     private diagnostics: Diagnostic[] = [];
 
-    protected constructor(source: PackageSource)
-    {
-        this.capturing = new CapturingPackageSource(source);
-        this.domain = new Domain(this.capturing);
-    }
+    constructor(private readonly contributors: readonly Contributor[]) {}
 
     public get Domain(): Domain
     {
@@ -40,10 +39,15 @@ export abstract class DomainHostBase implements IDomainHost
         return this.diagnostics;
     }
 
-    public async Compose(libraries: readonly PackageRef[]): Promise<void>
+    public async Compose(): Promise<void>
     {
         this.diagnostics = [];
-        for (const ref of libraries)
+        this.contributions = await this.gather();
+        for (const c of this.contributions) this.source.Add(DomainHost.toResolved(c));
+
+        const roots: PackageRef[] = [];
+        for (const contributor of this.contributors) roots.push(...contributor.Roots);
+        for (const ref of roots)
         {
             try
             {
@@ -67,28 +71,38 @@ export abstract class DomainHostBase implements IDomainHost
     public Query(): IGraphQuery
     {
         const documents: TodlDocument[] = [];
-        for (const manifest of this.domain.manifests)
-        {
-            const doc = this.capturing.DocumentFor(Domain.identity({ model: manifest.model, version: manifest.version }));
-            if (doc !== undefined) documents.push(doc);
-        }
+        for (const c of this.contributions) if (c.document !== undefined) documents.push(c.document);
         return GraphApi.FromDocuments(documents);
     }
-}
 
-// The default host: composes over an ordered collection of package sources.
-export class DomainHost extends DomainHostBase
-{
-    constructor(sources: readonly PackageSource[])
+    // Ergonomic façade: build, compose, return the loaded host.
+    public static async Compose(contributors: readonly Contributor[]): Promise<DomainHost>
     {
-        super(new CompositePackageSource(sources));
+        const host = new DomainHost(contributors);
+        await host.Compose();
+        return host;
     }
 
-    // Ergonomic library façade: build, compose, return the loaded host.
-    public static async Compose(sources: readonly PackageSource[], libraries: readonly PackageRef[]): Promise<DomainHost>
+    /** Gather every contributor's contributions, deduped by identity (last wins). */
+    private async gather(): Promise<Contribution[]>
     {
-        const host = new DomainHost(sources);
-        await host.Compose(libraries);
-        return host;
+        const byIdentity = new Map<string, Contribution>();
+        for (const contributor of this.contributors)
+            for (const contribution of await contributor.Contributions())
+                byIdentity.set(`${contribution.identity.model}@${contribution.identity.version}`, contribution);
+        return [...byIdentity.values()];
+    }
+
+    /** Map a contribution back to the ResolvedPackage the Domain's source serves. */
+    private static toResolved(c: Contribution): ResolvedPackage
+    {
+        const r: ResolvedPackage = {
+            ref: { model: c.identity.model, version: c.identity.version },
+            manifest: c.manifest,
+            dependencies: c.dependencies,
+        };
+        if (c.document !== undefined) r.document = c.document;
+        if (c.seed !== undefined) r.seed = c.seed;
+        return r;
     }
 }

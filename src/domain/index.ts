@@ -10,7 +10,15 @@ export {
     type PackageSource,
     type ResolveRequest,
 } from "./domain.js";
-export { DomainHost, DomainHostBase, type IDomainHost } from "./domain-host.js";
+export { DomainHost, type IDomainHost } from "./domain-host.js";
 export { CompositePackageSource } from "./composite-package-source.js";
 export { MemoryPackageSource } from "./memory-package-source.js";
-export { CapturingPackageSource } from "./capturing-package-source.js";
+export {
+    type Contributor,
+    type Contribution,
+    type ManifestIdentity,
+    type ResourceContent,
+    PackagesContributor,
+    BundledContributor,
+    Contributions,
+} from "./contributor.js";

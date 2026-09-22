@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DomainHost } from "../domain-host.js";
+import { PackagesContributor } from "../contributor.js";
 import { MemoryPackageSource } from "../memory-package-source.js";
 import { compilePackage, PackageKind } from "../../publish/publish.js";
 import { PackageManifestBridge } from "../../solution-services/package-manager/package-manifest-bridge.js";
@@ -32,9 +33,11 @@ function fixtures(): ResolvedPackage[]
 test("composes a shared meta-model + two libraries; Query sees concepts and instances from all", async () =>
 {
     const source = new MemoryPackageSource(fixtures());
-    const host = await DomainHost.Compose([source], [
-        { model: "acme.ms", version: "1.0.0" },
-        { model: "acme.aws", version: "1.0.0" },
+    const host = await DomainHost.Compose([
+        new PackagesContributor([source], [
+            { model: "acme.ms", version: "1.0.0" },
+            { model: "acme.aws", version: "1.0.0" },
+        ]),
     ]);
     assert.deepEqual(host.Diagnostics, []);
 
@@ -48,9 +51,11 @@ test("composes a shared meta-model + two libraries; Query sees concepts and inst
 test("an unresolvable library yields one diagnostic, not a throw; siblings still compose", async () =>
 {
     const source = new MemoryPackageSource(fixtures());
-    const host = await DomainHost.Compose([source], [
-        { model: "acme.ms", version: "1.0.0" },
-        { model: "acme.missing", version: "1.0.0" },
+    const host = await DomainHost.Compose([
+        new PackagesContributor([source], [
+            { model: "acme.ms", version: "1.0.0" },
+            { model: "acme.missing", version: "1.0.0" },
+        ]),
     ]);
     assert.equal(host.Diagnostics.length, 1);
     assert.match(host.Diagnostics[0]!.message, /acme\.missing/);
