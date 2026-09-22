@@ -92,6 +92,22 @@ export class FrozenGraph implements ManifestHost
         return this.nodes;
     }
 
+    /** Heap read surface, delegated so `graph.size`/`getNode`/`allNodes` read directly. */
+    get size(): number
+    {
+        return this.nodes.size;
+    }
+
+    getNode(id: string): ReflectedNode | undefined
+    {
+        return this.nodes.getNode(id);
+    }
+
+    allNodes(): ReflectedNode[]
+    {
+        return this.nodes.allNodes();
+    }
+
     /** Every registered manifest, in registration (deps-first) order. */
     get manifests(): readonly Manifest[]
     {
