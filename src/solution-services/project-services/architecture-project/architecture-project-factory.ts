@@ -13,9 +13,10 @@ import { ARCHITECTURE_CLAUDE_ROOT } from '../core/scaffold.generated.js'
 // registry). It is a TODL-authoring project: its `.todl` files are the instance-tier
 // architecture model, validated live against the project's BOUND bases — a meta-model
 // AND a set of libraries — by the shared base-aware validation (which reads the
-// manifest's metaModel + libraries via resolveBases). Architecture is the terminal
-// consumer: it binds bases but publishes nothing, so it is not an
-// IPublishableProjectFactory.
+// manifest's metaModel + libraries via resolveBases). Architecture composes bases
+// (meta-models, libraries, and other architectures) and is packaged through the
+// build-system pipeline (NpmPackageBuildSystem); it is not wired to the legacy factory
+// publish path.
 //
 // All project-lifecycle plumbing (create/open/save, the tree walk, and the TODL agent
 // scaffold) lives in TodlProjectFactory; this class declares only what differs: the
@@ -24,8 +25,11 @@ import { ARCHITECTURE_CLAUDE_ROOT } from '../core/scaffold.generated.js'
 // factories (resolved by extension) — editors own files, this factory owns the project.
 interface ArchitectureManifest extends ProjectManifestEnvelope
 {
+    id?: string                                             // publishable package id (slug of name)
+    packageVersion?: string                                 // published version of this architecture package
     metaModels?: readonly PublishedBaseModelReference[]      // the meta-models this architecture conforms to
     libraries?: readonly PublishedBaseModelReference[]       // the technology libraries it draws on
+    architectures?: readonly PublishedBaseModelReference[]   // other architectures this one composes
     diagrams?: { [path: string]: { viewpoints: string[] } }   // per-diagram viewpoint selection
 }
 
@@ -33,6 +37,7 @@ export class ArchitectureProjectFactory extends TodlProjectFactory
 {
     public static readonly Key = new ServiceKey<ArchitectureProjectFactory>('ArchitectureProjectFactory')
     public static readonly ProjectType = 'architecture'
+    private static readonly DefaultPackageVersion = '0.1.0'
 
     public readonly typeId = ArchitectureProjectFactory.ProjectType
     public readonly title = 'Architecture Project'
@@ -52,12 +57,21 @@ export class ArchitectureProjectFactory extends TodlProjectFactory
     {
         const manifest: ArchitectureManifest = {
             type: ArchitectureProjectFactory.ProjectType, name, version: 1,
+            id: ArchitectureProjectFactory.slugify(name),
+            packageVersion: ArchitectureProjectFactory.DefaultPackageVersion,
             ...(bindings?.metaModels !== undefined && bindings.metaModels.length > 0
                 ? { metaModels: bindings.metaModels } : {}),
             ...(bindings?.libraries !== undefined && bindings.libraries.length > 0
                 ? { libraries: bindings.libraries } : {}),
+            ...(bindings?.architectures !== undefined && bindings.architectures.length > 0
+                ? { architectures: bindings.architectures } : {}),
         }
         return manifest
+    }
+
+    private static slugify(name: string): string
+    {
+        return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'architecture'
     }
 
     // The architecture project's own scaffold (its CLAUDE.md); the shared TODL manual

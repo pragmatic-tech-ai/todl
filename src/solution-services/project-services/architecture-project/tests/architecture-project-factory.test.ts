@@ -43,12 +43,30 @@ test('createProject writes the bound meta-models and libraries into the manifest
     assert.deepEqual(m.libraries, [{ id: 'aws', version: '3.0.0' }, { id: 'microsoft', version: '2.1.0' }])
 })
 
+test('createProject stamps a slugified id and a default package version', async (t) => {
+    const storage = await tempStorage(t)
+    await factory().createProject(storage, 'Acme Corp')
+    const m = JSON.parse(await storage.ReadText('project.plexus'))
+    assert.equal(m.id, 'acme-corp')
+    assert.equal(m.packageVersion, '0.1.0')
+})
+
+test('createProject writes architecture composition bindings', async (t) => {
+    const storage = await tempStorage(t)
+    await factory().createProject(storage, 'Composite', {
+        architectures: [{ id: 'base-arch', version: '0.1.0' }],
+    })
+    const m = JSON.parse(await storage.ReadText('project.plexus'))
+    assert.deepEqual(m.architectures, [{ id: 'base-arch', version: '0.1.0' }])
+})
+
 test('createProject omits empty base bindings from the manifest', async (t) => {
     const storage = await tempStorage(t)
     await factory().createProject(storage, 'Bare', { metaModels: [], libraries: [] })
     const m = JSON.parse(await storage.ReadText('project.plexus'))
     assert.equal('metaModels' in m, false)
     assert.equal('libraries' in m, false)
+    assert.equal('architectures' in m, false)
 })
 
 test('createProject lays down the architecture CLAUDE.md over the shared TODL scaffold', async (t) => {
