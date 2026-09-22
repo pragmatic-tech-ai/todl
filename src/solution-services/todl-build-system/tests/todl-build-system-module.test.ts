@@ -16,12 +16,12 @@ describe("todl-build-system composition", () =>
         assert.equal(system!.OutputName, "npm-package");
     });
 
-    test("the npm-package system applies to meta-model + library targets", () =>
+    test("the npm-package system applies to meta-model, library, and architecture targets", () =>
     {
         const registry = new TodlBuildSystemRegistry();
         assert.equal(registry.For({ type: ProjectType.MetaModel, name: "m" } as never).length, 1);
         assert.equal(registry.For({ type: ProjectType.Library, name: "l" } as never).length, 1);
-        assert.equal(registry.For({ type: ProjectType.Architecture, name: "a" } as never).length, 0);
+        assert.equal(registry.For({ type: ProjectType.Architecture, name: "a" } as never).length, 1);
     });
 
     test("the build settings bag exposes the output-dir + colored-presentation fields", () =>

@@ -110,8 +110,8 @@ test("a failing compile writes nothing and returns errors", async () => {
   assert.equal(sink.files.size, 0, "sink untouched on failure");
 });
 
-test("refuses to compile an architecture (not published)", async () => {
+test("refuses to compile a project with no publishable id", async () => {
   const project: Project = { directory: "/x", manifest: manifest("architectures/test_architecture"), sources: [], resources: [] };
   const compiler = new PackageCompiler(emptyBackends(), { reader: reader(project), createSink: () => new MemorySink() });
-  await assert.rejects(compiler.compile("/x"), /not published/);
+  await assert.rejects(compiler.compile("/x"), /no id to publish/);
 });
