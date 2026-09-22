@@ -10,9 +10,9 @@
 //     `refs`) produced by the SPEC-03 emitter, not `src/model/graph.ts` Node
 //     (which has no node-root type/class — that is the SPEC-01 shape). The
 //     interface is local + structural so no import cycle to `src/emit`.
-//  2. `getAnnotations()` / `getInvariants()` return `[]`: SPEC-04 v1 has no
-//     annotation-application or invariant table yet (deferred). The handle
-//     classes exist so the surface is stable when those tables land.
+//  2. `getAnnotations()` reads the SPEC-04 Annotation table (types / members /
+//     terms); `FieldInfo.getAnnotations()` stays `[]` (fields have no own node).
+//     `getInvariants()` still returns `[]` — no invariant table yet (deferred).
 
 import { TableId, MetaKind, Cardinality } from "../enums.js";
 import { TypeDefOrRef } from "../token.js";
@@ -238,6 +238,32 @@ export class Manifest
         return dep?.getType(this.reader.getString(typeRef.name));
     }
 
+    /**
+     * @internal Build AnnotationInfo[] for a parent's `[start, count]` annotation
+     * slice. Each Annotation row resolves its coded annotation type and reads its
+     * AnnotationArg slice into a name→value map.
+     */
+    annotationsFor(start: number, count: number): AnnotationInfo[]
+    {
+        const out: AnnotationInfo[] = [];
+        for (let i = 0; i < count; i++)
+        {
+            const rowNum = start + i;
+            const rec = this.reader.annotation(rowNum);
+            const type = this.resolveTypeRef(rec.annotation);
+            if (type === undefined) continue; // defensive: dangling annotation type
+            const args = new Map<string, Scalar>();
+            for (const arg of this.reader.argsOf(rowNum))
+            {
+                const value = this.reader.getConst(arg.value);
+                if (typeof value === "string" || typeof value === "number" || typeof value === "boolean")
+                    args.set(this.reader.getString(arg.name), value);
+            }
+            out.push(new AnnotationInfo(type, args));
+        }
+        return out;
+    }
+
     /** @internal The concept whose declared Field slice contains `fieldRow`. */
     private fieldDeclarer(fieldRow: number): TypeInfo | undefined
     {
@@ -399,10 +425,11 @@ export class TypeInfo
         return [];
     }
 
-    /** Applied annotations — [] in v1 (no annotation-application table yet). */
+    /** Applied annotations (SPEC-04 Annotation slice on this TypeInfo row). */
     getAnnotations(): AnnotationInfo[]
     {
-        return [];
+        const rec = this.rec;
+        return this.manifest.annotationsFor(rec.annotStart, rec.annotCount);
     }
 }
 
@@ -474,6 +501,7 @@ export class FieldInfo extends MemberInfo
         return undefined;
     }
 
+    /** Fields have no own graph node, hence no annotation applications. */
     getAnnotations(): AnnotationInfo[]
     {
         return [];
@@ -538,9 +566,11 @@ export class RelationshipInfo extends MemberInfo
         return node.refs?.[this.name] ?? [];
     }
 
+    /** Applied annotations (SPEC-04 Annotation slice on this Rel row). */
     getAnnotations(): AnnotationInfo[]
     {
-        return [];
+        const rec = this.rec;
+        return this.manifest.annotationsFor(rec.annotStart, rec.annotCount);
     }
 }
 
@@ -629,6 +659,13 @@ export class TermInfo
             term = term.broader;
         }
         return undefined;
+    }
+
+    /** Applied annotations (SPEC-04 Annotation slice on this Class row). */
+    getAnnotations(): AnnotationInfo[]
+    {
+        const rec = this.rec;
+        return this.manifest.annotationsFor(rec.annotStart, rec.annotCount);
     }
 }
 
