@@ -50,6 +50,10 @@ export class CompileModelAction implements IBuildAction<TodlBuildContext>
         {
             refs.push({ kind: PackageKind.Library, id: library.id, version: library.version });
         }
+        for (const architecture of manifest.architectures ?? [])
+        {
+            refs.push({ kind: PackageKind.Architecture, id: architecture.id, version: architecture.version });
+        }
         return refs;
     }
 }

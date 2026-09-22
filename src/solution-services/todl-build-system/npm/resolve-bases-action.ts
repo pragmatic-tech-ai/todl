@@ -23,6 +23,7 @@ export class ResolveBasesAction implements IBuildAction<TodlBuildContext>
         const bindings: ProjectBaseModelBindings = {
             ...(manifest.metaModels !== undefined ? { metaModels: manifest.metaModels } : {}),
             ...(manifest.libraries !== undefined ? { libraries: manifest.libraries } : {}),
+            ...(manifest.architectures !== undefined ? { architectures: manifest.architectures } : {}),
         };
         const { bases, problems } = await RecursiveProjectReferencesResolver.Resolve(ctx.Source, bindings);
         if (problems.length > 0)
