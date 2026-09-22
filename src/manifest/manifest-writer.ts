@@ -13,7 +13,7 @@ import { Base64 } from "./bytes.js";
 import { TableId, MetaKind } from "./enums.js";
 import { TypeDefOrRef } from "./token.js";
 import { BinarySerializer } from "./binary-codec.js";
-import { CardinalityGlyph, ManifestModel, type LogicalManifest } from "./logical.js";
+import { CardinalityGlyph, ManifestModel, type LogicalManifest, type AnnotationApp, type Scalar } from "./logical.js";
 import type {
     TypeInfoRec,
     FieldRec,
@@ -280,11 +280,31 @@ export class ManifestWriter
         for (const tax of Object.values(m.taxonomies)) for (const t of tax.represents) see(t);
         const primitiveIds = referenced.filter((id) => !(id in m.concepts));
 
+        // Annotation type ids applied anywhere (concept / rel / class), in
+        // first-encounter order — synthesized as Annotation-kind TypeInfo rows
+        // (like primitives) so every coded annotation ref resolves locally.
+        const annotationIds: string[] = [];
+        // `annotations` is a late addition to the logical sidecar — tolerate its
+        // absence in older JSON by treating a missing slice as empty.
+        const seeAnnot = (apps: AnnotationApp[] | undefined): void =>
+        {
+            if (apps === undefined) return;
+            for (const a of apps)
+                if (!(a.annotation in m.concepts) && !annotationIds.includes(a.annotation)) annotationIds.push(a.annotation);
+        };
+        for (const c of Object.values(m.concepts))
+        {
+            seeAnnot(c.annotations);
+            for (const r of Object.values(c.relationships)) seeAnnot(r.annotations);
+        }
+        for (const cls of Object.values(m.classes)) seeAnnot(cls.annotations);
+
         // Precompute rows so coded references can point forward.
         const typeRow = new Map<string, number>();
         let ti = 0;
         for (const cid of conceptIds) typeRow.set(cid, ++ti);
         for (const pid of primitiveIds) typeRow.set(pid, ++ti);
+        for (const aid of annotationIds) if (!typeRow.has(aid)) typeRow.set(aid, ++ti);
         const taxRow = new Map<string, number>();
         let tx = 0;
         for (const tid of Object.keys(m.taxonomies)) taxRow.set(tid, ++tx);
@@ -297,6 +317,23 @@ export class ManifestWriter
             return r === undefined ? 0 : new TypeDefOrRef(false, r).encode();
         };
         const fieldRowOf = new Map<string, number>(); // "concept.field" -> Field row
+
+        // Pack a def's annotations into contiguous Annotation (+ AnnotationArg)
+        // rows, returning the parent's [annotStart, annotCount] slice.
+        const packAnnotations = (apps: AnnotationApp[] | undefined): [number, number] =>
+        {
+            if (apps === undefined || apps.length === 0) return [0, 0];
+            const annotStart = w.rowCount(TableId.Annotation) + 1;
+            for (const app of apps)
+            {
+                const argEntries = Object.entries(app.args) as [string, Scalar][];
+                const argStart = argEntries.length > 0 ? w.rowCount(TableId.AnnotationArg) + 1 : 0;
+                for (const [name, value] of argEntries)
+                    w.addAnnotationArg({ name: w.internString(name), value: w.internConst(value) });
+                w.addAnnotation({ annotation: coded(app.annotation), argStart, argCount: argEntries.length });
+            }
+            return [annotStart, apps.length];
+        };
 
         // Pass 1: concept TypeInfo rows (+ Field / Rel / Target slices), in order.
         for (const cid of conceptIds)
@@ -319,16 +356,18 @@ export class ManifestWriter
             {
                 const targetStart = rdef.targets.length > 0 ? w.rowCount(TableId.Target) + 1 : 0;
                 for (const t of rdef.targets) w.addTarget({ type: coded(t) });
+                const [relAnnotStart, relAnnotCount] = packAnnotations(rdef.annotations);
                 w.addRel({
                     name: w.internString(rname),
                     targetStart,
                     targetCount: rdef.targets.length,
                     card: CardinalityGlyph.fromGlyph(rdef.card),
                     inverse: rdef.inverse !== undefined ? w.internString(rdef.inverse) : 0,
-                    annotStart: 0,
-                    annotCount: 0,
+                    annotStart: relAnnotStart,
+                    annotCount: relAnnotCount,
                 });
             }
+            const [cAnnotStart, cAnnotCount] = packAnnotations(c.annotations);
             w.addTypeInfo({
                 name: w.internString(cid),
                 ns: 0,
@@ -338,8 +377,8 @@ export class ManifestWriter
                 fieldCount: fieldEntries.length,
                 relStart,
                 relCount: relEntries.length,
-                annotStart: 0,
-                annotCount: 0,
+                annotStart: cAnnotStart,
+                annotCount: cAnnotCount,
             });
         }
         // Synthesized primitive TypeInfo rows (kind Primitive, no members).
@@ -347,6 +386,15 @@ export class ManifestWriter
         {
             w.addTypeInfo({
                 name: w.internString(pid), ns: 0, kind: MetaKind.Primitive,
+                extends: 0, fieldStart: 0, fieldCount: 0, relStart: 0, relCount: 0,
+                annotStart: 0, annotCount: 0,
+            });
+        }
+        // Synthesized annotation-type TypeInfo rows (kind Annotation, no members).
+        for (const aid of annotationIds)
+        {
+            w.addTypeInfo({
+                name: w.internString(aid), ns: 0, kind: MetaKind.Annotation,
                 extends: 0, fieldStart: 0, fieldCount: 0, relStart: 0, relCount: 0,
                 annotStart: 0, annotCount: 0,
             });
@@ -377,6 +425,7 @@ export class ManifestWriter
                 const fieldRow = declaring !== undefined ? fieldRowOf.get(`${declaring}.${fname}`) ?? 0 : 0;
                 w.addFixed({ field: fieldRow, value: w.internConst(value) });
             }
+            const [clsAnnotStart, clsAnnotCount] = packAnnotations(cls.annotations);
             w.addClass({
                 name: w.internString(clsId),
                 type: coded(cls.concept),
@@ -384,8 +433,8 @@ export class ManifestWriter
                 broader: cls.broader !== undefined ? classRow.get(cls.broader) ?? 0 : 0,
                 fixedStart,
                 fixedCount: fixedEntries.length,
-                annotStart: 0,
-                annotCount: 0,
+                annotStart: clsAnnotStart,
+                annotCount: clsAnnotCount,
             });
         }
 
