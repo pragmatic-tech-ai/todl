@@ -61,6 +61,12 @@ export { EntityBase, type Entity } from './compiler-services/model/entity.js';
 export { FrozenRepository } from './compiler-services/model/frozen.js';
 
 export {
+    ReflectedRepository,
+    ReflectedEntity,
+    type EntityReader,
+} from './reflection-client/index.js';
+
+export {
     generateReadClient,
     isReferenceType,
     type ReadClientOptions,
