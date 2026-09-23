@@ -49,12 +49,20 @@ export interface PackageDocument extends TodlDocument
   dependencies?: PackageRef[];
 }
 
+/** A verbatim package resource (icon svg, wiki md, binary asset): a package-relative path + bytes. */
+export interface PackageResource
+{
+  path: string;   // package-relative POSIX path, e.g. "resources/az.svg"
+  bytes: Uint8Array;
+}
+
 export interface CompiledPackage extends PackageIdentity
 {
   document: PackageDocument;         // own-only + dependencies — persisted as model.json
   fullDocument: TodlDocument;        // the full compiled closure — for presentation/annotation baking
   sources: readonly SourceFile[];    // raw .todl passthrough (persisted under src/)
   classes: readonly PublishedClass[]; // instantiable palette classes (own-only)
+  resources?: readonly PackageResource[]; // verbatim asset bytes, persisted under <base>/<path>
 }
 
 export interface CompileOutcome
@@ -85,6 +93,7 @@ export function compilePackage(
   identity: PackageIdentity,
   dependencies?: readonly PackageRef[],
   options?: EmitOptions,
+  resources?: readonly PackageResource[],
 ): CompileOutcome
 {
   const { model, diagnostics, provenance } = checkAgainst([...bases], [...sources]);
@@ -116,6 +125,10 @@ export function compilePackage(
     sources,
     classes: deriveClasses(document, fullDocument),
   };
+  if (resources !== undefined && resources.length > 0)
+  {
+    pkg.resources = [...resources];
+  }
   return { ok: true, diagnostics, errors, package: pkg };
 }
 
@@ -126,9 +139,10 @@ export async function publish(
   store: PackageStore,
   identity: PackageIdentity,
   dependencies?: readonly PackageRef[],
+  resources?: readonly PackageResource[],
 ): Promise<PublishOutcome>
 {
-  const outcome = compilePackage(bases, sources, identity, dependencies);
+  const outcome = compilePackage(bases, sources, identity, dependencies, undefined, resources);
   if (!outcome.ok || outcome.package === undefined) return { ...outcome, persisted: false };
   await store.persist(outcome.package);
   return { ...outcome, persisted: true };

@@ -29,6 +29,7 @@ const defaultLayout = (id: string, version: string): string => `${id}/${version}
 /** Persist a package as blobs: `<base>/model.json` + `<base>/src/<uri>`. */
 export class BlobPackageStore implements PackageStore
 {
+  private static readonly NoByteSinkError = "cannot persist resource";
   private readonly layout: (id: string, version: string) => string;
   constructor(
     private readonly sink: PackageSink,
@@ -43,6 +44,14 @@ export class BlobPackageStore implements PackageStore
     const base = this.layout(pkg.id, pkg.version);
     await this.sink.writeText(`${base}/model.json`, JSON.stringify(pkg.document, null, 2));
     for (const s of pkg.sources) await this.sink.writeText(`${base}/src/${s.uri}`, s.text);
+    for (const r of pkg.resources ?? [])
+    {
+      if (this.sink.writeBytes === undefined)
+      {
+        throw new Error(`${BlobPackageStore.NoByteSinkError} "${r.path}": the sink has no writeBytes`);
+      }
+      await this.sink.writeBytes(`${base}/${r.path}`, r.bytes);
+    }
   }
 }
 

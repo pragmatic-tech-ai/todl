@@ -78,6 +78,7 @@ export {
     type PackageRef,
     type PackageIdentity,
     type PackageDocument,
+    type PackageResource,
     type CompiledPackage,
     type CompileOutcome,
     type PublishOutcome,

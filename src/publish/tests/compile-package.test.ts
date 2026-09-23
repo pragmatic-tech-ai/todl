@@ -92,4 +92,28 @@ describe("compilePackage", () => {
     assert.ok(pkg.classes.some((c) => c.id === "Microsoft.azure"));
     assert.ok(!pkg.classes.some((c) => c.id === "Location"));
   });
+
+  test("attaches non-empty resources to the package", () => {
+    const bytes = new Uint8Array([1, 2, 3]);
+    const out = compilePackage(
+      [], [META], { id: "ea", version: "0.1.0" }, undefined, undefined,
+      [{ path: "resources/az.svg", bytes }],
+    );
+    assert.ok(out.ok && out.package);
+    assert.deepEqual(out.package!.resources, [{ path: "resources/az.svg", bytes }]);
+  });
+
+  test("omits resources when none are passed", () => {
+    const out = compilePackage([], [META], { id: "ea", version: "0.1.0" });
+    assert.ok(out.ok && out.package);
+    assert.equal(out.package!.resources, undefined);
+  });
+
+  test("omits resources when an empty array is passed", () => {
+    const out = compilePackage(
+      [], [META], { id: "ea", version: "0.1.0" }, undefined, undefined, [],
+    );
+    assert.ok(out.ok && out.package);
+    assert.equal(out.package!.resources, undefined);
+  });
 });
