@@ -64,6 +64,10 @@ export {
     type EntityReader,
 } from './reflection-client/index.js';
 
+export { ModelDataSource } from './model-data/model-data-source.js';
+export { DocumentModelDataConnector } from './model-data/document-model-data-connector.js';
+export { type IModelDataConnector } from './model-data/model-data-connector.js';
+
 export {
     generateReadClient,
     isReferenceType,

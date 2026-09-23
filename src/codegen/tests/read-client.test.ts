@@ -7,6 +7,8 @@ import { Cardinality } from "../../compiler-services/model/graph.js";
 import { toJSON } from "../../compiler-services/emit/json.js";
 import { generateReadClient } from "../read-client.js";
 import { TechCatalog } from "./fixtures/tech-catalog.generated.js";
+import { ServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
+import { DocumentModelDataConnector } from "../../model-data/document-model-data-connector.js";
 
 // billing/location/technology concepts + a `stack` taxonomy + instances.
 function catalogRepo(): Repository
@@ -53,4 +55,12 @@ test("the generated client compiles and runs with typed navigation", () => {
   assert.deepEqual(catalog.stack.map((t) => t.label), ["M365"]);
   // reference resolves to the shared identity-map handle
   assert.equal(copilot.availableIn[0], catalog.locations[0]);
+});
+
+test("the generated client materializes through a connector at startup", async () => {
+  const catalog = new TechCatalog(new DocumentModelDataConnector(toJSON(catalogRepo())));
+  await catalog.Prepare(new ServiceProvider());
+  assert.deepEqual(catalog.technologies.map((t) => t.label), ["Copilot"]);
+  const copilot = catalog.technologies[0]!;
+  assert.equal(copilot.billing!.label, "Subscription");
 });
