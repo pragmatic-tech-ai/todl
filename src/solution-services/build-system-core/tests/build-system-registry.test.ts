@@ -124,3 +124,24 @@ describe("BuildSystemRegistry", () =>
         assert.throws(() => registry.Register(new FakeSystem("npm", [])), /npm/);
     });
 });
+
+describe("BuildSystemRegistry.SelectFlavor", () =>
+{
+    test("returns the first flavor when no id is given", () =>
+    {
+        const system = new FakeSystem("npm", []);
+        assert.equal(BuildSystemRegistry.SelectFlavor(system)?.Id, "npm");
+    });
+
+    test("returns the flavor matching the given id", () =>
+    {
+        const system = new FakeSystem("npm", []);
+        assert.equal(BuildSystemRegistry.SelectFlavor(system, "npm")?.Id, "npm");
+    });
+
+    test("returns undefined for an unknown flavor id", () =>
+    {
+        const system = new FakeSystem("npm", []);
+        assert.equal(BuildSystemRegistry.SelectFlavor(system, "nope"), undefined);
+    });
+});

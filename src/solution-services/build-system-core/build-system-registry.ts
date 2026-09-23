@@ -1,5 +1,6 @@
 import type { ArtifactKey } from "./artifact-key.js";
 import type { CoreBuildContext } from "./build-action.js";
+import type { BuildFlavor } from "./build-flavor.js";
 import type { IBuildSystem } from "./build-system.js";
 
 // The module-contributed registry of build systems (spec §5). Registration validates
@@ -37,6 +38,20 @@ export class BuildSystemRegistry<C extends CoreBuildContext, T>
     public For(target: T): readonly IBuildSystem<C, T>[]
     {
         return this.Systems().filter((s) => s.AppliesTo(target));
+    }
+
+    // Resolve the flavor a request selects: the one whose Id matches `flavorId`,
+    // or the system's first flavor when no id is given (backward compatibility for
+    // callers that name only a system). Undefined when the id matches nothing or
+    // the system exposes no flavors.
+    public static SelectFlavor<C extends CoreBuildContext, T>(
+        system: IBuildSystem<C, T>,
+        flavorId?: string,
+    ): BuildFlavor<C> | undefined
+    {
+        const flavors = system.Flavors();
+        if (flavorId === undefined) return flavors[0];
+        return flavors.find((f) => f.Id === flavorId);
     }
 
     // Every action's Consumes key must be Produced by an earlier action in the list.
