@@ -21,6 +21,7 @@ export interface TodlBuildRequest
     Project: IStorage;
     Manifest: ProjectManifest;
     BuildSystemId: string;
+    BuildFlavorId?: string;
     Source: IPackageSource;
     Options?: BuildOptions;
     Progress?: IBuildProgress;

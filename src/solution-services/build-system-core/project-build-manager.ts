@@ -1,8 +1,8 @@
 import type { IStorage } from "@pragmatic-tech-ai/todl-runtime";
-import type { BuildSystemRegistry } from "./build-system-registry.js";
+import { BuildSystemRegistry } from "./build-system-registry.js";
 import type { IBuildStorageProvider } from "./build-storage-provider.js";
 import type { CoreBuildContext, IBuildAction } from "./build-action.js";
-import type { IBuildSystem } from "./build-system.js";
+import type { BuildFlavor } from "./build-flavor.js";
 import type { IBuildProgress } from "./build-progress.js";
 import { NoOpBuildProgress } from "./build-progress.js";
 import type { BuildOptions } from "./build-options.js";
@@ -29,6 +29,7 @@ export interface ProjectBuildRequest<T>
     Id: ProjectId;
     Target: T;
     BuildSystemId: string;
+    BuildFlavorId?: string;
     Options?: BuildOptions;
     Progress?: IBuildProgress;
 }
@@ -59,6 +60,7 @@ export class ProjectBuildManager<C extends CoreBuildContext, T>
     private static readonly ReportFileName = "report.json";
     private static readonly UnknownSystemPrefix = "unknown build system:";
     private static readonly NotApplicablePrefix = "build system does not apply to project:";
+    private static readonly UnknownFlavorPrefix = "unknown build flavor:";
     private static readonly ActionFailedPrefix = "action failed:";
 
     constructor(
@@ -80,10 +82,15 @@ export class ProjectBuildManager<C extends CoreBuildContext, T>
         {
             throw new Error(`${ProjectBuildManager.NotApplicablePrefix} ${system.Id}`);
         }
-        return this.Run(system, request);
+        const flavor = BuildSystemRegistry.SelectFlavor(system, request.BuildFlavorId);
+        if (flavor === undefined)
+        {
+            throw new Error(`${ProjectBuildManager.UnknownFlavorPrefix} ${request.BuildFlavorId}`);
+        }
+        return this.Run(flavor, request);
     }
 
-    private async Run(system: IBuildSystem<C, T>, request: ProjectBuildRequest<T>): Promise<ProjectBuildOutput>
+    private async Run(flavor: BuildFlavor<C>, request: ProjectBuildRequest<T>): Promise<ProjectBuildOutput>
     {
         const progress = request.Progress ?? new NoOpBuildProgress();
         const options = request.Options ?? {};
@@ -91,7 +98,7 @@ export class ProjectBuildManager<C extends CoreBuildContext, T>
         const start = Date.now();
 
         const sandbox = await this.storage.CreateSandbox();
-        const output = await this.storage.OpenOutput(system.OutputName, options);
+        const output = await this.storage.OpenOutput(flavor.OutputName, options);
         const diagnostics = new DiagnosticSink();
         const base: CoreBuildContext = {
             Project: request.Project,
@@ -102,7 +109,7 @@ export class ProjectBuildManager<C extends CoreBuildContext, T>
         };
         const context: C = this.makeContext(base, request);
 
-        const actions = system.Actions();
+        const actions = flavor.Actions();
         progress.ProjectStarted(projectId, actions.map((a) => a.Name));
         const outcomes = await this.RunActions(actions, context, diagnostics, progress, projectId);
         const ok = outcomes.every((o) => o.Status !== ActionStatus.Failed);

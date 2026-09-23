@@ -30,6 +30,7 @@ export class TodlProjectBuildManager
             Id: request.Manifest.id ?? request.Manifest.name,
             Target: request.Manifest,
             BuildSystemId: request.BuildSystemId,
+            ...(request.BuildFlavorId !== undefined ? { BuildFlavorId: request.BuildFlavorId } : {}),
             ...(request.Options !== undefined ? { Options: request.Options } : {}),
             ...(request.Progress !== undefined ? { Progress: request.Progress } : {}),
         });

@@ -2,7 +2,7 @@ import type { IStorage } from "@pragmatic-tech-ai/todl-runtime";
 import type { ProjectManifest } from "../../package-manager/manifest.js";
 import { toPackageJson } from "../../package-manager/package-json.js";
 import type { PackageDocument } from "../../../publish/publish.js";
-import type { BuildSystemRegistry } from "../../build-system-core/build-system-registry.js";
+import { BuildSystemRegistry } from "../../build-system-core/build-system-registry.js";
 import type { IBuildStorageProvider } from "../../build-system-core/build-storage-provider.js";
 import type { IBuildSystem } from "../../build-system-core/build-system.js";
 import type { IBuildProgress } from "../../build-system-core/build-progress.js";
@@ -33,6 +33,7 @@ export interface SolutionBuildRequest
 {
     Projects: readonly SolutionProject[];
     BuildSystemId: string;
+    BuildFlavorId?: string;
     /** The source behind the fresh build outputs (solution cache / registry / node_modules). */
     ExternalSource: IPackageSource;
     /** Omit to build the whole solution; set to build a target's upstream closure. */
@@ -123,6 +124,7 @@ export class SolutionBuildManager
                 Project: project.Project,
                 Manifest: project.Manifest,
                 BuildSystemId: request.BuildSystemId,
+                ...(request.BuildFlavorId !== undefined ? { BuildFlavorId: request.BuildFlavorId } : {}),
                 Source: new CompositePackageSource([buildOutput, request.ExternalSource]),
                 Options: options,
                 ...(request.Progress !== undefined ? { Progress: request.Progress } : {}),
@@ -130,7 +132,7 @@ export class SolutionBuildManager
 
             if (result.Ok)
             {
-                await this.CaptureOutput(project, system, options, buildOutput);
+                await this.CaptureOutput(project, system, options, request.BuildFlavorId, buildOutput);
                 outcomes.push({ ProjectId: id, Status: ProjectBuildStatus.Built, Result: result });
             }
             else
@@ -144,9 +146,10 @@ export class SolutionBuildManager
 
     // Read the project's just-built model.json from its output and register it in the
     // build-output source so dependents resolve the fresh sibling.
-    private async CaptureOutput(project: SolutionProject, system: IBuildSystem<TodlBuildContext, ProjectManifest>, options: BuildOptions, buildOutput: BuildOutputSource): Promise<void>
+    private async CaptureOutput(project: SolutionProject, system: IBuildSystem<TodlBuildContext, ProjectManifest>, options: BuildOptions, buildFlavorId: string | undefined, buildOutput: BuildOutputSource): Promise<void>
     {
-        const output = await this.storage.OpenOutput(system.OutputName, options);
+        const flavor = BuildSystemRegistry.SelectFlavor(system, buildFlavorId);
+        const output = await this.storage.OpenOutput(flavor?.OutputName ?? system.OutputName, options);
         if (!(await output.Storage.Exists(SolutionBuildManager.ModelFileName))) return;
         const document = JSON.parse(await output.Storage.ReadText(SolutionBuildManager.ModelFileName)) as PackageDocument;
         const pkg: SourcedPackage = { Document: { nodes: document.nodes, edges: document.edges }, Dependencies: document.dependencies ?? [] };

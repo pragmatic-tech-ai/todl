@@ -180,4 +180,26 @@ describe("ProjectBuildManager", () =>
 
         await assert.rejects(() => manager.Build(request()), /apply/);
     });
+
+    test("an unknown BuildFlavorId is rejected", async () =>
+    {
+        const system = new FakeSystem("npm", "npm-package", [
+            new FakeAction({ name: "noop" }),
+        ], ProjectType.Library);
+        const { manager } = managerWith(system);
+        await assert.rejects(
+            () => manager.Build({ ...request(), BuildFlavorId: "nope" }),
+            /nope/,
+        );
+    });
+
+    test("omitting BuildFlavorId builds the system's first flavor", async () =>
+    {
+        const system = new FakeSystem("npm", "npm-package", [
+            new FakeAction({ name: "noop" }),
+        ], ProjectType.Library);
+        const { manager } = managerWith(system);
+        const { Result } = await manager.Build(request());
+        assert.equal(Result.Ok, true);
+    });
 });
