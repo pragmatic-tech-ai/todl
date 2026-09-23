@@ -14,6 +14,8 @@ export { DomainHost, type IDomainHost } from "./domain-host.js";
 export { CompositePackageSource } from "./composite-package-source.js";
 export { MemoryPackageSource } from "./memory-package-source.js";
 export { MimeTypes } from "./mime-types.js";
+export { type ResourceSource } from "./resource-source.js";
+export { MemoryResourceSource } from "./memory-resource-source.js";
 export {
     type Contributor,
     type Contribution,
