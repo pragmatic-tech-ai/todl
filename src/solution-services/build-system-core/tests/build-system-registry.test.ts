@@ -4,6 +4,7 @@ import { ArtifactKey } from "../artifact-key.js";
 import { BuildSystemRegistry } from "../build-system-registry.js";
 import type { CoreBuildContext, IBuildAction } from "../build-action.js";
 import type { IBuildSystem } from "../build-system.js";
+import { StaticBuildFlavor, type BuildFlavor } from "../build-flavor.js";
 
 // A minimal build target for the core registry test — the registry is generic over the
 // target type, so this test binds it to a local shape and stays free of any todl type.
@@ -61,6 +62,11 @@ class FakeSystem implements IBuildSystem<CoreBuildContext, FakeTarget>
     public Actions(): readonly IBuildAction<CoreBuildContext>[]
     {
         return this.actions;
+    }
+
+    public Flavors(): readonly BuildFlavor<CoreBuildContext>[]
+    {
+        return [new StaticBuildFlavor(this.Id, this.Id, this.Id, this.actions)];
     }
 }
 

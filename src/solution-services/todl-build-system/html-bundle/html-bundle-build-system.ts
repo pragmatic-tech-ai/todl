@@ -1,5 +1,6 @@
 import type { IBuildSystem } from "../../build-system-core/build-system.js";
 import type { IBuildAction } from "../../build-system-core/build-action.js";
+import { StaticBuildFlavor, type BuildFlavor } from "../../build-system-core/build-flavor.js";
 import type { TodlBuildContext } from "../todl-build-context.js";
 import { ProjectType, type ProjectManifest } from "../../package-manager/manifest.js";
 import { ResolveBasesAction } from "../npm/resolve-bases-action.js";
@@ -35,5 +36,15 @@ export class HtmlBundleBuildSystem implements IBuildSystem<TodlBuildContext, Pro
     public Actions(): readonly IBuildAction<TodlBuildContext>[]
     {
         return this.actions;
+    }
+
+    public Flavors(): readonly BuildFlavor<TodlBuildContext>[]
+    {
+        return [new StaticBuildFlavor(
+            HtmlBundleBuildSystem.SystemId,
+            HtmlBundleBuildSystem.Display,
+            HtmlBundleBuildSystem.Output,
+            this.actions,
+        )];
     }
 }

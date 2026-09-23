@@ -3,6 +3,7 @@ import type { ArtifactKey } from "../../build-system-core/artifact-key.js";
 import type { IBuildAction } from "../../build-system-core/build-action.js";
 import type { TodlBuildContext } from "../todl-build-context.js";
 import type { IBuildSystem } from "../../build-system-core/build-system.js";
+import { StaticBuildFlavor, type BuildFlavor } from "../../build-system-core/build-flavor.js";
 import type { IBuildProgress } from "../../build-system-core/build-progress.js";
 import type { IBuildStorageProvider, OpenedOutput } from "../../build-system-core/build-storage-provider.js";
 import type { BuildOptions } from "../../build-system-core/build-options.js";
@@ -67,6 +68,11 @@ export class FakeSystem implements IBuildSystem<TodlBuildContext, ProjectManifes
     public Actions(): readonly IBuildAction<TodlBuildContext>[]
     {
         return this.actions;
+    }
+
+    public Flavors(): readonly BuildFlavor<TodlBuildContext>[]
+    {
+        return [new StaticBuildFlavor(this.Id, this.Id, this.OutputName, this.actions)];
     }
 }
 

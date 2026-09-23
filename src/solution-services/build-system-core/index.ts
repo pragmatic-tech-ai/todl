@@ -7,6 +7,7 @@ export { DiagnosticSink, Severity, type BuildDiagnostic } from "./diagnostic-sin
 export type { BuildOptions } from "./build-options.js";
 export type { CoreBuildContext, IBuildAction } from "./build-action.js";
 export type { IBuildSystem } from "./build-system.js";
+export { StaticBuildFlavor, type BuildFlavor } from "./build-flavor.js";
 export { BuildSystemRegistry } from "./build-system-registry.js";
 export { NoOpBuildProgress, type IBuildProgress } from "./build-progress.js";
 export { type IBuildStorageProvider, type OpenedOutput } from "./build-storage-provider.js";

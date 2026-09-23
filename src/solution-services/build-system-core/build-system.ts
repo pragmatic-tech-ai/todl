@@ -1,3 +1,4 @@
+import type { BuildFlavor } from "./build-flavor.js";
 import type { CoreBuildContext, IBuildAction } from "./build-action.js";
 
 // A build system is the whole pipeline for one output (spec §2.1). The user picks its
@@ -13,4 +14,5 @@ export interface IBuildSystem<C extends CoreBuildContext, T>
     readonly OutputName: string;
     AppliesTo(target: T): boolean;
     Actions(): readonly IBuildAction<C>[];
+    Flavors(): readonly BuildFlavor<C>[];
 }
