@@ -22,7 +22,7 @@ export class BundledHostBootstrap
         const inlined = window.__TODL_PACKAGES__;
         if (root === null || inlined === undefined) return;
         const host = await DomainHost.Compose([new BundledContributor(inlined.packages, inlined.entry)]);
-        new GraphExplorer(host.Query(), root).Render();
+        new GraphExplorer(host, root).Render();
     }
 }
 
