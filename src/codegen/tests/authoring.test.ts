@@ -29,8 +29,9 @@ function catalogRepo(): Repository
 }
 
 test("a typed authoring constructor produces a descriptor ModelDraft.add consumes", () => {
-  const base = TechCatalog.fromJSON(toJSON(catalogRepo()));
-  const draft = ModelDraft.on([base], { namespace: "app" });
+  const repo = catalogRepo();
+  const base = TechCatalog.fromJSON(toJSON(repo));
+  const draft = ModelDraft.on([repo], { namespace: "app" });
 
   // Author a new technology referencing frozen base instances — fully typed.
   const descriptor = base.technology("copilot", {

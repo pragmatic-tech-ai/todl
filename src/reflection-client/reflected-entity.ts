@@ -84,8 +84,10 @@ export class MirrorReader implements EntityReader
 
     public targets(member: string): readonly string[]
     {
-        const rel = this.mirror.type.getRelationships().find((r) => r.name === member);
-        return rel === undefined ? [] : rel.getTargets(this.mirror.node);
+        // Read the flattened edge targets directly: both true relationships and
+        // concept-typed reference FIELDS materialise into node.refs, and only some
+        // are declared in getRelationships() — node.refs is the uniform source.
+        return this.mirror.node.refs?.[member] ?? [];
     }
 }
 
