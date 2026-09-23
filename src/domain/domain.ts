@@ -21,7 +21,6 @@ import {
     type InstanceMirror,
 } from "../manifest/reflection/reflection.js";
 import type { ManifestJson } from "../manifest/records.js";
-import type { TodlDocument } from "../compiler-services/emit/json.js";
 import { FrozenGraph, Heap, type SeedGraph, type DomainEdge, type DomainToken } from "./graph.js";
 
 // Re-export the substrate types so existing `from "./domain.js"` imports keep working.
@@ -48,8 +47,6 @@ export interface ResolvedPackage
     dependencies: readonly PackageRef[];
     /** Optional seed instance nodes/edges merged into the heap. */
     seed?: SeedGraph;
-    /** Optional own-only source document, for the host's query composition. */
-    document?: TodlDocument;
 }
 
 /** The Domain's package backend — a real injected dependency. */

@@ -14,7 +14,6 @@ test("toResolvedJson yields a JSON manifest a Domain can load", async () =>
     // The manifest is plain JSON (survives a stringify round-trip), not a Uint8Array.
     assert.ok(!(resolved.manifest instanceof Uint8Array));
     assert.deepEqual(JSON.parse(JSON.stringify(resolved.manifest)), resolved.manifest);
-    assert.deepEqual(resolved.document, out.package!.document);
 
     // A Domain loads it without throwing (Manifest.load accepts ManifestJson).
     const domain = new Domain(new MemoryPackageSource([resolved]));

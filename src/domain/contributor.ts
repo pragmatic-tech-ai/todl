@@ -6,7 +6,6 @@
 import type { PackageRef, ResolvedPackage, PackageSource, SeedGraph } from "./domain.js";
 import { CompositePackageSource } from "./composite-package-source.js";
 import type { ManifestJson } from "../manifest/records.js";
-import type { TodlDocument } from "../compiler-services/emit/json.js";
 
 /** Identity of a contributed unit (a model pinned to a version). */
 export interface ManifestIdentity
@@ -20,7 +19,6 @@ export interface Contribution
 {
     identity: ManifestIdentity;
     manifest: Uint8Array | ManifestJson;
-    document?: TodlDocument;
     seed?: SeedGraph;
     dependencies: readonly PackageRef[];
 }
@@ -54,7 +52,6 @@ export class Contributions
             manifest: r.manifest,
             dependencies: r.dependencies,
         };
-        if (r.document !== undefined) c.document = r.document;
         if (r.seed !== undefined) c.seed = r.seed;
         return c;
     }

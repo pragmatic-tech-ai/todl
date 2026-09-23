@@ -98,7 +98,6 @@ export class DomainHost implements IDomainHost
             manifest: c.manifest,
             dependencies: c.dependencies,
         };
-        if (c.document !== undefined) r.document = c.document;
         if (c.seed !== undefined) r.seed = c.seed;
         return r;
     }

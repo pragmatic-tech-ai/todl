@@ -30,7 +30,6 @@ export class PackageManifestBridge
       (d) => ({ model: d.id, version: d.version }),
     );
     const resolved = PackageManifestBridge.toResolvedDocument(pkg.fullDocument, pkg.id, pkg.version, dependencies);
-    resolved.document = pkg.document;
     return resolved;
   }
 
@@ -43,7 +42,6 @@ export class PackageManifestBridge
       (d) => ({ model: d.id, version: d.version }),
     );
     const resolved = PackageManifestBridge.toResolvedJsonDocument(pkg.fullDocument, pkg.id, pkg.version, dependencies);
-    resolved.document = pkg.document;
     return resolved;
   }
 
@@ -62,7 +60,6 @@ export class PackageManifestBridge
       manifest: ManifestWriter.fromLogical(manifest).toJSON(),
       dependencies,
     };
-    resolved.document = doc;
     const seed = PackageManifestBridge.seedOf(graph);
     if (seed.nodes.length > 0) resolved.seed = seed;
     return resolved;
