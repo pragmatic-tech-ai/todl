@@ -3,13 +3,11 @@ import {
     type PackageSource,
     type PackageRef,
     type ResolvedPackage,
-    type SeedGraph,
-    type DomainEdge,
 } from "../../domain/domain.js";
-import { type ReflectedNode } from "../../manifest/reflection/reflection.js";
 import { fromJSON } from "../../compiler-services/emit/json.js";
-import { ManifestEmitter, type DataGraph } from "../../compiler-services/emit/manifest.js";
+import { ManifestEmitter } from "../../compiler-services/emit/manifest.js";
 import { ManifestWriter } from "../../manifest/manifest-writer.js";
+import { PackageManifestBridge } from "./package-manifest-bridge.js";
 import { type PackageDocument } from "../../publish/publish.js";
 
 // The disk-backed PackageSource — the SPEC-06 `RegistryPackageSource` the Domain
@@ -40,7 +38,7 @@ export class StoragePackageSource implements PackageSource
 
         const resolved: ResolvedPackage = { ref: { model: ref.model, version }, manifest, dependencies };
         resolved.document = doc;
-        const seed = StoragePackageSource.toSeed(graph);
+        const seed = PackageManifestBridge.seedOf(graph);
         if (seed.nodes.length > 0) resolved.seed = seed;
         return resolved;
     }
@@ -60,22 +58,6 @@ export class StoragePackageSource implements PackageSource
         if (versions.length === 0) return undefined;
         versions.sort((a, b) => StoragePackageSource.compareVersions(b, a));
         return versions[0];
-    }
-
-    // Map the emitter's flattened data graph to a Domain seed: DataNode -> ReflectedNode
-    // and DataEdge -> DomainEdge (identical `{from,rel,to}`; bindGraph folds each edge
-    // into the source node's `refs`). Structural-only fields are assigned when present
-    // to satisfy exactOptionalPropertyTypes.
-    private static toSeed(graph: DataGraph): SeedGraph
-    {
-        const nodes: ReflectedNode[] = graph.nodes.map((dn) => {
-            const node: ReflectedNode = { id: dn.id, type: dn.type, attrs: dn.attrs };
-            if (dn.class !== undefined) node.class = dn.class;
-            if (dn.namespace !== "") node.namespace = dn.namespace;
-            return node;
-        });
-        const edges: DomainEdge[] = graph.edges.map((e) => ({ from: e.from, rel: e.rel, to: e.to }));
-        return edges.length > 0 ? { nodes, edges } : { nodes };
     }
 
     private static modelPath(model: string, version: string): string
