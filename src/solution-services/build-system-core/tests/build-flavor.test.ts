@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { ArtifactKey } from "../artifact-key.js";
 import { StaticBuildFlavor } from "../build-flavor.js";
 import type { CoreBuildContext, IBuildAction } from "../build-action.js";
+import { NpmPackageBuildSystem } from "../../todl-build-system/npm/npm-package-build-system.js";
+import { HtmlBundleBuildSystem } from "../../todl-build-system/html-bundle/html-bundle-build-system.js";
 
 class NoopAction implements IBuildAction<CoreBuildContext>
 {
@@ -31,9 +33,6 @@ describe("StaticBuildFlavor", () =>
         assert.deepEqual(flavor.Actions().map((a) => a.Name), ["compile"]);
     });
 });
-
-import { NpmPackageBuildSystem } from "../../todl-build-system/npm/npm-package-build-system.js";
-import { HtmlBundleBuildSystem } from "../../todl-build-system/html-bundle/html-bundle-build-system.js";
 
 describe("built-in systems expose a single flavor", () =>
 {
