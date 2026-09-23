@@ -92,28 +92,31 @@ export class PackageManifestBridge
     return resolved;
   }
 
-  // A JSON ResolvedPackage whose manifest is emitted (schema-only, no seed) from a
-  // SELF-CONTAINED source document, while `document` is what the host merges for its
-  // query. Used for bundling, where each base's own document is NOT self-contained (its
-  // edges point at base nodes): the manifest is emitted from the full closure so
-  // Repository construction never sees a dangling edge, and the heap-populating seed is
-  // omitted because the bundled host queries documents, not the heap.
+  // A JSON ResolvedPackage whose MANIFEST is emitted from a SELF-CONTAINED source
+  // (`manifestSource`, the full closure) so Repository construction never sees a dangling
+  // edge, and whose SEED is emitted from this package's OWN document (`ownDoc`) — its own
+  // instances. Used for bundling; the bundled host queries the heap, so each package must
+  // contribute its own instances. Emitting a DataGraph from a non-self-contained own doc is
+  // the same path StoragePackageSource/toResolvedDocument use; reflection recovers
+  // class-fixed values lazily at read.
   static toResolvedJsonManifest(
     manifestSource: TodlDocument,
-    document: TodlDocument,
+    ownDoc: TodlDocument,
     model: string,
     version: string,
     dependencies: DomainPackageRef[],
   ): ResolvedPackage
   {
-    const repo = new Repository(graphFromJSON(manifestSource));
-    const manifest = new ManifestEmitter(repo, model, version).emitManifest();
-    return {
+    const manifest = new ManifestEmitter(new Repository(graphFromJSON(manifestSource)), model, version).emitManifest();
+    const graph = new ManifestEmitter(new Repository(graphFromJSON(ownDoc)), model, version).emitDataGraph();
+    const resolved: ResolvedPackage = {
       ref: { model, version },
       manifest: ManifestWriter.fromLogical(manifest).toJSON(),
       dependencies,
-      document,
     };
+    const seed = PackageManifestBridge.seedOf(graph);
+    if (seed.nodes.length > 0) resolved.seed = seed;
+    return resolved;
   }
 
   // The one DataGraph -> SeedGraph mapper: DataNode -> ReflectedNode (structural-only
