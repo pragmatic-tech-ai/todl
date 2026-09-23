@@ -15,6 +15,7 @@ namespace todl
     annotation instance { concept : identifier; via : identifier?; }
     annotation iconSource { order : number; }
     annotation wiki { path : string?; }
+    annotation application { root : identifier?; }
 
     // Diagram nesting markers. `has_children` marks a concept whose nodes render
     // as a container (a box that holds children) — deliberately NOT named
