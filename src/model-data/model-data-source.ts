@@ -20,6 +20,7 @@ export abstract class ModelDataSource implements EntityHost
     private static readonly NoConnectorMessage =
         "ModelDataSource.Prepare requires a connector; construct the source with one, or use the synchronous document path.";
 
+    private prepared = false;
     private graph!: FrozenGraph;
     private query!: GraphQuery;
     private readonly entities = new Map<string, ReflectedEntity>();
@@ -34,11 +35,13 @@ export abstract class ModelDataSource implements EntityHost
     /** Startup hook: pull this model's document via the connector, then materialize. */
     public async Prepare(services: IServiceProvider): Promise<void>
     {
+        if (this.prepared) return;
         if (this.connector === undefined)
         {
             throw new Error(ModelDataSource.NoConnectorMessage);
         }
         this.loadDocument(await this.connector.Prepare(services));
+        this.prepared = true;
     }
 
     /** Build the single-package reflection substrate from a document in hand (SYNC). */

@@ -67,6 +67,9 @@ export {
 export { ModelDataSource } from './model-data/model-data-source.js';
 export { DocumentModelDataConnector } from './model-data/document-model-data-connector.js';
 export { type IModelDataConnector } from './model-data/model-data-connector.js';
+export { BundledModelDataConnector } from './model-data/bundled-model-data-connector.js';
+export { ModelRegistry } from './model-data/model-registry.js';
+export { ModelShardExtractor } from './model-data/model-shard-extractor.js';
 
 export {
     generateReadClient,
