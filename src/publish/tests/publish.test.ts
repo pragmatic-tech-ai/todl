@@ -30,3 +30,15 @@ test("publish does NOT persist a failing compile", async () => {
   assert.equal(out.persisted, false);
   assert.equal(seen.length, 0);
 });
+
+test("publish forwards resources onto the persisted package", async () => {
+  const { store, seen } = spyStore();
+  const bytes = new Uint8Array([9, 8, 7]);
+  const out = await publish(
+    [], [{ uri: "ea.todl", text: GOOD }], store, { id: "ea", version: "0.1.0" },
+    undefined, [{ path: "resources/a.svg", bytes }],
+  );
+  assert.equal(out.ok, true);
+  assert.equal(out.persisted, true);
+  assert.deepEqual(seen[0]!.resources, [{ path: "resources/a.svg", bytes }]);
+});

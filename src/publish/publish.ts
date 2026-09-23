@@ -139,9 +139,10 @@ export async function publish(
   store: PackageStore,
   identity: PackageIdentity,
   dependencies?: readonly PackageRef[],
+  resources?: readonly PackageResource[],
 ): Promise<PublishOutcome>
 {
-  const outcome = compilePackage(bases, sources, identity, dependencies);
+  const outcome = compilePackage(bases, sources, identity, dependencies, undefined, resources);
   if (!outcome.ok || outcome.package === undefined) return { ...outcome, persisted: false };
   await store.persist(outcome.package);
   return { ...outcome, persisted: true };
