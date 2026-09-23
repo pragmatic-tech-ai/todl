@@ -34,6 +34,6 @@ test("BundledContributor composes the inlined set; Query sees all packages", asy
     ]);
     assert.deepEqual(host.Diagnostics, []);
     const query = host.Query();
-    assert.ok(query.Concepts().some((c) => c.id === "Widget"));
-    assert.deepEqual(query.InstancesOf("Widget").map((e) => e.id).sort(), ["awsWidget", "msWidget"]);
+    assert.ok(query.Concepts().some((t) => t.name === "Widget"));
+    assert.deepEqual(query.InstancesOf("Widget").map((m) => m.node.id).sort(), ["awsWidget", "msWidget"]);
 });
