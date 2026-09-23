@@ -91,6 +91,30 @@ describe("SolutionCacheSource", () =>
         const cache = new SolutionCacheSource(new FakeStorage());
         assert.equal(await cache.TryGet(ref("absent")), undefined);
     });
+
+    test("Put then TryGet round-trips resource bytes", async () =>
+    {
+        const cache = new SolutionCacheSource(new FakeStorage());
+        const stored: SourcedPackage = { Document: { nodes: [], edges: [] }, Dependencies: [],
+            resources: [{ path: "resources/a.svg", bytes: new Uint8Array([1, 2, 3]) }] };
+        await cache.Put(ref("shop"), stored);
+
+        const loaded = await cache.TryGet(ref("shop"));
+        assert.equal(loaded?.resources?.length, 1);
+        assert.equal(loaded?.resources?.[0]?.path, "resources/a.svg");
+        assert.deepEqual(Uint8Array.from(loaded!.resources![0]!.bytes), new Uint8Array([1, 2, 3]));
+    });
+
+    test("TryGet omits resources when only model.json + src are stored", async () =>
+    {
+        const storage = new FakeStorage();
+        const cache = new SolutionCacheSource(storage);
+        await cache.Put(ref("shop"), pkg());
+        await storage.WriteText("shop/1.0.0/src/shop.todl", "namespace acme {}"); // a source must NOT surface
+
+        const loaded = await cache.TryGet(ref("shop"));
+        assert.equal(loaded?.resources, undefined);
+    });
 });
 
 describe("CachingPackageSource", () =>
@@ -115,5 +139,18 @@ describe("CachingPackageSource", () =>
     {
         const caching = new CachingPackageSource(new SolutionCacheSource(new FakeStorage()), new MapPackageSource());
         assert.equal(await caching.TryGet(ref("nope")), undefined);
+    });
+
+    test("writes upstream resource bytes through to the cache", async () =>
+    {
+        const upstream = new MapPackageSource();
+        upstream.Add("shop", "1.0.0", { Document: { nodes: [], edges: [] }, Dependencies: [],
+            resources: [{ path: "resources/b.png", bytes: new Uint8Array([9]) }] });
+        const cache = new SolutionCacheSource(new FakeStorage());
+        const caching = new CachingPackageSource(cache, upstream);
+
+        await caching.TryGet(ref("shop"));
+        const cached = await cache.TryGet(ref("shop"));
+        assert.deepEqual(Uint8Array.from(cached!.resources![0]!.bytes), new Uint8Array([9]));
     });
 });
