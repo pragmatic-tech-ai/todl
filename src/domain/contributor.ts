@@ -5,6 +5,8 @@
 
 import type { PackageRef, ResolvedPackage, PackageSource, SeedGraph } from "./domain.js";
 import { CompositePackageSource } from "./composite-package-source.js";
+import type { ResourceSource } from "./resource-source.js";
+import { MemoryResourceSource } from "./memory-resource-source.js";
 import type { ManifestJson } from "../manifest/records.js";
 
 /** Identity of a contributed unit (a model pinned to a version). */
@@ -63,6 +65,7 @@ export class BundledContributor implements Contributor
     constructor(
         private readonly packages: readonly ResolvedPackage[],
         readonly Roots: readonly PackageRef[],
+        private readonly resources: ResourceSource = new MemoryResourceSource(),
     ) {}
 
     Contributions(): Promise<readonly Contribution[]>
@@ -70,9 +73,9 @@ export class BundledContributor implements Contributor
         return Promise.resolve(this.packages.map((p) => Contributions.from(p)));
     }
 
-    Resource(_uri: string): Promise<ResourceContent | undefined>
+    Resource(uri: string): Promise<ResourceContent | undefined>
     {
-        return Promise.resolve(undefined); // no asset store in the pipeline yet (see spec)
+        return this.resources.resource(uri);
     }
 }
 
@@ -94,9 +97,9 @@ export class PackagesContributor implements Contributor
         return out;
     }
 
-    Resource(_uri: string): Promise<ResourceContent | undefined>
+    Resource(uri: string): Promise<ResourceContent | undefined>
     {
-        return Promise.resolve(undefined); // no asset store in the pipeline yet (see spec)
+        return this.source.resource(uri);
     }
 
     private async visit(ref: PackageRef, seen: Set<string>, out: Contribution[]): Promise<void>
