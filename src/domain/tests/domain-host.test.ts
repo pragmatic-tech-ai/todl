@@ -1,8 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DomainHost } from "../domain-host.js";
-import { PackagesContributor } from "../contributor.js";
+import { PackagesContributor, BundledContributor } from "../contributor.js";
 import { MemoryPackageSource } from "../memory-package-source.js";
+import { MemoryResourceSource } from "../memory-resource-source.js";
 import { compilePackage, PackageKind } from "../../publish/publish.js";
 import { PackageManifestBridge } from "../../solution-services/package-manager/package-manifest-bridge.js";
 import type { ResolvedPackage } from "../domain.js";
@@ -60,4 +61,14 @@ test("an unresolvable library yields one diagnostic, not a throw; siblings still
     assert.equal(host.Diagnostics.length, 1);
     assert.match(host.Diagnostics[0]!.message, /acme\.missing/);
     assert.notEqual(host.Domain.getManifest("acme.ms"), undefined);
+});
+
+test("Resource routes to the contributor that owns the uri", async () =>
+{
+    const res = new MemoryResourceSource([["acme.lib/1.0.0/resources/a.svg", new Uint8Array([4])]]);
+    const withAsset = new BundledContributor([], [], res);
+    const without = new BundledContributor([], []);
+    const host = new DomainHost([without, withAsset]);
+    assert.deepEqual((await host.Resource("acme.lib/1.0.0/resources/a.svg"))!.bytes, new Uint8Array([4]));
+    assert.equal(await host.Resource("acme.lib/1.0.0/resources/none.svg"), undefined);
 });

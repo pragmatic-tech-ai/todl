@@ -4,6 +4,9 @@ import {
     type PackageRef,
     type ResolvedPackage,
 } from "../../domain/domain.js";
+import { type ResourceSource } from "../../domain/resource-source.js";
+import { type ResourceContent } from "../../domain/contributor.js";
+import { MimeTypes } from "../../domain/mime-types.js";
 import { fromJSON } from "../../compiler-services/emit/json.js";
 import { ManifestEmitter } from "../../compiler-services/emit/manifest.js";
 import { ManifestWriter } from "../../manifest/manifest-writer.js";
@@ -19,7 +22,7 @@ import { type PackageDocument } from "../../publish/publish.js";
 // (ManifestWriter), and carries the instance graph as the package seed. Because
 // publish persists own-only documents that record their base deps, the recorded
 // dependencies flow through as domain-tier refs for transitive composition.
-export class StoragePackageSource implements PackageSource
+export class StoragePackageSource implements PackageSource, ResourceSource
 {
     constructor(private readonly storage: IStorage) {}
 
@@ -40,6 +43,15 @@ export class StoragePackageSource implements PackageSource
         const seed = PackageManifestBridge.seedOf(graph);
         if (seed.nodes.length > 0) resolved.seed = seed;
         return resolved;
+    }
+
+    // Read a package resource's bytes straight from the blob layout. `uri` is the
+    // qualified storage path `<model>/<version>/<path>` — the same layout publish writes.
+    public async resource(uri: string): Promise<ResourceContent | undefined>
+    {
+        if (!(await this.storage.Exists(uri))) return undefined;
+        const bytes = await this.storage.ReadBytes(uri);
+        return { uri, mime: MimeTypes.Of(uri), bytes };
     }
 
     // The concrete versions of `model` present in storage, in listing order. A model

@@ -1,6 +1,6 @@
 import { Domain, type PackageRef, type ResolvedPackage } from "./domain.js";
 import { MemoryPackageSource } from "./memory-package-source.js";
-import type { Contributor, Contribution } from "./contributor.js";
+import type { Contributor, Contribution, ResourceContent } from "./contributor.js";
 import { GraphQuery } from "../graph-api/graph-query-engine.js";
 import type { IGraphQuery } from "../graph-api/graph-query.js";
 import { Severity, DiagnosticCode, type Diagnostic } from "../compiler-services/diagnostics/diagnostic.js";
@@ -12,6 +12,7 @@ export interface IDomainHost
     readonly Diagnostics: readonly Diagnostic[];
     Compose(): Promise<void>;
     Query(): IGraphQuery;
+    Resource(uri: string): Promise<ResourceContent | undefined>;
 }
 
 // Composes a set of contributors into one Domain: gathers their deps-first
@@ -70,6 +71,18 @@ export class DomainHost implements IDomainHost
     public Query(): IGraphQuery
     {
         return new GraphQuery(this.domain.graph);
+    }
+
+    // Resolve a resource uri (`<model>/<version>/<path>`) across contributors, first
+    // non-undefined wins; undefined when no contributor owns it.
+    public async Resource(uri: string): Promise<ResourceContent | undefined>
+    {
+        for (const c of this.contributors)
+        {
+            const found = await c.Resource(uri);
+            if (found !== undefined) return found;
+        }
+        return undefined;
     }
 
     // Ergonomic façade: build, compose, return the loaded host.
