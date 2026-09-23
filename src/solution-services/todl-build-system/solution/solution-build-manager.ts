@@ -149,7 +149,8 @@ export class SolutionBuildManager
     private async CaptureOutput(project: SolutionProject, system: IBuildSystem<TodlBuildContext, ProjectManifest>, options: BuildOptions, buildFlavorId: string | undefined, buildOutput: BuildOutputSource): Promise<void>
     {
         const flavor = BuildSystemRegistry.SelectFlavor(system, buildFlavorId);
-        const output = await this.storage.OpenOutput(flavor?.OutputName ?? system.OutputName, options);
+        if (flavor === undefined) return;
+        const output = await this.storage.OpenOutput(flavor.OutputName, options);
         if (!(await output.Storage.Exists(SolutionBuildManager.ModelFileName))) return;
         const document = JSON.parse(await output.Storage.ReadText(SolutionBuildManager.ModelFileName)) as PackageDocument;
         const pkg: SourcedPackage = { Document: { nodes: document.nodes, edges: document.edges }, Dependencies: document.dependencies ?? [] };

@@ -48,7 +48,7 @@ export class FakeSystem implements IBuildSystem<TodlBuildContext, ProjectManifes
 {
     constructor(
         public readonly Id: string,
-        public readonly OutputName: string,
+        private readonly OutputName: string,
         private readonly actions: readonly IBuildAction<TodlBuildContext>[],
         private readonly appliesTo: ProjectType | undefined = undefined,
     )
@@ -63,11 +63,6 @@ export class FakeSystem implements IBuildSystem<TodlBuildContext, ProjectManifes
     public AppliesTo(manifest: ProjectManifest): boolean
     {
         return this.appliesTo === undefined || manifest.type === this.appliesTo;
-    }
-
-    public Actions(): readonly IBuildAction<TodlBuildContext>[]
-    {
-        return this.actions;
     }
 
     public Flavors(): readonly BuildFlavor<TodlBuildContext>[]

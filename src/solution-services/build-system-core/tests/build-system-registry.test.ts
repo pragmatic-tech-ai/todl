@@ -49,19 +49,9 @@ class FakeSystem implements IBuildSystem<CoreBuildContext, FakeTarget>
         return this.Id;
     }
 
-    public get OutputName(): string
-    {
-        return this.Id;
-    }
-
     public AppliesTo(target: FakeTarget): boolean
     {
         return this.appliesTo === undefined || target.type === this.appliesTo;
-    }
-
-    public Actions(): readonly IBuildAction<CoreBuildContext>[]
-    {
-        return this.actions;
     }
 
     public Flavors(): readonly BuildFlavor<CoreBuildContext>[]

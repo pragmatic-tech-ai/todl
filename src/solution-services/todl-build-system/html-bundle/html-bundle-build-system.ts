@@ -19,7 +19,6 @@ export class HtmlBundleBuildSystem implements IBuildSystem<TodlBuildContext, Pro
 
     public readonly Id = HtmlBundleBuildSystem.SystemId;
     public readonly DisplayName = HtmlBundleBuildSystem.Display;
-    public readonly OutputName = HtmlBundleBuildSystem.Output;
 
     private readonly actions: readonly IBuildAction<TodlBuildContext>[] = [
         new ResolveBasesAction(),
@@ -31,11 +30,6 @@ export class HtmlBundleBuildSystem implements IBuildSystem<TodlBuildContext, Pro
     public AppliesTo(manifest: ProjectManifest): boolean
     {
         return manifest.type === ProjectType.Architecture;
-    }
-
-    public Actions(): readonly IBuildAction<TodlBuildContext>[]
-    {
-        return this.actions;
     }
 
     public Flavors(): readonly BuildFlavor<TodlBuildContext>[]

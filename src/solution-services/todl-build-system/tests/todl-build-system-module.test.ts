@@ -13,7 +13,7 @@ describe("todl-build-system composition", () =>
         const registry = new TodlBuildSystemRegistry();
         const system = registry.Get("npm-package");
         assert.ok(system !== undefined);
-        assert.equal(system!.OutputName, "npm-package");
+        assert.equal(system!.Flavors()[0].OutputName, "npm-package");
     });
 
     test("the npm-package system applies to meta-model, library, and architecture targets", () =>

@@ -23,7 +23,6 @@ export class NpmPackageBuildSystem implements IBuildSystem<TodlBuildContext, Pro
 
     public readonly Id = NpmPackageBuildSystem.SystemId;
     public readonly DisplayName = NpmPackageBuildSystem.Display;
-    public readonly OutputName = NpmPackageBuildSystem.Output;
 
     private readonly actions: readonly IBuildAction<TodlBuildContext>[];
 
@@ -42,11 +41,6 @@ export class NpmPackageBuildSystem implements IBuildSystem<TodlBuildContext, Pro
         return manifest.type === ProjectType.MetaModel
             || manifest.type === ProjectType.Library
             || manifest.type === ProjectType.Architecture;
-    }
-
-    public Actions(): readonly IBuildAction<TodlBuildContext>[]
-    {
-        return this.actions;
     }
 
     public Flavors(): readonly BuildFlavor<TodlBuildContext>[]
