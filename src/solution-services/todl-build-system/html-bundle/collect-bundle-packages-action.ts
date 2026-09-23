@@ -16,7 +16,7 @@ export class CollectBundlePackagesAction implements IBuildAction<TodlBuildContex
 
     public readonly Name = CollectBundlePackagesAction.ActionName;
     public readonly Consumes: readonly ArtifactKey<unknown>[] = [NpmArtifacts.CompiledModel];
-    public readonly Produces: readonly ArtifactKey<unknown>[] = [NpmArtifacts.BundlePackages];
+    public readonly Produces: readonly ArtifactKey<unknown>[] = [NpmArtifacts.BundlePackages, NpmArtifacts.BundleResources];
 
     public async Execute(ctx: TodlBuildContext): Promise<void>
     {
@@ -32,12 +32,13 @@ export class CollectBundlePackagesAction implements IBuildAction<TodlBuildContex
             ...(manifest.libraries !== undefined ? { libraries: manifest.libraries } : {}),
             ...(manifest.architectures !== undefined ? { architectures: manifest.architectures } : {}),
         };
-        const { packages, problems } = await BundleClosureCollector.Collect(ctx.Source, bindings, compiled);
+        const { packages, problems, resources } = await BundleClosureCollector.Collect(ctx.Source, bindings, compiled);
         if (problems.length > 0)
         {
             for (const problem of problems) ctx.Diagnostics.Report({ severity: Severity.Error, message: problem, source: CollectBundlePackagesAction.ActionName });
             return;
         }
         ctx.Artifacts.Set(NpmArtifacts.BundlePackages, packages);
+        ctx.Artifacts.Set(NpmArtifacts.BundleResources, resources);
     }
 }
