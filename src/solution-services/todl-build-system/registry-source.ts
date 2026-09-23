@@ -1,7 +1,7 @@
 import type { IPackageRegistry } from "../package-manager/engine/package-registry.js";
 import { DEFAULT_SCOPE } from "../package-manager/package-json.js";
-import { TarReader } from "../package-manager/registry/tar-reader.js";
-import type { PackageDocument, PackageRef } from "../../publish/publish.js";
+import { TarReader, type TarFile } from "../package-manager/registry/tar-reader.js";
+import type { PackageDocument, PackageRef, PackageResource } from "../../publish/publish.js";
 import type { IPackageSource, SourcedPackage } from "./package-source.js";
 
 // The terminal source of the resolution chain (spec §8.2): fetches a compiled package
@@ -12,6 +12,11 @@ import type { IPackageSource, SourcedPackage } from "./package-source.js";
 // fall through. It is read-only; a CachingPackageSource decorator handles population.
 export class RegistrySource implements IPackageSource
 {
+    private static readonly Prefix = "package/";
+    private static readonly ModelFile = "package/model.json";
+    private static readonly PackageJsonFile = "package/package.json";
+    private static readonly SrcPrefix = "package/src/";
+
     constructor(
         private readonly registry: IPackageRegistry,
         private readonly scope: string = DEFAULT_SCOPE,
@@ -25,14 +30,25 @@ export class RegistrySource implements IPackageSource
         const bytes = await this.Fetch(name, reference.version);
         if (bytes === undefined) return undefined;
 
-        const installed = TarReader.readPackage(bytes);
-        if (installed === undefined) return undefined; // a non-TODL npm package
+        const files: TarFile[] = TarReader.read(bytes);
+        const byPath = new Map(files.map((f) => [f.path, f.bytes]));
+        const modelBytes = byPath.get(RegistrySource.ModelFile);
+        if (modelBytes === undefined || !byPath.has(RegistrySource.PackageJsonFile)) return undefined; // a non-TODL npm package
 
-        const document = installed.document as PackageDocument;
-        return {
+        const document = JSON.parse(new TextDecoder().decode(modelBytes)) as PackageDocument;
+        const resources: PackageResource[] = files
+            .filter((f) => f.path.startsWith(RegistrySource.Prefix)
+                && f.path !== RegistrySource.ModelFile
+                && f.path !== RegistrySource.PackageJsonFile
+                && !f.path.startsWith(RegistrySource.SrcPrefix))
+            .map((f) => ({ path: f.path.slice(RegistrySource.Prefix.length), bytes: f.bytes }));
+
+        const sourced: SourcedPackage = {
             Document: { nodes: document.nodes, edges: document.edges },
             Dependencies: document.dependencies ?? [],
         };
+        if (resources.length > 0) sourced.resources = resources;
+        return sourced;
     }
 
     // Fetch a tarball by scoped name + version; a rejection (a 404 / unpublished package)

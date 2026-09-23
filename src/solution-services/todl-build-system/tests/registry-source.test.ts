@@ -102,4 +102,34 @@ describe("RegistrySource", () =>
         const pkg = await source.TryGet(ref("leaf"));
         assert.deepEqual(pkg!.Dependencies, []);
     });
+
+    test("surfaces package resources (non-manifest, non-src files)", async () =>
+    {
+        const doc: PackageDocument = { nodes: [], edges: [] };
+        const svg = encoder.encode("<svg/>");
+        const entries: TarEntry[] = [
+            { path: "package/package.json", bytes: encoder.encode(JSON.stringify({ name: "@acme/widgets", version: "1.0.0", todl: { id: "widgets", kind: "library" } })) },
+            { path: "package/model.json", bytes: encoder.encode(JSON.stringify(doc)) },
+            { path: "package/src/widgets.todl", bytes: encoder.encode("namespace acme {}") },
+            { path: "package/resources/a.svg", bytes: svg },
+        ];
+        const registry = new FakeRegistry();
+        registry.Serve("@acme/widgets", createTgz(entries));
+        const source = new RegistrySource(registry, "@acme");
+
+        const pkg = await source.TryGet(ref("widgets"));
+        assert.equal(pkg!.resources!.length, 1);
+        assert.equal(pkg!.resources![0]!.path, "resources/a.svg");
+        assert.deepEqual(Uint8Array.from(pkg!.resources![0]!.bytes), svg);
+    });
+
+    test("omits resources when the tarball carries only manifest + sources", async () =>
+    {
+        const registry = new FakeRegistry();
+        registry.Serve("@pragmatic-tech-ai/plain", tarballFor("@pragmatic-tech-ai/plain", { nodes: [], edges: [] }));
+        const source = new RegistrySource(registry);
+
+        const pkg = await source.TryGet(ref("plain"));
+        assert.equal(pkg!.resources, undefined);
+    });
 });
