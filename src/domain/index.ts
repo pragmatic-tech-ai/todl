@@ -13,6 +13,7 @@ export {
 export { DomainHost, type IDomainHost } from "./domain-host.js";
 export { CompositePackageSource } from "./composite-package-source.js";
 export { MemoryPackageSource } from "./memory-package-source.js";
+export { MimeTypes } from "./mime-types.js";
 export {
     type Contributor,
     type Contribution,
