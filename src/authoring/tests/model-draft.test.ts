@@ -1,15 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Repository } from "../../compiler-services/model/model.js";
-import { FrozenRepository } from "../../compiler-services/model/frozen.js";
 import { Cardinality } from "../../compiler-services/model/graph.js";
-import { toJSON } from "../../compiler-services/emit/json.js";
 import { ModelDraft } from "../model-draft.js";
 
 // A tiny meta-model base : concept `component` with a scalar `label` and a
 // reference field `implementedBy : Technology`; concept `technology`; plus a
 // library instance `copilot` (a technology) to reference across the boundary.
-function baseClient(): FrozenRepository
+function baseClient(): Repository
 {
   const repo = new Repository();
   const b = repo.builder();
@@ -22,7 +20,7 @@ function baseClient(): FrozenRepository
   b.assertInstance("technology", "copilot");
   b.setField("copilot", "label", "Copilot");
   b.commit();
-  return FrozenRepository.fromJSON(toJSON(repo));
+  return repo;
 }
 
 test("on() builds a working model that resolves base nodes", () => {

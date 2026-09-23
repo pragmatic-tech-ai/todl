@@ -58,8 +58,6 @@ export {
 
 export { EntityBase, type Entity } from './compiler-services/model/entity.js';
 
-export { FrozenRepository } from './compiler-services/model/frozen.js';
-
 export {
     ReflectedRepository,
     ReflectedEntity,

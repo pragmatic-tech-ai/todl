@@ -1,14 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Repository } from "../../compiler-services/model/model.js";
-import { FrozenRepository } from "../../compiler-services/model/frozen.js";
 import { Cardinality } from "../../compiler-services/model/graph.js";
 import { toJSON } from "../../compiler-services/emit/json.js";
 import { mergeBases } from "../../compiler-services/api.js";
 import { ModelDraft, type InstanceDescriptor } from "../../index.js";
 import { checkAgainst } from "../../compiler-services/api.js";
 
-function baseClient(): FrozenRepository
+function baseClient(): Repository
 {
   const repo = new Repository();
   const b = repo.builder().setNamespace("acme.ea");
@@ -21,7 +20,7 @@ function baseClient(): FrozenRepository
   b.assertInstance("technology", "copilot");
   b.setField("copilot", "label", "Copilot");
   b.commit();
-  return FrozenRepository.fromJSON(toJSON(repo));
+  return repo;
 }
 
 function draftWithGw()
