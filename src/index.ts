@@ -58,16 +58,6 @@ export {
 
 export { EntityBase, type Entity } from './compiler-services/model/entity.js';
 
-export {
-    toElement,
-    type Element,
-    type ElementSchema,
-    type Provenance,
-    type IncomingRef,
-    type PresentationHint,
-    type ToElementOptions,
-} from './compiler-services/model/element.js';
-
 export { FrozenRepository } from './compiler-services/model/frozen.js';
 
 export {
