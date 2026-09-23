@@ -4,6 +4,8 @@ import { BundleClosureCollector } from "../bundle-closure-collector.js";
 import { compilePackage, PackageKind, type PackageRef } from "../../../../publish/publish.js";
 import type { IPackageSource, SourcedPackage } from "../../package-source.js";
 import type { ProjectBaseModelBindings } from "../../../project-services/core/base-binding.js";
+import { DomainHost } from "../../../../domain/domain-host.js";
+import { BundledContributor } from "../../../../domain/contributor.js";
 
 // A build-tier source over compiled own-documents, keyed by id@version.
 class MapSource implements IPackageSource
@@ -55,6 +57,13 @@ test("collects the architecture + meta-model + both libraries", async () =>
     assert.deepEqual(problems, []);
     assert.deepEqual(entry, { model: "acme.arch", version: "0.1.0" });
     assert.deepEqual(packages.map((p) => p.ref.model).sort(), ["acme.arch", "acme.aws", "acme.meta", "acme.ms"]);
+
+    // Bundle ships seed (heap source), not document; the composed heap exposes every instance.
+    assert.ok(packages.every((p) => (p as { document?: unknown }).document === undefined), "no document carried");
+    const host = await DomainHost.Compose([new BundledContributor(packages, [entry])]);
+    assert.deepEqual(host.Diagnostics, []);
+    const ids = host.Query().InstancesOf("Widget").map((m) => m.node.id).sort();
+    assert.deepEqual(ids, ["appWidget", "awsWidget", "msWidget"]);
 });
 
 test("reports a problem for an unresolvable binding", async () =>

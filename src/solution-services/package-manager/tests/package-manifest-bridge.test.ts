@@ -5,6 +5,7 @@ import { check } from "../../../compiler-services/api.js";
 import { compilePackage } from "../../../publish/publish.js";
 import { ManifestWriter } from "../../../manifest/manifest-writer.js";
 import { Manifest } from "../../../manifest/reflection/reflection.js";
+import type { DataGraph } from "../../../compiler-services/emit/manifest.js";
 
 // Compile a tiny self-contained model the real way; emit its logical manifest.
 function logical()
@@ -72,4 +73,23 @@ test("toResolved carries instance nodes + relationship edges as a seed graph", (
   const a = resolved.seed!.nodes.find((n) => n.id === "a")!;
   assert.equal(a.type, "Widget");
   assert.deepEqual(resolved.seed!.edges, [{ from: "a", rel: "parts", to: "b" }]);
+});
+
+test("seedOf maps a DataGraph to a SeedGraph (class/namespace optional, edges omitted when empty)", () => {
+  const graph: DataGraph = {
+    manifestRef: { model: "m", version: "1.0.0" },
+    nodes: [
+      { id: "a", type: "Widget", namespace: "acme", attrs: { name: "A" } },
+      { id: "b", type: "Widget", class: "Comp.Card", namespace: "", attrs: {} },
+    ],
+    edges: [{ from: "a", rel: "parts", to: "b" }],
+  };
+  const seed = PackageManifestBridge.seedOf(graph);
+  assert.deepEqual(seed.nodes[0], { id: "a", type: "Widget", attrs: { name: "A" }, namespace: "acme" });
+  assert.deepEqual(seed.nodes[1], { id: "b", type: "Widget", attrs: {}, class: "Comp.Card" });
+  assert.deepEqual(seed.edges, [{ from: "a", rel: "parts", to: "b" }]);
+
+  const edgeless: DataGraph = { manifestRef: { model: "m", version: "1.0.0" }, nodes: [{ id: "x", type: "Widget", namespace: "", attrs: {} }], edges: [] };
+  const seed2 = PackageManifestBridge.seedOf(edgeless);
+  assert.equal(seed2.edges, undefined);
 });
