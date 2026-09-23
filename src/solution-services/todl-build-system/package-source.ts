@@ -1,5 +1,5 @@
 import type { TodlDocument } from "../../compiler-services/emit/json.js";
-import type { PackageRef } from "../../publish/publish.js";
+import type { PackageRef, PackageResource } from "../../publish/publish.js";
 
 // A compiled package as a source returns it: the model.json document plus the base
 // deps it recorded, for the recursive base walk.
@@ -7,6 +7,7 @@ export interface SourcedPackage
 {
     Document: TodlDocument;
     Dependencies: readonly PackageRef[];
+    resources?: readonly PackageResource[]; // verbatim non-.todl asset bytes, package-relative
 }
 
 // The seam the recursive resolver reads packages through (spec §8). A miss returns

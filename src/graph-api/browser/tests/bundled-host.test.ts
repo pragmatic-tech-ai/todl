@@ -5,6 +5,8 @@ import { BundledContributor } from "../../../domain/contributor.js";
 import { compilePackage, PackageKind } from "../../../publish/publish.js";
 import { PackageManifestBridge } from "../../../solution-services/package-manager/package-manifest-bridge.js";
 import type { ResolvedPackage } from "../../../domain/domain.js";
+import { MemoryResourceSource } from "../../../domain/memory-resource-source.js";
+import { Base64 } from "../base64.js";
 
 function inlined(): ResolvedPackage[]
 {
@@ -36,4 +38,15 @@ test("BundledContributor composes the inlined set; Query sees all packages", asy
     const query = host.Query();
     assert.ok(query.Concepts().some((t) => t.name === "Widget"));
     assert.deepEqual(query.InstancesOf("Widget").map((m) => m.node.id).sort(), ["awsWidget", "msWidget"]);
+});
+
+test("inlined base64 resources resolve through the composed host", async () =>
+{
+    const b64 = Base64.Encode(new Uint8Array([1, 2, 3])); // the bundle transport shape
+    const resources = new MemoryResourceSource([["acme.meta/1.0.0/resources/w.svg", Base64.Decode(b64)]]);
+    const host = await DomainHost.Compose([new BundledContributor(inlined(), [
+        { model: "acme.ms", version: "1.0.0" }, { model: "acme.aws", version: "1.0.0" },
+    ], resources)]);
+    const got = await host.Resource("acme.meta/1.0.0/resources/w.svg");
+    assert.deepEqual(got!.bytes, new Uint8Array([1, 2, 3]));
 });

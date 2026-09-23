@@ -1,11 +1,14 @@
 import { DomainHost } from "../../domain/domain-host.js";
 import { BundledContributor } from "../../domain/contributor.js";
+import { MemoryResourceSource } from "../../domain/memory-resource-source.js";
 import type { PackageRef, ResolvedPackage } from "../../domain/domain.js";
 import { GraphExplorer } from "./ui.js";
+import { Base64 } from "./base64.js";
 
 declare global
 {
-    interface Window { __TODL_PACKAGES__?: { packages: ResolvedPackage[]; entry: PackageRef[] }; }
+    interface Window { __TODL_PACKAGES__?: { packages: ResolvedPackage[]; entry: PackageRef[];
+        resources?: { uri: string; base64: string }[] }; }
 }
 
 // Bootstrap for the bundled page: read the inlined packages, compose them through
@@ -21,8 +24,10 @@ export class BundledHostBootstrap
         const root = document.getElementById(BundledHostBootstrap.RootId);
         const inlined = window.__TODL_PACKAGES__;
         if (root === null || inlined === undefined) return;
-        const host = await DomainHost.Compose([new BundledContributor(inlined.packages, inlined.entry)]);
-        new GraphExplorer(host.Query(), root).Render();
+        const resources = new MemoryResourceSource(
+            (inlined.resources ?? []).map((r) => [r.uri, Base64.Decode(r.base64)] as const));
+        const host = await DomainHost.Compose([new BundledContributor(inlined.packages, inlined.entry, resources)]);
+        new GraphExplorer(host, root).Render();
     }
 }
 

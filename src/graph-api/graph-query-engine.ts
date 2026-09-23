@@ -12,9 +12,25 @@ interface ReverseRef { from: string; member: string; }
 
 export class GraphQuery implements IGraphQuery
 {
+    private static readonly IconAnnotation = "icon";
+    private static readonly IconPathArg = "path";
+
     private reverse?: Map<string, ReverseRef[]>;
 
     constructor(private readonly graph: FrozenGraph) {}
+
+    public IconKey(typeId: string): string | undefined
+    {
+        const owner = this.graph.ownerOf(typeId);
+        if (owner === undefined) return undefined;
+        const type = owner.getType(typeId);
+        if (type === undefined) return undefined;
+        const icon = type.getAnnotations().find((a) => a.type.name === GraphQuery.IconAnnotation);
+        if (icon === undefined) return undefined;
+        const path = icon.args.get(GraphQuery.IconPathArg);
+        if (typeof path !== "string") return undefined;
+        return `${owner.model}/${owner.version}/${path}`;
+    }
 
     public Concepts(): TypeInfo[]
     {

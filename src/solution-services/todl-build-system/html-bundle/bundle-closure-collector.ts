@@ -14,10 +14,12 @@ export class BundleClosureCollector
         source: IPackageSource,
         bindings: ProjectBaseModelBindings,
         compiled: CompiledPackage,
-    ): Promise<{ packages: ResolvedPackage[]; entry: DomainPackageRef; problems: string[] }>
+    ): Promise<{ packages: ResolvedPackage[]; entry: DomainPackageRef; problems: string[];
+                 resources: { uri: string; bytes: Uint8Array }[] }>
     {
         const packages: ResolvedPackage[] = [];
         const problems: string[] = [];
+        const resources: { uri: string; bytes: Uint8Array }[] = [];
         const visited = new Set<string>();
 
         // The architecture's full closure is the self-contained universe (prelude + all
@@ -45,6 +47,7 @@ export class BundleClosureCollector
             }
             const deps: DomainPackageRef[] = pkg.Dependencies.map((d) => ({ model: d.id, version: d.version }));
             packages.push(PackageManifestBridge.toResolvedJsonManifest(universe, pkg.Document, ref.id, ref.version, deps));
+            for (const r of pkg.resources ?? []) resources.push({ uri: `${ref.id}/${ref.version}/${r.path}`, bytes: r.bytes });
             for (const dep of pkg.Dependencies) queue.push(dep);
         }
 
@@ -52,6 +55,7 @@ export class BundleClosureCollector
         // merged query graph is self-contained regardless of the bases' own documents.
         const archDeps: DomainPackageRef[] = (compiled.document.dependencies ?? []).map((d) => ({ model: d.id, version: d.version }));
         packages.push(PackageManifestBridge.toResolvedJsonManifest(universe, universe, compiled.id, compiled.version, archDeps));
-        return { packages, entry: { model: compiled.id, version: compiled.version }, problems };
+        for (const r of compiled.resources ?? []) resources.push({ uri: `${compiled.id}/${compiled.version}/${r.path}`, bytes: r.bytes });
+        return { packages, entry: { model: compiled.id, version: compiled.version }, problems, resources };
     }
 }
