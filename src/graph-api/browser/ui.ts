@@ -1,8 +1,9 @@
 import type { IGraphQuery } from "../graph-query.js";
-import type { EntitySummary } from "../dto.js";
+import { Snapshot } from "../snapshot.js";
+import type { InstanceMirror } from "../../manifest/reflection/reflection.js";
 
-// A deliberately minimal three-pane explorer: concepts -> instances -> entity detail.
-// Proves the GraphApi end-to-end; not a product UI.
+// A deliberately minimal three-pane explorer: concepts -> instances -> instance detail.
+// Proves the reflection-native query end-to-end; not a product UI.
 export class GraphExplorer
 {
     private static readonly ConceptsTitle = "Concepts";
@@ -33,8 +34,8 @@ export class GraphExplorer
         for (const concept of this.api.Concepts())
         {
             const item = document.createElement("li");
-            item.textContent = concept.label;
-            item.addEventListener("click", () => this.ShowInstances(concept.id));
+            item.textContent = Snapshot.ofType(concept).label;
+            item.addEventListener("click", () => this.ShowInstances(concept.fullName));
             list.appendChild(item);
         }
         return list;
@@ -44,19 +45,19 @@ export class GraphExplorer
     {
         const list = this.instances.querySelector("ul")!;
         list.innerHTML = "";
-        for (const entity of this.api.InstancesOf(conceptId))
+        for (const mirror of this.api.InstancesOf(conceptId))
         {
             const item = document.createElement("li");
-            item.textContent = entity.label;
-            item.addEventListener("click", () => this.ShowDetail(entity));
+            item.textContent = Snapshot.LabelOf(mirror);
+            item.addEventListener("click", () => this.ShowDetail(mirror));
             list.appendChild(item);
         }
     }
 
-    private ShowDetail(entity: EntitySummary): void
+    private ShowDetail(mirror: InstanceMirror): void
     {
         const pre = this.detail.querySelector("pre")!;
-        pre.textContent = JSON.stringify(this.api.Entity(entity.id), null, 2);
+        pre.textContent = JSON.stringify(Snapshot.of(mirror), null, 2);
     }
 
     private Column(title: string, body: HTMLElement): HTMLElement

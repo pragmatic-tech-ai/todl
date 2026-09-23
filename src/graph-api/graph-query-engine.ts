@@ -6,10 +6,11 @@ import type { FrozenGraph } from "../domain/graph.js";
 import type { TypeInfo, InstanceMirror, TermInfo } from "../manifest/reflection/reflection.js";
 import { MetaKind } from "../manifest/enums.js";
 import { Snapshot } from "./snapshot.js";
+import type { IGraphQuery } from "./graph-query.js";
 
 interface ReverseRef { from: string; member: string; }
 
-export class GraphQuery
+export class GraphQuery implements IGraphQuery
 {
     private reverse?: Map<string, ReverseRef[]>;
 

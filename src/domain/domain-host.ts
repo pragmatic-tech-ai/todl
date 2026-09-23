@@ -1,9 +1,8 @@
 import { Domain, type PackageRef, type ResolvedPackage } from "./domain.js";
 import { MemoryPackageSource } from "./memory-package-source.js";
 import type { Contributor, Contribution } from "./contributor.js";
-import { GraphApi } from "../graph-api/graph-api.js";
+import { GraphQuery } from "../graph-api/graph-query-engine.js";
 import type { IGraphQuery } from "../graph-api/graph-query.js";
-import type { TodlDocument } from "../compiler-services/emit/json.js";
 import { Severity, DiagnosticCode, type Diagnostic } from "../compiler-services/diagnostics/diagnostic.js";
 
 // The host's read/compose contract (also the type a caller holds).
@@ -70,9 +69,7 @@ export class DomainHost implements IDomainHost
 
     public Query(): IGraphQuery
     {
-        const documents: TodlDocument[] = [];
-        for (const c of this.contributions) if (c.document !== undefined) documents.push(c.document);
-        return GraphApi.FromDocuments(documents);
+        return new GraphQuery(this.domain.graph);
     }
 
     // Ergonomic façade: build, compose, return the loaded host.
