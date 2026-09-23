@@ -100,6 +100,22 @@ describe("StoragePackageSource — resolve", () => {
   });
 });
 
+describe("StoragePackageSource — resource", () => {
+  test("resource reads bytes back from the blob layout with inferred mime", async () => {
+    const storage = await published("shop", "1.0.0");
+    await storage.WriteBytes("shop/1.0.0/resources/a.svg", new Uint8Array([1, 2, 3]));
+    const src = new StoragePackageSource(storage);
+    const got = await src.resource("shop/1.0.0/resources/a.svg");
+    assert.deepEqual(got, { uri: "shop/1.0.0/resources/a.svg", mime: "image/svg+xml", bytes: new Uint8Array([1, 2, 3]) });
+  });
+
+  test("resource returns undefined for a missing path", async () => {
+    const storage = await published("shop", "1.0.0");
+    const src = new StoragePackageSource(storage);
+    assert.equal(await src.resource("shop/1.0.0/resources/nope.svg"), undefined);
+  });
+});
+
 describe("StoragePackageSource — versions + latest pinning", () => {
   test("versions lists the published versions of a model", async () => {
     const storage = await published("shop", "1.0.0");
