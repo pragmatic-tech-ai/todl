@@ -18,4 +18,7 @@ export interface IGraphQuery
     Broader(termId: string): TermInfo[];
     Descendants(termId: string): TermInfo[];
     Ancestors(termId: string): TermInfo[];
+    /** The qualified resource uri (`<model>/<version>/<path>`) of a type's `icon` annotation,
+     *  resolved against the DECLARING manifest; undefined when the type has no icon. */
+    IconKey(typeId: string): string | undefined;
 }
