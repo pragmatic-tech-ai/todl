@@ -42,9 +42,10 @@ test("collects the architecture + meta-model + both libraries", async () =>
     );
     assert.ok(arch.ok && arch.package);
 
-    const sourced = (doc: { nodes: unknown[] }, deps: PackageRef[]): SourcedPackage => ({ Document: doc as never, Dependencies: deps });
+    const sourced = (doc: { nodes: unknown[] }, deps: PackageRef[], resources?: { path: string; bytes: Uint8Array }[]): SourcedPackage =>
+        resources === undefined ? { Document: doc as never, Dependencies: deps } : { Document: doc as never, Dependencies: deps, resources };
     const map = new Map<string, SourcedPackage>([
-        ["acme.meta@1.0.0", sourced(meta.package!.document, [])],
+        ["acme.meta@1.0.0", sourced(meta.package!.document, [], [{ path: "resources/w.svg", bytes: new Uint8Array([7]) }])],
         ["acme.ms@1.0.0", sourced(ms.package!.document, [{ kind: PackageKind.MetaModel, id: "acme.meta", version: "1.0.0" }])],
         ["acme.aws@1.0.0", sourced(aws.package!.document, [{ kind: PackageKind.MetaModel, id: "acme.meta", version: "1.0.0" }])],
     ]);
@@ -53,10 +54,14 @@ test("collects the architecture + meta-model + both libraries", async () =>
         libraries: [{ id: "acme.ms", version: "1.0.0" }, { id: "acme.aws", version: "1.0.0" }],
     };
 
-    const { packages, entry, problems } = await BundleClosureCollector.Collect(new MapSource(map), bindings, arch.package!);
+    const { packages, entry, problems, resources } = await BundleClosureCollector.Collect(new MapSource(map), bindings, arch.package!);
     assert.deepEqual(problems, []);
     assert.deepEqual(entry, { model: "acme.arch", version: "0.1.0" });
     assert.deepEqual(packages.map((p) => p.ref.model).sort(), ["acme.arch", "acme.aws", "acme.meta", "acme.ms"]);
+
+    // Each package's resources are qualified with its own model/version.
+    const w = resources.find((r) => r.uri === "acme.meta/1.0.0/resources/w.svg");
+    assert.deepEqual(w?.bytes, new Uint8Array([7]));
 
     // Bundle ships seed (heap source), not document; the composed heap exposes every instance.
     assert.ok(packages.every((p) => (p as { document?: unknown }).document === undefined), "no document carried");
