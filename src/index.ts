@@ -78,6 +78,9 @@ export {
     type ReadClientOptions,
 } from './codegen/read-client.js';
 
+export { ModelPackageGenerator } from './codegen/model-package.js';
+export type { ModelPackageOptions } from './codegen/model-package.js';
+
 export { ModelDraft, type InstanceDescriptor } from './authoring/model-draft.js';
 
 export { TodlFileStore, type FileIO } from './authoring/file-store.js';

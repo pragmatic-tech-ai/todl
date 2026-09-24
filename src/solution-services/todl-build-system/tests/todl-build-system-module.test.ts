@@ -21,7 +21,7 @@ describe("todl-build-system composition", () =>
         const registry = new TodlBuildSystemRegistry();
         assert.equal(registry.For({ type: ProjectType.MetaModel, name: "m" } as never).length, 1);
         assert.equal(registry.For({ type: ProjectType.Library, name: "l" } as never).length, 1);
-        assert.equal(registry.For({ type: ProjectType.Architecture, name: "a" } as never).length, 2);
+        assert.equal(registry.For({ type: ProjectType.Architecture, name: "a" } as never).length, 3);
     });
 
     test("the build settings bag exposes the output-dir + colored-presentation fields", () =>
