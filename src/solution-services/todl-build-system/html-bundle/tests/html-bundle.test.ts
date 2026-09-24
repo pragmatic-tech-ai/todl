@@ -49,10 +49,10 @@ describe("HtmlBundleBuildSystem", () =>
 
         const html = await provider.Output.ReadText("index.html");
         assert.match(html, /id="todl-app-root"/);
-        assert.match(html, /__TODL_PACKAGES__/);
-        assert.match(html, /BundledHostBootstrap/);      // the bundled-host bootstrap is inlined
-        assert.match(html, /"entry"/);                    // the entry ref is present
-        assert.match(html, /App/);                        // the compiled document is inlined (my-arch's concept)
+        assert.match(html, /__TODL_APP__/);
+        assert.match(html, /MuralBundledHost/);           // the mural host bundle is inlined
+        assert.match(html, /"root"/);                      // the root model id is present
+        assert.match(html, /App/);                         // the compiled document is inlined (my-arch's concept)
     });
 
     test("inlines dependency resource bytes (base64) into the page", async () =>
