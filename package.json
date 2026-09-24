@@ -105,6 +105,7 @@
     "cli": "tsx --conditions=development cli/src/main.ts",
     "build": "npm run gen:prelude && npm run gen:scaffold && npm run compile:mu && npm run gen:graph-app && tsc -p tsconfig.build.json",
     "clean": "rimraf dist",
+    "clean:smoke": "rimraf --glob \"user-smoke-tests/*/\"",
     "prepublishOnly": "npm run clean && npm run build"
   },
   "engines": {
