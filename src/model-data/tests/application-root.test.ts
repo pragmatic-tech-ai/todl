@@ -17,12 +17,12 @@ function appDoc(): TodlDocument
     b.definePrimitive("string");
     b.defineConcept("technology");
     b.addField("technology", "label", "string");
-    b.defineAnnotation("application");
+    b.defineAnnotation("entrypoint");
     b.assertModel("app");
     b.assertInstance("technology", "x");
     b.setField("x", "label", "X");
     b.addContains("app", "x");
-    b.annotate("app", "application");
+    b.annotate("app", "entrypoint");
     b.commit();
     return toJSON(r);
 }
@@ -65,11 +65,11 @@ test("Resolve returns undefined for a library document", () =>
 test("Resolve throws on a malformed document with more than one marked model", () =>
 {
     const doc = appDoc();
-    // Fabricate a second marked model: a model node + an application app node + Annotated edge.
+    // Fabricate a second marked model: a model node + an entrypoint app node + Annotated edge.
     doc.nodes.push({ id: "app2", tier: "Instance", type: null, metaKind: MetaKind.Model, namespace: null, localId: "app2", isClass: false, class: null, storageId: null, fields: [], attrs: {} });
-    doc.nodes.push({ id: "app2@application", tier: "Ontology", type: "application", metaKind: null, namespace: null, localId: null, isClass: false, class: null, storageId: null, fields: [], attrs: {} });
-    doc.edges.push({ kind: "Annotated", via: null, from: "app2", to: "app2@application" });
-    assert.throws(() => ApplicationRootResolver.Resolve(doc), /more than one application-marked model/);
+    doc.nodes.push({ id: "app2@entrypoint", tier: "Ontology", type: "entrypoint", metaKind: null, namespace: null, localId: null, isClass: false, class: null, storageId: null, fields: [], attrs: {} });
+    doc.edges.push({ kind: "Annotated", via: null, from: "app2", to: "app2@entrypoint" });
+    assert.throws(() => ApplicationRootResolver.Resolve(doc), /more than one entrypoint-marked model/);
 });
 
 test("ModelRegistry Root/RootModel reflect the set root", () =>

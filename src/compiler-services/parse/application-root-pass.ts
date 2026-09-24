@@ -9,7 +9,7 @@ import { type Diagnostic, DiagnosticCode, Severity } from "../diagnostics/diagno
 
 export class ApplicationRootPass
 {
-    private static readonly AnnotationName = "application";
+    private static readonly AnnotationName = "entrypoint";
     private static readonly RootParam = "root";
 
     /** Resolve/mark the application root on a committed graph. No-op for libraries. */
@@ -25,7 +25,7 @@ export class ApplicationRootPass
         {
             ApplicationRootPass.report(model, diagnostics, DiagnosticCode.ApplicationMultipleRoots,
                 ApplicationRootPass.appId(marked[0]!),
-                `application has ${marked.length} models marked \`application\`; exactly one may be the root`);
+                `application has ${marked.length} models marked \`entrypoint\`; exactly one may be the root`);
             return;
         }
         if (marked.length === 1) return; // already rooted (explicit mark)
@@ -52,7 +52,7 @@ export class ApplicationRootPass
         }
         ApplicationRootPass.report(model, diagnostics, DiagnosticCode.ApplicationRootUndesignated,
             ApplicationRootPass.appId(PACKAGE_NODE_ID),
-            `application has ${models.length} models; designate the root with \`annotate application\` or a package-level \`root\``);
+            `application has ${models.length} models; designate the root with \`annotate entrypoint\` or a package-level \`root\``);
     }
 
     private static appId(target: NodeId): NodeId

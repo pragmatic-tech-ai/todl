@@ -1,6 +1,6 @@
 // Runtime reader of the compile-time application-root marking (design §6). Reads
 // the document, not runtime reflection: the single model that is the `from` of an
-// `Annotated` edge to an `application` app node is the root. The compile-time pass
+// `Annotated` edge to an `entrypoint` app node is the root. The compile-time pass
 // guarantees at most one; this throws defensively on a malformed document.
 
 import { MetaKind } from "../compiler-services/model/kinds.js";
@@ -9,11 +9,11 @@ import type { TodlDocument } from "../compiler-services/emit/json.js";
 
 export class ApplicationRootResolver
 {
-    private static readonly AnnotationName = "application";
+    private static readonly AnnotationName = "entrypoint";
     private static readonly AnnotatedKind = "Annotated";
     private static readonly OntologyTier = "Ontology";
     private static readonly MultipleRootsMessage =
-        "document has more than one application-marked model; expected exactly one";
+        "document has more than one entrypoint-marked model; expected exactly one";
 
     /** The id of the single application-rooted model, or undefined for a library document. */
     static Resolve(doc: TodlDocument): NodeId | undefined
