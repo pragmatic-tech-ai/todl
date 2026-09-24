@@ -5,6 +5,9 @@ export class HtmlShell
     private static readonly RootId = "todl-app-root";
     private static readonly AppGlobal = "__TODL_APP__";
     private static readonly Title = "TODL Graph";
+    private static readonly PageStyle =
+        "html, body { height: 100%; margin: 0; overflow: hidden; }\n"
+        + `#${HtmlShell.RootId} { height: 100%; }`;
 
     public static Render(appJson: string, bundleJs: string): string
     {
@@ -14,6 +17,7 @@ export class HtmlShell
             "<head>",
             "<meta charset=\"utf-8\" />",
             `<title>${HtmlShell.Title}</title>`,
+            `<style>${HtmlShell.PageStyle}</style>`,
             "</head>",
             "<body>",
             `<div id="${HtmlShell.RootId}"></div>`,

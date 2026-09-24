@@ -53,6 +53,9 @@ describe("HtmlBundleBuildSystem", () =>
         assert.match(html, /MuralBundledHost/);           // the mural host bundle is inlined
         assert.match(html, /"root"/);                      // the root model id is present
         assert.match(html, /App/);                         // the compiled document is inlined (my-arch's concept)
+        assert.match(html, /<style>/);                     // page CSS present
+        assert.match(html, /html,\s*body\s*\{[^}]*height:\s*100%/); // viewport-filling body
+        assert.match(html, /#todl-app-root\s*\{[^}]*height:\s*100%/); // host div gets height (fixes 0-tall surface)
     });
 
     test("inlines dependency resource bytes (base64) into the page", async () =>
