@@ -9,7 +9,7 @@ import { CollectBundlePackagesAction } from "./collect-bundle-packages-action.js
 import { EmitBundledHostAction } from "./emit-bundled-host-action.js";
 
 // Builds a self-contained single-page HTML app for an ARCHITECTURE project: resolve bases
-// -> compile the full closure -> emit index.html with the model + graph-app bundle inlined.
+// -> compile the full closure -> emit index.html with the model shards + mural host bundle inlined.
 // Architecture-only — meta-models and libraries publish via the npm-package system.
 export class HtmlBundleBuildSystem implements IBuildSystem<TodlBuildContext, ProjectManifest>
 {
