@@ -72,6 +72,11 @@ export { ModelRegistry } from './model-data/model-registry.js';
 export { ModelShardExtractor } from './model-data/model-shard-extractor.js';
 export { ApplicationRootResolver } from './model-data/application-root-resolver.js';
 
+export { ApplicationBootstrapper } from './application/application-bootstrapper.js';
+export { ApplicationEntryPoint } from './application/application-entry-point.js';
+export { ModelRegistryContribution } from './application/model-registry-contribution.js';
+export type { IContributionSource } from './application/contribution-source.js';
+
 export {
     generateReadClient,
     isReferenceType,

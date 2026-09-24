@@ -3,12 +3,14 @@
 // is the startup fan-out that loads/authenticates every model's data before the
 // synchronous read surface goes live.
 
-import type { IServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
+import { ServiceKey, type IServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
 import type { NodeId } from "../compiler-services/model/graph.js";
 import type { ModelDataSource } from "./model-data-source.js";
 
 export class ModelRegistry
 {
+    public static readonly ServiceKey = new ServiceKey<ModelRegistry>("ModelRegistry");
+
     private static readonly UnknownModelMessage = "ModelRegistry: no data source registered for model ";
 
     private readonly sources = new Map<NodeId, ModelDataSource>();
