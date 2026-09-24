@@ -17,6 +17,8 @@ export interface ReadClientOptions
   name: string;
   /** Import module specifier for the todl runtime. Defaults to the package name. */
   importSpecifier?: string;
+  /** Omit the file header + import lines (the caller emits its own). Default false. */
+  omitHeader?: boolean;
 }
 
 /** True when `typeId` names a concept or taxonomy (→ reference); false for a primitive. */
@@ -81,6 +83,10 @@ export function generateReadClient(repo: Repository, options: ReadClientOptions)
   const packageClass = emitPackageClass(pascalCase(options.name), options.name, concepts, taxonomies, repo);
   const entityClasses = concepts.map((c) => emitEntityClass(c, repo));
 
+  if (options.omitHeader === true)
+  {
+    return [packageClass, ...entityClasses].join("\n\n") + "\n";
+  }
   return [header, packageClass, ...entityClasses].join("\n\n") + "\n";
 }
 
