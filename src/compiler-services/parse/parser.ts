@@ -434,10 +434,12 @@ class Parser
     }
     const instances: InstanceDecl[] = [];
     const edges: EdgeApplication[] = [];
+    const annotations: AnnotationApplication[] = [];
     this.expect(TokenKind.LBrace);
     while (!this.check(TokenKind.RBrace))
     {
       const memberStart = this.startToken();
+      if (this.checkKeyword("annotate")) { annotations.push(this.parseAnnotationApplication(memberStart)); continue; }
       if (this.edgeApplicationAhead())
       {
         edges.push(this.parseEdgeApplication(memberStart));
@@ -455,6 +457,7 @@ class Parser
       libraries,
       instances,
       edges,
+      annotations,
       conforms,
       span: this.spanFrom(start),
     };

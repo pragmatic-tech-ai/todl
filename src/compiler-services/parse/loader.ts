@@ -715,6 +715,7 @@ export function loadInto(
     else if (decl.kind === DeclKind.Model)
     {
       fourth.setNamespace(ns);
+      stageApplications(fourth, model, decl.id, decl.annotations, seenApps, diagnostics, asserted, idGenerator, ops);
       for (const inst of decl.instances) stageInstanceAnnotations(fourth, model, inst, seenApps, diagnostics, asserted, idGenerator, ops);
     }
   }
