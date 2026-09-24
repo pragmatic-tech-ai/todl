@@ -24,7 +24,6 @@ import {
 import { PackageRegistryClient, parseManifest } from "../src/solution-services/package-manager/index.js";
 import { LocalNpmRegistry } from "../src/solution-services/package-manager/registries/npm/local-npm-registry.js";
 import type { PackageRef } from "../src/publish/publish.js";
-import type { TodlDocument } from "../src/compiler-services/emit/json.js";
 
 // USER SMOKE TEST — builds the real on-disk architecture project (TODL/test_projects/
 // architectures/test_architecture) into a single-page HTML application by driving the
@@ -114,15 +113,18 @@ class TempBuildStorage implements IBuildStorageProvider
     }
 }
 
-// Pull the inlined package set out of the generated page and union every package
-// document's node namespaces, to prove what the bundle carries.
+// Pull the inlined shard payload out of the generated page and union every shard's
+// node namespaces, to prove the full closure (meta-model + libraries) is carried.
 function inlinedNamespaces(html: string): Set<string>
 {
-    const match = /window\.__TODL_PACKAGES__ = (.+);<\/script>/.exec(html);
-    assert.notEqual(match, null, "the page inlines window.__TODL_PACKAGES__");
-    const payload = JSON.parse(match![1]!) as { packages: { document: TodlDocument }[] };
+    const match = /window\.__TODL_APP__ = (.+);<\/script>/.exec(html);
+    assert.notEqual(match, null, "the page inlines window.__TODL_APP__");
+    const payload = JSON.parse(match![1]!) as { shards: Record<string, { nodes: { namespace?: string }[] }> };
     const namespaces = new Set<string>();
-    for (const pkg of payload.packages) for (const node of pkg.document.nodes) if (node.namespace) namespaces.add(node.namespace);
+    for (const shard of Object.values(payload.shards))
+    {
+        for (const node of shard.nodes) if (node.namespace) namespaces.add(node.namespace);
+    }
     return namespaces;
 }
 
@@ -169,8 +171,8 @@ describe("user smoke: build test_architecture into a bundled application", () =>
         // The page is a self-contained app: mount point + inlined package set + app bundle.
         const html = readFileSync(join(built.Result!.OutputPath!, "index.html"), "utf8");
         assert.match(html, /id="todl-app-root"/);
-        assert.match(html, /__TODL_PACKAGES__/);
-        assert.match(html, /BundledHostBootstrap/); // the bundled-host app bundle is inlined
+        assert.match(html, /__TODL_APP__/);
+        assert.match(html, /MuralBundledHost/); // the mural host app bundle is inlined
 
         // The bundle carries the whole closure — the meta-model AND both libraries — not
         // just the architecture's own instances.
