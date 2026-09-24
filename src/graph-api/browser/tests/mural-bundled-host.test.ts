@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { Application, type Visual } from "@pragmatic-tech-ai/mural";
+import { type Visual } from "@pragmatic-tech-ai/mural";
 import { HeadlessTarget, SvgDrawingContext } from "@pragmatic-tech-ai/mural/visual-engine";
 import { TextBlock } from "@pragmatic-tech-ai/mural/basic";
 import { Repository } from "../../../compiler-services/model/model.js";

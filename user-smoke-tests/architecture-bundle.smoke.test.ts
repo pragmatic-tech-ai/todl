@@ -168,13 +168,13 @@ describe("user smoke: build test_architecture into a bundled application", () =>
         assert.equal(built.Status, ProjectBuildStatus.Built);
         assert.ok(built.Result!.Artifacts.includes("index.html"), "produced index.html");
 
-        // The page is a self-contained app: mount point + inlined package set + app bundle.
+        // The page is a self-contained app: mount point + inlined shard payload + app bundle.
         const html = readFileSync(join(built.Result!.OutputPath!, "index.html"), "utf8");
         assert.match(html, /id="todl-app-root"/);
         assert.match(html, /__TODL_APP__/);
         assert.match(html, /MuralBundledHost/); // the mural host app bundle is inlined
 
-        // The bundle carries the whole closure — the meta-model AND both libraries — not
+        // The shard payload carries the whole closure — the meta-model AND both libraries — not
         // just the architecture's own instances.
         const namespaces = inlinedNamespaces(html);
         assert.ok(namespaces.has("tech_architecture"), "meta-model namespace bundled");
