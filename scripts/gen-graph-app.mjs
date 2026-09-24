@@ -12,6 +12,13 @@ const result = await build({
   format: "iife",
   platform: "browser",
   target: "es2020",
+  // Mural's theme/scheme lookup and property store are keyed by class `.name`
+  // (ThemeManager registers schemes by name; Material.Activate resolves the
+  // scheme by the passed class's `.name`). esbuild otherwise renames bundled
+  // classes (e.g. `MaterialDark` -> `_MaterialDark`), which breaks that lookup
+  // at runtime ("theme 'Material' has no scheme '_MaterialDark'"). keepNames
+  // restores the original `.name` so the name-keyed runtime works in the bundle.
+  keepNames: true,
   write: false,
   logLevel: "silent",
 });
