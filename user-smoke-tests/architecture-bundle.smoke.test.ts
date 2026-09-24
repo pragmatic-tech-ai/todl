@@ -181,6 +181,11 @@ describe("user smoke: build test_architecture into a bundled application", () =>
         assert.ok(namespaces.has("libraries.microsoft"), "microsoft library bundled");
         assert.ok(namespaces.has("libraries.aws"), "aws library bundled");
 
+        // The inlined bundle must reflect the NEW themed .mu view, not the old imperative view.
+        // These assertions fail if the bundle artifact is stale (regenerated before the theme fix).
+        assert.match(html, /ModelBrowserResources/, "themed .mu resource dictionary must be bundled");
+        assert.ok(!/ModelBrowserView/.test(html), "old imperative view must not be bundled");
+
         t.diagnostic(`run output kept at ${built.Result!.OutputPath!}`);
         t.diagnostic(`open the app: ${join(built.Result!.OutputPath!, "index.html")}`);
     });
