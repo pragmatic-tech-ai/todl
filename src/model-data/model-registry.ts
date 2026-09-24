@@ -12,6 +12,7 @@ export class ModelRegistry
     private static readonly UnknownModelMessage = "ModelRegistry: no data source registered for model ";
 
     private readonly sources = new Map<NodeId, ModelDataSource>();
+    private rootModel: NodeId | undefined;
 
     public Register(modelId: NodeId, source: ModelDataSource): this
     {
@@ -34,6 +35,22 @@ export class ModelRegistry
     public Models(): readonly NodeId[]
     {
         return [...this.sources.keys()];
+    }
+
+    public SetRoot(modelId: NodeId): this
+    {
+        this.rootModel = modelId;
+        return this;
+    }
+
+    public RootModel(): NodeId | undefined
+    {
+        return this.rootModel;
+    }
+
+    public Root(): ModelDataSource | undefined
+    {
+        return this.rootModel === undefined ? undefined : this.sources.get(this.rootModel);
     }
 
     public async PrepareAll(services: IServiceProvider): Promise<void>
