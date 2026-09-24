@@ -15,6 +15,11 @@ namespace todl
     annotation instance { concept : identifier; via : identifier?; }
     annotation iconSource { order : number; }
     annotation wiki { path : string?; }
+    // `entrypoint` marks the application's root model — deliberately NOT named
+    // `application`, which is a common domain concept (e.g. the C4 Application /
+    // an ArchiMate application component), so the marker never squats on a
+    // meta-model's own vocabulary. Its `root` param names the root model.
+    annotation entrypoint { root : identifier?; }
 
     // Diagram nesting markers. `has_children` marks a concept whose nodes render
     // as a container (a box that holds children) — deliberately NOT named

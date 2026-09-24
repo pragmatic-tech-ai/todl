@@ -226,6 +226,8 @@ export interface ModelDecl
   instances: InstanceDecl[];
   /** Edge applications (`a <glyph> b`) in the model body. */
   edges: EdgeApplication[];
+  /** Model-level annotation applications (`annotate <Ann> { … }`). */
+  annotations: AnnotationApplication[];
   /** The viewpoint this model conforms to (`… conforms <viewpoint>`), or null. */
   conforms: string | null;
   span: SourceSpan;

@@ -73,6 +73,10 @@ export enum DiagnosticCode
   AnnotationInvalidTarget = "annotation.invalid-target",
   AnnotationBaseNotAnnotation = "annotation.base-not-annotation",
   AnnotationParamRedeclared = "annotation.param-redeclared",
+  // Application root selection (Wave 2).
+  ApplicationMultipleRoots = "application.multiple-roots",
+  ApplicationRootUndesignated = "application.root-undesignated",
+  ApplicationRootNotAModel = "application.root-not-a-model",
   // Solution composition phase (SPEC-06): a member/dependency package could not
   // be resolved or loaded into the composed Domain.
   PackageUnresolved = "package.unresolved",
