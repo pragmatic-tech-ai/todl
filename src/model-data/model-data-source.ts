@@ -68,6 +68,18 @@ export abstract class ModelDataSource implements EntityHost
         return tax === undefined ? [] : tax.getTerms().map((t) => this.entityFor(new TermReader(t)));
     }
 
+    /** Domain concept ids in this source (excludes the prelude root), usable with Instances(). */
+    public ConceptNames(): readonly string[]
+    {
+        return this.query.Concepts().map((c) => c.fullName);
+    }
+
+    /** Public read of a concept's instances (the generic-host surface over protected instancesOf). */
+    public Instances(concept: string): readonly ReflectedEntity[]
+    {
+        return this.instancesOf(concept);
+    }
+
     public entity(id: string): ReflectedEntity | undefined
     {
         const cached = this.entities.get(id);
