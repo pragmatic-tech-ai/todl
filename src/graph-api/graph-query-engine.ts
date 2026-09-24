@@ -37,7 +37,8 @@ export class GraphQuery implements IGraphQuery
         const byName = new Map<string, TypeInfo>();
         for (const m of this.graph.manifests)
         {
-            const rootName = m.root().fullName; // the universal base Element is not a domain concept
+            const rootToken = m.root().token;
+            const rootName = rootToken !== 0 ? m.root().fullName : ""; // guard: row 0 = no root declared
             for (const t of m.types())
                 if (t.kind === MetaKind.Concept && t.fullName !== rootName) byName.set(t.fullName, t);
         }
