@@ -6,24 +6,25 @@ import type { ProjectBaseModelBindings } from "../../project-services/core/base-
 import { NpmArtifacts } from "../npm/npm-artifacts.js";
 import { BundleClosureCollector } from "./bundle-closure-collector.js";
 
-// Collects the architecture's closure as the inlined package set for the page,
-// deps-first over the build source, and publishes it as BundlePackages. An
-// unresolvable base is an error diagnostic (stops the pipeline).
-export class CollectBundlePackagesAction implements IBuildAction<TodlBuildContext>
+// Walks the architecture's base closure deps-first over the build source and publishes
+// every package's resource bytes as BundleResources for the page to inline. The model
+// data itself is carried by the compiled closure (CompiledModel.fullDocument), so this
+// action no longer builds a package set. An unresolvable base is an error diagnostic.
+export class CollectBundleResourcesAction implements IBuildAction<TodlBuildContext>
 {
-    private static readonly ActionName = "collect-bundle-packages";
+    private static readonly ActionName = "collect-bundle-resources";
     private static readonly NoModelMessage = "no compiled model to bundle";
 
-    public readonly Name = CollectBundlePackagesAction.ActionName;
+    public readonly Name = CollectBundleResourcesAction.ActionName;
     public readonly Consumes: readonly ArtifactKey<unknown>[] = [NpmArtifacts.CompiledModel];
-    public readonly Produces: readonly ArtifactKey<unknown>[] = [NpmArtifacts.BundlePackages, NpmArtifacts.BundleResources];
+    public readonly Produces: readonly ArtifactKey<unknown>[] = [NpmArtifacts.BundleResources];
 
     public async Execute(ctx: TodlBuildContext): Promise<void>
     {
         const compiled = ctx.Artifacts.Get(NpmArtifacts.CompiledModel);
         if (compiled === undefined)
         {
-            ctx.Diagnostics.Report({ severity: Severity.Error, message: CollectBundlePackagesAction.NoModelMessage, source: CollectBundlePackagesAction.ActionName });
+            ctx.Diagnostics.Report({ severity: Severity.Error, message: CollectBundleResourcesAction.NoModelMessage, source: CollectBundleResourcesAction.ActionName });
             return;
         }
         const manifest = ctx.Manifest;
@@ -32,13 +33,12 @@ export class CollectBundlePackagesAction implements IBuildAction<TodlBuildContex
             ...(manifest.libraries !== undefined ? { libraries: manifest.libraries } : {}),
             ...(manifest.architectures !== undefined ? { architectures: manifest.architectures } : {}),
         };
-        const { packages, problems, resources } = await BundleClosureCollector.Collect(ctx.Source, bindings, compiled);
+        const { problems, resources } = await BundleClosureCollector.Collect(ctx.Source, bindings, compiled);
         if (problems.length > 0)
         {
-            for (const problem of problems) ctx.Diagnostics.Report({ severity: Severity.Error, message: problem, source: CollectBundlePackagesAction.ActionName });
+            for (const problem of problems) ctx.Diagnostics.Report({ severity: Severity.Error, message: problem, source: CollectBundleResourcesAction.ActionName });
             return;
         }
-        ctx.Artifacts.Set(NpmArtifacts.BundlePackages, packages);
         ctx.Artifacts.Set(NpmArtifacts.BundleResources, resources);
     }
 }

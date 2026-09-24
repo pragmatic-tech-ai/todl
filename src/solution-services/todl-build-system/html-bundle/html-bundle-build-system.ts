@@ -5,7 +5,7 @@ import type { TodlBuildContext } from "../todl-build-context.js";
 import { ProjectType, type ProjectManifest } from "../../package-manager/manifest.js";
 import { ResolveBasesAction } from "../npm/resolve-bases-action.js";
 import { CompileModelAction } from "../npm/compile-model-action.js";
-import { CollectBundlePackagesAction } from "./collect-bundle-packages-action.js";
+import { CollectBundleResourcesAction } from "./collect-bundle-resources-action.js";
 import { EmitBundledHostAction } from "./emit-bundled-host-action.js";
 
 // Builds a self-contained single-page HTML app for an ARCHITECTURE project: resolve bases
@@ -23,7 +23,7 @@ export class HtmlBundleBuildSystem implements IBuildSystem<TodlBuildContext, Pro
     private readonly actions: readonly IBuildAction<TodlBuildContext>[] = [
         new ResolveBasesAction(),
         new CompileModelAction(),
-        new CollectBundlePackagesAction(),
+        new CollectBundleResourcesAction(),
         new EmitBundledHostAction(),
     ];
 

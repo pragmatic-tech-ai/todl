@@ -1,11 +1,11 @@
-// Root + per-model-shard extraction for a compiled application Repository, shared by
-// the typed package codegen (ModelPackageGenerator) and the html-bundle emit action.
-// Strict requires an `entrypoint` designation (published-package semantics); the
-// html-bundle path uses WithSoleModelFallback so a single-model architecture with no
-// entrypoint still boots.
+// Root + per-model-shard extraction from a compiled application's serialized document,
+// shared by the typed package codegen (ModelPackageGenerator, which passes toJSON(repo))
+// and the html-bundle emit action (which passes the already-compiled closure,
+// compiled.fullDocument — no recompile). Strict requires an `entrypoint` designation
+// (published-package semantics); the html-bundle path uses WithSoleModelFallback so a
+// single-model architecture with no entrypoint still boots.
 
-import { Repository } from "../compiler-services/model/model.js";
-import { toJSON, type TodlDocument } from "../compiler-services/emit/json.js";
+import type { TodlDocument } from "../compiler-services/emit/json.js";
 import type { NodeId } from "../compiler-services/model/graph.js";
 import { ApplicationRootResolver } from "../model-data/application-root-resolver.js";
 import { ModelShardExtractor } from "../model-data/model-shard-extractor.js";
@@ -23,9 +23,8 @@ export class ApplicationModelData
     private static readonly NoRootMessage =
         "no application root: the document has no `entrypoint` designation and is not a single model.";
 
-    public static Strict(repo: Repository): ApplicationModelShards
+    public static Strict(doc: TodlDocument): ApplicationModelShards
     {
-        const doc = toJSON(repo);
         const root = ApplicationRootResolver.Resolve(doc);
         if (root === undefined)
         {
@@ -34,9 +33,8 @@ export class ApplicationModelData
         return { root, shards: ApplicationModelData.ShardsOf(doc) };
     }
 
-    public static WithSoleModelFallback(repo: Repository): ApplicationModelShards
+    public static WithSoleModelFallback(doc: TodlDocument): ApplicationModelShards
     {
-        const doc = toJSON(repo);
         const explicit = ApplicationRootResolver.Resolve(doc);
         const models = ModelShardExtractor.ModelsOf(doc);
         const root = explicit ?? (models.length === 1 ? models[0] : undefined);

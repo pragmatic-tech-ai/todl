@@ -1,23 +1,23 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { checkAgainst } from "../../compiler-services/api.js";
-import { Repository } from "../../compiler-services/model/model.js";
+import { toJSON, type TodlDocument } from "../../compiler-services/emit/json.js";
 import { ApplicationModelData } from "../application-model-data.js";
 
 class Fixtures
 {
     // One model, no entrypoint (base binding `: acme` = the namespace, as in html-bundle.test).
-    public static SoleModel(): Repository
+    public static SoleModel(): TodlDocument
     {
-        return checkAgainst([], [{ uri: "m.todl", text:
-            `namespace acme { concept App { label : string?; } model M : acme { App a1 { label = "A1"; } } }` }]).model;
+        return toJSON(checkAgainst([], [{ uri: "m.todl", text:
+            `namespace acme { concept App { label : string?; } model M : acme { App a1 { label = "A1"; } } }` }]).model);
     }
 
     // Two models, no entrypoint.
-    public static TwoModels(): Repository
+    public static TwoModels(): TodlDocument
     {
-        return checkAgainst([], [{ uri: "m.todl", text:
-            `namespace acme { concept App { label : string?; } model M1 : acme { App a1 { label = "A1"; } } model M2 : acme { App a2 { label = "A2"; } } }` }]).model;
+        return toJSON(checkAgainst([], [{ uri: "m.todl", text:
+            `namespace acme { concept App { label : string?; } model M1 : acme { App a1 { label = "A1"; } } model M2 : acme { App a2 { label = "A2"; } } }` }]).model);
     }
 }
 

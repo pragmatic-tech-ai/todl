@@ -25,7 +25,7 @@ export { NpmPackageBuildSystem } from "./npm/npm-package-build-system.js";
 export { HtmlBundleBuildSystem } from "./html-bundle/html-bundle-build-system.js";
 // bundled-application build system (spec: runnable TS package for architecture projects).
 export { BundledApplicationBuildSystem } from "./application/bundled-application-build-system.js";
-export { CollectBundlePackagesAction } from "./html-bundle/collect-bundle-packages-action.js";
+export { CollectBundleResourcesAction } from "./html-bundle/collect-bundle-resources-action.js";
 export { EmitBundledHostAction } from "./html-bundle/emit-bundled-host-action.js";
 // Solution builds (spec §9): dependency-ordered multi-project build.
 export { BuildOutputSource } from "./solution/build-output-source.js";
