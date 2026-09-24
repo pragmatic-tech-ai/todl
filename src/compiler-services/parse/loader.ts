@@ -54,6 +54,7 @@
 
 import { parse } from "./parser.js";
 import { parsePredicate } from "./predicate-parser.js";
+import { ApplicationRootPass } from "./application-root-pass.js";
 import { Repository } from "../model/model.js";
 import type { Builder, TermInput } from "../model/builder.js";
 import type { Expr } from "../predicate/ast.js";
@@ -720,6 +721,10 @@ export function loadInto(
     }
   }
   fourth.commit(undefinedIds);
+
+  // ═══════════════════════ APPLICATION ROOT (Wave 2) ═══════════════════════════
+  // Resolve/mark the application root from the committed application annotations.
+  ApplicationRootPass.Resolve(model, diagnostics);
 
   // ═══════════════════════════ INVARIANTS & spans ══════════════════════════════
   // Register the executable invariants collected in Pass 2a — done last, when every
