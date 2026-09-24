@@ -93,9 +93,9 @@ export class PackageManifestBridge
   // (`manifestSource`, the full closure) so Repository construction never sees a dangling
   // edge, and whose SEED is emitted from this package's OWN document (`ownDoc`) — its own
   // instances. Used for bundling; the bundled host queries the heap, so each package must
-  // contribute its own instances. Emitting a DataGraph from a non-self-contained own doc is
-  // the same path StoragePackageSource/toResolvedDocument use; reflection recovers
-  // class-fixed values lazily at read.
+  // contribute its own instances. Own documents compiled against a base can carry
+  // cross-package ontology edges (e.g. `Represents` into the meta-model's concept nodes);
+  // those are stripped before graph construction so the graph store invariant is preserved.
   static toResolvedJsonManifest(
     manifestSource: TodlDocument,
     ownDoc: TodlDocument,
@@ -105,7 +105,9 @@ export class PackageManifestBridge
   ): ResolvedPackage
   {
     const manifest = new ManifestEmitter(new Repository(graphFromJSON(manifestSource)), model, version).emitManifest();
-    const graph = new ManifestEmitter(new Repository(graphFromJSON(ownDoc)), model, version).emitDataGraph();
+    const ownIds = new Set(ownDoc.nodes.map((n) => n.id));
+    const selfContained: TodlDocument = { ...ownDoc, edges: ownDoc.edges.filter((e) => ownIds.has(e.from) && ownIds.has(e.to)) };
+    const graph = new ManifestEmitter(new Repository(graphFromJSON(selfContained)), model, version).emitDataGraph();
     const resolved: ResolvedPackage = {
       ref: { model, version },
       manifest: ManifestWriter.fromLogical(manifest).toJSON(),
