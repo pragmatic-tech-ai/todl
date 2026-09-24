@@ -89,35 +89,6 @@ export class PackageManifestBridge
     return resolved;
   }
 
-  // A JSON ResolvedPackage whose MANIFEST is emitted from a SELF-CONTAINED source
-  // (`manifestSource`, the full closure) so Repository construction never sees a dangling
-  // edge, and whose SEED is emitted from this package's OWN document (`ownDoc`) — its own
-  // instances. Used for bundling; the bundled host queries the heap, so each package must
-  // contribute its own instances. Own documents compiled against a base can carry
-  // cross-package ontology edges (e.g. `Represents` into the meta-model's concept nodes);
-  // those are stripped before graph construction so the graph store invariant is preserved.
-  static toResolvedJsonManifest(
-    manifestSource: TodlDocument,
-    ownDoc: TodlDocument,
-    model: string,
-    version: string,
-    dependencies: DomainPackageRef[],
-  ): ResolvedPackage
-  {
-    const manifest = new ManifestEmitter(new Repository(graphFromJSON(manifestSource)), model, version).emitManifest();
-    const ownIds = new Set(ownDoc.nodes.map((n) => n.id));
-    const selfContained: TodlDocument = { ...ownDoc, edges: ownDoc.edges.filter((e) => ownIds.has(e.from) && ownIds.has(e.to)) };
-    const graph = new ManifestEmitter(new Repository(graphFromJSON(selfContained)), model, version).emitDataGraph();
-    const resolved: ResolvedPackage = {
-      ref: { model, version },
-      manifest: ManifestWriter.fromLogical(manifest).toJSON(),
-      dependencies,
-    };
-    const seed = PackageManifestBridge.seedOf(graph);
-    if (seed.nodes.length > 0) resolved.seed = seed;
-    return resolved;
-  }
-
   // The one DataGraph -> SeedGraph mapper: DataNode -> ReflectedNode (structural-only
   // fields assigned only when present, per exactOptionalPropertyTypes) and DataEdge ->
   // DomainEdge. Edges are omitted when empty; bind folds each edge into the source node's refs.

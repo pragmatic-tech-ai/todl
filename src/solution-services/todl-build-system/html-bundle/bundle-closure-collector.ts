@@ -1,31 +1,22 @@
 import { PackageKind, type PackageRef, type CompiledPackage } from "../../../publish/publish.js";
 import type { IPackageSource } from "../package-source.js";
 import type { ProjectBaseModelBindings } from "../../project-services/core/base-binding.js";
-import { PackageManifestBridge } from "../../package-manager/package-manifest-bridge.js";
-import type { ResolvedPackage, PackageRef as DomainPackageRef } from "../../../domain/domain.js";
 
-// Walks an architecture's base closure deps-first over the build-tier IPackageSource,
-// bridging each package (own document) to a JSON ResolvedPackage, and appends the
-// architecture's own compiled package. The result is the inlined package set a
-// DomainHost + BundledContributor composes in the page; `entry` is the architecture ref.
+// Walks an architecture's base closure deps-first over the build-tier IPackageSource and
+// gathers every package's resource bytes (keyed `<id>/<version>/<path>`), plus the
+// architecture's own. The mural bundle inlines these resources for the page; the model
+// data itself comes from the compiled closure (CompiledModel.fullDocument), not from here.
 export class BundleClosureCollector
 {
     public static async Collect(
         source: IPackageSource,
         bindings: ProjectBaseModelBindings,
         compiled: CompiledPackage,
-    ): Promise<{ packages: ResolvedPackage[]; entry: DomainPackageRef; problems: string[];
-                 resources: { uri: string; bytes: Uint8Array }[] }>
+    ): Promise<{ problems: string[]; resources: { uri: string; bytes: Uint8Array }[] }>
     {
-        const packages: ResolvedPackage[] = [];
         const problems: string[] = [];
         const resources: { uri: string; bytes: Uint8Array }[] = [];
         const visited = new Set<string>();
-
-        // The architecture's full closure is the self-contained universe (prelude + all
-        // bases + own). Every package's manifest is emitted from it, so Repository
-        // construction never chokes on a base own-document's edges into other bases.
-        const universe = compiled.fullDocument;
 
         const queue: PackageRef[] = [];
         for (const meta of bindings.metaModels ?? []) queue.push({ kind: PackageKind.MetaModel, ...meta });
@@ -45,17 +36,11 @@ export class BundleClosureCollector
                 problems.push(`"${ref.id}@${ref.version}" is not published`);
                 continue;
             }
-            const deps: DomainPackageRef[] = pkg.Dependencies.map((d) => ({ model: d.id, version: d.version }));
-            packages.push(PackageManifestBridge.toResolvedJsonManifest(universe, pkg.Document, ref.id, ref.version, deps));
             for (const r of pkg.resources ?? []) resources.push({ uri: `${ref.id}/${ref.version}/${r.path}`, bytes: r.bytes });
             for (const dep of pkg.Dependencies) queue.push(dep);
         }
 
-        // The architecture package carries the full closure as its document, so the host's
-        // merged query graph is self-contained regardless of the bases' own documents.
-        const archDeps: DomainPackageRef[] = (compiled.document.dependencies ?? []).map((d) => ({ model: d.id, version: d.version }));
-        packages.push(PackageManifestBridge.toResolvedJsonManifest(universe, universe, compiled.id, compiled.version, archDeps));
         for (const r of compiled.resources ?? []) resources.push({ uri: `${compiled.id}/${compiled.version}/${r.path}`, bytes: r.bytes });
-        return { packages, entry: { model: compiled.id, version: compiled.version }, problems, resources };
+        return { problems, resources };
     }
 }

@@ -3,8 +3,6 @@ import type { TodlBuildContext } from "../todl-build-context.js";
 import type { ArtifactKey } from "../../build-system-core/artifact-key.js";
 import { Severity } from "../../build-system-core/diagnostic-sink.js";
 import { NpmArtifacts } from "../npm/npm-artifacts.js";
-import { TodlProjectSourceFiles } from "../../project-services/core/todl-sources.js";
-import { checkAgainst } from "../../../compiler-services/api.js";
 import { ApplicationModelData } from "../../../codegen/application-model-data.js";
 import { MuralAppBundle } from "../../../graph-api/generated/graph-app-bundle.js";
 import { Base64 } from "../../../graph-api/browser/base64.js";
@@ -12,8 +10,8 @@ import { HtmlShell } from "./html-shell.js";
 
 // Stages a single self-contained index.html: the inlined { shards, root, resources } app
 // payload on a window global plus the pre-bundled mural host. The page builds a
-// ModelRegistry from the shards and runs it through MuralHost -> HtmlTarget. The
-// Repository is re-derived (checkAgainst) because CompiledModel carries only a document.
+// ModelRegistry from the shards and runs it through MuralHost -> HtmlTarget. Shards are
+// extracted from the already-compiled closure (CompiledModel.fullDocument) — no recompile.
 export class EmitBundledHostAction implements IBuildAction<TodlBuildContext>
 {
     private static readonly ActionName = "emit-bundled-host";
@@ -21,7 +19,7 @@ export class EmitBundledHostAction implements IBuildAction<TodlBuildContext>
     private static readonly NoCompiledModelMessage = "no compiled model to emit a bundled host from";
 
     public readonly Name = EmitBundledHostAction.ActionName;
-    public readonly Consumes: readonly ArtifactKey<unknown>[] = [NpmArtifacts.CompiledModel, NpmArtifacts.ResolvedBases, NpmArtifacts.BundleResources];
+    public readonly Consumes: readonly ArtifactKey<unknown>[] = [NpmArtifacts.CompiledModel, NpmArtifacts.BundleResources];
     public readonly Produces: readonly ArtifactKey<unknown>[] = [];
 
     public async Execute(ctx: TodlBuildContext): Promise<void>
@@ -33,14 +31,10 @@ export class EmitBundledHostAction implements IBuildAction<TodlBuildContext>
             return;
         }
 
-        const bases = ctx.Artifacts.Get(NpmArtifacts.ResolvedBases) ?? [];
-        const sources = await TodlProjectSourceFiles.Collect(ctx.Project);
-        const { model } = checkAgainst([...bases], [...sources]);
-
         let data;
         try
         {
-            data = ApplicationModelData.WithSoleModelFallback(model);
+            data = ApplicationModelData.WithSoleModelFallback(compiled.fullDocument);
         }
         catch (error)
         {

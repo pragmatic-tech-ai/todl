@@ -5,7 +5,7 @@
 // follows the read-client generated-code style, not house style.
 
 import { Repository } from "../compiler-services/model/model.js";
-import type { TodlDocument } from "../compiler-services/emit/json.js";
+import { toJSON } from "../compiler-services/emit/json.js";
 import type { NodeId } from "../compiler-services/model/graph.js";
 import { ApplicationModelData } from "./application-model-data.js";
 import { generateReadClient } from "./read-client.js";
@@ -34,13 +34,13 @@ export class ModelPackageGenerator
         const registryClass = options.registryClassName ?? ModelPackageGenerator.DefaultRegistryClassName;
         const accessorClass = pascalCase(options.name);
 
-        const { root: rootId, shards } = ApplicationModelData.Strict(repo);
+        const { root: rootId, shards } = ApplicationModelData.Strict(toJSON(repo));
         const models = [...shards.keys()].sort();
 
         const header = ModelPackageGenerator.EmitHeader(runtimeImport);
         const body = generateReadClient(repo, { name: options.name, importSpecifier: runtimeImport, omitHeader: true });
         const shardsCode = models
-            .map((m) => `const ${ModelPackageGenerator.SlugFor(m)}: TodlDocument = ${JSON.stringify(shards.get(m))};`)
+            .map((m) => `const ${ModelPackageGenerator.SlugFor(m)}: TodlDocument = JSON.parse(${JSON.stringify(JSON.stringify(shards.get(m)))});`)
             .join("\n");
         const factory = ModelPackageGenerator.EmitFactory(registryClass, accessorClass, models, rootId);
 
