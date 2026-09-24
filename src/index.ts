@@ -76,6 +76,9 @@ export { ApplicationBootstrapper } from './application/application-bootstrapper.
 export { ApplicationEntryPoint } from './application/application-entry-point.js';
 export { ModelRegistryContribution } from './application/model-registry-contribution.js';
 export type { IContributionSource } from './application/contribution-source.js';
+export { MuralHost } from './application/mural-host.js';
+export { MuralViewContribution } from './application/mural-view-contribution.js';
+export { ModelBrowserView } from './application/model-browser-view.js';
 
 export {
     generateReadClient,
