@@ -80,7 +80,7 @@ export { ModelRegistryContribution } from './application/model-registry-contribu
 export type { IContributionSource } from './application/contribution-source.js';
 export { MuralHost } from './application/mural-host.js';
 export { MuralViewContribution } from './application/mural-view-contribution.js';
-export { ModelBrowserView } from './application/model-browser-view.js';
+export { ModelBrowserVM, ConceptHeaderVM, InstanceRowVM } from './application/model-browser-vm.js';
 
 export {
     generateReadClient,
