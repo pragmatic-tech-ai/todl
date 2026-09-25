@@ -7,7 +7,7 @@ import { ResolveBasesAction } from "../npm/resolve-bases-action.js";
 import { CompileModelAction } from "../npm/compile-model-action.js";
 import { GenerateModelDtoAction } from "./generate-model-dto-action.js";
 import { GenerateAppUiAction } from "./generate-app-ui-action.js";
-import { GenerateEntryAction } from "./generate-entry-action.js";
+import { EmitEntryAction } from "./emit-entry-action.js";
 import { CompileMuralAction } from "./compile-mural-action.js";
 import { BundleAppAction } from "./bundle-app-action.js";
 import { EmitBundledHostAction } from "./emit-bundled-host-action.js";
@@ -33,7 +33,7 @@ export class HtmlBundleBuildSystem implements IBuildSystem<TodlBuildContext, Pro
         new CompileModelAction(),
         new GenerateModelDtoAction(),
         new GenerateAppUiAction(),
-        new GenerateEntryAction(),
+        new EmitEntryAction(),
         new CompileMuralAction(),
         new BundleAppAction(),
         new EmitBundledHostAction(),

@@ -135,8 +135,9 @@ function readOnlyFixture(rel: string): SolutionProject
 }
 
 // Copies the architecture fixture into a scratch dir so the pipeline's generated/*
-// writes (GenerateModelDtoAction/GenerateAppUiAction/GenerateEntryAction all write into
-// ctx.Project) never touch the real checked-in fixture.
+// writes (GenerateModelDtoAction/GenerateAppUiAction write into ctx.Project;
+// EmitEntryAction writes its build glue into ctx.Sandbox) never touch the real
+// checked-in fixture.
 async function copiedArchitectureFixture(t: TestContext): Promise<SolutionProject>
 {
     const scratch = await mkdtemp(join(tmpdir(), "todl-e2e-arch-"));

@@ -57,7 +57,9 @@ function contextWith(): TodlBuildContext
 
 async function stageValidInputs(ctx: TodlBuildContext): Promise<void>
 {
-    await ctx.Project.WriteText(EntryPath, EntrySource);
+    // entry.ts is build glue emitted by EmitEntryAction into ctx.Sandbox (Task 10), not
+    // part of the project's generated/ tree.
+    await ctx.Sandbox.WriteText(EntryPath, EntrySource);
     await ctx.Project.WriteText(ModelPath, ModelSource);
     await ctx.Sandbox.WriteText(CompiledAppPath, CompiledAppRoot);
     ctx.Artifacts.Set(HtmlArtifacts.AppEntry, EntryPath);
@@ -91,7 +93,7 @@ describe("BundleAppAction", () =>
     {
         const ctx = contextWith();
         // Entry imports a module that does not exist anywhere — esbuild fails to resolve it.
-        await ctx.Project.WriteText(EntryPath, `import "./does-not-exist.js";\n`);
+        await ctx.Sandbox.WriteText(EntryPath, `import "./does-not-exist.js";\n`);
         await ctx.Sandbox.WriteText(CompiledAppPath, CompiledAppRoot);
         ctx.Artifacts.Set(HtmlArtifacts.AppEntry, EntryPath);
         ctx.Artifacts.Set(HtmlArtifacts.CompiledUi, [CompiledAppPath]);
@@ -105,7 +107,7 @@ describe("BundleAppAction", () =>
     test("a missing compiled app root reports a Severity.Error and produces no bundle", async () =>
     {
         const ctx = contextWith();
-        await ctx.Project.WriteText(EntryPath, EntrySource);
+        await ctx.Sandbox.WriteText(EntryPath, EntrySource);
         ctx.Artifacts.Set(HtmlArtifacts.AppEntry, EntryPath);
         // CompiledUi carries a module, but not the required compiled/app.mu.js root.
         await ctx.Sandbox.WriteText("compiled/resources.mu.js", `export const resources = {};\n`);
@@ -120,7 +122,7 @@ describe("BundleAppAction", () =>
     test("more than one application root reports a Severity.Error naming the candidates", async () =>
     {
         const ctx = contextWith();
-        await ctx.Project.WriteText(EntryPath, EntrySource);
+        await ctx.Sandbox.WriteText(EntryPath, EntrySource);
         ctx.Artifacts.Set(HtmlArtifacts.AppEntry, EntryPath);
         await ctx.Sandbox.WriteText(CompiledAppPath, CompiledAppRoot);
         await ctx.Sandbox.WriteText("compiled/other.mu.js", CompiledAppRoot);

@@ -16,9 +16,10 @@ import { HtmlArtifacts } from "./html-artifacts.js";
 // single browser IIFE string recorded under HtmlArtifacts.AppBundle, so the emit action
 // can inline it with no bundler at emit time.
 //
-// The hard part is module resolution across storages. The generated entry lives in
-// ctx.Project, the compiled UI in ctx.Sandbox, and both are IStorage abstractions that
-// may not be a single on-disk root and never have node_modules adjacent — yet the entry
+// The hard part is module resolution across storages. The generated model DTO/app.mu
+// live in ctx.Project's generated/ tree; the entry (build glue — Task 10) and the
+// compiled UI live in ctx.Sandbox; both are IStorage abstractions that may not be a
+// single on-disk root and never have node_modules adjacent — yet the entry
 // imports the bare packages "@pragmatic-tech-ai/todl" (and, transitively, "@pragmatic-
 // tech-ai/mural/runtime"), which esbuild resolves on the REAL filesystem by walking up
 // to node_modules. So the action MATERIALIZES both stores into one on-disk staging dir
@@ -143,10 +144,11 @@ export class BundleAppAction implements IBuildAction<TodlBuildContext>
         return true;
     }
 
-    // Materializes the generated tree (from Project) and the compiled modules (from
-    // Sandbox) into stageDir, then runs esbuild over the staged entry. esbuild resolves
-    // bare package imports against resolutionRoot's node_modules (nodePaths) and, for the
-    // enclosing "@pragmatic-tech-ai/todl" package, by self-reference from inside the root.
+    // Materializes the generated tree (from Project), the compiled modules (from
+    // Sandbox), and the entry (also from Sandbox — build glue) into stageDir, then runs
+    // esbuild over the staged entry. esbuild resolves bare package imports against
+    // resolutionRoot's node_modules (nodePaths) and, for the enclosing
+    // "@pragmatic-tech-ai/todl" package, by self-reference from inside the root.
     private async BundleStaged(
         ctx: TodlBuildContext,
         entry: string,
@@ -160,6 +162,9 @@ export class BundleAppAction implements IBuildAction<TodlBuildContext>
         {
             await copyTree(ctx.Sandbox, path, stage, path, false);
         }
+        // entry.ts is build glue (Task 10): EmitEntryAction writes it into ctx.Sandbox,
+        // not ctx.Project's generated/ tree copied above, so it is staged separately.
+        await copyTree(ctx.Sandbox, entry, stage, entry, false);
 
         try
         {
