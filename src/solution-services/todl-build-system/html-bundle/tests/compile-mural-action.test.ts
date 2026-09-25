@@ -72,4 +72,20 @@ describe("CompileMuralAction", () =>
         assert.equal(ctx.Diagnostics.Count, 0);
         assert.deepEqual(ctx.Artifacts.Get(HtmlArtifacts.CompiledUi), []);
     });
+
+    test("two .mu sources with the same basename in different folders report an Error naming both", async () =>
+    {
+        const ctx = contextWith();
+        // Both map to compiled/app.mu.js — a silent clobber if not guarded.
+        await ctx.Project.WriteText("a/app.mu", ValidAppMu);
+        await ctx.Project.WriteText("b/app.mu", ValidAppMu);
+
+        await assert.doesNotReject(() => new CompileMuralAction().Execute(ctx));
+
+        const error = ctx.Diagnostics.All().find((d) => d.severity === Severity.Error);
+        assert.ok(error, "reported an error");
+        assert.ok(error!.message.includes("a/app.mu") && error!.message.includes("b/app.mu"),
+            "the error names both colliding sources");
+        assert.equal(ctx.Artifacts.Get(HtmlArtifacts.CompiledUi), undefined);
+    });
 });

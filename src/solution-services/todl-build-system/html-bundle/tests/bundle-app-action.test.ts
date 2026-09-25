@@ -134,4 +134,20 @@ describe("BundleAppAction", () =>
         assert.ok(error!.message.includes(CompiledAppPath) && error!.message.includes("compiled/other.mu.js"),
             "the error names both application-root candidates");
     });
+
+    test("a module whose export name merely starts with 'app' is not counted as a second root", async () =>
+    {
+        const ctx = contextWith();
+        await stageValidInputs(ctx);
+        // A sibling compiled module exporting `appBar` (not `app`): its JS contains the
+        // substring "export const app" but is NOT an application root. The word-boundary
+        // marker must not miscount it, so the single-root bundle still succeeds.
+        await ctx.Sandbox.WriteText("compiled/app-bar.mu.js", `export const appBar = {};\n`);
+        ctx.Artifacts.Set(HtmlArtifacts.CompiledUi, [CompiledAppPath, "compiled/app-bar.mu.js"]);
+
+        await new BundleAppAction().Execute(ctx);
+
+        assert.equal(ctx.Diagnostics.Count, 0, JSON.stringify(ctx.Diagnostics.All()));
+        assert.equal(typeof ctx.Artifacts.Get(HtmlArtifacts.AppBundle), "string");
+    });
 });

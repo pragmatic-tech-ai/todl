@@ -35,7 +35,13 @@ export class BundleAppAction implements IBuildAction<TodlBuildContext>
 {
     private static readonly ActionName = "bundle-app";
     private static readonly AppRootModule = "compiled/app.mu.js";
-    private static readonly AppRootExportMarker = "export const app";
+    // A compiled module is the application root when it exports the binding `app`
+    // (what mural emits for an `Application` with an `x:root` visual). Matched with a
+    // trailing word boundary so a DIFFERENT export whose name merely starts with "app"
+    // — `appBar`, `appTheme` — is not misread as a second root (which used to trip the
+    // multiple-roots guard). `\bexport const app\b`: the `\b` after `app` requires a
+    // non-word char next (` `, `=`, `;`), which `appBar`/`appTheme` fail.
+    private static readonly AppRootExportPattern = /\bexport const app\b/;
     private static readonly GeneratedDirectory = "generated";
     private static readonly NodeModulesDirectory = "node_modules";
     private static readonly StagePrefix = "todl-bundle-stage-";
@@ -127,7 +133,7 @@ export class BundleAppAction implements IBuildAction<TodlBuildContext>
         for (const path of compiled)
         {
             const js = await ctx.Sandbox.ReadText(path);
-            if (js.includes(BundleAppAction.AppRootExportMarker)) roots.push(path);
+            if (BundleAppAction.AppRootExportPattern.test(js)) roots.push(path);
         }
         if (roots.length > 1)
         {
