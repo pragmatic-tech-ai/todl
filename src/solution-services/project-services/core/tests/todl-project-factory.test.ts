@@ -14,6 +14,7 @@ import {
 import { type ProjectBaseModelBindings } from '../base-binding.js'
 import { ProjectNodeKind } from '../project.js'
 import { TodlProjectFactory, isTodlProject, type ScaffoldFile } from '../todl-project-factory.js'
+import { ProjectEventsKey, ProjectEventKind, type ProjectEvent, type IProjectEvents } from '../../generators/project-events.js'
 
 // A real filesystem storage rooted at a throwaway temp dir, torn down after the test.
 async function tempStorage(t: TestContext): Promise<NodeFsStorage>
@@ -46,6 +47,22 @@ class FakeFactory extends TodlProjectFactory
 }
 
 function factory(): FakeFactory { return new FakeFactory(new ServiceProvider()) }
+
+// A fake events sink recording every raised event, for asserting createProject's
+// create-time Created raise without a real ProjectEvents bus.
+class FakeProjectEvents implements IProjectEvents
+{
+    public readonly Raised: ProjectEvent[] = []
+    public async Raise(event: ProjectEvent): Promise<void> { this.Raised.push(event) }
+}
+
+function factoryWithEvents(): { factory: FakeFactory, events: FakeProjectEvents }
+{
+    const events = new FakeProjectEvents()
+    const provider = new ServiceProvider()
+    provider.registerInstance(ProjectEventsKey, events)
+    return { factory: new FakeFactory(provider), events }
+}
 
 test('createProject writes base scaffold ∪ subclass contribution', async (t) => {
     const storage = await tempStorage(t)
@@ -115,4 +132,22 @@ test('updateScaffold refreshes .claude docs, preserves CLAUDE.md, self-heals mis
 test('isTodlProject is true for a subclass, false for a plain factory', () => {
     assert.equal(isTodlProject(factory()), true)
     assert.equal(isTodlProject({ formats: [] } as unknown as IProjectFactory), false)
+})
+
+test('createProject raises a Created event when an events sink is registered', async (t) => {
+    const storage = await tempStorage(t)
+    const { factory: f, events } = factoryWithEvents()
+    await f.createProject(storage, 'P')
+    assert.equal(events.Raised.length, 1)
+    const [event] = events.Raised
+    assert.equal(event!.Kind, ProjectEventKind.Created)
+    assert.equal(event!.ProjectType, 'fake')
+    assert.equal(event!.Manifest.name, 'P')
+    assert.equal(event!.Manifest.type, 'fake')
+})
+
+test('createProject raises nothing when no events sink is registered', async (t) => {
+    const storage = await tempStorage(t)
+    const project = await factory().createProject(storage, 'P')
+    assert.equal(project.Name, 'P')     // completes normally; no throw
 })

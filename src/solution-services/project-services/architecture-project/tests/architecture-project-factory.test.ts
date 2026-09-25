@@ -6,7 +6,9 @@ import { join } from 'node:path'
 import { ServiceProvider } from '@pragmatic-tech-ai/todl-runtime'
 import { NodeFsStorage } from '@pragmatic-tech-ai/todl-runtime/node'
 import { ProjectNodeKind } from '../../core/project.js'
+import { providesGenerators } from '../../core/project-factory.js'
 import { ArchitectureProjectFactory } from '../architecture-project-factory.js'
+import { MetaModelProjectFactory } from '../../meta-model-project/meta-model-project-factory.js'
 
 async function tempStorage(t: TestContext): Promise<NodeFsStorage>
 {
@@ -75,4 +77,15 @@ test('createProject lays down the architecture CLAUDE.md over the shared TODL sc
     assert.match(await storage.ReadText('CLAUDE.md'), /Architecture project/i)
     assert.equal(await storage.Exists('.claude/todl-manual.md'), true)
     assert.equal(await storage.Exists('.claude/todl-rules.md'), true)
+})
+
+test('declares its content generators: app UI then model DTO', () => {
+    const f = factory()
+    assert.equal(providesGenerators(f), true)
+    assert.deepEqual(f.generators().map((g) => g.Id), ['app-ui', 'model-dto'])
+})
+
+test('a factory with no generators() does not satisfy providesGenerators', () => {
+    const metaModelFactory = new MetaModelProjectFactory(new ServiceProvider())
+    assert.equal(providesGenerators(metaModelFactory), false)
 })

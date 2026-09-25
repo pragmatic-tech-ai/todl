@@ -11,6 +11,8 @@ import {
 import { type ProjectBaseModelBindings } from './base-binding.js'
 import { Project, ProjectNode, ProjectNodeKind } from './project.js'
 import { TODL_MANUAL_SOURCE, TODL_RULES_SOURCE } from './scaffold.generated.js'
+import { ProjectEventsKey, ProjectEventKind } from '../generators/project-events.js'
+import { parseManifest } from '../../package-manager/index.js'
 
 // The base for every TODL-authoring project type. It owns the whole project
 // lifecycle common to architecture / meta-model / library — manifest write+read,
@@ -63,7 +65,9 @@ export abstract class TodlProjectFactory extends ServiceBase implements IProject
         const manifest = this.buildManifest(name, bindings)
         await storage.WriteText(PROJECT_MANIFEST_FILENAME, JSON.stringify(manifest, null, 2))
         await this.ensureScaffold(storage)
-        return this.buildProject(storage, manifest)
+        const project = await this.buildProject(storage, manifest)
+        await this.raiseCreated(storage)
+        return project
     }
 
     public async openProject(storage: IStorage): Promise<Project>
@@ -157,6 +161,19 @@ export abstract class TodlProjectFactory extends ServiceBase implements IProject
     {
         const i = name.lastIndexOf('.')
         return i > 0 ? name.slice(i).toLowerCase() : ''
+    }
+
+    // Raise a Created lifecycle event when an events sink is registered — optional so
+    // existing callers with no ProjectEventsKey service are unaffected. Re-parses the
+    // just-written manifest via the package-manager's parseManifest so the event
+    // carries a package-manager ProjectManifest (what the generator scheduler's model
+    // provider consumes), not this file's own manifest envelope.
+    private async raiseCreated(storage: IStorage): Promise<void>
+    {
+        const events = this.Provider.get(ProjectEventsKey)
+        if (events === undefined) return
+        const manifest = parseManifest(await storage.ReadText(PROJECT_MANIFEST_FILENAME))
+        await events.Raise({ Kind: ProjectEventKind.Created, ProjectType: manifest.type, Project: storage, Manifest: manifest })
     }
 }
 

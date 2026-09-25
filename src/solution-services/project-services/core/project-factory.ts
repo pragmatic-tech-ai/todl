@@ -1,6 +1,7 @@
 import { type IStorage, type IServiceProvider } from '@pragmatic-tech-ai/todl-runtime'
 import { type Project } from './project.js'
 import { type ProjectBaseModelBindings } from './base-binding.js'
+import { type IProjectContentGenerator } from '../generators/project-content-generator.js'
 
 // The contract a module's project factory implements — the behavior the generic
 // project explorer delegates to. A module declares a project-factory definition
@@ -115,6 +116,23 @@ export function canGeneratePresentation(
 ): factory is IProjectFactory & IPresentationProjectFactory
 {
     return typeof (factory as Partial<IPresentationProjectFactory>).regeneratePresentation === 'function'
+}
+
+// Optional capability a factory MAY also implement: declaring the content generators
+// for its project type. Composition registers these into the ProjectGeneratorRegistry
+// (Task 8) — the explorer does not call this directly, unlike isPublishable /
+// canGeneratePresentation.
+export interface IGeneratingProjectFactory
+{
+    generators(): readonly IProjectContentGenerator[]
+}
+
+// Type guard: does this factory declare its own content generators?
+export function providesGenerators(
+    factory: IProjectFactory,
+): factory is IProjectFactory & IGeneratingProjectFactory
+{
+    return typeof (factory as Partial<IGeneratingProjectFactory>).generators === 'function'
 }
 
 // Optional capability a producer factory (meta-model, library) implements: read and
