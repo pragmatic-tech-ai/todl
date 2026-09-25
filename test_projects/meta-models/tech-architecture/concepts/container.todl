@@ -20,7 +20,6 @@ namespace tech_architecture
         app_components : app_component[];
 
         delivered_by   : component?;
-        deployed_into  : identifier[];
 
         invariant "Container ids are globally unique within the model.";
         invariant

@@ -20,6 +20,7 @@ export class CompileMuralAction implements IBuildAction<TodlBuildContext>
     private static readonly CompiledExtension = ".mu.js";
     private static readonly CompiledDirectory = "compiled";
     private static readonly CompileFailedMessagePrefix = "failed to compile ";
+    private static readonly CollisionMessagePrefix = "two .mu sources compile to the same output ";
 
     public readonly Name = CompileMuralAction.ActionName;
     public readonly Consumes: readonly ArtifactKey<unknown>[] = [];
@@ -31,6 +32,28 @@ export class CompileMuralAction implements IBuildAction<TodlBuildContext>
             .filter((path) => path.endsWith(CompileMuralAction.SourceExtension));
 
         const written: string[] = [];
+        // Two `.mu` sources in different folders share a basename (e.g. `a/app.mu` and
+        // `b/app.mu`) → the same `compiled/app.mu.js` output. Detected up front (before
+        // any compile) so one silently clobbers the other's JS instead of both landing:
+        // report an Error naming both sources and stop, rather than emit a bundle built
+        // from whichever happened to be written last.
+        const sourceByOutput = new Map<string, string>();
+        for (const path of sources)
+        {
+            const outputPath = CompileMuralAction.OutputPathFor(path);
+            const prior = sourceByOutput.get(outputPath);
+            if (prior !== undefined)
+            {
+                ctx.Diagnostics.Report({
+                    severity: Severity.Error,
+                    message: `${CompileMuralAction.CollisionMessagePrefix}${outputPath}: ${prior} and ${path}`,
+                    source: CompileMuralAction.ActionName,
+                });
+                return;
+            }
+            sourceByOutput.set(outputPath, path);
+        }
+
         for (const path of sources)
         {
             const source = await ctx.Project.ReadText(path);

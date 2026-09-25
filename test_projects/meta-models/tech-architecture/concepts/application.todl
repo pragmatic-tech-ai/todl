@@ -24,7 +24,6 @@ namespace tech_architecture
         contains    : application[];
 
         owner       : actor?;
-        enables     : identifier[];
 
         invariant "Application ids are globally unique within the model.";
         invariant

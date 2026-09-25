@@ -72,7 +72,6 @@ export { ModelRegistry } from './model-data/model-registry.js';
 export { ModelShardExtractor } from './model-data/model-shard-extractor.js';
 export { ApplicationRootResolver } from './model-data/application-root-resolver.js';
 export { GenericModelDataSource } from './model-data/generic-model-data-source.js';
-export { BundledModelRegistry, type BundledAppPayload } from './model-data/bundled-model-registry.js';
 
 export { ApplicationBootstrapper } from './application/application-bootstrapper.js';
 export { ApplicationEntryPoint } from './application/application-entry-point.js';
