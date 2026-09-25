@@ -215,6 +215,18 @@ describe("user smoke: build test_architecture into a bundled application", () =>
                 render.texts.some((s) => headers.includes(s)),
                 `expected a known concept header (${headers.join("/")}) in ${JSON.stringify(render.texts.slice(0, 30))}`,
             );
+            // The ListBox rows bind DisplayMemberPath="id": each must paint the entity's
+            // id, not a stringified object. "[object Object]" means DisplayMemberPath was
+            // ignored (regression guard for the mural ListBox DisplayMemberPath fix).
+            assert.ok(
+                !render.texts.includes("[object Object]"),
+                `rows rendered as "[object Object]" — DisplayMemberPath not applied: ${JSON.stringify(render.texts.slice(0, 30))}`,
+            );
+            // And a known test_architecture instance id actually paints in a row.
+            assert.ok(
+                render.texts.includes("business_user"),
+                `expected instance id "business_user" among rendered rows: ${JSON.stringify(render.texts.slice(0, 40))}`,
+            );
         }
         finally
         {
