@@ -9,7 +9,7 @@
 import type { IStorage } from "@pragmatic-tech-ai/todl-runtime";
 import type { DiagnosticSink } from "../../build-system-core/diagnostic-sink.js";
 import type { ProjectManifest } from "../../package-manager/manifest.js";
-import type { CompileOutcome } from "../../../publish/publish.js";
+import type { CompiledPackage } from "../../../publish/publish.js";
 
 /** Why a generator run was requested. */
 export enum GeneratorTrigger
@@ -28,13 +28,24 @@ export enum WritePolicy
 }
 
 /**
+ * The result of compiling a project to its model: either the `CompiledPackage`
+ * (bases resolved, sources compiled clean) or a list of error messages — the
+ * diagnostic detail generators/build actions need is already collapsed to
+ * strings here, so `IProjectModelProvider` stays independent of the compiler's
+ * `Diagnostic` shape.
+ */
+export interface ProjectModel
+{
+    readonly package?: CompiledPackage;
+    readonly errors: readonly string[];
+}
+
+/**
  * The shared compile seam a generator uses to read the project's compiled model.
- * Reuses publish's `CompileOutcome` ({ ok, diagnostics, errors, package? }) —
- * generators do not get a bespoke result type.
  */
 export interface IProjectModelProvider
 {
-    Compile(): Promise<CompileOutcome>;
+    Compile(): Promise<ProjectModel>;
 }
 
 /** Everything a generator needs to produce its content for one run. */
