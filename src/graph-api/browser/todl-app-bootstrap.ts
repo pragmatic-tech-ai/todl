@@ -7,8 +7,8 @@ import { HtmlTarget } from "@pragmatic-tech-ai/mural/visual-engine";
 // the given `app` (the compiled app.mu's exported Application instance) onto it
 // with the Material theme and a caller-supplied DataContext. Carries NO view
 // knowledge — the view lives in the project's compiled app.mu; this class only
-// wires host + theme + data. Node/no-DOM guard mirrors MuralBundledHost so the
-// generated entry.ts stays inert outside a browser.
+// wires host + theme + data. Node/no-DOM guard keeps the generated entry.ts
+// inert outside a browser.
 export class TodlAppBootstrap
 {
     private static readonly RootId = "todl-app-root";
