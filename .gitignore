@@ -10,3 +10,7 @@ dist/
 
 # User smoke-test run outputs (per-run <date-time> dirs)
 user-smoke-tests/*/
+
+# Per-project app-build output: the html-bundle build writes generated/* (model.ts,
+# app.mu, entry.ts) into the architecture project it builds — build artifacts, not source.
+test_projects/architectures/*/generated/
