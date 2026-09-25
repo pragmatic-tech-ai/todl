@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 import { FakeStorage, type IStorage } from "@pragmatic-tech-ai/todl-runtime";
 import { NodeFsStorage } from "@pragmatic-tech-ai/todl-runtime/node";
@@ -186,7 +186,46 @@ describe("user smoke: build test_architecture into a bundled application", () =>
         assert.match(html, /ModelBrowserResources/, "themed .mu resource dictionary must be bundled");
         assert.ok(!/ModelBrowserView/.test(html), "old imperative view must not be bundled");
 
+        // REAL-BROWSER render check (requires `npx playwright install chromium`). The build
+        // assertions above prove the page is well-formed, but not that it renders — a themed
+        // Border rect passes a "non-empty SVG" check while every row is missing. Load the built
+        // page in headless Chromium and assert the model-browser list actually paints: no page
+        // errors, and many <text> nodes including known concept headers (the ItemsControl stamps
+        // one row per instance — regression guard for the missing-ItemsPanel blank page).
+        const indexHtml = join(built.Result!.OutputPath!, "index.html");
+        const { chromium } = await import("playwright");
+        const browser = await chromium.launch();
+        try
+        {
+            const page = await browser.newPage();
+            const errors: string[] = [];
+            page.on("pageerror", (e) => errors.push(e.message));
+            await page.goto(pathToFileURL(indexHtml).href, { waitUntil: "load" });
+            await page.waitForTimeout(1500);   // let the RafClock paint a few frames
+            const render = await page.evaluate(() =>
+            {
+                const texts = [...document.querySelectorAll("text")]
+                    .map((t) => (t.textContent ?? "").trim())
+                    .filter((s) => s.length > 0);
+                return { textCount: texts.length, texts };
+            });
+            await page.screenshot({ path: join(built.Result!.OutputPath!, "render.png") });
+
+            assert.deepEqual(errors, [], `browser page errors: ${errors.join("; ")}`);
+            assert.ok(render.textCount >= 20, `expected the rendered list to paint many text nodes, got ${render.textCount}`);
+            const headers = ["actor", "application", "component", "block"];
+            assert.ok(
+                render.texts.some((s) => headers.includes(s)),
+                `expected a known concept header (${headers.join("/")}) in ${JSON.stringify(render.texts.slice(0, 30))}`,
+            );
+        }
+        finally
+        {
+            await browser.close();
+        }
+
         t.diagnostic(`run output kept at ${built.Result!.OutputPath!}`);
-        t.diagnostic(`open the app: ${join(built.Result!.OutputPath!, "index.html")}`);
+        t.diagnostic(`open the app: ${indexHtml}`);
+        t.diagnostic(`render screenshot: ${join(built.Result!.OutputPath!, "render.png")}`);
     });
 });
