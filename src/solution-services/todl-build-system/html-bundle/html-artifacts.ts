@@ -4,7 +4,6 @@ import { ArtifactKey } from "../../build-system-core/artifact-key.js";
 // members so the produce/consume sites share one key identity.
 export class HtmlArtifacts
 {
-    public static readonly GeneratedDto = new ArtifactKey<string>("GeneratedDto");
     public static readonly CompiledUi = new ArtifactKey<readonly string[]>("CompiledUi");
     public static readonly AppEntry = new ArtifactKey<string>("AppEntry");
     public static readonly AppBundle = new ArtifactKey<string>("AppBundle");

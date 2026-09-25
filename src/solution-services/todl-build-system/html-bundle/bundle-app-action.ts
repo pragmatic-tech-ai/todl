@@ -74,7 +74,6 @@ export class BundleAppAction implements IBuildAction<TodlBuildContext>
     public readonly Consumes: readonly ArtifactKey<unknown>[] = [
         HtmlArtifacts.AppEntry,
         HtmlArtifacts.CompiledUi,
-        HtmlArtifacts.GeneratedDto,
     ];
     public readonly Produces: readonly ArtifactKey<unknown>[] = [HtmlArtifacts.AppBundle];
 

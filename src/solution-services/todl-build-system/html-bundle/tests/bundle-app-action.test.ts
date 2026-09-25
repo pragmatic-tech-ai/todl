@@ -58,12 +58,13 @@ function contextWith(): TodlBuildContext
 async function stageValidInputs(ctx: TodlBuildContext): Promise<void>
 {
     // entry.ts is build glue emitted by EmitEntryAction into ctx.Sandbox (Task 10), not
-    // part of the project's generated/ tree.
+    // part of the project's generated/ tree. generated/model.ts is required project
+    // content (a generator's output, Task 11) — BundleAppAction never reads it as an
+    // artifact, but stages it from ctx.Project because the entry imports it by path.
     await ctx.Sandbox.WriteText(EntryPath, EntrySource);
     await ctx.Project.WriteText(ModelPath, ModelSource);
     await ctx.Sandbox.WriteText(CompiledAppPath, CompiledAppRoot);
     ctx.Artifacts.Set(HtmlArtifacts.AppEntry, EntryPath);
-    ctx.Artifacts.Set(HtmlArtifacts.GeneratedDto, ModelPath);
     ctx.Artifacts.Set(HtmlArtifacts.CompiledUi, [CompiledAppPath]);
 }
 
