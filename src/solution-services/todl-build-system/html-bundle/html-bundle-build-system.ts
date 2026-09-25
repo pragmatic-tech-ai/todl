@@ -5,7 +5,12 @@ import type { TodlBuildContext } from "../todl-build-context.js";
 import { ProjectType, type ProjectManifest } from "../../package-manager/manifest.js";
 import { ResolveBasesAction } from "../npm/resolve-bases-action.js";
 import { CompileModelAction } from "../npm/compile-model-action.js";
+import { GenerateModelDtoAction } from "./generate-model-dto-action.js";
+import { GenerateAppUiAction } from "./generate-app-ui-action.js";
+import { GenerateEntryAction } from "./generate-entry-action.js";
+import { CompileMuralAction } from "./compile-mural-action.js";
 import { CollectBundleResourcesAction } from "./collect-bundle-resources-action.js";
+import { BundleAppAction } from "./bundle-app-action.js";
 import { EmitBundledHostAction } from "./emit-bundled-host-action.js";
 
 // Builds a self-contained single-page HTML app for an ARCHITECTURE project: resolve bases
@@ -20,10 +25,19 @@ export class HtmlBundleBuildSystem implements IBuildSystem<TodlBuildContext, Pro
     public readonly Id = HtmlBundleBuildSystem.SystemId;
     public readonly DisplayName = HtmlBundleBuildSystem.Display;
 
+    // Order is a controller ruling (spec §per-project-app-build, task 8): it satisfies
+    // consume-before-produce AND the file dependency CompileMural needs — generated/app.mu
+    // (written by GenerateAppUiAction) must already exist in the Project before CompileMural
+    // walks it looking for .mu sources.
     private readonly actions: readonly IBuildAction<TodlBuildContext>[] = [
         new ResolveBasesAction(),
         new CompileModelAction(),
+        new GenerateModelDtoAction(),
+        new GenerateAppUiAction(),
+        new GenerateEntryAction(),
+        new CompileMuralAction(),
         new CollectBundleResourcesAction(),
+        new BundleAppAction(),
         new EmitBundledHostAction(),
     ];
 
