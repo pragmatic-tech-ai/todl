@@ -3,23 +3,23 @@ import type { TodlBuildContext } from "../todl-build-context.js";
 import type { ArtifactKey } from "../../build-system-core/artifact-key.js";
 import { Severity } from "../../build-system-core/diagnostic-sink.js";
 import { NpmArtifacts } from "../npm/npm-artifacts.js";
-import { ApplicationModelData } from "../../../codegen/application-model-data.js";
-import { MuralAppBundle } from "../../../graph-api/generated/graph-app-bundle.js";
-import { Base64 } from "../../../graph-api/browser/base64.js";
+import { HtmlArtifacts } from "./html-artifacts.js";
 import { HtmlShell } from "./html-shell.js";
 
-// Stages a single self-contained index.html: the inlined { shards, root, resources } app
-// payload on a window global plus the pre-bundled mural host. The page builds a
-// ModelRegistry from the shards and runs it through MuralHost -> HtmlTarget. Shards are
-// extracted from the already-compiled closure (CompiledModel.fullDocument) — no recompile.
+// Stages a single self-contained index.html: the compiled model's full document, inlined
+// on a window global, plus the per-build compiled app bundle (produced by BundleAppAction).
+// The page's generated entry builds the DTO via `<Pkg>.fromJSON(window.__TODL_APP__)`, and
+// ModelDataSource.fromJSON(doc: TodlDocument) takes exactly that shape — no shard/root
+// payload assembly here, and no resource inlining (deferred follow-up).
 export class EmitBundledHostAction implements IBuildAction<TodlBuildContext>
 {
     private static readonly ActionName = "emit-bundled-host";
     private static readonly OutputFile = "index.html";
     private static readonly NoCompiledModelMessage = "no compiled model to emit a bundled host from";
+    private static readonly NoAppBundleMessage = "no app bundle to emit a bundled host from";
 
     public readonly Name = EmitBundledHostAction.ActionName;
-    public readonly Consumes: readonly ArtifactKey<unknown>[] = [NpmArtifacts.CompiledModel, NpmArtifacts.BundleResources];
+    public readonly Consumes: readonly ArtifactKey<unknown>[] = [NpmArtifacts.CompiledModel, HtmlArtifacts.AppBundle];
     public readonly Produces: readonly ArtifactKey<unknown>[] = [];
 
     public async Execute(ctx: TodlBuildContext): Promise<void>
@@ -31,20 +31,15 @@ export class EmitBundledHostAction implements IBuildAction<TodlBuildContext>
             return;
         }
 
-        let data;
-        try
+        const appBundle = ctx.Artifacts.Get(HtmlArtifacts.AppBundle);
+        if (appBundle === undefined)
         {
-            data = ApplicationModelData.WithSoleModelFallback(compiled.fullDocument);
-        }
-        catch (error)
-        {
-            ctx.Diagnostics.Report({ severity: Severity.Error, message: (error as Error).message, source: EmitBundledHostAction.ActionName });
+            ctx.Diagnostics.Report({ severity: Severity.Error, message: EmitBundledHostAction.NoAppBundleMessage, source: EmitBundledHostAction.ActionName });
             return;
         }
 
-        const resources = (ctx.Artifacts.Get(NpmArtifacts.BundleResources) ?? []).map((r) => ({ uri: r.uri, base64: Base64.Encode(r.bytes) }));
-        const payload = { shards: Object.fromEntries(data.shards), root: data.root, resources };
-        const html = HtmlShell.Render(JSON.stringify(payload), MuralAppBundle);
+        const payload = compiled.fullDocument;
+        const html = HtmlShell.Render(JSON.stringify(payload), appBundle);
         await ctx.Sandbox.WriteText(EmitBundledHostAction.OutputFile, html);
     }
 }
