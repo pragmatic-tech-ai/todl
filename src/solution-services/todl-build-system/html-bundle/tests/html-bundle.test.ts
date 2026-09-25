@@ -182,17 +182,7 @@ class ScratchBuildStorage implements IBuildStorageProvider
 
 describe("end-to-end: real test_architecture fixture through the new html-bundle pipeline", () =>
 {
-    // BLOCKED (task 8 of plan-per-project-app-build): the wiring under test is correct —
-    // this exact test fails past resolve-bases/compile-model, inside GenerateModelDtoAction,
-    // with "Authoring codegen: ManyValued scalar field \"application.enables\" is unsupported"
-    // (thrown by emitAuthoringConstructor in src/codegen/read-client.ts, for the real
-    // meta-model's `enables : identifier[]` field on `application` — a many-valued SCALAR
-    // field, not a reference; the generator only handles many-valued reference/relationship
-    // fields today). This is a pre-existing gap in generateReadClient (an earlier task's
-    // action, not task 8's wiring), surfaced for the first time by real fixture data. Per
-    // ruling, task 8 does not patch read-client.ts — re-enable once that gap is closed.
-    test("builds a self-contained index.html carrying the model payload and a real compiled bundle",
-        { skip: "blocked on read-client.ts ManyValued-scalar-field gap (see comment)" }, async (t) =>
+    test("builds a self-contained index.html carrying the model payload and a real compiled bundle", async (t) =>
     {
         const scratchRoot = await mkdtemp(join(tmpdir(), "todl-e2e-"));
         t.after(async () => { await rm(scratchRoot, { recursive: true, force: true }); });
