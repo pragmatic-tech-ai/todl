@@ -124,7 +124,7 @@ export function canGeneratePresentation(
 // canGeneratePresentation.
 export interface IGeneratingProjectFactory
 {
-    generators(): readonly IProjectContentGenerator[]
+    Generators(): readonly IProjectContentGenerator[]
 }
 
 // Type guard: does this factory declare its own content generators?
@@ -132,7 +132,7 @@ export function providesGenerators(
     factory: IProjectFactory,
 ): factory is IProjectFactory & IGeneratingProjectFactory
 {
-    return typeof (factory as Partial<IGeneratingProjectFactory>).generators === 'function'
+    return typeof (factory as Partial<IGeneratingProjectFactory>).Generators === 'function'
 }
 
 // Optional capability a producer factory (meta-model, library) implements: read and

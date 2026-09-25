@@ -86,7 +86,7 @@ export class ArchitectureProjectFactory extends TodlProjectFactory
 
     // The content generators for an architecture project (§ IGeneratingProjectFactory) —
     // the default app UI placeholder and the read-client model DTO. Order: UI then DTO.
-    public generators(): readonly IProjectContentGenerator[]
+    public Generators(): readonly IProjectContentGenerator[]
     {
         return [new UiPlaceholderGenerator(), new DtoGenerator()]
     }

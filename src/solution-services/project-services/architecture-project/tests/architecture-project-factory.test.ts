@@ -82,10 +82,10 @@ test('createProject lays down the architecture CLAUDE.md over the shared TODL sc
 test('declares its content generators: app UI then model DTO', () => {
     const f = factory()
     assert.equal(providesGenerators(f), true)
-    assert.deepEqual(f.generators().map((g) => g.Id), ['app-ui', 'model-dto'])
+    assert.deepEqual(f.Generators().map((g) => g.Id), ['app-ui', 'model-dto'])
 })
 
-test('a factory with no generators() does not satisfy providesGenerators', () => {
+test('a factory with no Generators() does not satisfy providesGenerators', () => {
     const metaModelFactory = new MetaModelProjectFactory(new ServiceProvider())
     assert.equal(providesGenerators(metaModelFactory), false)
 })
