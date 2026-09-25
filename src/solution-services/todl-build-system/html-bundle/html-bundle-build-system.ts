@@ -9,7 +9,6 @@ import { GenerateModelDtoAction } from "./generate-model-dto-action.js";
 import { GenerateAppUiAction } from "./generate-app-ui-action.js";
 import { GenerateEntryAction } from "./generate-entry-action.js";
 import { CompileMuralAction } from "./compile-mural-action.js";
-import { CollectBundleResourcesAction } from "./collect-bundle-resources-action.js";
 import { BundleAppAction } from "./bundle-app-action.js";
 import { EmitBundledHostAction } from "./emit-bundled-host-action.js";
 
@@ -36,7 +35,6 @@ export class HtmlBundleBuildSystem implements IBuildSystem<TodlBuildContext, Pro
         new GenerateAppUiAction(),
         new GenerateEntryAction(),
         new CompileMuralAction(),
-        new CollectBundleResourcesAction(),
         new BundleAppAction(),
         new EmitBundledHostAction(),
     ];
