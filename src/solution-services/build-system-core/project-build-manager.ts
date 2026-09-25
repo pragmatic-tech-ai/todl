@@ -62,6 +62,9 @@ export class ProjectBuildManager<C extends CoreBuildContext, T>
     private static readonly NotApplicablePrefix = "build system does not apply to project:";
     private static readonly UnknownFlavorPrefix = "unknown build flavor:";
     private static readonly ActionFailedPrefix = "action failed:";
+    private static readonly MissingRequirementSuffix = " is missing";
+    private static readonly RunGeneratorHint = " — run generator ";
+    private static readonly RequirementsSource = "requirements";
 
     constructor(
         private readonly registry: BuildSystemRegistry<C, T>,
@@ -97,6 +100,29 @@ export class ProjectBuildManager<C extends CoreBuildContext, T>
         const projectId = request.Id;
         const start = Date.now();
 
+        const unmet = await this.CheckRequirements(flavor, request.Project);
+        if (unmet.length > 0)
+        {
+            const diagnostics = new DiagnosticSink();
+            for (const message of unmet)
+            {
+                diagnostics.Report({ severity: Severity.Error, message, source: ProjectBuildManager.RequirementsSource });
+            }
+            const output = await this.storage.OpenOutput(flavor.OutputName, options);
+            const result: BuildResult = {
+                Ok: false,
+                Status: BuildStatus.Failed,
+                Actions: [],
+                Diagnostics: diagnostics.All(),
+                Artifacts: [],
+                OutputPath: output.Path,
+                DurationMs: Date.now() - start,
+            };
+            await output.Storage.WriteText(ProjectBuildManager.ReportFileName, JSON.stringify(result, null, 2));
+            progress.ProjectFinished(projectId, ProjectBuildStatus.Failed);
+            return { Result: result, Artifacts: new BuildArtifacts() };
+        }
+
         const sandbox = await this.storage.CreateSandbox();
         const output = await this.storage.OpenOutput(flavor.OutputName, options);
         const diagnostics = new DiagnosticSink();
@@ -131,6 +157,24 @@ export class ProjectBuildManager<C extends CoreBuildContext, T>
         await this.storage.DeleteSandbox(sandbox);
         progress.ProjectFinished(projectId, ok ? ProjectBuildStatus.Built : ProjectBuildStatus.Failed);
         return { Result: result, Artifacts: context.Artifacts };
+    }
+
+    // Fails fast, before any provisioning or action runs, when project content a
+    // generator was supposed to have produced is missing (spec: require, never create).
+    private async CheckRequirements(flavor: BuildFlavor<C>, project: IStorage): Promise<readonly string[]>
+    {
+        const missing: string[] = [];
+        for (const requirement of flavor.Requires)
+        {
+            if (!(await project.Exists(requirement.Path)))
+            {
+                const hint = requirement.GeneratorId !== undefined
+                    ? `${ProjectBuildManager.RunGeneratorHint}${requirement.GeneratorId}`
+                    : "";
+                missing.push(`${requirement.Path}${ProjectBuildManager.MissingRequirementSuffix}${hint}`);
+            }
+        }
+        return missing;
     }
 
     private async RunActions(

@@ -32,6 +32,21 @@ describe("StaticBuildFlavor", () =>
         assert.equal(flavor.OutputName, "npm-package");
         assert.deepEqual(flavor.Actions().map((a) => a.Name), ["compile"]);
     });
+
+    test("defaults Requires to an empty list when the 5th argument is omitted", () =>
+    {
+        const action = new NoopAction("compile");
+        const flavor = new StaticBuildFlavor<CoreBuildContext>("npm-package", "npm package", "npm-package", [action]);
+        assert.deepEqual(flavor.Requires, []);
+    });
+
+    test("exposes the Requires list it was constructed with", () =>
+    {
+        const action = new NoopAction("compile");
+        const requires = [{ Path: "generated/model.ts", GeneratorId: "model-dto" }];
+        const flavor = new StaticBuildFlavor<CoreBuildContext>("npm-package", "npm package", "npm-package", [action], requires);
+        assert.deepEqual(flavor.Requires, requires);
+    });
 });
 
 describe("built-in systems expose a single flavor", () =>
