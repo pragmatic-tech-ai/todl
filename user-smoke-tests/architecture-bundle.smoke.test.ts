@@ -113,18 +113,17 @@ class TempBuildStorage implements IBuildStorageProvider
     }
 }
 
-// Pull the inlined shard payload out of the generated page and union every shard's
-// node namespaces, to prove the full closure (meta-model + libraries) is carried.
+// Pull the inlined document payload out of the generated page and union every node's
+// namespace, to prove the full closure (meta-model + libraries) is carried. The page
+// inlines a flat TodlDocument (`{ nodes, edges }`) as window.__TODL_APP__ — the compiled
+// closure the DTO package rebuilds via fromJSON — not the pre-app-build sharded payload.
 function inlinedNamespaces(html: string): Set<string>
 {
     const match = /window\.__TODL_APP__ = (.+);<\/script>/.exec(html);
     assert.notEqual(match, null, "the page inlines window.__TODL_APP__");
-    const payload = JSON.parse(match![1]!) as { shards: Record<string, { nodes: { namespace?: string }[] }> };
+    const payload = JSON.parse(match![1]!) as { nodes: { namespace?: string }[] };
     const namespaces = new Set<string>();
-    for (const shard of Object.values(payload.shards))
-    {
-        for (const node of shard.nodes) if (node.namespace) namespaces.add(node.namespace);
-    }
+    for (const node of payload.nodes) if (node.namespace) namespaces.add(node.namespace);
     return namespaces;
 }
 
@@ -168,30 +167,28 @@ describe("user smoke: build test_architecture into a bundled application", () =>
         assert.equal(built.Status, ProjectBuildStatus.Built);
         assert.ok(built.Result!.Artifacts.includes("index.html"), "produced index.html");
 
-        // The page is a self-contained app: mount point + inlined shard payload + app bundle.
+        // The page is a self-contained app: mount point + inlined document payload + app bundle.
         const html = readFileSync(join(built.Result!.OutputPath!, "index.html"), "utf8");
         assert.match(html, /id="todl-app-root"/);
         assert.match(html, /__TODL_APP__/);
-        assert.match(html, /MuralBundledHost/); // the mural host app bundle is inlined
+        // The per-project app bundle is inlined: the thin bootstrap that mounts the compiled
+        // app.mu into an HtmlTarget. keepNames preserves the class name through esbuild, so it
+        // survives as a substring — the new-architecture analogue of the old MuralBundledHost.
+        assert.match(html, /TodlAppBootstrap/);
 
-        // The shard payload carries the whole closure — the meta-model AND both libraries — not
-        // just the architecture's own instances.
+        // The document payload carries the whole closure — the meta-model AND both libraries —
+        // not just the architecture's own instances.
         const namespaces = inlinedNamespaces(html);
         assert.ok(namespaces.has("tech_architecture"), "meta-model namespace bundled");
         assert.ok(namespaces.has("libraries.microsoft"), "microsoft library bundled");
         assert.ok(namespaces.has("libraries.aws"), "aws library bundled");
 
-        // The inlined bundle must reflect the NEW themed .mu view, not the old imperative view.
-        // These assertions fail if the bundle artifact is stale (regenerated before the theme fix).
-        assert.match(html, /ModelBrowserResources/, "themed .mu resource dictionary must be bundled");
-        assert.ok(!/ModelBrowserView/.test(html), "old imperative view must not be bundled");
-
         // REAL-BROWSER render check (requires `npx playwright install chromium`). The build
-        // assertions above prove the page is well-formed, but not that it renders — a themed
-        // Border rect passes a "non-empty SVG" check while every row is missing. Load the built
-        // page in headless Chromium and assert the model-browser list actually paints: no page
-        // errors, and many <text> nodes including known concept headers (the ItemsControl stamps
-        // one row per instance — regression guard for the missing-ItemsPanel blank page).
+        // assertions above prove the page is well-formed, but not that it renders. Load the built
+        // page in headless Chromium and assert the generated app.mu actually paints: no page
+        // errors, and many <text> nodes including known concept-section headers. The generated UI
+        // (app-ui-template.ts) emits one section per concept — a bold TextBlock header of
+        // pascalCase(conceptId) over a ListBox of instance ids — so the headers are PascalCase.
         const indexHtml = join(built.Result!.OutputPath!, "index.html");
         const { chromium } = await import("playwright");
         const browser = await chromium.launch();
@@ -213,7 +210,7 @@ describe("user smoke: build test_architecture into a bundled application", () =>
 
             assert.deepEqual(errors, [], `browser page errors: ${errors.join("; ")}`);
             assert.ok(render.textCount >= 20, `expected the rendered list to paint many text nodes, got ${render.textCount}`);
-            const headers = ["actor", "application", "component", "block"];
+            const headers = ["Actor", "Application", "Component", "Block"];
             assert.ok(
                 render.texts.some((s) => headers.includes(s)),
                 `expected a known concept header (${headers.join("/")}) in ${JSON.stringify(render.texts.slice(0, 30))}`,
