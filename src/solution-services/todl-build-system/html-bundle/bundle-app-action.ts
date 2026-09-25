@@ -22,9 +22,15 @@ import { HtmlArtifacts } from "./html-artifacts.js";
 // imports the bare packages "@pragmatic-tech-ai/todl" (and, transitively, "@pragmatic-
 // tech-ai/mural/runtime"), which esbuild resolves on the REAL filesystem by walking up
 // to node_modules. So the action MATERIALIZES both stores into one on-disk staging dir
-// created INSIDE the repo/install root: from there esbuild reaches that root's
-// node_modules by walking up, and "@pragmatic-tech-ai/todl" (the package the staged
-// files sit inside) resolves by package self-reference against its exports map.
+// created INSIDE the TODL repo/source-checkout root: from there esbuild reaches that
+// root's node_modules by walking up, and "@pragmatic-tech-ai/todl" (the package the
+// staged files sit inside) resolves by package self-reference against its exports map.
+//
+// SCOPE: this currently supports building TODL projects from an in-repo / source
+// checkout, where "@pragmatic-tech-ai/*" resolve to their TypeScript `src` under the
+// `development` export condition (see DevelopmentCondition below). A published/installed
+// TODL (which ships only `dist`, per package.json `files`) is NOT yet supported — that
+// dist-based resolution is a KNOWN FOLLOW-UP, deferred by ruling.
 export class BundleAppAction implements IBuildAction<TodlBuildContext>
 {
     private static readonly ActionName = "bundle-app";
@@ -39,10 +45,13 @@ export class BundleAppAction implements IBuildAction<TodlBuildContext>
     private static readonly EsbuildTarget = "es2020";
     private static readonly EsbuildLogLevel = "silent";
     // The package.json `import` conditions map "@pragmatic-tech-ai/*" to their `src`
-    // TypeScript entries; without this esbuild resolves the `default` (built `dist`)
-    // entry, which the runner (`--conditions=development`) never touches and which can
-    // lag the source. Bundling from source mirrors the proven scripts/gen-graph-app.mjs
-    // path and is independent of dist freshness.
+    // TypeScript entries, so this build resolves and bundles those packages FROM SOURCE,
+    // mirroring the proven scripts/gen-graph-app.mjs path and matching the runner
+    // (`--conditions=development`). This is why the action is scoped to in-repo / source
+    // checkouts (see class doc): a published/installed TODL ships only `dist` (its `src`
+    // is absent), so under this condition resolution would fail. Making a published build
+    // work would mean resolving the `default` (built `dist`) exports instead — a known
+    // follow-up, not currently supported.
     private static readonly DevelopmentCondition = "development";
 
     private static readonly MissingEntryMessage = "no app entry to bundle";
@@ -81,15 +90,26 @@ export class BundleAppAction implements IBuildAction<TodlBuildContext>
             return;
         }
 
-        const stageDir = mkdtempSync(join(resolutionRoot, BundleAppAction.StagePrefix));
+        // The whole staging + bundle is inside the try so ANY failure — temp-dir
+        // creation (read-only root, disk full, permissions), the cross-store copy, or
+        // esbuild itself — is reported as a Severity.Error and Execute returns normally,
+        // honoring the no-throw contract. stageDir may still be unset if mkdtempSync
+        // itself threw, so the finally cleanup guards for that.
+        let stageDir: string | undefined;
         try
         {
+            stageDir = mkdtempSync(join(resolutionRoot, BundleAppAction.StagePrefix));
             const bundle = await this.BundleStaged(ctx, entry, compiled, resolutionRoot, stageDir);
             if (bundle !== undefined) ctx.Artifacts.Set(HtmlArtifacts.AppBundle, bundle);
         }
+        catch (err)
+        {
+            const detail = err instanceof Error ? err.message : String(err);
+            this.ReportError(ctx, `${BundleAppAction.BundleFailedMessagePrefix}${detail}`);
+        }
         finally
         {
-            rmSync(stageDir, { recursive: true, force: true });
+            if (stageDir !== undefined) rmSync(stageDir, { recursive: true, force: true });
         }
     }
 
@@ -166,9 +186,10 @@ export class BundleAppAction implements IBuildAction<TodlBuildContext>
     }
 
     // Walks up from this module to the nearest ancestor directory that contains a
-    // node_modules folder — the repo root in-source, or the install root in production.
-    // The staging dir is created inside it so esbuild's upward node_modules walk (and the
-    // "@pragmatic-tech-ai/todl" package self-reference) resolve there.
+    // node_modules folder — the TODL repo/source-checkout root when running in-repo (the
+    // supported scope; see class doc). The staging dir is created inside it so esbuild's
+    // upward node_modules walk (and the "@pragmatic-tech-ai/todl" package self-reference)
+    // resolve there.
     private static ResolutionRoot(): string | undefined
     {
         let dir = dirname(fileURLToPath(import.meta.url));
