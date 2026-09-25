@@ -174,9 +174,17 @@ function emitAuthoringConstructor(concept: NodeId, repo: Repository): string
 
   for (const f of scalarFields)
   {
+    if (isMany(f.cardinality))
+    {
+      // Authoring of many-valued scalar fields (e.g. `identifier[]`) is not yet
+      // supported: `Scalar`/`InstanceDescriptor.scalars` (graph.ts) are single-valued
+      // (`Map<string, Scalar>`), so there is nowhere to stage an array value without a
+      // core widening we are deferring. Intentionally skipped here — no constructor
+      // param, no assignment. Read access (the generated entity's getter) is unaffected.
+      continue;
+    }
     const opt = required(f.cardinality) ? "" : "?";
-    const type = isMany(f.cardinality) ? `${scalarTsType(f.type)}[]` : scalarTsType(f.type);
-    params.push(`    ${camelCase(f.name)}${opt}: ${type};`);
+    params.push(`    ${camelCase(f.name)}${opt}: ${scalarTsType(f.type)};`);
     const read = `fields.${camelCase(f.name)}`;
     assigns.push(
       required(f.cardinality)

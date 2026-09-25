@@ -47,10 +47,14 @@ test("generateReadClient reproduces the golden fixture byte-for-byte", () => {
   assert.equal(out, golden);
 });
 
-test("a many-valued scalar field generates an array-typed authoring member (previously threw)", () => {
+test("a many-valued scalar field generates successfully (previously threw), omitted from authoring", () => {
   const out = generateReadClient(catalogRepo(), { name: "tech-catalog", importSpecifier: "../../../index.js" });
-  assert.match(out, /tags\?: string\[\];/);
-  assert.match(out, /if \(fields\.tags !== undefined\) scalars\.set\("tags", fields\.tags\);/);
+  // No authoring param or assignment for the many-valued scalar `tags` — Scalar/
+  // InstanceDescriptor.scalars are single-valued, so it is intentionally skipped.
+  assert.doesNotMatch(out, /tags\?: string\[\]/);
+  assert.doesNotMatch(out, /scalars\.set\("tags"/);
+  // Read access is unaffected: the entity class still exposes a `tags` getter.
+  assert.match(out, /get tags\(\): string \{ return this\.field\("tags"\) as string; \}/);
 });
 
 test("the generated client compiles and runs with typed navigation", () => {
