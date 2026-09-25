@@ -82,6 +82,7 @@ export class Location extends ReflectedEntity {
 
 export class Technology extends ReflectedEntity {
   get label(): string { return this.field("label") as string; }
+  get tags(): string { return this.field("tags") as string; }
   get availableIn(): readonly Location[] { return this.refs("availableIn") as readonly Location[]; }
   get billing(): Billing | undefined { return this.ref("billing") as Billing | undefined; }
 }

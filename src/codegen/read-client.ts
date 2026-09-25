@@ -148,13 +148,6 @@ function emitAuthoringConstructor(concept: NodeId, repo: Repository): string
   const scalarFields = schema.fields
     .filter((f) => !isReferenceType(repo, f.type))
     .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
-  for (const f of scalarFields)
-  {
-    if (isMany(f.cardinality))
-    {
-      throw new Error(`Authoring codegen: ManyValued scalar field "${concept}.${f.name}" is unsupported`);
-    }
-  }
 
   const refMembers: RefMember[] = [
     ...schema.fields
@@ -181,6 +174,15 @@ function emitAuthoringConstructor(concept: NodeId, repo: Repository): string
 
   for (const f of scalarFields)
   {
+    if (isMany(f.cardinality))
+    {
+      // Authoring of many-valued scalar fields (e.g. `identifier[]`) is not yet
+      // supported: `Scalar`/`InstanceDescriptor.scalars` (graph.ts) are single-valued
+      // (`Map<string, Scalar>`), so there is nowhere to stage an array value without a
+      // core widening we are deferring. Intentionally skipped here — no constructor
+      // param, no assignment. Read access (the generated entity's getter) is unaffected.
+      continue;
+    }
     const opt = required(f.cardinality) ? "" : "?";
     params.push(`    ${camelCase(f.name)}${opt}: ${scalarTsType(f.type)};`);
     const read = `fields.${camelCase(f.name)}`;

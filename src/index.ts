@@ -79,6 +79,7 @@ export { ApplicationEntryPoint } from './application/application-entry-point.js'
 export { ModelRegistryContribution } from './application/model-registry-contribution.js';
 export type { IContributionSource } from './application/contribution-source.js';
 export { MuralHost } from './application/mural-host.js';
+export { TodlAppBootstrap } from './graph-api/browser/todl-app-bootstrap.js';
 export { MuralViewContribution } from './application/mural-view-contribution.js';
 export { ModelBrowserVM, ConceptHeaderVM, InstanceRowVM } from './application/model-browser-vm.js';
 

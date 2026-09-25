@@ -22,6 +22,7 @@ function catalogRepo(): Repository
   b.addField("location", "label", "string");
   b.defineConcept("technology");
   b.addField("technology", "label", "string");
+  b.addField("technology", "tags", "string", Cardinality.Many);
   b.addField("technology", "billing", "billing", Cardinality.Optional);
   b.addField("technology", "availableIn", "location", Cardinality.Many);
   b.defineTaxonomy("stack", ["technology"], [{ id: "m365", attrs: new Map([["label", "M365"]]) }]);
@@ -44,6 +45,16 @@ test("generateReadClient reproduces the golden fixture byte-for-byte", () => {
   );
   const out = generateReadClient(catalogRepo(), { name: "tech-catalog", importSpecifier: "../../../index.js" });
   assert.equal(out, golden);
+});
+
+test("a many-valued scalar field generates successfully (previously threw), omitted from authoring", () => {
+  const out = generateReadClient(catalogRepo(), { name: "tech-catalog", importSpecifier: "../../../index.js" });
+  // No authoring param or assignment for the many-valued scalar `tags` — Scalar/
+  // InstanceDescriptor.scalars are single-valued, so it is intentionally skipped.
+  assert.doesNotMatch(out, /tags\?: string\[\]/);
+  assert.doesNotMatch(out, /scalars\.set\("tags"/);
+  // Read access is unaffected: the entity class still exposes a `tags` getter.
+  assert.match(out, /get tags\(\): string \{ return this\.field\("tags"\) as string; \}/);
 });
 
 test("the generated client compiles and runs with typed navigation", () => {
