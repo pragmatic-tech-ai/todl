@@ -1,3 +1,4 @@
+import { ServiceKey } from "@pragmatic-tech-ai/todl-runtime";
 import { type IProjectContentGenerator } from "./project-content-generator.js";
 
 export class ProjectGeneratorRegistry
@@ -29,3 +30,7 @@ export class ProjectGeneratorRegistry
         return this.byId.get(id);
     }
 }
+
+// Service token composition registers the assembled registry under, so factories and
+// hosts can resolve it without importing the composition module that built it.
+export const ProjectGeneratorRegistryKey = new ServiceKey<ProjectGeneratorRegistry>("ProjectGeneratorRegistry");

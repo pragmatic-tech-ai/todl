@@ -265,3 +265,35 @@ export {
     type ScannedResources,
     type PublishedClass,
 } from './solution-services/project-services/core/package-bundle.js';
+
+// ── Project content generators (declarative per-project-type generated content) ──
+export {
+    GeneratorTrigger,
+    WritePolicy,
+    type IProjectContentGenerator,
+    type GeneratorContext,
+    type GeneratorResult,
+    type IProjectModelProvider,
+    type ProjectModel,
+} from './solution-services/project-services/generators/project-content-generator.js';
+export { WritePolicyWriter } from './solution-services/project-services/generators/write-policy-writer.js';
+export { ProjectModelProvider } from './solution-services/project-services/generators/project-model-provider.js';
+export {
+    ProjectGeneratorRegistry,
+    ProjectGeneratorRegistryKey,
+} from './solution-services/project-services/generators/project-generator-registry.js';
+export { DtoGenerator } from './solution-services/project-services/generators/dto-generator.js';
+export { UiPlaceholderGenerator } from './solution-services/project-services/generators/ui-placeholder-generator.js';
+export {
+    ProjectEvents,
+    ProjectEventsKey,
+    ProjectEventKind,
+    type IProjectEvents,
+    type ProjectEvent,
+} from './solution-services/project-services/generators/project-events.js';
+export { GeneratorScheduler, type GeneratorContextFactory } from './solution-services/project-services/generators/generator-scheduler.js';
+export {
+    type IGeneratingProjectFactory,
+    providesGenerators,
+} from './solution-services/project-services/core/project-factory.js';
+export { GeneratorRegistryContribution } from './application/generator-registry-contribution.js';
