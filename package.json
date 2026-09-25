@@ -93,6 +93,7 @@
   "scripts": {
     "test": "tsx --conditions=development --test \"src/**/*.test.ts\"",
     "test:corpus": "tsx --conditions=development --test \"shared/**/*.test.ts\" \"examples/**/*.test.ts\" \"examples/**/*.test.mts\" \"cli/**/*.test.ts\"",
+    "pretest:smoke": "playwright install chromium",
     "test:smoke": "tsx --conditions=development --test \"user-smoke-tests/**/*.test.ts\"",
     "typecheck": "tsc --noEmit",
     "typecheck:demos": "tsc -p cli/tsconfig.json --noEmit",
