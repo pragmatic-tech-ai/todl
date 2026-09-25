@@ -60,12 +60,14 @@ export class TechCatalog extends ModelDataSource {
 
   technology(id: string, fields: {
     label: string;
+    tags?: string[];
     availableIn?: readonly Location[];
     billing?: Billing;
   }): InstanceDescriptor {
     const scalars = new Map<string, Scalar>();
     const refs = new Map<string, readonly NodeId[]>();
     scalars.set("label", fields.label);
+    if (fields.tags !== undefined) scalars.set("tags", fields.tags);
     if (fields.availableIn !== undefined) refs.set("availableIn", fields.availableIn.map((e) => e.id));
     if (fields.billing !== undefined) refs.set("billing", [fields.billing.id]);
     return { concept: "technology", id, scalars, refs };
@@ -82,6 +84,7 @@ export class Location extends ReflectedEntity {
 
 export class Technology extends ReflectedEntity {
   get label(): string { return this.field("label") as string; }
+  get tags(): string { return this.field("tags") as string; }
   get availableIn(): readonly Location[] { return this.refs("availableIn") as readonly Location[]; }
   get billing(): Billing | undefined { return this.ref("billing") as Billing | undefined; }
 }

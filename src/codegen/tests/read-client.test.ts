@@ -22,6 +22,7 @@ function catalogRepo(): Repository
   b.addField("location", "label", "string");
   b.defineConcept("technology");
   b.addField("technology", "label", "string");
+  b.addField("technology", "tags", "string", Cardinality.Many);
   b.addField("technology", "billing", "billing", Cardinality.Optional);
   b.addField("technology", "availableIn", "location", Cardinality.Many);
   b.defineTaxonomy("stack", ["technology"], [{ id: "m365", attrs: new Map([["label", "M365"]]) }]);
@@ -44,6 +45,12 @@ test("generateReadClient reproduces the golden fixture byte-for-byte", () => {
   );
   const out = generateReadClient(catalogRepo(), { name: "tech-catalog", importSpecifier: "../../../index.js" });
   assert.equal(out, golden);
+});
+
+test("a many-valued scalar field generates an array-typed authoring member (previously threw)", () => {
+  const out = generateReadClient(catalogRepo(), { name: "tech-catalog", importSpecifier: "../../../index.js" });
+  assert.match(out, /tags\?: string\[\];/);
+  assert.match(out, /if \(fields\.tags !== undefined\) scalars\.set\("tags", fields\.tags\);/);
 });
 
 test("the generated client compiles and runs with typed navigation", () => {
