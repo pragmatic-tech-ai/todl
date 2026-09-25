@@ -23,7 +23,6 @@ export { GeneratePresentationAction } from "./npm/generate-presentation-action.j
 export { NpmPackageBuildSystem } from "./npm/npm-package-build-system.js";
 // html-bundle build system (spec: single-page app for architecture projects).
 export { HtmlBundleBuildSystem } from "./html-bundle/html-bundle-build-system.js";
-export { CollectBundleResourcesAction } from "./html-bundle/collect-bundle-resources-action.js";
 export { EmitBundledHostAction } from "./html-bundle/emit-bundled-host-action.js";
 // Solution builds (spec §9): dependency-ordered multi-project build.
 export { BuildOutputSource } from "./solution/build-output-source.js";
