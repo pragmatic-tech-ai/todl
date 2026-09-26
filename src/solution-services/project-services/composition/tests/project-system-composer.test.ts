@@ -22,6 +22,9 @@ import { TodlProjectBuildManager } from "../../../todl-build-system/todl-project
 import { FakeStorageProvider, EmptyPackageSource } from "../../../todl-build-system/tests/fakes.js";
 import { parseManifest } from "../../../package-manager/manifest.js";
 import type { BuildResult } from "../../../build-system-core/build-result.js";
+import { PackageStoreKey, type IPackageStore } from "../../../todl-build-system/package-store.js";
+import type { SourcedPackage } from "../../../todl-build-system/package-source.js";
+import type { PackageRef } from "../../../../publish/publish.js";
 
 const ARCH_MODEL = "namespace acme { concept Widget { label : string?; } }";
 const NpmPackageId = "npm-package";
@@ -29,8 +32,25 @@ const HtmlBundleId = "html-bundle";
 const LIBRARY_WITH_ICON = 'namespace acme { concept Widget { label : string?; annotate icon { path = "visuals/w.svg"; } } }';
 const ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M0 0h16v16H0z"/></svg>';
 
+// A host package store that records every ref the generators' base resolution asks
+// for and holds nothing — so a bound base is REQUESTED through it and then misses.
+class RecordingPackageStore implements IPackageStore
+{
+    public readonly Storage = new FakeStorage();
+    public readonly Requested: PackageRef[] = [];
+
+    public TryGet(ref: PackageRef): Promise<SourcedPackage | undefined>
+    {
+        this.Requested.push(ref);
+        return Promise.resolve(undefined);
+    }
+}
+
 class ComposerFixtures
 {
+    public static readonly BoundMetaModelId = "acme-meta";
+    public static readonly BoundMetaModelVersion = "1.0.0";
+
     public static ArchManifest(): ProjectManifest
     {
         return {
@@ -39,6 +59,15 @@ class ComposerFixtures
             version: 1,
             id: "test-architecture",
             packageVersion: "0.1.0",
+        };
+    }
+
+    // The architecture manifest bound to a meta-model the test's store does not hold.
+    public static BoundArchManifest(): ProjectManifest
+    {
+        return {
+            ...ComposerFixtures.ArchManifest(),
+            metaModels: [{ id: ComposerFixtures.BoundMetaModelId, version: ComposerFixtures.BoundMetaModelVersion }],
         };
     }
 
@@ -166,6 +195,47 @@ describe("ProjectSystemComposer", () =>
 
         assert.ok(await project.Exists("generated/app.mu"), "UiPlaceholderGenerator should have written generated/app.mu");
         assert.ok(await project.Exists("generated/model.ts"), "DtoGenerator should have written generated/model.ts");
+    });
+
+    test("generators resolve bases through a PackageStoreKey store registered AFTER composition", async () =>
+    {
+        const provider = new ServiceProvider();
+        ProjectSystemComposer.Compose(provider);
+        const store = new RecordingPackageStore();
+        provider.registerInstance(PackageStoreKey, store);
+
+        const project = await ComposerFixtures.ArchProject();
+        await provider.getRequired(ProjectEventsKey).Raise({
+            Kind: ProjectEventKind.Created,
+            ProjectType: ArchitectureProjectFactory.ProjectType,
+            Project: project,
+            Manifest: ComposerFixtures.BoundArchManifest(),
+        });
+
+        // One lookup per generator (each gets a fresh model provider), all for the bound base.
+        const bound = `${ComposerFixtures.BoundMetaModelId}@${ComposerFixtures.BoundMetaModelVersion}`;
+        assert.deepEqual(store.Requested.map((r) => `${r.id}@${r.version}`), [bound, bound]);
+        // The bound base missed in the host store, so the model did not compile and
+        // nothing was generated — the host store (not the empty fallback) was the source.
+        assert.equal(await project.Exists("generated/model.ts"), false);
+        assert.equal(await project.Exists("generated/app.mu"), false);
+    });
+
+    test("an explicit composer Source wins over a registered PackageStoreKey store", async () =>
+    {
+        const provider = new ServiceProvider();
+        ProjectSystemComposer.Compose(provider, { Source: new EmptyPackageSource() });
+        const store = new RecordingPackageStore();
+        provider.registerInstance(PackageStoreKey, store);
+
+        await provider.getRequired(ProjectEventsKey).Raise({
+            Kind: ProjectEventKind.Created,
+            ProjectType: ArchitectureProjectFactory.ProjectType,
+            Project: await ComposerFixtures.ArchProject(),
+            Manifest: ComposerFixtures.BoundArchManifest(),
+        });
+
+        assert.equal(store.Requested.length, 0);
     });
 });
 

@@ -591,11 +591,14 @@ generators independent of any one build pipeline.
   compile identically to the build without depending on any build action.
 - **`ProjectGeneratorRegistry`** (+ `ProjectGeneratorRegistryKey`) — a
   `{ projectType → generators[] }` map plus a global by-id lookup (duplicate ids
-  rejected). Assembled by `GeneratorRegistryContribution`
-  (`src/application/generator-registry-contribution.ts`) from every project
-  factory's declared generators (`IGeneratingProjectFactory.Generators()`,
-  detected via the `providesGenerators` type guard) plus any build-registered
-  extras.
+  rejected). Assembled by `ProjectSystemComposer.Compose`
+  (`src/solution-services/project-services/composition/project-system-composer.ts`)
+  from every project factory's declared generators
+  (`IGeneratingProjectFactory.Generators()`, detected via the `providesGenerators`
+  type guard). The composer also registers the `ProjectEvents` bus and subscribes
+  the `GeneratorScheduler`; a generator's model compile resolves bases through the
+  composer's explicit `Source`, else the host's `PackageStoreKey` store (resolved at
+  event time), else an empty source.
 - **`ProjectEvents`/`IProjectEvents`/`ProjectEventKind`** (+ `ProjectEventsKey`) —
   the project lifecycle event bus (`Created`, `Opened`, `ReferencesChanged`,
   `Saved`). A project factory raises `Created` after writing the manifest

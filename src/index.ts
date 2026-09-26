@@ -297,7 +297,6 @@ export {
     type IGeneratingProjectFactory,
     providesGenerators,
 } from './solution-services/project-services/core/project-factory.js';
-export { GeneratorRegistryContribution } from './application/generator-registry-contribution.js';
 
 // ── Project-system composition + publish (BROWSER-SAFE core) ──
 // The one-call project-system module a host puts at the head of its `.modules:` block,

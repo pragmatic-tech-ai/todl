@@ -2,10 +2,9 @@
  * The headless (NODE-ONLY) entry point for the project system (CLI, devUI main, smoke
  * tests): seeds the identical registries as `TodlNodeProjectSystemModule` — the
  * browser-safe core PLUS the html-bundle build system — but with no mural
- * `app.Modules` block — just a bare `CompositionRoot`. Additive alongside
- * `GeneratorRegistryContribution` (see `ProjectSystemComposer`'s header); this is
- * the new one-call path for a host that wants everything `ProjectSystemComposer`
- * seeds, not just the generator registry.
+ * `app.Modules` block — just a bare `CompositionRoot`. It superseded the retired
+ * `GeneratorRegistryContribution`: the one-call path for a host that wants everything
+ * `ProjectSystemComposer` seeds, including the lifecycle scheduler wiring.
  */
 
 import { type CompositionRoot } from "@pragmatic-tech-ai/todl-runtime";

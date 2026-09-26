@@ -2,9 +2,10 @@
  * The single unified seeder for the three project-system DI registries + the
  * default presentation baker + the ProjectEvents/GeneratorScheduler lifecycle. It is
  * the ONE owner of the project-factory registry under ProjectFactoryRegistryKey
- * (`solution-services-module.mu` no longer registers factories). The remaining old
- * units (`todl-build-system-module.mu`, `application/generator-registry-contribution.ts`)
- * stay in place for deferred devUI/Plexus consumers. `ProjectSystemComposer`
+ * (`solution-services-module.mu` no longer registers factories) and of the lifecycle
+ * scheduler wiring (it superseded the retired `GeneratorRegistryContribution`). The
+ * remaining old unit (`todl-build-system-module.mu`) stays in place for deferred
+ * devUI/Plexus consumers. `ProjectSystemComposer`
  * is a new, self-contained composer, reused by a mural module (Task 7) and a
  * headless contribution, that stands up TODL's built-in factories/build-systems/
  * generators into a FRESH container in one call.
@@ -17,7 +18,7 @@
  * `tests/browser-safe-composition.test.ts` bundles this graph for the browser platform.
  */
 
-import { type IServiceContainer, ServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
+import { type IServiceContainer, type IServiceProvider, ServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
 import { ProjectFactoryRegistry } from "../../solution-manager/engine/project-factory-registry.js";
 import { ProjectFactoryRegistryKey } from "../../solution-manager/engine/host-services.js";
 import { BuildSystemRegistry } from "../../build-system-core/build-system-registry.js";
@@ -35,6 +36,7 @@ import { PresentationBakerKey } from "../core/presentation-baker.js";
 import { ProviderPresentationBaker } from "../core/provider-presentation-baker.js";
 import { providesGenerators } from "../core/project-factory.js";
 import type { IPackageSource, SourcedPackage } from "../../todl-build-system/package-source.js";
+import { PackageStoreKey } from "../../todl-build-system/package-store.js";
 import type { PackageRef } from "../../../publish/publish.js";
 // Built-in factories / build systems.
 import { MetaModelProjectFactory } from "../meta-model-project/meta-model-project-factory.js";
@@ -44,8 +46,8 @@ import { NpmPackageBuildSystem } from "../../todl-build-system/npm/npm-package-b
 
 export interface ProjectSystemComposerOptions
 {
-    // The real base-model source. Omitted => an empty source (no bases resolve),
-    // mirroring GeneratorRegistryContribution's fallback.
+    // The real base-model source. Omitted => the host's IPackageStore (PackageStoreKey),
+    // resolved lazily at EVENT time; neither => an empty source (no bases resolve).
     readonly Source?: IPackageSource;
 }
 
@@ -87,7 +89,7 @@ export class ProjectSystemComposer
         buildSystems.RegisterResolved(provider.getRequired(NpmPackageBuildSystem));
 
         // 5. Seed generators FROM the resolved factory instances (each factory owns its
-        // own generator set — mirrors GeneratorRegistryContribution.BuildRegistry exactly).
+        // own generator set; each is registered exactly once).
         for (const factory of factories.All())
         {
             if (providesGenerators(factory))
@@ -104,26 +106,35 @@ export class ProjectSystemComposer
         const events = new ProjectEvents();
         const scheduler = new GeneratorScheduler(
             generators,
-            (event, reason) => ProjectSystemComposer.BuildContext(event, reason, options.Source),
+            (event, reason) => ProjectSystemComposer.BuildContext(event, reason, ProjectSystemComposer.ResolveSource(provider, options.Source)),
         );
         events.Subscribe((event) => scheduler.Handle(event));
         container.registerInstance(ProjectEventsKey, events);
     }
 
-    private static BuildContext(event: ProjectEvent, reason: GeneratorTrigger, source?: IPackageSource): GeneratorContext
+    // The package source a generator's model compile resolves bases through, picked at
+    // EVENT time (not composition time) so a host that registers its package store
+    // after composition — Plexus registers PlexusPackageStore under PackageStoreKey in a
+    // later module — is still reached. An explicit composer Source wins; a headless host
+    // with neither falls back to the empty source.
+    private static ResolveSource(provider: IServiceProvider, explicit?: IPackageSource): IPackageSource
     {
-        const effective = source ?? new ProjectSystemComposer.EmptyPackageSource();
+        return explicit ?? provider.get(PackageStoreKey) ?? new ProjectSystemComposer.EmptyPackageSource();
+    }
+
+    private static BuildContext(event: ProjectEvent, reason: GeneratorTrigger, source: IPackageSource): GeneratorContext
+    {
         return {
             Project: event.Project,
             Manifest: event.Manifest,
-            Model: new ProjectModelProvider(event.Project, event.Manifest, effective),
+            Model: new ProjectModelProvider(event.Project, event.Manifest, source),
             Diagnostics: new DiagnosticSink(),
             Reason: reason,
         };
     }
 
     // A package source with nothing in it — composition falls back to this when no
-    // host `Source` is supplied, so a generator's model compile still runs (against
+    // host `Source` is supplied and no PackageStoreKey is registered, so a generator's model compile still runs (against
     // zero resolved bases) rather than needing a null check at every call site.
     private static readonly EmptyPackageSource = class EmptyPackageSource implements IPackageSource
     {
