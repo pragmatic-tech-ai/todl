@@ -43,6 +43,7 @@ describe("TodlProjectSystemModule", () =>
 
         assert.equal(provider.getRequired(BuildSystemRegistryKey).Get(HtmlBundleId), undefined);
     });
+
     test("the composed registry indexes exactly the three built-in types and nothing else", () =>
     {
         const provider = new ServiceProvider();
@@ -82,6 +83,7 @@ describe("TodlNodeProjectSystemModule", () =>
         assert.ok(buildSystems.Get(NpmPackageId) instanceof NpmPackageBuildSystem);
         assert.ok(buildSystems.Get(HtmlBundleId) instanceof HtmlBundleBuildSystem);
     });
+
     test("the node CLASS listed by name composes its own override (html-bundle included)", () =>
     {
         const root = new CompositionRoot(ShellHost);
