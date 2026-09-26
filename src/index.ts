@@ -240,6 +240,8 @@ export {
     type BakeResult,
 } from './solution-services/project-services/core/presentation-baker.js';
 export { ProviderPresentationBaker } from './solution-services/project-services/core/provider-presentation-baker.js';
+// The baked presentation payload's shape (presentation.compiled.json), for host loaders.
+export type { CompiledPresentation } from './solution-services/project-services/core/presentation-bake.js';
 export {
     PackageStoreKey,
     StoragePackageStore,
