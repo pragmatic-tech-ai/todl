@@ -33,8 +33,6 @@ import { LibraryProjectFactory } from "../library-project/library-project-factor
 import { ArchitectureProjectFactory } from "../architecture-project/architecture-project-factory.js";
 import { NpmPackageBuildSystem } from "../../todl-build-system/npm/npm-package-build-system.js";
 import { HtmlBundleBuildSystem } from "../../todl-build-system/html-bundle/html-bundle-build-system.js";
-import { DtoGenerator } from "../generators/dto-generator.js";
-import { UiPlaceholderGenerator } from "../generators/ui-placeholder-generator.js";
 
 export interface ProjectSystemComposerOptions
 {
@@ -61,8 +59,6 @@ export class ProjectSystemComposer
         container.register(ArchitectureProjectFactory, (p) => new ArchitectureProjectFactory(p));
         container.register(NpmPackageBuildSystem, (p) => new NpmPackageBuildSystem(p.getRequired(PresentationBakerKey)));
         container.register(HtmlBundleBuildSystem, () => new HtmlBundleBuildSystem());
-        container.register(DtoGenerator, () => new DtoGenerator());
-        container.register(UiPlaceholderGenerator, () => new UiPlaceholderGenerator());
 
         // 2. The three registries, as singletons.
         const factories = new ProjectFactoryRegistry(provider);
@@ -83,9 +79,6 @@ export class ProjectSystemComposer
 
         // 5. Seed generators FROM the resolved factory instances (each factory owns its
         // own generator set — mirrors GeneratorRegistryContribution.BuildRegistry exactly).
-        // DtoGenerator/UiPlaceholderGenerator are registered above as service tokens for a
-        // host to resolve directly; they are NOT also seeded as standalone GeneratorDefinitions
-        // here, since ArchitectureProjectFactory.Generators() already returns them.
         for (const factory of factories.All())
         {
             if (providesGenerators(factory))

@@ -9,7 +9,7 @@ export class ProjectGeneratorRegistry
 
     public Register(projectType: string, generator: IProjectContentGenerator): void
     {
-        if (this.byId.has(generator.Id)) return
+        if (this.byId.has(generator.Id)) return; // Dedup by id; factory-sourced + standalone converge — silent discard is intentional.
         const list = this.byType.get(projectType) ?? [];
         list.push(generator);
         this.byType.set(projectType, list);
