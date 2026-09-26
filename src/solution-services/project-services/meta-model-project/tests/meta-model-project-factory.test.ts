@@ -3,13 +3,10 @@ import assert from 'node:assert/strict'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { ServiceProvider, type IStorage } from '@pragmatic-tech-ai/todl-runtime'
+import { ServiceProvider } from '@pragmatic-tech-ai/todl-runtime'
 import { NodeFsStorage } from '@pragmatic-tech-ai/todl-runtime/node'
 import { ProjectNodeKind } from '../../core/project.js'
-import { PresentationBakerKey } from '../../core/presentation-baker.js'
-import { PackageStoreKey, StoragePackageStore } from '../../../todl-build-system/package-store.js'
 import { MetaModelProjectFactory } from '../meta-model-project-factory.js'
-import { FakePresentationBaker } from '../../core/tests/fake-producer-seams.js'
 
 const META = 'namespace acme { concept Widget { label : string?; } }'
 
@@ -18,15 +15,6 @@ async function tempDir(t: TestContext): Promise<NodeFsStorage>
     const dir = await mkdtemp(join(tmpdir(), 'todl-mm-'))
     t.after(async () => { await rm(dir, { recursive: true, force: true }) })
     return new NodeFsStorage(dir)
-}
-
-// A provider wiring the baker + unified package store to the given fakes.
-function providerWith(baker: FakePresentationBaker, store: IStorage): ServiceProvider
-{
-    const p = new ServiceProvider()
-    p.registerInstance(PresentationBakerKey, baker)
-    p.registerInstance(PackageStoreKey, new StoragePackageStore(store))
-    return p
 }
 
 function factory(provider: ServiceProvider = new ServiceProvider()): MetaModelProjectFactory
@@ -72,49 +60,7 @@ test('compileToDocument compiles the project .todl into a document', async (t) =
     assert.ok(doc.nodes.some((n) => n.id.includes('Widget')))
 })
 
-test('publish bakes and persists model.json + bundle.json', async (t) => {
-    const project = await tempDir(t)
-    const store = await tempDir(t)
-    const baker = new FakePresentationBaker({ ok: true, icons: 3 })
-    const provider = providerWith(baker, store)
-
-    const f = factory(provider)
-    await f.createProject(project, 'Widgets')
-    await project.WriteText('model.todl', META)
-    const result = await f.publish(await f.openProject(project), project, provider)
-
-    assert.equal(result.ok, true)
-    assert.match(result.message, /Published widgets@0\.1\.0/)
-    assert.equal(baker.calls.length, 1)
-    assert.equal(baker.calls[0]!.options.dictName, 'MetaModelPresentation')
-    assert.equal(baker.calls[0]!.options.iconPrefix, 'mm:')
-    assert.equal(await store.Exists('widgets/0.1.0/model.json'), true)
-    assert.equal(await store.Exists('widgets/0.1.0/bundle.json'), true)
-})
-
-test('publish is blocked (nothing written) when a referenced icon is missing', async (t) => {
-    const project = await tempDir(t)
-    const store = await tempDir(t)
-    const baker = new FakePresentationBaker({ ok: false, missing: ['resources/x.svg'] })
-    const provider = providerWith(baker, store)
-
-    const f = factory(provider)
-    await f.createProject(project, 'Widgets')
-    await project.WriteText('model.todl', META)
-    const result = await f.publish(await f.openProject(project), project, provider)
-
-    assert.equal(result.ok, false)
-    assert.match(result.message, /missing icon/i)
-    assert.equal(await store.Exists('widgets/0.1.0/model.json'), false)   // nothing persisted
-})
-
-test('publish refuses an empty project', async (t) => {
-    const project = await tempDir(t)
-    const provider = providerWith(new FakePresentationBaker(), await tempDir(t))
-    const f = factory(provider)
-    await f.createProject(project, 'Empty')
-    // createProject lays down no .todl; remove none — the project has only scaffold.
-    const result = await f.publish(await f.openProject(project), project, provider)
-    assert.equal(result.ok, false)
-    assert.match(result.message, /no \.todl/i)
-})
+// The former publish() tests (bakes + persists model.json/bundle.json; blocked on a
+// missing icon; blocked on an empty project) are retired — coverage moved to the build
+// pipeline: emit-bundle-action / bake-resources-action / publish-package-action /
+// solution-build tests.

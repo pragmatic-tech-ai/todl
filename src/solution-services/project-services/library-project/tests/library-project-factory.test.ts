@@ -3,15 +3,11 @@ import assert from 'node:assert/strict'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { ServiceProvider, type IStorage } from '@pragmatic-tech-ai/todl-runtime'
+import { ServiceProvider } from '@pragmatic-tech-ai/todl-runtime'
 import { NodeFsStorage } from '@pragmatic-tech-ai/todl-runtime/node'
 import { ProjectNodeKind } from '../../core/project.js'
-import { PresentationBakerKey } from '../../core/presentation-baker.js'
-import { PackageStoreKey, StoragePackageStore } from '../../../todl-build-system/package-store.js'
 import { LibraryProjectFactory } from '../library-project-factory.js'
-import { FakePresentationBaker } from '../../core/tests/fake-producer-seams.js'
 
-const LIB = 'namespace lib { concept Foo { label : string?; } }'
 const META_REF = { id: 'mm', version: '0.1.0' }
 
 async function tempDir(t: TestContext): Promise<NodeFsStorage>
@@ -19,14 +15,6 @@ async function tempDir(t: TestContext): Promise<NodeFsStorage>
     const dir = await mkdtemp(join(tmpdir(), 'todl-lib-'))
     t.after(async () => { await rm(dir, { recursive: true, force: true }) })
     return new NodeFsStorage(dir)
-}
-
-function providerWith(baker: FakePresentationBaker, store: IStorage): ServiceProvider
-{
-    const p = new ServiceProvider()
-    p.registerInstance(PresentationBakerKey, baker)
-    p.registerInstance(PackageStoreKey, new StoragePackageStore(store))
-    return p
 }
 
 function factory(provider: ServiceProvider = new ServiceProvider()): LibraryProjectFactory
@@ -62,46 +50,7 @@ test('getVersion / setVersion round-trip through the manifest', async (t) => {
     assert.equal(await f.getVersion(storage), '9.9.9')
 })
 
-test('publish is blocked when no meta-model is bound', async (t) => {
-    const project = await tempDir(t)
-    const provider = providerWith(new FakePresentationBaker(), await tempDir(t))
-    const f = factory(provider)
-    await f.createProject(project, 'L')      // no bindings
-    await project.WriteText('taxonomy.todl', LIB)
-    const result = await f.publish(await f.openProject(project), project, provider)
-    assert.equal(result.ok, false)
-    assert.match(result.message, /meta-model binding/i)
-})
-
-test('publish is blocked when the bound meta-model is not published', async (t) => {
-    const project = await tempDir(t)
-    const store = await tempDir(t)      // empty — the base cannot resolve
-    const provider = providerWith(new FakePresentationBaker(), store)
-    const f = factory(provider)
-    await f.createProject(project, 'L', { metaModels: [META_REF] })
-    await project.WriteText('taxonomy.todl', LIB)
-    const result = await f.publish(await f.openProject(project), project, provider)
-    assert.equal(result.ok, false)
-    assert.match(result.message, /not published/i)
-})
-
-test('publish bakes and persists model.json + bundle.json', async (t) => {
-    const project = await tempDir(t)
-    const store = await tempDir(t)
-    // Seed the bound meta-model so RecursiveProjectReferencesResolver resolves it.
-    await store.WriteText('mm/0.1.0/model.json', JSON.stringify({ nodes: [], edges: [] }))
-
-    const baker = new FakePresentationBaker({ ok: true, icons: 2 })
-    const provider = providerWith(baker, store)
-    const f = factory(provider)
-    await f.createProject(project, 'AWS', { metaModels: [META_REF] })
-    await project.WriteText('taxonomy.todl', LIB)
-    const result = await f.publish(await f.openProject(project), project, provider)
-
-    assert.equal(result.ok, true)
-    assert.match(result.message, /Published aws@0\.1\.0/)
-    assert.equal(baker.calls[0]!.options.dictName, 'LibraryPresentation')
-    assert.equal(baker.calls[0]!.options.iconPrefix, '')
-    assert.equal(await store.Exists('aws/0.1.0/model.json'), true)
-    assert.equal(await store.Exists('aws/0.1.0/bundle.json'), true)
-})
+// The former publish() tests (blocked with no meta-model bound; blocked when the bound
+// meta-model is not published; bakes + persists model.json/bundle.json) are retired —
+// coverage moved to the build pipeline: emit-bundle-action / bake-resources-action /
+// publish-package-action / solution-build tests.
