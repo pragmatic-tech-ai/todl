@@ -8,4 +8,5 @@ export class NpmArtifacts
 {
     public static readonly ResolvedBases = new ArtifactKey<readonly TodlDocument[]>("ResolvedBases");
     public static readonly CompiledModel = new ArtifactKey<CompiledPackage>("CompiledModel");
+    public static readonly CompiledMural = new ArtifactKey<readonly string[]>("CompiledMural");
 }
