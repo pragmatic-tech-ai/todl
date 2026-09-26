@@ -239,6 +239,7 @@ export {
     type BakeOptions,
     type BakeResult,
 } from './solution-services/project-services/core/presentation-baker.js';
+export { ProviderPresentationBaker } from './solution-services/project-services/core/provider-presentation-baker.js';
 export {
     PackageStoreKey,
     StoragePackageStore,

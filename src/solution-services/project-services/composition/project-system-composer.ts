@@ -32,6 +32,7 @@ import { type GeneratorContext, GeneratorTrigger } from "../generators/project-c
 import { DiagnosticSink } from "../../build-system-core/diagnostic-sink.js";
 import { DefaultPresentationBaker } from "../core/default-presentation-baker.js";
 import { PresentationBakerKey } from "../core/presentation-baker.js";
+import { ProviderPresentationBaker } from "../core/provider-presentation-baker.js";
 import { providesGenerators } from "../core/project-factory.js";
 import type { IPackageSource, SourcedPackage } from "../../todl-build-system/package-source.js";
 import type { PackageRef } from "../../../publish/publish.js";
@@ -65,7 +66,9 @@ export class ProjectSystemComposer
         container.register(MetaModelProjectFactory, (p) => new MetaModelProjectFactory(p));
         container.register(LibraryProjectFactory, (p) => new LibraryProjectFactory(p));
         container.register(ArchitectureProjectFactory, (p) => new ArchitectureProjectFactory(p));
-        container.register(NpmPackageBuildSystem, (p) => new NpmPackageBuildSystem(p.getRequired(PresentationBakerKey)));
+        // The build bakes through PresentationBakerKey resolved at BAKE time (not here), so
+        // a host that re-registers the key after composition still reaches the build.
+        container.register(NpmPackageBuildSystem, (p) => new NpmPackageBuildSystem(new ProviderPresentationBaker(p)));
 
         // 2. The three registries, as singletons.
         const factories = new ProjectFactoryRegistry(provider);
