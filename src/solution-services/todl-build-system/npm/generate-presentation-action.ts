@@ -38,8 +38,10 @@ export class GeneratePresentationAction implements IBuildAction<TodlBuildContext
         if (pkg === undefined) return; // the compile gate did not produce a model
 
         // Write the assigned keys onto the shared document before the emit action serializes
-        // it, so model.json carries them.
-        PresentationResourceEmitter.StampResourceKeys(pkg.document);
+        // it, so model.json carries them. `pkg.fullDocument` is the closure — ancestry
+        // resolution (MuralResource-inherited annotations) needs it to detect anything
+        // beyond the literal `icon`.
+        PresentationResourceEmitter.StampResourceKeys(pkg.document, pkg.fullDocument);
 
         const result = await this.baker.Bake(ctx.Project, ctx.Sandbox, GeneratePresentationAction.OutputBase, pkg.document, this.options);
         if (!result.ok)

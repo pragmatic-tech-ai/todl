@@ -28,14 +28,31 @@ function contextWith(pkg: CompiledPackage): TodlBuildContext
     };
 }
 
+// A realistic own/full split (mirrors src/publish/tests/reflect.test.ts's
+// ownDoc/fullDoc fixtures): the entity + its `@icon` application + the Annotated
+// edge between them are own (authored in-project), while the `icon`/`MuralResource`
+// annotation declarations + the `Extends` edge between them live only in the
+// closure — same as the real prelude. StampResourceKeys now resolves ancestry via
+// `projectAnnotations(closure, entityId)`, so both are required for the icon to be
+// discovered at all.
 function iconPkg(): CompiledPackage
 {
-    const iconNode = { id: "app1", type: "icon", attrs: { path: "visuals/a.svg" } };
+    const entityNode = { id: "app1", type: null, metaKind: "concept", attrs: {} };
+    const iconNode = { id: "app1@icon", type: "icon", metaKind: null, attrs: { path: "visuals/a.svg" } };
+    const ownEdges = [{ kind: "Annotated", from: "app1", to: "app1@icon" }];
+    const ownNodes = [entityNode, iconNode];
     return {
         id: "microsoft",
         version: "1.0.0",
-        document: { nodes: [iconNode], edges: [] },
-        fullDocument: { nodes: [], edges: [] },
+        document: { nodes: ownNodes, edges: ownEdges },
+        fullDocument: {
+            nodes: [
+                ...ownNodes,
+                { id: "icon", type: null, metaKind: "annotation", attrs: {} },
+                { id: "MuralResource", type: null, metaKind: "annotation", attrs: {} },
+            ],
+            edges: [...ownEdges, { kind: "Extends", from: "icon", to: "MuralResource" }],
+        },
         sources: [],
         classes: [],
     } as unknown as CompiledPackage;
@@ -62,7 +79,7 @@ describe("GeneratePresentationAction", () =>
 
         await new GeneratePresentationAction(new FakePresentationBaker(), OPTIONS).Execute(ctx);
 
-        const icon = pkg.document.nodes[0] as unknown as { attrs: Record<string, unknown> };
+        const icon = pkg.document.nodes.find((n) => (n as unknown as { type: string | null }).type === "icon") as unknown as { attrs: Record<string, unknown> };
         assert.equal(typeof icon.attrs["key"], "string");
     });
 

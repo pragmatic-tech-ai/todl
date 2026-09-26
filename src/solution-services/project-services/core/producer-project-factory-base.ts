@@ -137,8 +137,9 @@ export abstract class ProducerProjectFactory extends TodlProjectFactory
         const doc = pkg.document
 
         // Stamp mural resource keys onto icon apps before persist (same shared pkg.document
-        // object), so the key lands in model.json.
-        PresentationResourceEmitter.StampResourceKeys(doc)
+        // object), so the key lands in model.json. pkg.fullDocument is the closure —
+        // ancestry resolution (MuralResource-inherited annotations) needs it.
+        PresentationResourceEmitter.StampResourceKeys(doc, pkg.fullDocument)
 
         const classes: PublishedClass[] = pkg.classes.map((c) => ({ ...c }))
         const scanned = await ProducerResources.Scan(storage, classes.map((c) => c.id))
@@ -210,9 +211,14 @@ export abstract class ProducerProjectFactory extends TodlProjectFactory
 
     private async writePresentation(storage: IStorage, doc: TodlDocument, colored: boolean): Promise<void>
     {
+        // This legacy path only ever computes one document (`toJSON(model)` in
+        // regeneratePresentation, above) — no separate own/closure split — so `doc` is
+        // passed as both the document and the closure. A behaviour-preserving shim:
+        // ancestry resolution still works for a literal `icon` self-key, just not for a
+        // MuralResource-inherited annotation whose declaration lives outside `doc`.
         await storage.WriteText(
             ProducerProjectFactory.PRESENTATION_FILE,
-            PresentationResourceEmitter.GenerateAssets(doc, this.presentationDict, colored))
+            PresentationResourceEmitter.GenerateAssets(doc, doc, this.presentationDict, colored))
     }
 
     // Recursively copy one resource folder from the project storage into the bundle at
