@@ -144,9 +144,9 @@ class TestPresentationBaker implements IPresentationBaker
 {
     private static readonly PresentationDir = "presentation";
 
-    public async Bake(project: IStorage, dest: IStorage, base: string, doc: TodlDocument, options: BakeOptions): Promise<BakeResult>
+    public async Bake(project: IStorage, dest: IStorage, base: string, document: TodlDocument, _closure: TodlDocument, options: BakeOptions): Promise<BakeResult>
     {
-        const icons = TestPresentationBaker.IconPaths(doc);
+        const icons = TestPresentationBaker.IconPaths(document);
         const missing: string[] = [];
         for (const path of icons) if (!(await project.Exists(path))) missing.push(path);
         if (missing.length > 0) return { ok: false, missing };

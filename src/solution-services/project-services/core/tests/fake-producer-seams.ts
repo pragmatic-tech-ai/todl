@@ -10,7 +10,7 @@ export class FakePresentationBaker implements IPresentationBaker
     public calls: Array<{ base: string; options: BakeOptions }> = []
     constructor(private readonly result: BakeResult = { ok: true, icons: 0 }) {}
 
-    async Bake(_project: IStorage, _dest: IStorage, base: string, _doc: TodlDocument, options: BakeOptions): Promise<BakeResult>
+    async Bake(_project: IStorage, _dest: IStorage, base: string, _document: TodlDocument, _closure: TodlDocument, options: BakeOptions): Promise<BakeResult>
     {
         this.calls.push({ base, options })
         return this.result

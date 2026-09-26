@@ -26,9 +26,16 @@ export type BakeResult =
 
 export interface IPresentationBaker
 {
-    // Bake `doc`'s presentation from icons read out of `project`, writing the
+    // Bake `document`'s presentation from icons read out of `project`, writing the
     // compiled artifact + icon index into `dest` under `<base>/presentation/`.
-    Bake(project: IStorage, dest: IStorage, base: string, doc: TodlDocument, options: BakeOptions): Promise<BakeResult>
+    // `document` is the own-only doc to enumerate (and, upstream of this call,
+    // to stamp) — only THIS project's icons are baked. `closure` (a compiled
+    // package's `fullDocument`) is used ONLY to resolve annotation ancestry (e.g.
+    // the literal `icon` annotation, which extends `MuralResource` in the
+    // prelude, outside any project's own nodes) — never to enumerate, so a base
+    // package's own icons are never folded into this bake and resource-key
+    // assignment stays deterministic regardless of which bases are present.
+    Bake(project: IStorage, dest: IStorage, base: string, document: TodlDocument, closure: TodlDocument, options: BakeOptions): Promise<BakeResult>
 }
 
 export const PresentationBakerKey = new ServiceKey<IPresentationBaker>('PresentationBaker')

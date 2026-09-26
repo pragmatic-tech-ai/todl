@@ -49,7 +49,7 @@ export class BakeResourcesAction implements IBuildAction<TodlBuildContext>
 
         if (this.baker === undefined) return; // no host baker supplied — skip cleanly
 
-        const result = await this.baker.Bake(ctx.Project, ctx.Sandbox, BakeResourcesAction.OutputBase, pkg.document, options);
+        const result = await this.baker.Bake(ctx.Project, ctx.Sandbox, BakeResourcesAction.OutputBase, pkg.document, pkg.fullDocument, options);
         if (!result.ok)
         {
             ctx.Diagnostics.Report({

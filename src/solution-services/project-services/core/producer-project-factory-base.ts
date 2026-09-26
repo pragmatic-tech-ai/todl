@@ -163,7 +163,7 @@ export abstract class ProducerProjectFactory extends TodlProjectFactory
 
         // Bake the compiled presentation first — a missing icon blocks the publish before
         // anything is written to the backend.
-        const pres = await provider.getRequired(PresentationBakerKey).Bake(storage, dest, base, doc, {
+        const pres = await provider.getRequired(PresentationBakerKey).Bake(storage, dest, base, doc, pkg.fullDocument, {
             dictName: this.presentationDict, iconPrefix: this.iconPrefix,
         })
         if (!pres.ok)

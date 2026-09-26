@@ -9,13 +9,16 @@
 // + `options.iconPrefix`, so there is no meta/library branching here.
 //
 // Icon discovery and resource-key assignment are NOT re-implemented here — they
-// are owned by `PresentationResourceEmitter` (presentation-model.ts), which this
-// class calls with `doc` as both the own document and the closure it projects
-// annotations against. Callers should pass the closure-complete document (the
-// `fullDocument` a compiled package carries — see publish.ts's own comment: "the
-// full compiled closure — for presentation/annotation baking") so a
-// prelude-inherited annotation (the literal `icon`, which extends `MuralResource`
-// in the prelude, outside any project's own nodes) still resolves correctly.
+// are owned by `PresentationResourceEmitter` (presentation-model.ts), which every
+// method here calls with the emitter's real two-document contract: `document`
+// (own-only — what gets ENUMERATED, so only this project's own icons are baked)
+// and `closure` (a compiled package's `fullDocument` — used ONLY to resolve
+// annotation ancestry, e.g. the literal `icon` annotation, which extends
+// `MuralResource` in the prelude, outside any project's own nodes). Collapsing
+// both to one document is wrong in either direction: `document` alone can't
+// resolve prelude/base-inherited ancestry, and `closure` alone enumerates every
+// base's icons too and makes AssignResourceKeys's stem-collision suffixing
+// depend on which unrelated bases happen to be present.
 
 import {
     compile, DEFAULT_SYMBOLS, svgToGeometryJs,
@@ -71,17 +74,17 @@ export class PresentationBake
         return btoa(bin)
     }
 
-    // Pre-reads every distinct icon `doc` declares (per PresentationResourceEmitter,
-    // projecting against `doc` itself as the closure): SVGs as text, raster images as
-    // base64 data URIs. `missing` names every referenced icon with no readable project
-    // file. Shared by every producer type so meta-model and library bake raster
+    // Pre-reads every distinct icon `document` declares (annotation ancestry
+    // resolved against `closure`): SVGs as text, raster images as base64 data
+    // URIs. `missing` names every referenced icon with no readable project file.
+    // Shared by every producer type so meta-model and library bake raster
     // identically.
-    public static async ReadIcons(project: IStorage, doc: TodlDocument): Promise<ReadIconsResult>
+    public static async ReadIcons(project: IStorage, document: TodlDocument, closure: TodlDocument): Promise<ReadIconsResult>
     {
         const svgByPath = new Map<string, string>()
         const rasterUriByPath = new Map<string, string>()
         const missing: string[] = []
-        for (const path of PresentationResourceEmitter.DistinctIcons(doc, doc))
+        for (const path of PresentationResourceEmitter.DistinctIcons(document, closure))
         {
             if (PresentationResourceEmitter.IsRasterIcon(path))
             {
@@ -147,34 +150,38 @@ export class PresentationBake
         }
     }
 
-    // One self-contained assets `resources` block: an icon include per distinct icon,
-    // keyed by its PresentationResourceEmitter-assigned resource key. Publish always
-    // bakes colored — the compiled runtime artifact keeps each icon's own colors; the
+    // One self-contained assets `resources` block: an icon include per distinct OWN
+    // icon (enumerated from `document`; ancestry resolved against `closure`), keyed
+    // by its PresentationResourceEmitter-assigned resource key. Publish always bakes
+    // colored — the compiled runtime artifact keeps each icon's own colors; the
     // Generate command's monochrome mode is for the inspection .mu only.
-    public static CombinedSource(doc: TodlDocument, dictName: string): string
+    public static CombinedSource(document: TodlDocument, closure: TodlDocument, dictName: string): string
     {
-        const keys = PresentationResourceEmitter.AssignResourceKeys(doc, doc)
+        const keys = PresentationResourceEmitter.AssignResourceKeys(document, closure)
         const includes = [...keys].map(([path, key]) => PresentationResourceEmitter.IncludeLine(path, key, true))
         return [`resources ${dictName} {`, ...includes, '}'].join('\n')
     }
 
-    // Compile `doc`'s presentation once and write it into `dest` under
+    // Compile `document`'s presentation once and write it into `dest` under
     // `<base>/presentation/presentation.compiled.json`, plus an icon-index.json sidecar
-    // (entityKey → resource key, keyed under `options.iconPrefix`). The artifact is
-    // ASSETS ONLY: one baked icon asset per distinct icon (SVG → colored
-    // IconDefinition, raster → BitmapImage). No DataTemplates — every entity renders
-    // through the host's one default template, which draws the icon the icon-index
-    // names. Icon content is embedded, so the artifact has no external file
-    // dependency. A referenced icon with no readable project file blocks the publish
-    // (nothing is written).
+    // (entityKey → resource key, keyed under `options.iconPrefix`). `document` is the
+    // own-only doc — only ITS icons are baked, never a base's. `closure` (a compiled
+    // package's `fullDocument`) is used ONLY to resolve annotation ancestry, so the
+    // literal `icon` annotation (which extends `MuralResource` in the prelude) still
+    // resolves. The artifact is ASSETS ONLY: one baked icon asset per distinct icon
+    // (SVG → colored IconDefinition, raster → BitmapImage). No DataTemplates — every
+    // entity renders through the host's one default template, which draws the icon
+    // the icon-index names. Icon content is embedded, so the artifact has no external
+    // file dependency. A referenced icon with no readable project file blocks the
+    // publish (nothing is written).
     public static async Publish(
-        project: IStorage, dest: IStorage, base: string, doc: TodlDocument, options: BakeOptions,
+        project: IStorage, dest: IStorage, base: string, document: TodlDocument, closure: TodlDocument, options: BakeOptions,
     ): Promise<BakeResult>
     {
-        const { svgByPath, rasterUriByPath, missing } = await PresentationBake.ReadIcons(project, doc)
+        const { svgByPath, rasterUriByPath, missing } = await PresentationBake.ReadIcons(project, document, closure)
         if (missing.length > 0) return { ok: false, missing }
 
-        const source = PresentationBake.CombinedSource(doc, options.dictName)
+        const source = PresentationBake.CombinedSource(document, closure, options.dictName)
         const include = PresentationBake.IconIncludeResolver(svgByPath, rasterUriByPath)
         const result = compile(source, { include, symbols: new Map(DEFAULT_SYMBOLS) })
 
@@ -189,7 +196,7 @@ export class PresentationBake
 
         await dest.WriteText(
             `${base}/${PresentationBake.PresentationDir}/${PresentationBake.IconIndexFile}`,
-            JSON.stringify(Object.fromEntries(PresentationResourceEmitter.BuildIconIndex(doc, doc, options.iconPrefix))),
+            JSON.stringify(Object.fromEntries(PresentationResourceEmitter.BuildIconIndex(document, closure, options.iconPrefix))),
         )
 
         return { ok: true, icons: svgByPath.size + rasterUriByPath.size }
