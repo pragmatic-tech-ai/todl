@@ -226,7 +226,7 @@ class BuildHarness
         return new RegistrySource(this.Registry);
     }
 
-    public Build(project: FixtureProject, source: IPackageSource, baker?: IPresentationBaker): Promise<ProjectBuildOutput>
+    public Build(project: FixtureProject, source: IPackageSource, baker: IPresentationBaker = new TestPresentationBaker()): Promise<ProjectBuildOutput>
     {
         return new TodlProjectBuildManager(this.registryWith(baker), this.provider).Build({
             Project: project.Project,
@@ -237,9 +237,9 @@ class BuildHarness
         });
     }
 
-    public SolutionManager(): SolutionBuildManager
+    public SolutionManager(baker: IPresentationBaker = new TestPresentationBaker()): SolutionBuildManager
     {
-        return new SolutionBuildManager(this.registryWith(undefined), this.provider);
+        return new SolutionBuildManager(this.registryWith(baker), this.provider);
     }
 
     public async Publish(outputPath: string): Promise<void>
@@ -252,7 +252,7 @@ class BuildHarness
         return this.Registry.ListPackages();
     }
 
-    private registryWith(baker: IPresentationBaker | undefined): BuildSystemRegistry<TodlBuildContext, ProjectManifest>
+    private registryWith(baker: IPresentationBaker): BuildSystemRegistry<TodlBuildContext, ProjectManifest>
     {
         const registry = new BuildSystemRegistry<TodlBuildContext, ProjectManifest>();
         registry.Register(new NpmPackageBuildSystem(baker));

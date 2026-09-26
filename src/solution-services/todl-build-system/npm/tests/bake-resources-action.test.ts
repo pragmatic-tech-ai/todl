@@ -106,16 +106,7 @@ describe("BakeResourcesAction", () =>
         assert.equal(baker.calls[0]!.options.iconPrefix, "mm:");
     });
 
-    test("skips cleanly (no error, no bake) when no baker is supplied", async () =>
-    {
-        const ctx = contextWith(iconPkg(), libraryManifest());
-
-        await new BakeResourcesAction(undefined).Execute(ctx);
-
-        assert.equal(ctx.Diagnostics.All().length, 0);
-    });
-
-    test("skips when the project declares no resources", async () =>
+    test("skips (no write, no error) when the project declares no resources", async () =>
     {
         const baker = new FakePresentationBaker();
         const ctx = contextWith(plainPkg(), libraryManifest());

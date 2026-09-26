@@ -10,15 +10,14 @@ import { NpmArtifacts } from "./npm-artifacts.js";
 // A project content generator (spec §2, §11) that bakes the compiled model's
 // presentation — SVG/raster icons into a self-contained presentation.compiled.json +
 // icon-index — into the package output. Mural-coupled, so it runs the injected
-// IPresentationBaker (the concrete baker lives host-side; the ctor takes `undefined`
-// when the host has none, in which case this action skips cleanly rather than failing
-// the build). Gated on the project actually declaring resources
-// (`PresentationResourceEmitter.DeclaresResources`) and on the current project type
-// having bake options at all — an architecture project has neither dict name nor icon
-// prefix to bake with. Runs AFTER StampResourceKeysAction, which stamps the resource
-// keys onto the shared document in place so model.json carries them; this action only
-// bakes, it does not stamp. A referenced icon with no readable project file is reported
-// as an error, stopping the pipeline before promotion.
+// IPresentationBaker; the baker is always supplied (TODL's own DefaultPresentationBaker),
+// so the bake skips only when the project declares no resources at all
+// (`PresentationResourceEmitter.DeclaresResources`) or when the current project type has
+// no bake options — an architecture project has neither dict name nor icon prefix to bake
+// with. Runs AFTER StampResourceKeysAction, which stamps the resource keys onto the
+// shared document in place so model.json carries them; this action only bakes, it does
+// not stamp. A referenced icon with no readable project file is reported as an error,
+// stopping the pipeline before promotion.
 export class BakeResourcesAction implements IBuildAction<TodlBuildContext>
 {
     private static readonly ActionName = "bake-resources";
@@ -33,7 +32,7 @@ export class BakeResourcesAction implements IBuildAction<TodlBuildContext>
     public readonly Consumes: readonly ArtifactKey<unknown>[] = [NpmArtifacts.CompiledModel];
     public readonly Produces: readonly ArtifactKey<unknown>[] = [];
 
-    constructor(private readonly baker: IPresentationBaker | undefined)
+    constructor(private readonly baker: IPresentationBaker)
     {
     }
 
@@ -46,8 +45,6 @@ export class BakeResourcesAction implements IBuildAction<TodlBuildContext>
 
         const options = this.OptionsFor(ctx.Manifest.type);
         if (options === undefined) return;
-
-        if (this.baker === undefined) return; // no host baker supplied — skip cleanly
 
         const result = await this.baker.Bake(ctx.Project, ctx.Sandbox, BakeResourcesAction.OutputBase, pkg.document, pkg.fullDocument, options);
         if (!result.ok)

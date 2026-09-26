@@ -14,10 +14,10 @@ import { EmitPackageLayoutAction } from "./emit-package-layout-action.js";
 // The npm-package output (spec §4): resolve bases -> compile model -> compile mural ->
 // stamp resource keys -> bake resources -> emit the package layout. Applies to every
 // publishable project type — meta-model, library, and architecture (each carries a graph
-// fragment). Presentation baking is mural-coupled: the concrete IPresentationBaker lives
-// host-side and is passed in through the constructor; the headless pipeline still runs
-// compile-mural + stamp-resource-keys on its own, and BakeResourcesAction itself skips
-// cleanly when no baker is supplied.
+// fragment). Presentation baking is mural-coupled: the required IPresentationBaker is
+// passed in through the constructor and forwarded to BakeResourcesAction, which itself
+// gates the bake on the project declaring resources and the project type having bake
+// options.
 export class NpmPackageBuildSystem implements IBuildSystem<TodlBuildContext, ProjectManifest>
 {
     private static readonly SystemId = "npm-package";
@@ -29,7 +29,7 @@ export class NpmPackageBuildSystem implements IBuildSystem<TodlBuildContext, Pro
 
     private readonly actions: readonly IBuildAction<TodlBuildContext>[];
 
-    constructor(baker?: IPresentationBaker)
+    constructor(baker: IPresentationBaker)
     {
         this.actions = [
             new ResolveBasesAction(),

@@ -5,6 +5,7 @@ import { StaticBuildFlavor } from "../build-flavor.js";
 import type { CoreBuildContext, IBuildAction } from "../build-action.js";
 import { NpmPackageBuildSystem } from "../../todl-build-system/npm/npm-package-build-system.js";
 import { HtmlBundleBuildSystem } from "../../todl-build-system/html-bundle/html-bundle-build-system.js";
+import { FakePresentationBaker } from "../../project-services/core/tests/fake-producer-seams.js";
 
 class NoopAction implements IBuildAction<CoreBuildContext>
 {
@@ -53,7 +54,7 @@ describe("built-in systems expose a single flavor", () =>
 {
     test("npm-package flavor mirrors the system output + non-empty pipeline", () =>
     {
-        const flavors = new NpmPackageBuildSystem().Flavors();
+        const flavors = new NpmPackageBuildSystem(new FakePresentationBaker()).Flavors();
         assert.equal(flavors.length, 1);
         assert.equal(flavors[0].OutputName, "npm-package");
         assert.ok(flavors[0].Actions().length > 0);

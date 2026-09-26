@@ -9,6 +9,7 @@ import { FakeStorage, type IStorage } from "@pragmatic-tech-ai/todl-runtime";
 import { NodeFsStorage } from "@pragmatic-tech-ai/todl-runtime/node";
 import { BuildSystemRegistry } from "../../../build-system-core/build-system-registry.js";
 import { NpmPackageBuildSystem } from "../../npm/npm-package-build-system.js";
+import { FakePresentationBaker } from "../../../project-services/core/tests/fake-producer-seams.js";
 import { SolutionBuildManager } from "../solution-build-manager.js";
 import { EmptyPackageSource } from "../../tests/fakes.js";
 import { ProjectBuildStatus } from "../../../build-system-core/build-result.js";
@@ -77,7 +78,7 @@ describe("SolutionBuildManager", () =>
         const meta = fsProject("meta-models/tech-architecture");
         const lib = fsProject("libraries/microsoft");
         const registry = new BuildSystemRegistry();
-        registry.Register(new NpmPackageBuildSystem());
+        registry.Register(new NpmPackageBuildSystem(new FakePresentationBaker()));
         const manager = new SolutionBuildManager(registry, await MultiOutputProvider.Create(t));
 
         // Projects listed dependent-first to prove the manager reorders; external source
@@ -96,7 +97,7 @@ describe("SolutionBuildManager", () =>
     test("a dependency cycle is reported and no project builds", async (t) =>
     {
         const registry = new BuildSystemRegistry();
-        registry.Register(new NpmPackageBuildSystem());
+        registry.Register(new NpmPackageBuildSystem(new FakePresentationBaker()));
         const manager = new SolutionBuildManager(registry, await MultiOutputProvider.Create(t));
         // Two libraries that (via explicit edges) depend on each other.
         const a = { Id: "a", Project: new FakeStorage(), Manifest: { type: "library", name: "a", version: 1, id: "a" } as ProjectManifest };

@@ -41,7 +41,7 @@ async function runNpm(project: FakeStorage): Promise<{ result: BuildResult; prov
 {
     const manifest = parseManifest(await project.ReadText("project.plexus"));
     const registry = new BuildSystemRegistry<TodlBuildContext, ProjectManifest>();
-    registry.Register(new NpmPackageBuildSystem());
+    registry.Register(new NpmPackageBuildSystem(new FakePresentationBaker()));
     const provider = new FakeStorageProvider();
     const manager = new TodlProjectBuildManager(registry, provider);
     const { Result: result } = await manager.Build({ Project: project, Manifest: manifest, BuildSystemId: "npm-package", Source: new EmptyPackageSource() });
@@ -75,7 +75,7 @@ describe("NpmPackageBuildSystem", () =>
 
     test("applies to meta-model, library, and architecture projects", () =>
     {
-        const system = new NpmPackageBuildSystem();
+        const system = new NpmPackageBuildSystem(new FakePresentationBaker());
         assert.equal(system.AppliesTo({ type: "meta-model", name: "m", version: 1 } as never), true);
         assert.equal(system.AppliesTo({ type: "library", name: "l", version: 1 } as never), true);
         assert.equal(system.AppliesTo({ type: "architecture", name: "a", version: 1 } as never), true);
@@ -83,7 +83,7 @@ describe("NpmPackageBuildSystem", () =>
 
     test("wires the fixed action pipeline: resolve -> compile -> mural -> stamp -> bake -> emit", () =>
     {
-        const system = new NpmPackageBuildSystem();
+        const system = new NpmPackageBuildSystem(new FakePresentationBaker());
         const flavor = system.Flavors()[0];
         assert.deepEqual(flavor.Actions().map((a) => a.Name), [
             "resolve-bases", "compile-model", "compile-mural",
@@ -158,7 +158,7 @@ async function runNpmWith(project: FakeStorage, source: IPackageSource): Promise
 {
     const manifest = parseManifest(await project.ReadText("project.plexus"));
     const registry = new BuildSystemRegistry<TodlBuildContext, ProjectManifest>();
-    registry.Register(new NpmPackageBuildSystem());
+    registry.Register(new NpmPackageBuildSystem(new FakePresentationBaker()));
     const provider = new FakeStorageProvider();
     const manager = new TodlProjectBuildManager(registry, provider);
     const { Result: result } = await manager.Build({ Project: project, Manifest: manifest, BuildSystemId: "npm-package", Source: source });
