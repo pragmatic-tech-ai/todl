@@ -1,6 +1,6 @@
 import { test, describe, type TestContext } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, cpSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -10,7 +10,6 @@ import { NodeFsStorage } from "@pragmatic-tech-ai/todl-runtime/node";
 import {
     BuildSystemRegistry,
     ProjectBuildStatus,
-    type IBuildAction,
     type ProjectBuildOutput,
     type IBuildStorageProvider,
     type OpenedOutput,
@@ -20,7 +19,6 @@ import {
     TodlProjectBuildManager,
     SolutionBuildManager,
     NpmPackageBuildSystem,
-    GeneratePresentationAction,
     RegistrySource,
     type TodlBuildContext,
     type IPackageSource,
@@ -44,7 +42,9 @@ const TEST_PROJECTS = join(dirname(fileURLToPath(import.meta.url)), "../../../..
 const META_MODEL = "meta-models/tech-architecture";
 const MICROSOFT = "libraries/microsoft";
 const AWS = "libraries/aws";
-const LIBRARY_BAKE: BakeOptions = { dictName: "LibraryPresentation", iconPrefix: "" };
+const MU_VIEW_PATH = "views/app.mu";
+const VALID_APP_MU = "Application { resources: { Border x:root {} } }\n";
+const COMPILED_MU_PATH = "compiled/app.mu.js";
 
 interface FixtureProject
 {
@@ -64,6 +64,38 @@ async function tempRoot(t: TestContext): Promise<string>
     const root = await mkdtemp(join(tmpdir(), "todl-build-life-"));
     t.after(async () => { await rm(root, { recursive: true, force: true }); });
     return root;
+}
+
+// Copies a fixture project into a scratch dir so a test can add its own content (a
+// `.mu` view, for the compile-mural assertion below) without ever touching the
+// checked-in fixture under TODL/test_projects.
+async function copiedFixture(t: TestContext, rel: string): Promise<FixtureProject>
+{
+    const scratch = await mkdtemp(join(tmpdir(), "todl-build-life-copy-"));
+    t.after(async () => { await rm(scratch, { recursive: true, force: true }); });
+    cpSync(join(TEST_PROJECTS, rel), scratch, { recursive: true });
+    return fsProject(rel, new NodeFsStorage(scratch));
+}
+
+// Lists every file under a project (sorted, depth-first), so a test can snapshot the
+// project's content before and after a build and assert the build wrote none of its
+// own — all Phase-2 outputs (compiled mural, stamped keys, baked presentation) belong
+// in the sandbox/output, never back into the project.
+async function filesUnder(storage: IStorage, dir: string): Promise<readonly string[]>
+{
+    const files: string[] = [];
+    await collectFiles(storage, dir, files);
+    return files.sort();
+}
+
+async function collectFiles(storage: IStorage, dir: string, into: string[]): Promise<void>
+{
+    for (const entry of await storage.List(dir))
+    {
+        const path = dir.length > 0 ? `${dir}/${entry.Name}` : entry.Name;
+        if (entry.IsDirectory) await collectFiles(storage, path, into);
+        else into.push(path);
+    }
 }
 
 // A build source that resolves nothing, so a project's bases can only come from wherever
@@ -193,9 +225,9 @@ class BuildHarness
         return new RegistrySource(this.Registry);
     }
 
-    public Build(project: FixtureProject, source: IPackageSource, generators: readonly IBuildAction<TodlBuildContext>[] = []): Promise<ProjectBuildOutput>
+    public Build(project: FixtureProject, source: IPackageSource, baker?: IPresentationBaker): Promise<ProjectBuildOutput>
     {
-        return new TodlProjectBuildManager(this.registryWith(generators), this.provider).Build({
+        return new TodlProjectBuildManager(this.registryWith(baker), this.provider).Build({
             Project: project.Project,
             Manifest: project.Manifest,
             BuildSystemId: "npm-package",
@@ -206,7 +238,7 @@ class BuildHarness
 
     public SolutionManager(): SolutionBuildManager
     {
-        return new SolutionBuildManager(this.registryWith([]), this.provider);
+        return new SolutionBuildManager(this.registryWith(undefined), this.provider);
     }
 
     public async Publish(outputPath: string): Promise<void>
@@ -219,17 +251,12 @@ class BuildHarness
         return this.Registry.ListPackages();
     }
 
-    private registryWith(generators: readonly IBuildAction<TodlBuildContext>[]): BuildSystemRegistry<TodlBuildContext, ProjectManifest>
+    private registryWith(baker: IPresentationBaker | undefined): BuildSystemRegistry<TodlBuildContext, ProjectManifest>
     {
         const registry = new BuildSystemRegistry<TodlBuildContext, ProjectManifest>();
-        registry.Register(new NpmPackageBuildSystem(generators));
+        registry.Register(new NpmPackageBuildSystem(baker));
         return registry;
     }
-}
-
-function presentationGenerator(): IBuildAction<TodlBuildContext>
-{
-    return new GeneratePresentationAction(new TestPresentationBaker(), LIBRARY_BAKE);
 }
 
 describe("build lifecycle (build → presentation → publish → resolve)", () =>
@@ -267,13 +294,21 @@ describe("build lifecycle (build → presentation → publish → resolve)", () 
         assert.equal(meta.Result.Ok, true, JSON.stringify(meta.Result.Diagnostics));
         await harness.Publish(meta.Result.OutputPath!);
 
-        const lib = fsProject(MICROSOFT);
-        const output = await harness.Build(lib, harness.Source(), [presentationGenerator()]);
+        // A copy of the library fixture, carrying an extra `.mu` view so the build also
+        // has something for CompileMuralAction to compile — the checked-in fixture itself
+        // stays untouched.
+        const lib = await copiedFixture(t, MICROSOFT);
+        await lib.Project.WriteText(MU_VIEW_PATH, VALID_APP_MU);
+        const projectFilesBefore = await filesUnder(lib.Project, "");
+
+        const output = await harness.Build(lib, harness.Source(), new TestPresentationBaker());
 
         assert.equal(output.Result.Ok, true, JSON.stringify(output.Result.Diagnostics));
-        // Presentation was generated into the output.
+        // Presentation was baked into the output.
         assert.ok(output.Result.Artifacts.includes("presentation/presentation.compiled.json"), "wrote presentation.compiled.json");
         assert.ok(output.Result.Artifacts.includes("presentation/icon-index.json"), "wrote icon-index.json");
+        // The project's own `.mu` view compiled into the package (CompileMuralAction ran).
+        assert.ok(output.Result.Artifacts.includes(COMPILED_MU_PATH), "compiled the library's .mu view");
 
         // The stamped resource key reached model.json (an icon application carries a key).
         const model = JSON.parse(readFileSync(join(output.Result.OutputPath!, "model.json"), "utf8")) as TodlDocument;
@@ -283,6 +318,11 @@ describe("build lifecycle (build → presentation → publish → resolve)", () 
         // The library records its meta-model as a pinned dependency.
         const pkg = JSON.parse(readFileSync(join(output.Result.OutputPath!, "package.json"), "utf8")) as { dependencies: Record<string, string> };
         assert.ok(pkg.dependencies["@pragmatic-tech-ai/todl-test-tech-architecture"] !== undefined, "records the meta-model dependency");
+
+        // The build wrote NO project content: everything above (compiled mural, stamped
+        // keys, baked presentation) landed in the sandbox/output only.
+        const projectFilesAfter = await filesUnder(lib.Project, "");
+        assert.deepEqual(projectFilesAfter, projectFilesBefore, "the build must not write anything into the project");
 
         await harness.Publish(output.Result.OutputPath!);
         const names = await harness.PublishedNames();
@@ -310,7 +350,7 @@ describe("build lifecycle (build → presentation → publish → resolve)", () 
         // Hide one icon the library's model references; the presentation bake must fail.
         const hidden = "resources/teams.svg";
         const lib = fsProject(MICROSOFT, new HidingStorage(new NodeFsStorage(join(TEST_PROJECTS, MICROSOFT)), hidden));
-        const output = await harness.Build(lib, harness.Source(), [presentationGenerator()]);
+        const output = await harness.Build(lib, harness.Source(), new TestPresentationBaker());
 
         assert.equal(output.Result.Ok, false);
         assert.equal(output.Result.Artifacts.length, 0, "nothing promoted");
