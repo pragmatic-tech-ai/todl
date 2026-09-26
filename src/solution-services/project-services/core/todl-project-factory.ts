@@ -12,7 +12,7 @@ import { type ProjectBaseModelBindings } from './base-binding.js'
 import { Project, ProjectNode, ProjectNodeKind } from './project.js'
 import { TODL_MANUAL_SOURCE, TODL_RULES_SOURCE } from './scaffold.generated.js'
 import { ProjectEventsKey, ProjectEventKind } from '../generators/project-events.js'
-import { parseManifest } from '../../package-manager/index.js'
+import { parseManifest } from '../../package-manager/manifest.js'
 
 // The base for every TODL-authoring project type. It owns the whole project
 // lifecycle common to architecture / meta-model / library — manifest write+read,
