@@ -178,7 +178,7 @@ export abstract class ProducerProjectFactory extends TodlProjectFactory
         for (const folder of ProducerProjectFactory.ResourceFolders)
             copied += await this.copyResourceFolder(storage, dest, folder, base)
 
-        await this.writePresentation(storage, doc, true)
+        await this.writePresentation(storage, doc, pkg.fullDocument, true)
 
         const warn = scanned.warnings.length > 0
             ? ` (${scanned.warnings.length} warning(s): ${scanned.warnings.join('; ')})`
@@ -206,19 +206,17 @@ export abstract class ProducerProjectFactory extends TodlProjectFactory
         if (problems.length > 0) return
         const { model, diagnostics } = checkAgainst(bases, sources)
         if (diagnostics.some((d) => d.severity === Severity.Error)) return
-        await this.writePresentation(storage, toJSON(model), colored)
+        // `toJSON(model)` here is the full checked graph (bases + prelude included, per
+        // checkAgainst), not an own-only split — so it doubles as its own closure.
+        const doc = toJSON(model)
+        await this.writePresentation(storage, doc, doc, colored)
     }
 
-    private async writePresentation(storage: IStorage, doc: TodlDocument, colored: boolean): Promise<void>
+    private async writePresentation(storage: IStorage, doc: TodlDocument, closure: TodlDocument, colored: boolean): Promise<void>
     {
-        // This legacy path only ever computes one document (`toJSON(model)` in
-        // regeneratePresentation, above) — no separate own/closure split — so `doc` is
-        // passed as both the document and the closure. A behaviour-preserving shim:
-        // ancestry resolution still works for a literal `icon` self-key, just not for a
-        // MuralResource-inherited annotation whose declaration lives outside `doc`.
         await storage.WriteText(
             ProducerProjectFactory.PRESENTATION_FILE,
-            PresentationResourceEmitter.GenerateAssets(doc, doc, this.presentationDict, colored))
+            PresentationResourceEmitter.GenerateAssets(doc, closure, this.presentationDict, colored))
     }
 
     // Recursively copy one resource folder from the project storage into the bundle at

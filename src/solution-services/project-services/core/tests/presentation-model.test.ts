@@ -42,6 +42,16 @@ describe('PresentationResourceEmitter — MuralResource ancestry discovery', () 
         assert.equal(PresentationResourceEmitter.DeclaresResources(pkg.document, pkg.fullDocument), false)
     })
 
+    test('DeclaresResources is true for a MuralResource application that sets only key (no path — both optional)', () =>
+    {
+        const src = `namespace demo {
+            annotation pin : MuralResource { path : string?; }
+            concept Widget { annotate pin { key = "custom_key"; } }
+        }`
+        const pkg = compileFixture(src)
+        assert.equal(PresentationResourceEmitter.DeclaresResources(pkg.document, pkg.fullDocument), true)
+    })
+
     test('DistinctIcons finds literal @icon paths via the closure', () =>
     {
         const src = 'namespace demo { concept Widget { annotate icon { path = "resources/w.svg"; } } }'

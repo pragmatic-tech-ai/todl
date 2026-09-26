@@ -30,20 +30,24 @@ export class PresentationResourceEmitter
     private static readonly MuralResourceAnnotation = 'MuralResource'
     private static readonly PathAttr = 'path'
     private static readonly KeyAttr = 'key'
+    private static readonly AnnotatedEdgeKind = 'Annotated'
 
     // True iff some own node carries an annotation application whose declared type
     // inherits (transitively) from MuralResource — resolved via `projectAnnotations`
     // against the full closure, since the prelude's own MuralResource/icon
     // declarations (and their `Extends` chain) live outside the own-only `document`.
+    // Presence-only: a MuralResource application that sets only `key` (no `path` —
+    // both are optional on the prelude base) still counts as a declared resource.
     public static DeclaresResources(document: TodlDocument, closure: TodlDocument): boolean
     {
-        return document.nodes.some((n) => PresentationResourceEmitter.MuralResourcePath(n, closure) !== undefined)
+        return document.nodes.some((n) => PresentationResourceEmitter.ProjectedMuralResource(n, closure) !== undefined)
     }
 
     // Distinct resource paths declared by own nodes, sorted — the SVGs the generated
     // dictionary `include`s. A resource is any node whose applied annotation inherits
     // MuralResource (not just the literal `icon`), discovered by projecting the own
-    // node's annotations against the full closure.
+    // node's annotations against the full closure. Unlike DeclaresResources, a path is
+    // required here — there is nothing to `include` without one.
     public static DistinctIcons(document: TodlDocument, closure: TodlDocument): readonly string[]
     {
         const set = new Set<string>()
@@ -55,12 +59,19 @@ export class PresentationResourceEmitter
         return [...set].sort()
     }
 
-    // The MuralResource-inherited resource path for one node (own or closure), or
-    // undefined if none of its annotations inherit MuralResource. The bridge between
-    // an own node and the closure it must be projected against.
+    // The projected MuralResource-inherited params bag for one node (own or closure),
+    // or undefined if none of its annotations inherit MuralResource. The bridge
+    // between an own node and the closure it must be projected against.
+    private static ProjectedMuralResource(node: JsonNode, closure: TodlDocument): Record<string, unknown> | undefined
+    {
+        return projectAnnotations(closure, node.id)[PresentationResourceEmitter.MuralResourceAnnotation]
+    }
+
+    // The MuralResource-inherited resource path for one node, or undefined if none of
+    // its annotations inherit MuralResource or the inherited application sets no path.
     private static MuralResourcePath(node: JsonNode, closure: TodlDocument): string | undefined
     {
-        const path = projectAnnotations(closure, node.id)[PresentationResourceEmitter.MuralResourceAnnotation]?.[PresentationResourceEmitter.PathAttr]
+        const path = PresentationResourceEmitter.ProjectedMuralResource(node, closure)?.[PresentationResourceEmitter.PathAttr]
         return (typeof path === 'string' && path.length > 0) ? path : undefined
     }
 
@@ -152,23 +163,44 @@ export class PresentationResourceEmitter
         return PresentationResourceEmitter.AssignResourceKeys(document, closure).get(path) ?? PresentationResourceEmitter.IconKey(path)
     }
 
-    // Write the assigned resource key onto each own node that declares a MuralResource-
-    // inherited path — the "write-back" that lands in the compiled artifact
-    // (model.json). Every discovered path came from DistinctIcons (own nodes, ancestry
-    // resolved against `closure`), so matching an own node's own `path` attr against
-    // that discovered set is sufficient to find the node to stamp — still the
-    // annotation application node itself, exactly as before generalisation. Called over
-    // pkg.document before persist, so the stamped key reaches model.json.
+    // Write the assigned resource key onto each own annotation APPLICATION node that
+    // carries a MuralResource-inherited path — the "write-back" that lands in the
+    // compiled artifact (model.json). Iterates own nodes as candidate TARGETS (the
+    // entity an application is attached to, matching DeclaresResources/DistinctIcons),
+    // then — guarded by the same ancestry projection, not merely a coincidental
+    // `path` string match — walks the target's own `Annotated` edges to the actual
+    // application node and stamps it. Called over pkg.document before persist, so the
+    // stamped key reaches model.json.
     public static StampResourceKeys(document: TodlDocument, closure: TodlDocument): void
     {
         const keys = PresentationResourceEmitter.AssignResourceKeys(document, closure)
-        for (const n of document.nodes)
+        if (keys.size === 0) return
+        const ownNodeById = new Map(document.nodes.map((n) => [n.id, n]))
+        for (const target of document.nodes)
         {
-            const attrs = n.attrs as Record<string, unknown>
-            const path = attrs[PresentationResourceEmitter.PathAttr]
+            // One call, reused below for the alias check — `projectAnnotations` builds a
+            // fresh params object per call, so a second call would never be
+            // reference-equal to `muralResource` even for the same application.
+            const annotations = projectAnnotations(closure, target.id)
+            const muralResource = annotations[PresentationResourceEmitter.MuralResourceAnnotation]
+            if (muralResource === undefined) continue
+            const path = muralResource[PresentationResourceEmitter.PathAttr]
             if (typeof path !== 'string' || path.length === 0) continue
             const key = keys.get(path)
-            if (key !== undefined) attrs[PresentationResourceEmitter.KeyAttr] = key
+            if (key === undefined) continue
+
+            for (const edge of document.edges)
+            {
+                if (edge.kind !== PresentationResourceEmitter.AnnotatedEdgeKind || edge.from !== target.id) continue
+                const appNode = ownNodeById.get(edge.to)
+                if (appNode === undefined) continue
+                // The application whose OWN chain resolution is this same MuralResource
+                // entry (reference-identity: `projectAnnotations` aliases one params
+                // object under every ancestor name of one chain walk) — disambiguates a
+                // target carrying several unrelated annotations.
+                if (annotations[appNode.type ?? ''] !== muralResource) continue
+                ;(appNode.attrs as Record<string, unknown>)[PresentationResourceEmitter.KeyAttr] = key
+            }
         }
     }
 
