@@ -73,6 +73,17 @@ describe("NpmPackageBuildSystem", () =>
         assert.equal(await provider.Output.Exists("resources/model.todl"), false);
     });
 
+    test("a producer build excludes the top-level samples/ folder from the model compile", async () =>
+    {
+        const project = await metaProject();
+        await project.WriteText("samples/demo.todl", "namespace boom { this is not valid todl }");
+
+        const { result, provider } = await runNpm(project);
+
+        assert.equal(result.Ok, true, JSON.stringify(result.Diagnostics));
+        assert.equal(await provider.Output.Exists("model.json"), true);
+    });
+
     test("applies to meta-model, library, and architecture projects", () =>
     {
         const system = new NpmPackageBuildSystem(new FakePresentationBaker());

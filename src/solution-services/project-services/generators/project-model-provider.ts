@@ -9,8 +9,9 @@
 
 import type { IStorage } from "@pragmatic-tech-ai/todl-runtime";
 import type { TodlDocument } from "../../../compiler-services/emit/json.js";
+import type { SourceFile } from "../../../compiler-services/diagnostics/span.js";
 import { compilePackage, PackageKind, type PackageIdentity, type PackageRef } from "../../../publish/publish.js";
-import type { ProjectManifest } from "../../package-manager/manifest.js";
+import { ProjectType, type ProjectManifest } from "../../package-manager/manifest.js";
 import { toPackageJson } from "../../package-manager/package-json.js";
 import { RecursiveProjectReferencesResolver } from "../core/base-resolver.js";
 import type { ProjectBaseModelBindings } from "../core/base-binding.js";
@@ -58,7 +59,7 @@ export class ProjectModelProvider implements IProjectModelProvider
     // Mirrors CompileModelAction, as the granular half a build action delegates to.
     public async CompileWithBases(bases: readonly TodlDocument[]): Promise<ProjectModel>
     {
-        const sources = await TodlProjectSourceFiles.Collect(this.project);
+        const sources = await this.CollectSources();
         const packageJson = toPackageJson(this.manifest); // throws on an architecture manifest
         const identity: PackageIdentity = { id: packageJson.todl.id, version: packageJson.version, name: this.manifest.name };
 
@@ -68,6 +69,22 @@ export class ProjectModelProvider implements IProjectModelProvider
             return { errors: outcome.errors.map((e) => e.message) };
         }
         return { package: outcome.package, errors: [] };
+    }
+
+    // The project's compile inputs. A producer (meta-model / library) excludes its
+    // top-level `samples/` folder — example instances that must never enter the
+    // taxonomy compile (the retired ProducerProjectFactory.publish() did the same);
+    // any other project type compiles every `.todl`.
+    private CollectSources(): Promise<SourceFile[]>
+    {
+        switch (this.manifest.type)
+        {
+            case ProjectType.MetaModel:
+            case ProjectType.Library:
+                return TodlProjectSourceFiles.CollectTaxonomy(this.project);
+            default:
+                return TodlProjectSourceFiles.Collect(this.project);
+        }
     }
 
     // The pinned dependency refs a manifest declares, as PackageRefs (identical to
