@@ -2,7 +2,7 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { FakeStorage } from "@pragmatic-tech-ai/todl-runtime";
 import { BuildArtifacts } from "../../../build-system-core/build-artifacts.js";
-import { DiagnosticSink } from "../../../build-system-core/diagnostic-sink.js";
+import { DiagnosticSink, Severity } from "../../../build-system-core/diagnostic-sink.js";
 import { EmptyPackageSource } from "../../tests/fakes.js";
 import type { TodlBuildContext } from "../../todl-build-context.js";
 import { ProjectType, type ProjectManifest } from "../../../package-manager/manifest.js";
@@ -121,6 +121,23 @@ describe("EmitBundleAction", () =>
         assert.equal(cls?.thumbnail, `thumbnails/${classId}.png`);
         assert.equal(cls?.doc, `docs/${classId}.md`);
         assert.deepEqual(bundle.docs, [`docs/${classId}.md`]);
+    });
+
+    test("an orphan visual is reported as a non-blocking Warning and the bundle is still written", async () =>
+    {
+        const pkg = compiledPackage("demo-lib");
+        const project = new FakeStorage();
+        await project.WriteText("visuals/ghost.mural", "<mural/>");
+        const ctx = contextWith(pkg, libraryManifest(), project);
+
+        await new EmitBundleAction().Execute(ctx);
+
+        const diagnostics = ctx.Diagnostics.All();
+        assert.equal(diagnostics.length, 1);
+        assert.equal(diagnostics[0]?.severity, Severity.Warning);
+        assert.match(diagnostics[0]?.message ?? "", /visuals\/ghost\.mural/);
+        assert.equal(ctx.Diagnostics.HasErrorsSince(0), false, "an orphan never blocks the build");
+        assert.equal(await ctx.Sandbox.Exists("bundle.json"), true);
     });
 
     test("architecture project: no bundle.json written, no throw", async () =>

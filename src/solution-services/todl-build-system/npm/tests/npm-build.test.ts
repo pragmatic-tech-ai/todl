@@ -11,6 +11,8 @@ import type { BuildResult } from "../../../build-system-core/build-result.js";
 import { PackageKind, type PackageRef } from "../../../../publish/publish.js";
 import type { IPackageSource, SourcedPackage } from "../../package-source.js";
 import { FakePresentationBaker } from "../../../project-services/core/tests/fake-producer-seams.js";
+import { DefaultPresentationBaker } from "../../../project-services/core/default-presentation-baker.js";
+import { Severity } from "../../../build-system-core/diagnostic-sink.js";
 
 const META = "namespace acme { concept Widget { label : string?; } }";
 const VALID_APP_MU = "Application { resources: { Border x:root {} } }\n";
@@ -82,6 +84,35 @@ describe("NpmPackageBuildSystem", () =>
 
         assert.equal(result.Ok, true, JSON.stringify(result.Diagnostics));
         assert.equal(await provider.Output.Exists("model.json"), true);
+    });
+
+    test("with the real default baker, a referenced icon with no project file fails the build and promotes nothing", async () =>
+    {
+        const project = await libraryProjectWithIconAndMu();
+        await project.Delete("visuals/w.svg");
+        const manifest = parseManifest(await project.ReadText("project.plexus"));
+        const registry = new BuildSystemRegistry<TodlBuildContext, ProjectManifest>();
+        registry.Register(new NpmPackageBuildSystem(new DefaultPresentationBaker()));
+        const provider = new FakeStorageProvider();
+        const manager = new TodlProjectBuildManager(registry, provider);
+
+        const { Result: result } = await manager.Build({ Project: project, Manifest: manifest, BuildSystemId: "npm-package", Source: new EmptyPackageSource() });
+
+        assert.equal(result.Ok, false);
+        assert.ok(result.Diagnostics.some((d) => /missing icon file\(s\): visuals\/w\.svg/.test(d.message)), JSON.stringify(result.Diagnostics));
+        assert.equal(await provider.Output.Exists("model.json"), false, "nothing promoted");
+    });
+
+    test("an orphan visual is a non-blocking warning: the build succeeds and reports it", async () =>
+    {
+        const project = await metaProject();
+        await project.WriteText("visuals/ghost.mural", "<template/>");
+
+        const { result, provider } = await runNpm(project);
+
+        assert.equal(result.Ok, true, JSON.stringify(result.Diagnostics));
+        assert.ok(result.Diagnostics.some((d) => d.severity === Severity.Warning && /ghost/.test(d.message)), JSON.stringify(result.Diagnostics));
+        assert.equal(await provider.Output.Exists("bundle.json"), true);
     });
 
     test("applies to meta-model, library, and architecture projects", () =>

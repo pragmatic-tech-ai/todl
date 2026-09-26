@@ -1,6 +1,7 @@
 import type { IBuildAction } from "../../build-system-core/build-action.js";
 import type { TodlBuildContext } from "../todl-build-context.js";
 import type { ArtifactKey } from "../../build-system-core/artifact-key.js";
+import { Severity } from "../../build-system-core/diagnostic-sink.js";
 import { ProjectType } from "../../package-manager/manifest.js";
 import { type PackageBundle, type PublishedClass, ProducerResources } from "../../project-services/core/package-bundle.js";
 import { projectAnnotations } from "../../../publish/reflect.js";
@@ -44,6 +45,12 @@ export class EmitBundleAction implements IBuildAction<TodlBuildContext>
 
         const classes: PublishedClass[] = pkg.classes.map((c) => ({ ...c }));
         const scanned = await ProducerResources.Scan(ctx.Project, classes.map((c) => c.id));
+        // Orphan resources (a visuals/thumbnails file naming no known class) are
+        // non-blocking: surfaced as warnings, the bundle is still written.
+        for (const warning of scanned.warnings)
+        {
+            ctx.Diagnostics.Report({ severity: Severity.Warning, message: warning, source: EmitBundleAction.ActionName });
+        }
         for (const c of classes)
         {
             const r = scanned.byClass.get(c.id);
