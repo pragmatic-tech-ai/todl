@@ -9,6 +9,7 @@ import { FakeStorage, type IStorage } from "@pragmatic-tech-ai/todl-runtime";
 import { NodeFsStorage } from "@pragmatic-tech-ai/todl-runtime/node";
 import {
     ProjectBuildStatus,
+    DiagnosticSink,
     type IBuildStorageProvider,
     type OpenedOutput,
     type BuildOptions,
@@ -24,6 +25,13 @@ import {
 import { PackageRegistryClient, parseManifest } from "../src/solution-services/package-manager/index.js";
 import { LocalNpmRegistry } from "../src/solution-services/package-manager/registries/npm/local-npm-registry.js";
 import type { PackageRef } from "../src/publish/publish.js";
+import {
+    ProjectModelProvider,
+    DtoGenerator,
+    UiPlaceholderGenerator,
+    GeneratorTrigger,
+    type GeneratorContext,
+} from "../src/index.js";
 
 // USER SMOKE TEST — builds the real on-disk architecture project (TODL/test_projects/
 // architectures/test_architecture) into a single-page HTML application by driving the
@@ -152,10 +160,28 @@ describe("user smoke: build test_architecture into a bundled application", () =>
         assert.equal(bases.Ok, true, JSON.stringify(bases.Projects.map((p) => ({ p: p.ProjectId, d: p.Result?.Diagnostics }))));
         for (const outcome of bases.Projects) await client.publish(outcome.Result!.OutputPath!);
 
+        // Generation step — html-bundle now REQUIRES generated/model.ts + generated/app.mu
+        // to already exist as project content (Task 11's "require, never create"
+        // boundary), so produce them up front via the same generators and compile seam
+        // (ProjectModelProvider) a real caller would run before ever invoking the build,
+        // against the same RegistrySource the architecture resolves its bases with.
+        const architecture = fsProject(ARCHITECTURE);
+        const source = new RegistrySource(registry);
+        const model = new ProjectModelProvider(architecture.Project, architecture.Manifest, source);
+        const genCtx: GeneratorContext = {
+            Project: architecture.Project,
+            Manifest: architecture.Manifest,
+            Model: model,
+            Diagnostics: new DiagnosticSink(),
+            Reason: GeneratorTrigger.ProjectCreated,
+        };
+        await new DtoGenerator().Generate(genCtx);
+        await new UiPlaceholderGenerator().Generate(genCtx);
+        assert.equal(genCtx.Diagnostics.Count, 0, JSON.stringify(genCtx.Diagnostics.All()));
+
         // Phase 2 — build the architecture as an html-bundle, resolving its meta-model +
         // libraries from the registry (html-bundle is architecture-only, so it is the only
         // project the manager builds here).
-        const architecture = fsProject(ARCHITECTURE);
         const bundle = await solution.Build({
             Projects: [architecture],
             BuildSystemId: "html-bundle",
