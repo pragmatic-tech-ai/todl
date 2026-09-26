@@ -1,9 +1,10 @@
 /**
  * The single unified seeder for the three project-system DI registries + the
- * default presentation baker + the ProjectEvents/GeneratorScheduler lifecycle —
- * ADDITIVE to the existing composition units (`solution-services-module.mu`,
- * `todl-build-system-module.mu`, `application/generator-registry-contribution.ts`),
- * which stay in place for deferred devUI/Plexus consumers. `ProjectSystemComposer`
+ * default presentation baker + the ProjectEvents/GeneratorScheduler lifecycle. It is
+ * the ONE owner of the project-factory registry under ProjectFactoryRegistryKey
+ * (`solution-services-module.mu` no longer registers factories). The remaining old
+ * units (`todl-build-system-module.mu`, `application/generator-registry-contribution.ts`)
+ * stay in place for deferred devUI/Plexus consumers. `ProjectSystemComposer`
  * is a new, self-contained composer, reused by a mural module (Task 7) and a
  * headless contribution, that stands up TODL's built-in factories/build-systems/
  * generators into a FRESH container in one call.

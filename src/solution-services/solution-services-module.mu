@@ -5,32 +5,23 @@
 // (a shell adds it alongside its shell modules; mural's ShellCompositionRoot routes
 // a plain Module straight through to RegisterServices, never into `Modules`).
 //
-// It owns the engine services themselves (SolutionManagerService + settings
-// registry) AND todl's three built-in project TYPES — the meta-model / library /
-// architecture factories — plus the registrar that indexes them
-// (DefaultProjectFactoryRegistry, under ProjectFactoryRegistryKey). Project types
-// are an engine concern (opening/creating project data), so a host composes them by
-// composing the engine, with no app-side factory wiring; an app that ships a
-// different type set (e.g. devUI's todl-package) shadows ProjectFactoryRegistryKey
-// with its own registry after composing the engine.
+// It owns the engine services themselves: SolutionManagerService + the settings
+// registry. Project TYPES are NOT registered here: todl's three built-in factories
+// (meta-model / library / architecture) and the one registry that indexes them
+// (under ProjectFactoryRegistryKey) come from TodlProjectSystemModule — the
+// project-system module a host lists at the head of its `.modules:` block. An app
+// that ships a different type set (e.g. devUI's todl-package) registers its own
+// IProjectFactoryRegistry under ProjectFactoryRegistryKey instead.
 //
-// The host still supplies the manager's remaining seams — the storage-provider
-// registry, the prompt service, the package source — under their keys.
+// The host still supplies the manager's remaining seams — the project-factory
+// registry (TodlProjectSystemModule or its own), the storage-provider registry, the
+// prompt service, the package source — under their keys.
 import SolutionManagerService from "./solution-manager/engine/solution-manager-service.js"
 import SolutionSettingsRegistry from "./solution-manager/engine/solution-settings-registry.js"
-import ProjectFactoryRegistryKey from "./solution-manager/engine/host-services.js"
-import MetaModelProjectFactory from "./project-services/meta-model-project/meta-model-project-factory.js"
-import LibraryProjectFactory from "./project-services/library-project/library-project-factory.js"
-import ArchitectureProjectFactory from "./project-services/architecture-project/architecture-project-factory.js"
-import DefaultProjectFactoryRegistry from "./project-services/default-project-factory-registry.js"
 
 module SolutionServicesEngine {
     .services: {
         SolutionManagerService
         SolutionSettingsRegistry
-        MetaModelProjectFactory
-        LibraryProjectFactory
-        ArchitectureProjectFactory
-        DefaultProjectFactoryRegistry -> ProjectFactoryRegistryKey
     }
 }

@@ -227,7 +227,6 @@ export {
 export { ArchitectureProjectFactory } from './solution-services/project-services/architecture-project/architecture-project-factory.js';
 export { MetaModelProjectFactory } from './solution-services/project-services/meta-model-project/meta-model-project-factory.js';
 export { LibraryProjectFactory } from './solution-services/project-services/library-project/library-project-factory.js';
-export { DefaultProjectFactoryRegistry } from './solution-services/project-services/default-project-factory-registry.js';
 export {
     isBaseProducing,
     type IBaseProducingProjectFactory,
