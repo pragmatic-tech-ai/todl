@@ -62,6 +62,14 @@
       },
       "require": "./dist/solution-services/todl-build-system/index.js"
     },
+    "./project-system": {
+      "types": "./dist/solution-services/project-services/composition/index.d.ts",
+      "import": {
+        "development": "./src/solution-services/project-services/composition/index.ts",
+        "default": "./dist/solution-services/project-services/composition/index.js"
+      },
+      "require": "./dist/solution-services/project-services/composition/index.js"
+    },
     "./domain": {
       "types": "./dist/domain/index.d.ts",
       "import": {
