@@ -21,6 +21,7 @@ import {
 import { type INotificationService } from './notification-service.js';
 import { type PackageSource, type PackageRef } from '../../../domain/domain.js';
 import { type Diagnostic } from '../../../compiler-services/diagnostics/diagnostic.js';
+import { type IPackageRegistry } from '../../package-manager/engine/package-registry.js';
 
 // Owns exactly ONE active solution (the Visual Studio .sln model): create a new
 // empty solution, open/save/close one, and keep a recent-solutions list. Opening
@@ -93,6 +94,13 @@ export class SolutionManagerService extends ServiceBase
     private readonly prompts: IPromptService;
     private readonly packages: PackageSource;
     private readonly notifications: INotificationService | undefined;
+
+    // The registry a solution build's publish flavor pushes to. Infrastructure state,
+    // not bound UI, so it is a plain settable field (no INPC): the host sets it from
+    // the solution's configured registry connection (once that wiring exists), and a
+    // headless caller may set it directly. undefined means "no registry associated" —
+    // PublishPackageAction reports that as a build error rather than publishing.
+    public PublishRegistry: IPackageRegistry | undefined;
 
     constructor(provider: IServiceProvider)
     {

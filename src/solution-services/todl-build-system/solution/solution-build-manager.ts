@@ -10,6 +10,7 @@ import { NoOpBuildProgress } from "../../build-system-core/build-progress.js";
 import type { BuildOptions } from "../../build-system-core/build-options.js";
 import type { IPackageSource, SourcedPackage } from "../package-source.js";
 import type { TodlBuildContext } from "../todl-build-context.js";
+import type { IPackageRegistry } from "../../package-manager/engine/package-registry.js";
 import { CompositePackageSource } from "../composite-package-source.js";
 import { DiagnosticSink, Severity } from "../../build-system-core/diagnostic-sink.js";
 import { TodlProjectBuildManager } from "../todl-project-build-manager.js";
@@ -42,6 +43,8 @@ export interface SolutionBuildRequest
     Progress?: IBuildProgress;
     /** Add-only ordering overrides: [dependent, dependency] — dependent builds after dependency. */
     ExplicitEdges?: readonly (readonly [ProjectId, ProjectId])[];
+    /** The registry a publish-flavor build pushes each built producer package to (spec Task 10); ignored by the plain package flavor. */
+    PublishRegistry?: IPackageRegistry;
 }
 
 // Builds a solution's projects in dependency order (spec §9). Derives the graph from
@@ -128,6 +131,7 @@ export class SolutionBuildManager
                 Source: new CompositePackageSource([buildOutput, request.ExternalSource]),
                 Options: options,
                 ...(request.Progress !== undefined ? { Progress: request.Progress } : {}),
+                ...(request.PublishRegistry !== undefined ? { PublishRegistry: request.PublishRegistry } : {}),
             });
 
             if (result.Ok)

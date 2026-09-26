@@ -15,6 +15,7 @@ import { SolutionManagerService } from '../solution-manager-service.js';
 import { type IStorageProviderRegistry, type IProjectFactoryRegistry } from '../host-services.js';
 import { type INotificationService } from '../notification-service.js';
 import { FakeProjectFactory } from './fake-project-factory.js';
+import { FakeRegistry } from '../../../package-manager/engine/tests/fakes.js';
 
 // A stand-in SessionStore: on Register it applies a preset slice to the bag (as the
 // real store does once loaded) and holds the bag so a test can read what the manager
@@ -357,4 +358,13 @@ test('Rename of an unsaved solution just sets the name (no storage touched)', as
     await svc.Rename('Named But Unsaved');
     assert.equal(svc.ActiveSolution!.Name, 'Named But Unsaved');
     assert.equal(svc.ActiveSolution!.HasLocation, false);
+});
+
+test('PublishRegistry defaults to undefined and is settable/readable', () => {
+    const { svc } = makeService();
+    assert.equal(svc.PublishRegistry, undefined);
+
+    const registry = new FakeRegistry();
+    svc.PublishRegistry = registry;
+    assert.equal(svc.PublishRegistry, registry);
 });

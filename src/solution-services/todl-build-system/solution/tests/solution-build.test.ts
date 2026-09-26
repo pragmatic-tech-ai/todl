@@ -5,7 +5,12 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { FakeStorage, type IStorage } from "@pragmatic-tech-ai/todl-runtime";
+import {
+    FakeStorage,
+    type IStorage,
+    type IPromptService,
+    type IServiceProvider,
+} from "@pragmatic-tech-ai/todl-runtime";
 import { NodeFsStorage } from "@pragmatic-tech-ai/todl-runtime/node";
 import { BuildSystemRegistry } from "../../../build-system-core/build-system-registry.js";
 import { NpmPackageBuildSystem } from "../../npm/npm-package-build-system.js";
@@ -16,6 +21,12 @@ import { ProjectBuildStatus } from "../../../build-system-core/build-result.js";
 import { parseManifest, type ProjectManifest } from "../../../package-manager/manifest.js";
 import type { IBuildStorageProvider, OpenedOutput } from "../../../build-system-core/build-storage-provider.js";
 import type { BuildOptions } from "../../../build-system-core/build-options.js";
+import { SolutionManagerService } from "../../../solution-manager/engine/solution-manager-service.js";
+import type {
+    IStorageProviderRegistry,
+    IProjectFactoryRegistry,
+} from "../../../solution-manager/engine/host-services.js";
+import { FakeRegistry } from "../../../package-manager/engine/tests/fakes.js";
 
 const PROJECTS = join(dirname(fileURLToPath(import.meta.url)), "../../../../../test_projects");
 
@@ -70,6 +81,134 @@ class MultiOutputProvider implements IBuildStorageProvider
         return { Storage: storage, Path: key };
     }
 }
+
+// A single-project meta-model producer (no cross-project dependency needed): the
+// npm-package build system's npm-publish flavor promotes it to a package layout and
+// then runs PublishPackageAction, so building it is enough to exercise threading
+// SolutionManagerService.PublishRegistry -> SolutionBuildRequest -> TodlBuildContext.
+async function producerProject(): Promise<{ Id: string; Project: IStorage; Manifest: ProjectManifest }>
+{
+    const storage = new FakeStorage();
+    await storage.WriteText("project.plexus", JSON.stringify({ type: "meta-model", name: "widgets", version: 1, id: "widgets", packageVersion: "0.1.0" }));
+    await storage.WriteText("model.todl", "namespace acme { concept Widget { label : string?; } }");
+    const manifest = parseManifest(await storage.ReadText("project.plexus"));
+    return { Id: manifest.id ?? manifest.name, Project: storage, Manifest: manifest };
+}
+
+// A prompt service SolutionManagerService's ctor requires but this fixture never
+// drives (no dirty-solution / Save-As flow is exercised) — every method rejects.
+class StubPromptService implements IPromptService
+{
+    private static readonly NotExercisedMessage = "StubPromptService: not exercised by this fixture";
+
+    public Ask<R>(): Promise<R>
+    {
+        return Promise.reject(new Error(StubPromptService.NotExercisedMessage));
+    }
+    public Confirm(): Promise<boolean>
+    {
+        return Promise.reject(new Error(StubPromptService.NotExercisedMessage));
+    }
+    public PickFolder(): Promise<string | undefined>
+    {
+        return Promise.reject(new Error(StubPromptService.NotExercisedMessage));
+    }
+    public PickFile(): Promise<string | undefined>
+    {
+        return Promise.reject(new Error(StubPromptService.NotExercisedMessage));
+    }
+    public PromptText(): Promise<string | undefined>
+    {
+        return Promise.reject(new Error(StubPromptService.NotExercisedMessage));
+    }
+    public Choose<T>(): Promise<T | undefined>
+    {
+        return Promise.reject(new Error(StubPromptService.NotExercisedMessage));
+    }
+}
+
+// Builds a bare SolutionManagerService through its real constructor, with minimal
+// fakes for the host seams it requires but this fixture never drives — just enough
+// to hold and hand back a PublishRegistry (Task 10's authoritative holder).
+function makeSolutionManagerService(): SolutionManagerService
+{
+    const storages: IStorageProviderRegistry = {
+        CreateStorage: (folder: string) => new FakeStorage(folder),
+    };
+    const factories: IProjectFactoryRegistry = {
+        factoryFor: () => undefined,
+        All: () => [],
+    };
+    const prompts = new StubPromptService();
+    const packages = {
+        resolve: () => Promise.reject(new Error("PackageSource: not exercised by this fixture")),
+    };
+    const provider = {
+        get: () => undefined,
+        getRequired: (token: unknown) =>
+        {
+            if (token === SolutionManagerService.StorageRegistryKey) return storages;
+            if (token === SolutionManagerService.ProjectFactoryRegistryKey) return factories;
+            if (token === SolutionManagerService.PromptServiceKey) return prompts;
+            if (token === SolutionManagerService.PackageSourceKey) return packages;
+            throw new Error(`unexpected service key: ${String(token)}`);
+        },
+        has: () => true,
+    } as unknown as IServiceProvider;
+    return new SolutionManagerService(provider);
+}
+
+describe("SolutionBuildManager — PublishRegistry threading (Task 10)", () =>
+{
+    test("SolutionManagerService.PublishRegistry threads through a publish-flavor build: the fake registry's Publish is called", async (t) =>
+    {
+        const service = makeSolutionManagerService();
+        const registry = new FakeRegistry();
+        service.PublishRegistry = registry;
+        const project = await producerProject();
+
+        const buildSystemRegistry = new BuildSystemRegistry();
+        buildSystemRegistry.Register(new NpmPackageBuildSystem(new FakePresentationBaker()));
+        const manager = new SolutionBuildManager(buildSystemRegistry, await MultiOutputProvider.Create(t));
+
+        const result = await manager.Build({
+            Projects: [project],
+            BuildSystemId: "npm-package",
+            BuildFlavorId: "npm-publish",
+            ExternalSource: new EmptyPackageSource(),
+            PublishRegistry: service.PublishRegistry,
+        });
+
+        assert.equal(result.Ok, true, JSON.stringify(result.Projects.map((p) => p.Result?.Diagnostics)));
+        assert.equal(registry.Published.length, 1);
+    });
+
+    test("with SolutionManagerService.PublishRegistry left undefined, the publish-flavor build fails with the no-registry diagnostic and never publishes", async (t) =>
+    {
+        const service = makeSolutionManagerService();
+        // PublishRegistry left undefined — mirrors a solution with no registry connection configured.
+        const project = await producerProject();
+
+        const buildSystemRegistry = new BuildSystemRegistry();
+        buildSystemRegistry.Register(new NpmPackageBuildSystem(new FakePresentationBaker()));
+        const manager = new SolutionBuildManager(buildSystemRegistry, await MultiOutputProvider.Create(t));
+
+        const result = await manager.Build({
+            Projects: [project],
+            BuildSystemId: "npm-package",
+            BuildFlavorId: "npm-publish",
+            ExternalSource: new EmptyPackageSource(),
+            // exactOptionalPropertyTypes: an optional field takes "absent", not an
+            // explicit `undefined` value — so this mirrors the request the host would
+            // build from a service with no registry configured.
+            ...(service.PublishRegistry !== undefined ? { PublishRegistry: service.PublishRegistry } : {}),
+        });
+
+        assert.equal(result.Ok, false);
+        const diagnostics = result.Projects.flatMap((p) => p.Result?.Diagnostics ?? []);
+        assert.equal(diagnostics.some((d) => /no registry/.test(d.message)), true);
+    });
+});
 
 describe("SolutionBuildManager", () =>
 {
