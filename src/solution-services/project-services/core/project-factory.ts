@@ -100,28 +100,9 @@ export function isPublishable(factory: IProjectFactory): factory is IProjectFact
     return typeof (factory as Partial<IPublishableProjectFactory>).publish === 'function'
 }
 
-// Optional capability a factory MAY also implement: (re)generating a presentation
-// resource dictionary into the project from its compiled model. `colored` picks the
-// icon mode (true → colorful IconDefinitions, false → monochrome geometry). The
-// explorer feature-tests with canGeneratePresentation before offering its Generate
-// Presentation submenu (Colorful / Monochrome) — same pattern as isPublishable.
-export interface IPresentationProjectFactory
-{
-    regeneratePresentation(storage: IStorage, colored: boolean): Promise<void>
-}
-
-// Type guard: can this factory (re)generate a presentation?
-export function canGeneratePresentation(
-    factory: IProjectFactory,
-): factory is IProjectFactory & IPresentationProjectFactory
-{
-    return typeof (factory as Partial<IPresentationProjectFactory>).regeneratePresentation === 'function'
-}
-
 // Optional capability a factory MAY also implement: declaring the content generators
 // for its project type. Composition registers these into the ProjectGeneratorRegistry
-// (Task 8) — the explorer does not call this directly, unlike isPublishable /
-// canGeneratePresentation.
+// (Task 8) — the explorer does not call this directly, unlike isPublishable.
 export interface IGeneratingProjectFactory
 {
     Generators(): readonly IProjectContentGenerator[]

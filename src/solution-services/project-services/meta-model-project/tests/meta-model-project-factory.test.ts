@@ -72,7 +72,7 @@ test('compileToDocument compiles the project .todl into a document', async (t) =
     assert.ok(doc.nodes.some((n) => n.id.includes('Widget')))
 })
 
-test('publish bakes, persists model.json + bundle.json, and writes the generated presentation', async (t) => {
+test('publish bakes and persists model.json + bundle.json', async (t) => {
     const project = await tempDir(t)
     const store = await tempDir(t)
     const baker = new FakePresentationBaker({ ok: true, icons: 3 })
@@ -90,7 +90,6 @@ test('publish bakes, persists model.json + bundle.json, and writes the generated
     assert.equal(baker.calls[0]!.options.iconPrefix, 'mm:')
     assert.equal(await store.Exists('widgets/0.1.0/model.json'), true)
     assert.equal(await store.Exists('widgets/0.1.0/bundle.json'), true)
-    assert.equal(await project.Exists('presentation.generated.mu'), true)
 })
 
 test('publish is blocked (nothing written) when a referenced icon is missing', async (t) => {

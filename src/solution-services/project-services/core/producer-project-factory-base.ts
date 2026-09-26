@@ -7,7 +7,6 @@ import { BlobPackageStore } from '../../../publish/stores.js'
 import { projectAnnotations } from '../../../publish/reflect.js'
 import {
     PROJECT_MANIFEST_FILENAME,
-    type IPresentationProjectFactory,
     type IPublishableProjectFactory,
     type IVersionedProjectFactory,
     type ProjectManifestEnvelope,
@@ -45,9 +44,8 @@ export interface ProducerManifest extends ProjectManifestEnvelope
 // dictionary name + icon key prefix. Everything else is identical, because internally a
 // meta-model and a library are the same thing.
 export abstract class ProducerProjectFactory extends TodlProjectFactory
-    implements IPublishableProjectFactory, IPresentationProjectFactory, IBaseProducingProjectFactory, IVersionedProjectFactory
+    implements IPublishableProjectFactory, IBaseProducingProjectFactory, IVersionedProjectFactory
 {
-    private static readonly PRESENTATION_FILE = 'presentation.generated.mu'
     private static readonly PACKAGE_NODE = 'package'
     private static readonly BundleFileName = 'bundle.json'
     private static readonly ResourceFolders = ['visuals', 'assets', 'docs', 'samples', 'thumbnails', 'resources', 'wiki']
@@ -178,8 +176,6 @@ export abstract class ProducerProjectFactory extends TodlProjectFactory
         for (const folder of ProducerProjectFactory.ResourceFolders)
             copied += await this.copyResourceFolder(storage, dest, folder, base)
 
-        await this.writePresentation(storage, doc, pkg.fullDocument, true)
-
         const warn = scanned.warnings.length > 0
             ? ` (${scanned.warnings.length} warning(s): ${scanned.warnings.join('; ')})`
             : ''
@@ -189,34 +185,6 @@ export abstract class ProducerProjectFactory extends TodlProjectFactory
                 + `${classes.length} class(es), ${sources.length} source(s), ${copied} resource file(s), `
                 + `presentation: ${pres.icons} icon(s)${warn}.`,
         }
-    }
-
-    // Capability entry point (the "Generate Presentation" command): resolve bases, compile
-    // the .todl to a model, then write the presentation dictionary. No .todl / unresolvable
-    // base / TODL error → no-op (the Problems dock already surfaces the errors).
-    public async regeneratePresentation(storage: IStorage, colored: boolean): Promise<void>
-    {
-        const sources = await TodlProjectSourceFiles.CollectTaxonomy(storage)
-        if (sources.length === 0) return
-        const manifest = await this.readManifest(storage)
-        const { bases, problems } = await RecursiveProjectReferencesResolver.Resolve(
-            this.Provider.getRequired(PackageStoreKey),
-            { metaModels: manifest.metaModels ?? [], libraries: manifest.libraries ?? [] },
-        )
-        if (problems.length > 0) return
-        const { model, diagnostics } = checkAgainst(bases, sources)
-        if (diagnostics.some((d) => d.severity === Severity.Error)) return
-        // `toJSON(model)` here is the full checked graph (bases + prelude included, per
-        // checkAgainst), not an own-only split — so it doubles as its own closure.
-        const doc = toJSON(model)
-        await this.writePresentation(storage, doc, doc, colored)
-    }
-
-    private async writePresentation(storage: IStorage, doc: TodlDocument, closure: TodlDocument, colored: boolean): Promise<void>
-    {
-        await storage.WriteText(
-            ProducerProjectFactory.PRESENTATION_FILE,
-            PresentationResourceEmitter.GenerateAssets(doc, closure, this.presentationDict, colored))
     }
 
     // Recursively copy one resource folder from the project storage into the bundle at

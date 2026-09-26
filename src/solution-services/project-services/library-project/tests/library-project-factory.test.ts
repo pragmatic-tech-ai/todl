@@ -85,7 +85,7 @@ test('publish is blocked when the bound meta-model is not published', async (t) 
     assert.match(result.message, /not published/i)
 })
 
-test('publish bakes, persists model.json + bundle.json, and writes the generated presentation', async (t) => {
+test('publish bakes and persists model.json + bundle.json', async (t) => {
     const project = await tempDir(t)
     const store = await tempDir(t)
     // Seed the bound meta-model so RecursiveProjectReferencesResolver resolves it.
@@ -104,5 +104,4 @@ test('publish bakes, persists model.json + bundle.json, and writes the generated
     assert.equal(baker.calls[0]!.options.iconPrefix, '')
     assert.equal(await store.Exists('aws/0.1.0/model.json'), true)
     assert.equal(await store.Exists('aws/0.1.0/bundle.json'), true)
-    assert.equal(await project.Exists('presentation.generated.mu'), true)
 })

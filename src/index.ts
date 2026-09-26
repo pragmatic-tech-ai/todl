@@ -207,13 +207,11 @@ export {
     PROJECT_MANIFEST_FILENAME,
     ProducerKind,
     isPublishable,
-    canGeneratePresentation,
     isVersioned,
     type ProjectManifestEnvelope,
     type ProjectFileFormat,
     type PublishResult,
     type IPublishableProjectFactory,
-    type IPresentationProjectFactory,
     type IVersionedProjectFactory,
 } from './solution-services/project-services/core/project-factory.js';
 export { type PublishedBaseModelReference, type ProjectBaseModelBindings } from './solution-services/project-services/core/base-binding.js';
