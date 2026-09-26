@@ -23,13 +23,13 @@ export class CompileMuralAction implements IBuildAction<TodlBuildContext>
 
     public async Execute(ctx: TodlBuildContext): Promise<void>
     {
-        const diagnosticsBefore = ctx.Diagnostics.Count;
+        const checkpoint = ctx.Diagnostics.Count;
         const written = await new MuralCompiler().Compile(ctx);
         // MuralCompiler reports its own Error diagnostic and returns [] on a collision
         // or a compile failure — in that case the run is aborted, and (as before the
         // extraction) no CompiledUi artifact is recorded at all, rather than an empty
         // one that would read as "compiled successfully, nothing to compile".
-        if (ctx.Diagnostics.Count === diagnosticsBefore)
+        if (!ctx.Diagnostics.HasErrorsSince(checkpoint))
         {
             ctx.Artifacts.Set(HtmlArtifacts.CompiledUi, written);
         }
