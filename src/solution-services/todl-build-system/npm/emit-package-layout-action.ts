@@ -10,11 +10,14 @@ import { NpmArtifacts } from "./npm-artifacts.js";
 
 // Stages the npm package layout into the Sandbox: package.json, model.json (own-only +
 // deps), the raw .todl under src/, the browser-safe handle module (index.js/.d.ts), and
-// every non-.todl project file packed verbatim under resources/.
+// every non-.todl, non-.mu project file packed verbatim under resources/. Raw .mu is
+// excluded because CompileMuralAction already compiles it into compiled/*.mu.js earlier
+// in the pipeline — shipping the source too would double-ship the same view.
 export class EmitPackageLayoutAction implements IBuildAction<TodlBuildContext>
 {
     private static readonly ActionName = "emit-package-layout";
     private static readonly TodlExtension = ".todl";
+    private static readonly MuralExtension = ".mu";
     private static readonly ResourcePrefix = "resources/";
     private static readonly ExcludedDirs = ["dist/", "node_modules/", ".git/"];
     private static readonly NoModelMessage = "no compiled model to emit";
@@ -55,6 +58,7 @@ export class EmitPackageLayoutAction implements IBuildAction<TodlBuildContext>
     private static IsExcludedResource(path: string): boolean
     {
         if (path.endsWith(EmitPackageLayoutAction.TodlExtension)) return true;
+        if (path.endsWith(EmitPackageLayoutAction.MuralExtension)) return true;
         if (path === PROJECT_MANIFEST_FILENAME) return true;
         return EmitPackageLayoutAction.ExcludedDirs.some((dir) => path.startsWith(dir));
     }

@@ -10,8 +10,10 @@ import { parseManifest, type ProjectManifest } from "../../../package-manager/ma
 import type { BuildResult } from "../../../build-system-core/build-result.js";
 import { PackageKind, type PackageRef } from "../../../../publish/publish.js";
 import type { IPackageSource, SourcedPackage } from "../../package-source.js";
+import { FakePresentationBaker } from "../../../project-services/core/tests/fake-producer-seams.js";
 
 const META = "namespace acme { concept Widget { label : string?; } }";
+const VALID_APP_MU = "Application { resources: { Border x:root {} } }\n";
 
 async function metaProject(): Promise<FakeStorage>
 {
@@ -19,6 +21,19 @@ async function metaProject(): Promise<FakeStorage>
     await storage.WriteText("project.plexus", JSON.stringify({ type: "meta-model", name: "widgets", version: 1, id: "widgets", packageVersion: "0.1.0" }));
     await storage.WriteText("model.todl", META);
     await storage.WriteText("README.md", "# widgets");
+    return storage;
+}
+
+// A library declaring a real `@icon` resource (so DeclaresResources/stamp/bake all gate
+// open) plus a `.mu` view (so compile-mural has something to compile) — for the
+// full-pipeline test below.
+async function libraryProjectWithIconAndMu(): Promise<FakeStorage>
+{
+    const storage = new FakeStorage();
+    await storage.WriteText("project.plexus", JSON.stringify({ type: "library", name: "widgets", version: 1, id: "widgets", packageVersion: "0.1.0" }));
+    await storage.WriteText("model.todl", 'namespace acme { concept Widget { label : string?; annotate icon { path = "visuals/w.svg"; } } }');
+    await storage.WriteText("visuals/w.svg", "<svg></svg>");
+    await storage.WriteText("views/app.mu", VALID_APP_MU);
     return storage;
 }
 
@@ -66,11 +81,55 @@ describe("NpmPackageBuildSystem", () =>
         assert.equal(system.AppliesTo({ type: "architecture", name: "a", version: 1 } as never), true);
     });
 
-    test("inserts host content generators between compile and emit", () =>
+    test("wires the fixed action pipeline: resolve -> compile -> mural -> stamp -> bake -> emit", () =>
     {
-        const generator = { Name: "generate-presentation", Consumes: [], Produces: [], Execute: () => Promise.resolve() };
-        const names = new NpmPackageBuildSystem([generator]).Flavors()[0].Actions().map((a) => a.Name);
-        assert.deepEqual(names, ["resolve-bases", "compile-model", "generate-presentation", "emit-package-layout"]);
+        const system = new NpmPackageBuildSystem();
+        const flavor = system.Flavors()[0];
+        assert.deepEqual(flavor.Actions().map((a) => a.Name), [
+            "resolve-bases", "compile-model", "compile-mural",
+            "stamp-resource-keys", "bake-resources", "emit-package-layout",
+        ]);
+    });
+
+    test("compiles .mu into compiled/*.mu.js and excludes the raw .mu from resources/", async () =>
+    {
+        const project = await metaProject();
+        await project.WriteText("views/app.mu", VALID_APP_MU);
+
+        const { result, provider } = await runNpm(project);
+
+        assert.equal(result.Ok, true, JSON.stringify(result.Diagnostics));
+        assert.equal(await provider.Output.Exists("compiled/app.mu.js"), true, "compiled the .mu view");
+        assert.equal(await provider.Output.Exists("resources/views/app.mu"), false, "did not double-ship the raw .mu");
+    });
+
+    test("a supplied baker reaches BakeResourcesAction, model.json carries stamped keys, and no raw .mu ships", async () =>
+    {
+        const project = await libraryProjectWithIconAndMu();
+        const manifest = parseManifest(await project.ReadText("project.plexus"));
+        const baker = new FakePresentationBaker();
+        const registry = new BuildSystemRegistry<TodlBuildContext, ProjectManifest>();
+        registry.Register(new NpmPackageBuildSystem(baker));
+        const provider = new FakeStorageProvider();
+        const manager = new TodlProjectBuildManager(registry, provider);
+
+        const { Result: result } = await manager.Build({ Project: project, Manifest: manifest, BuildSystemId: "npm-package", Source: new EmptyPackageSource() });
+
+        assert.equal(result.Ok, true, JSON.stringify(result.Diagnostics));
+
+        // (a) the baker was invoked.
+        assert.equal(baker.calls.length, 1);
+
+        // (b) model.json carries the stamped key.
+        const model = JSON.parse(await provider.Output.ReadText("model.json")) as { nodes: Array<{ type: string | null; attrs: Record<string, unknown> }> };
+        const stamped = model.nodes.some((n) => n.type === "icon" && typeof n.attrs["key"] === "string");
+        assert.ok(stamped, "an icon node in model.json carries a stamped resource key");
+
+        // (c) the .mu view compiled.
+        assert.equal(await provider.Output.Exists("compiled/app.mu.js"), true);
+
+        // (d) no raw .mu shipped under resources/.
+        assert.equal(await provider.Output.Exists("resources/views/app.mu"), false);
     });
 });
 
