@@ -484,11 +484,46 @@ through generics). The contract:
 by `TodlBuildSystemRegistry`.
 
 **npm-package** (applies to MetaModel ∨ Library ∨ Architecture) — produces a
-publishable package layout. Actions:
-`ResolveBasesAction → CompileModelAction → [host generators] → EmitPackageLayoutAction`.
-It resolves the base closure, compiles to a `CompiledPackage`, optionally bakes
-presentation, and stages `package.json` + `model.json` + `src/` + a browser-safe
-handle module + `resources/` into the sandbox.
+publishable package layout. Its constructor takes an optional host
+`IPresentationBaker`. Actions, in order:
+
+1. **ResolveBasesAction** → `ResolvedBases` — reassembles the base closure
+   through the composite `IPackageSource` chain.
+2. **CompileModelAction** → `CompiledModel` — `compilePackage` over the
+   project's sources, producing the `CompiledPackage` (own-only `document` +
+   the full-closure `fullDocument`) every later action reads from the
+   artifact bag.
+3. **CompileMuralAction** → `CompiledMural` — compiles the project's `.mu`
+   files (hand-authored or generated) to `compiled/*.mu.js` in the sandbox via
+   the shared `MuralCompiler`; a no-op (empty array, no diagnostic) when the
+   project has no `.mu` at all.
+4. **StampResourceKeysAction** — stamps a resource key onto every own
+   annotation application that inherits (transitively) from the prelude's
+   `MuralResource`, mutating the shared `CompiledPackage.document` in place so
+   the stamped keys land in `model.json`. Gated on
+   `PresentationResourceEmitter.DeclaresResources`: a project with no
+   MuralResource-derived annotation applications has nothing to stamp, so this
+   is a no-op.
+5. **BakeResourcesAction** — bakes `presentation/presentation.compiled.json` +
+   `presentation/icon-index.json` through the injected `IPresentationBaker`.
+   Runs only when the project `DeclaresResources` *and* a host baker was
+   supplied to the constructor, and only for a MetaModel or Library project
+   (an Architecture project never bakes, even if it declares resources);
+   skips cleanly (not a failure) when any of those conditions doesn't hold —
+   the concrete baker is mural-coupled and lives host-side, so the headless
+   pipeline never fails for lack of one.
+6. **EmitPackageLayoutAction** — stages `package.json` + `model.json` + `src/`
+   + a browser-safe handle module (`index.js`/`index.d.ts`) + everything else
+   under `resources/`. Raw `.todl` and raw `.mu` are excluded from
+   `resources/`: `.todl` because `src/` already carries it, `.mu` because
+   CompileMuralAction already compiled it into `compiled/*.mu.js`.
+
+So presentation resources, resource keys, and compiled `.mu` are npm-package
+**build artifacts** — the build *produces* them when a project declares
+resources or ships `.mu`, it does not *require* them to pre-exist (contrast
+html-bundle's `Requires`, below). The former user-driven
+`regeneratePresentation` project-factory capability is gone; the generator
+surface (below) still covers only the DTO and the default app UI.
 
 **html-bundle** (Architecture only) — compiles a project into a runnable
 single-page app. This is the per-project *application compiler*. Before any
@@ -721,11 +756,19 @@ diagnostics — query it via `Entity`, or emit it.
 ### B. A meta-model or library becomes a published package
 
 `TodlProjectBuildManager.Build({ …, BuildSystemId: "npm-package" })` runs
-ResolveBases (reassemble the closure through the package-source chain) → CompileModel
-(`compilePackage` → `CompiledPackage`) → EmitPackageLayout (stage `package.json` +
-`model.json` + `src/` + resources into the sandbox). On success the sandbox is
-promoted to the output; `PackageRegistryClient.publish(dir)` then tars it and hands
-it to an `IPackageRegistry`, from where downstream projects resolve it.
+ResolveBases (reassemble the closure through the package-source chain) →
+CompileModel (`compilePackage` → `CompiledPackage`) → CompileMural (compile any
+project `.mu` to `compiled/*.mu.js`) → StampResourceKeys (write a resource key
+onto every MuralResource-derived annotation application, in place on the
+compiled document) → BakeResources (bake `presentation.compiled.json` +
+`icon-index.json` through the host `IPresentationBaker`, when the project
+declares resources, a baker was supplied, and the project is a MetaModel or
+Library) → EmitPackageLayout (stage
+`package.json` + `model.json` + `src/` + resources into the sandbox). The
+mural-compile and resource steps are no-ops for a project with no `.mu` and no
+declared resources. On success the sandbox is promoted to the output;
+`PackageRegistryClient.publish(dir)` then tars it and hands it to an
+`IPackageRegistry`, from where downstream projects resolve it.
 
 ### C. An architecture project becomes a runnable single-page app
 

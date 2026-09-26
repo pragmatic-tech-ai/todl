@@ -137,8 +137,9 @@ class HidingStorage implements IStorage
 // A presentation baker double faithful to the real contract: it reads each icon path the
 // compiled document declares, fails (missing) if the project lacks the file, and otherwise
 // writes presentation.compiled.json + icon-index.json into the output. No mural coupling,
-// so it runs headless in a test while still exercising GeneratePresentationAction (stamping
-// + the missing-icon failure channel + the produced presentation files).
+// so it runs headless in a test while still exercising StampResourceKeysAction and
+// BakeResourcesAction (stamping + the missing-icon failure channel + the produced
+// presentation files).
 class TestPresentationBaker implements IPresentationBaker
 {
     private static readonly PresentationDir = "presentation";

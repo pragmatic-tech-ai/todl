@@ -9,8 +9,9 @@ import { NpmArtifacts } from "./npm-artifacts.js";
 // package so libraries/meta-models that ship `.mu` views deliver compiled JS. The
 // compile/collision/write logic itself lives in the shared MuralCompiler (also used
 // by html-bundle's own CompileMuralAction) — this action just runs it and records
-// the result under NpmArtifacts.CompiledMural. Wiring into the pipeline is a later
-// task; this action is not yet consumed by NpmPackageBuildSystem.
+// the result under NpmArtifacts.CompiledMural. Wired into NpmPackageBuildSystem
+// between CompileModelAction and StampResourceKeysAction; a no-op (empty array, no
+// diagnostic) for a project with no `.mu` files at all.
 export class CompileMuralAction implements IBuildAction<TodlBuildContext>
 {
     private static readonly ActionName = "compile-mural";

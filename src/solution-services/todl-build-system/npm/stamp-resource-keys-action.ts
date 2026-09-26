@@ -6,10 +6,11 @@ import { NpmArtifacts } from "./npm-artifacts.js";
 
 // Stamps presentation resource keys onto the compiled model document as a build step
 // (spec §2, §11), so the published model.json carries them for consumers to resolve —
-// replacing the former user-driven path. Runs after model compile and BEFORE baking (the
-// baker needs the already-stamped document); wiring into the pipeline is a later task.
-// Gated on the project actually declaring resources (`DeclaresResources`), since a
-// project with no MuralResource-derived annotation applications has nothing to stamp.
+// replacing the former user-driven path. Wired into NpmPackageBuildSystem after
+// CompileMuralAction and BEFORE BakeResourcesAction (the baker needs the
+// already-stamped document). Gated on the project actually declaring resources
+// (`DeclaresResources`), since a project with no MuralResource-derived annotation
+// applications has nothing to stamp.
 // Mutates the shared `CompiledPackage.document` held in the artifact bag in place, so the
 // downstream EmitPackageLayoutAction serializes the stamped document into model.json. No
 // new artifact is produced.
