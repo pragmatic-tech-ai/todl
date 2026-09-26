@@ -296,3 +296,5 @@ export {
     providesGenerators,
 } from './solution-services/project-services/core/project-factory.js';
 export { GeneratorRegistryContribution } from './application/generator-registry-contribution.js';
+export { TodlProjectSystemModule } from './solution-services/project-services/composition/todl-project-system-module.js';
+export { ProjectSystemContribution } from './solution-services/project-services/composition/project-system-contribution.js';
