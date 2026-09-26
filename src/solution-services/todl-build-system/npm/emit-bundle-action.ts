@@ -4,6 +4,7 @@ import type { ArtifactKey } from "../../build-system-core/artifact-key.js";
 import { ProjectType } from "../../package-manager/manifest.js";
 import { type PackageBundle, type PublishedClass, ProducerResources } from "../../project-services/core/package-bundle.js";
 import { projectAnnotations } from "../../../publish/reflect.js";
+import { PACKAGE_NODE_ID } from "../../../compiler-services/model/kinds.js";
 import { NpmArtifacts } from "./npm-artifacts.js";
 
 // Emits `bundle.json` — the load-bearing index Plexus's meta-model browser reads to
@@ -24,7 +25,6 @@ export class EmitBundleAction implements IBuildAction<TodlBuildContext>
     private static readonly BundleFileName = "bundle.json";
     private static readonly MetaModelType = "meta-model";
     private static readonly LibraryType = "library";
-    private static readonly PackageNode = "package";
 
     public readonly Name = EmitBundleAction.ActionName;
     public readonly Consumes: readonly ArtifactKey<unknown>[] = [NpmArtifacts.CompiledModel];
@@ -57,7 +57,7 @@ export class EmitBundleAction implements IBuildAction<TodlBuildContext>
             id: pkg.id, version: pkg.version, name: pkg.name ?? pkg.id,
             metaModels, libraries,
             classes, assets: scanned.assets, docs: scanned.docs, samples: scanned.samples,
-            annotations: projectAnnotations(pkg.document, EmitBundleAction.PackageNode),
+            annotations: projectAnnotations(pkg.document, PACKAGE_NODE_ID),
         };
 
         await ctx.Sandbox.WriteText(EmitBundleAction.BundleFileName, JSON.stringify(bundle, null, 2));

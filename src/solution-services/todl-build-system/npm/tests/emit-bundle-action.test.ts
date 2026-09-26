@@ -16,10 +16,15 @@ import type { PackageBundle } from "../../../project-services/core/package-bundl
 // A minimal taxonomy source with exactly one instantiable class (`class=true` Instance
 // clabject) — enough for `compilePackage` to produce a real `PublishedClass` in
 // `pkg.classes`, so the test exercises the actual derive/scan path rather than a
-// hand-rolled fixture.
+// hand-rolled fixture. Also authors a package-level annotation application (`package {
+// annotate Author { ... } }`) so the fix under test — reading the reserved package-node
+// id from the shared `PACKAGE_NODE_ID` constant rather than a private duplicate — is
+// covered end to end: `projectAnnotations` must still find it.
 const CLASS_SRC: SourceFile = {
     uri: "model.todl",
     text: `namespace acme {
+        annotation Author { name : string; }
+        package { annotate Author { name = "Acme"; } }
         concept Location { label : string; }
         taxonomy Regions : represents Location {
             Location euWest { label = "EU West"; }
@@ -80,6 +85,9 @@ describe("EmitBundleAction", () =>
         assert.equal(bundle.version, "1.0.0");
         assert.ok(bundle.classes.length > 0, "at least one derived class");
         assert.ok(bundle.classes.some((c) => c.localId === "euWest"));
+        // Package-level annotations still populate — the reserved package-node id now
+        // comes from the shared `PACKAGE_NODE_ID` constant (kinds.ts), not a private copy.
+        assert.deepEqual(bundle.annotations["Author"], { name: "Acme" });
     });
 
     test("library project: writes bundle.json with type 'library'", async () =>
