@@ -729,11 +729,16 @@ it to an `IPackageRegistry`, from where downstream projects resolve it.
 
 ### C. An architecture project becomes a runnable single-page app
 
-The `html-bundle` build resolves + compiles the closure, generates
-`generated/model.ts` (DTO), `generated/app.mu` (per-concept UI), and
-`generated/entry.ts` (wiring), compiles every `.mu` with mural, bundles the entry
-with esbuild (keepNames, IIFE), and emits one self-contained `index.html` inlining
-the model as `window.__TODL_APP__` and the app as a script.
+`generated/model.ts` (the DTO) and `generated/app.mu` (the default UI) are not
+produced by this build — they are project content the `DtoGenerator` and
+`UiPlaceholderGenerator` generators own (§10). The `html-bundle` build only
+**requires** both already exist and fails fast, before doing anything else, if
+either is missing. Given that, it resolves + compiles the closure, emits
+`generated/entry.ts` into the **sandbox** as fixed build glue (wiring, not
+project content), compiles every `.mu` with mural (including the project's own
+`generated/app.mu`), bundles the entry with esbuild (keepNames, IIFE), and emits
+one self-contained `index.html` inlining the model as `window.__TODL_APP__` and
+the app as a script.
 
 ### D. What happens when someone opens that index.html
 
