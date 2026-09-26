@@ -8,7 +8,7 @@ import { HtmlArtifacts } from "./html-artifacts.js";
 
 // The mural compiler action of the per-project html-bundle app pipeline (spec
 // §per-project-app-build, task 5): discovers every `.mu` file under the project
-// (hand-authored or generated, e.g. generated/app.mu from GenerateAppUiAction),
+// (hand-authored or generated, e.g. generated/app.mu from the UiPlaceholderGenerator),
 // compiles each to a JS module via mural's `compile()`, and stages the output
 // under `compiled/<basename>.mu.js` in the sandbox — never the project, since
 // compiled JS is build output, not source the developer edits. A compile failure
