@@ -14,11 +14,13 @@
  */
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
+import type { IStorage } from "@pragmatic-tech-ai/todl-runtime";
 import { TarReader } from "./registry/tar-reader.js";
 import { createTgz, type TarEntry } from "./registry/tar.js";
 import { resolveClosure, type InstalledPackage, type ResolvedClosure } from "./resolve.js";
 import { LocalPackageStore } from "./local-package-store.js";
 import { PackageManifestBridge } from "./package-manifest-bridge.js";
+import { StorageTree } from "../build-system-core/storage-tree.js";
 import {
   type IPackageRegistry,
   type PackageRef,
@@ -60,6 +62,9 @@ const decoder = new TextDecoder();
 
 export class PackageRegistryClient
 {
+  private static readonly PackageJsonName = "package.json";
+  private static readonly NoManifestMessage = "no package.json in build output";
+
   protected readonly registry: IPackageRegistry;
   private readonly localStore: LocalPackageStore | undefined;
 
@@ -209,6 +214,25 @@ export class PackageRegistryClient
     const file = outFile ?? `${PackageRegistryClient.unscoped(ref.name)}-${ref.version ?? "latest"}.tgz`;
     writeFileSync(file, bytes);
     return file;
+  }
+
+  /** Pack an already-staged {@link IStorage} layout (a build's Sandbox) into a
+   *  {@link PublishablePackage}: every file under the layout tar+gzips under
+   *  `package/`, and the top-level package.json is parsed as the manifest. The
+   *  IStorage-based counterpart to {@link packDir} — used by the publish build
+   *  action, which stages into a Sandbox rather than a filesystem directory. */
+  public static async PackStorage(layout: IStorage): Promise<PublishablePackage>
+  {
+    const entries: TarEntry[] = [];
+    let manifest: PackageManifestJson | undefined;
+    for (const path of await StorageTree.Files(layout))
+    {
+      const bytes = await layout.ReadBytes(path);
+      if (path === PackageRegistryClient.PackageJsonName) manifest = JSON.parse(decoder.decode(bytes)) as PackageManifestJson;
+      entries.push({ path: `${PACKAGE_PREFIX}${path}`, bytes });
+    }
+    if (manifest === undefined) throw new Error(PackageRegistryClient.NoManifestMessage);
+    return { Manifest: manifest, Tarball: createTgz(entries) };
   }
 
   /** Read a packed package directory into a {@link PublishablePackage}: its

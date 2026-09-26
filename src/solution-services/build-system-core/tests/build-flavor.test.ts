@@ -50,21 +50,25 @@ describe("StaticBuildFlavor", () =>
     });
 });
 
-describe("built-in systems expose a single flavor", () =>
+describe("built-in systems expose their flavors", () =>
 {
-    test("npm-package flavor mirrors the system output + non-empty pipeline", () =>
+    test("npm-package exposes a plain package flavor and a publish flavor over the same output", () =>
     {
         const flavors = new NpmPackageBuildSystem(new FakePresentationBaker()).Flavors();
-        assert.equal(flavors.length, 1);
-        assert.equal(flavors[0].OutputName, "npm-package");
-        assert.ok(flavors[0].Actions().length > 0);
+        assert.equal(flavors.length, 2);
+        for (const flavor of flavors)
+        {
+            assert.equal(flavor.OutputName, "npm-package");
+            assert.ok(flavor.Actions().length > 0);
+        }
+        assert.deepEqual(flavors.map((f) => f.Id), ["npm-package", "npm-publish"]);
     });
 
     test("html-bundle flavor mirrors the system output + non-empty pipeline", () =>
     {
         const flavors = new HtmlBundleBuildSystem().Flavors();
         assert.equal(flavors.length, 1);
-        assert.equal(flavors[0].OutputName, "html-bundle");
-        assert.ok(flavors[0].Actions().length > 0);
+        assert.equal(flavors[0]!.OutputName, "html-bundle");
+        assert.ok(flavors[0]!.Actions().length > 0);
     });
 });

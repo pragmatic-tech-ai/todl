@@ -11,6 +11,7 @@ import { StampResourceKeysAction } from "./stamp-resource-keys-action.js";
 import { BakeResourcesAction } from "./bake-resources-action.js";
 import { EmitBundleAction } from "./emit-bundle-action.js";
 import { EmitPackageLayoutAction } from "./emit-package-layout-action.js";
+import { PublishPackageAction } from "./publish-package-action.js";
 
 // The npm-package output (spec §4): resolve bases -> compile model -> compile mural ->
 // stamp resource keys -> bake resources -> emit bundle -> emit the package layout. Applies
@@ -25,6 +26,8 @@ export class NpmPackageBuildSystem implements IBuildSystem<TodlBuildContext, Pro
     private static readonly SystemId = "npm-package";
     private static readonly Display = "npm package";
     private static readonly Output = "npm-package";
+    private static readonly PublishSystemId = "npm-publish";
+    private static readonly PublishDisplay = "npm package (publish)";
 
     public readonly Id = NpmPackageBuildSystem.SystemId;
     public readonly DisplayName = NpmPackageBuildSystem.Display;
@@ -53,11 +56,19 @@ export class NpmPackageBuildSystem implements IBuildSystem<TodlBuildContext, Pro
 
     public Flavors(): readonly BuildFlavor<TodlBuildContext>[]
     {
-        return [new StaticBuildFlavor(
-            NpmPackageBuildSystem.SystemId,
-            NpmPackageBuildSystem.Display,
-            NpmPackageBuildSystem.Output,
-            this.actions,
-        )];
+        return [
+            new StaticBuildFlavor(
+                NpmPackageBuildSystem.SystemId,
+                NpmPackageBuildSystem.Display,
+                NpmPackageBuildSystem.Output,
+                this.actions,
+            ),
+            new StaticBuildFlavor(
+                NpmPackageBuildSystem.PublishSystemId,
+                NpmPackageBuildSystem.PublishDisplay,
+                NpmPackageBuildSystem.Output,
+                [...this.actions, new PublishPackageAction()],
+            ),
+        ];
     }
 }

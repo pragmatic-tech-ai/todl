@@ -23,7 +23,12 @@ export class TodlProjectBuildManager
         const manager = new ProjectBuildManager<TodlBuildContext, ProjectManifest>(
             this.registry,
             this.storage,
-            (base) => ({ ...base, Manifest: request.Manifest, Source: request.Source }),
+            (base) => ({
+                ...base,
+                Manifest: request.Manifest,
+                Source: request.Source,
+                ...(request.PublishRegistry !== undefined ? { PublishRegistry: request.PublishRegistry } : {}),
+            }),
         );
         return manager.Build({
             Project: request.Project,
