@@ -19,7 +19,6 @@ export { NpmArtifacts } from "./npm/npm-artifacts.js";
 export { ResolveBasesAction } from "./npm/resolve-bases-action.js";
 export { CompileModelAction } from "./npm/compile-model-action.js";
 export { EmitPackageLayoutAction } from "./npm/emit-package-layout-action.js";
-export { GeneratePresentationAction } from "./npm/generate-presentation-action.js";
 export { NpmPackageBuildSystem } from "./npm/npm-package-build-system.js";
 // html-bundle build system (spec: single-page app for architecture projects).
 export { HtmlBundleBuildSystem } from "./html-bundle/html-bundle-build-system.js";
