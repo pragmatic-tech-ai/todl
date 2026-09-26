@@ -93,9 +93,12 @@ export class Solution extends Observable
             if (factory === undefined)
             {
                 member.Project = undefined;
+                member.Storage = undefined;
                 continue;
             }
-            member.Project = await factory.openProject(storageFor(member.Ref.path));
+            const storage = storageFor(member.Ref.path);
+            member.Storage = storage;
+            member.Project = await factory.openProject(storage);
         }
     }
 

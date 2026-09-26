@@ -30,3 +30,24 @@ test('OpenMembers passes a member-rooted storage to the factory', async () => {
     )
     assert.equal(arch.lastOpenedRoot, 'root:./api')
 })
+
+test('OpenMembers stashes each resolved member storage; unresolved stays undefined', async () => {
+    const s = new Solution('S', new FakeStorage())
+    s.AddMember('./api', 'architecture')
+    s.AddMember('./x', 'not-installed')
+    const arch = new FakeProjectFactory()
+    const stores = new Map<string, FakeStorage>()
+    await s.OpenMembers(
+        (rel) => {
+            const st = new FakeStorage(`root:${rel}`)
+            stores.set(rel, st)
+            return st
+        },
+        (type) => (type === 'architecture' ? arch : undefined),
+    )
+    const [known, unknown] = s.Members.ToArray()
+    assert.equal(known!.Storage, stores.get('./api'))
+    assert.equal(known!.IsResolved, true)
+    assert.equal(unknown!.Storage, undefined)
+    assert.equal(unknown!.IsResolved, false)
+})

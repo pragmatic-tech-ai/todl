@@ -1,13 +1,16 @@
-import { Observable } from '@pragmatic-tech-ai/todl-runtime'
+import { Observable, type IStorage } from '@pragmatic-tech-ai/todl-runtime'
 import { type SolutionMemberRef } from './solution-member-ref.js'
 
 // One member project of a solution: its manifest reference (path + type), the
-// opened project handle (set when the solution opens all members), and a display
+// opened project handle (set when the solution opens all members), the rooted
+// storage that project was opened from (stashed by Solution.OpenMembers so a
+// later live-compile can reuse it instead of re-resolving it), and a display
 // title. Extends Observable so the explorer binds Title/Project.
 export class SolutionMember extends Observable
 {
     public readonly Ref: SolutionMemberRef
     private _project: unknown | undefined
+    private _storage: IStorage | undefined
     private _title: string
 
     constructor(ref: SolutionMemberRef)
@@ -24,6 +27,11 @@ export class SolutionMember extends Observable
         this._project = v
         this.RaisePropertyChanged('Project', old, v)
     }
+
+    // The rooted IStorage the member's Project was opened from — plain
+    // infrastructure state, not bound UI, so no RaisePropertyChanged.
+    public get Storage(): IStorage | undefined { return this._storage }
+    public set Storage(v: IStorage | undefined) { this._storage = v }
 
     public get Title(): string { return this._title }
     public set Title(v: string)
