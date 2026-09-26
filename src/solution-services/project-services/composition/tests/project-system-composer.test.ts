@@ -16,27 +16,31 @@ import { HtmlBundleBuildSystem } from "../../../todl-build-system/html-bundle/ht
 import { DtoGenerator } from "../../generators/dto-generator.js";
 import { UiPlaceholderGenerator } from "../../generators/ui-placeholder-generator.js";
 import { ProjectSystemComposer } from "../project-system-composer.js";
+import { NodeProjectSystemComposer } from "../node-project-system-composer.js";
 
 const ARCH_MODEL = "namespace acme { concept Widget { label : string?; } }";
 const NpmPackageId = "npm-package";
 const HtmlBundleId = "html-bundle";
 
-function archManifest(): ProjectManifest
+class ComposerFixtures
 {
-    return {
-        type: ProjectType.Architecture,
-        name: "Test Architecture",
-        version: 1,
-        id: "test-architecture",
-        packageVersion: "0.1.0",
-    };
-}
+    public static ArchManifest(): ProjectManifest
+    {
+        return {
+            type: ProjectType.Architecture,
+            name: "Test Architecture",
+            version: 1,
+            id: "test-architecture",
+            packageVersion: "0.1.0",
+        };
+    }
 
-async function archProject(): Promise<FakeStorage>
-{
-    const storage = new FakeStorage();
-    await storage.WriteText("model.todl", ARCH_MODEL);
-    return storage;
+    public static async ArchProject(): Promise<FakeStorage>
+    {
+        const storage = new FakeStorage();
+        await storage.WriteText("model.todl", ARCH_MODEL);
+        return storage;
+    }
 }
 
 describe("ProjectSystemComposer", () =>
@@ -52,14 +56,14 @@ describe("ProjectSystemComposer", () =>
         assert.ok(factories.factoryFor(ArchitectureProjectFactory.ProjectType) instanceof ArchitectureProjectFactory);
     });
 
-    test("Compose seeds the build-system registry with npm-package + html-bundle", () =>
+    test("Compose (browser-safe core) seeds npm-package but NOT the node-bound html-bundle", () =>
     {
         const provider = new ServiceProvider();
         ProjectSystemComposer.Compose(provider);
 
         const buildSystems = provider.getRequired(BuildSystemRegistryKey);
         assert.ok(buildSystems.Get(NpmPackageId) instanceof NpmPackageBuildSystem);
-        assert.ok(buildSystems.Get(HtmlBundleId) instanceof HtmlBundleBuildSystem);
+        assert.equal(buildSystems.Get(HtmlBundleId), undefined);
     });
 
     test("Compose seeds the generator registry from the architecture factory's own generators, exactly once each", () =>
@@ -89,17 +93,43 @@ describe("ProjectSystemComposer", () =>
         const provider = new ServiceProvider();
         ProjectSystemComposer.Compose(provider);
 
-        const project = await archProject();
+        const project = await ComposerFixtures.ArchProject();
         const events = provider.getRequired(ProjectEventsKey);
 
         await events.Raise({
             Kind: ProjectEventKind.Created,
             ProjectType: ArchitectureProjectFactory.ProjectType,
             Project: project,
-            Manifest: archManifest(),
+            Manifest: ComposerFixtures.ArchManifest(),
         });
 
         assert.ok(await project.Exists("generated/app.mu"), "UiPlaceholderGenerator should have written generated/app.mu");
         assert.ok(await project.Exists("generated/model.ts"), "DtoGenerator should have written generated/model.ts");
+    });
+});
+
+describe("NodeProjectSystemComposer", () =>
+{
+    test("Compose seeds the core AND layers html-bundle on top", () =>
+    {
+        const provider = new ServiceProvider();
+        NodeProjectSystemComposer.Compose(provider);
+
+        const buildSystems = provider.getRequired(BuildSystemRegistryKey);
+        assert.ok(buildSystems.Get(NpmPackageId) instanceof NpmPackageBuildSystem);
+        assert.ok(buildSystems.Get(HtmlBundleId) instanceof HtmlBundleBuildSystem);
+
+        const factories = provider.getRequired(ProjectFactoryRegistryKey);
+        assert.ok(factories.factoryFor(ArchitectureProjectFactory.ProjectType) instanceof ArchitectureProjectFactory);
+        assert.ok(provider.getRequired(PresentationBakerKey) instanceof DefaultPresentationBaker);
+    });
+
+    test("Compose reuses the core seeding exactly once (no duplicated generators)", () =>
+    {
+        const provider = new ServiceProvider();
+        NodeProjectSystemComposer.Compose(provider);
+
+        const forArch = provider.getRequired(ProjectGeneratorRegistryKey).For(ArchitectureProjectFactory.ProjectType);
+        assert.equal(forArch.length, 2);
     });
 });

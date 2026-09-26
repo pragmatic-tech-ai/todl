@@ -7,6 +7,13 @@
  * is a new, self-contained composer, reused by a mural module (Task 7) and a
  * headless contribution, that stands up TODL's built-in factories/build-systems/
  * generators into a FRESH container in one call.
+ *
+ * BROWSER-SAFE: this core composer's import graph reaches NO node builtin and NO
+ * esbuild, so it (and `TodlProjectSystemModule`) ships on the main barrel and loads in
+ * a renderer bundle. The one node-bound build system — html-bundle (esbuild +
+ * node fs) — is layered on by `NodeProjectSystemComposer` (node-only `./project-system`
+ * subpath), which calls this composer first and then registers it. The guard test
+ * `tests/browser-safe-composition.test.ts` bundles this graph for the browser platform.
  */
 
 import { type IServiceContainer, ServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
@@ -32,7 +39,6 @@ import { MetaModelProjectFactory } from "../meta-model-project/meta-model-projec
 import { LibraryProjectFactory } from "../library-project/library-project-factory.js";
 import { ArchitectureProjectFactory } from "../architecture-project/architecture-project-factory.js";
 import { NpmPackageBuildSystem } from "../../todl-build-system/npm/npm-package-build-system.js";
-import { HtmlBundleBuildSystem } from "../../todl-build-system/html-bundle/html-bundle-build-system.js";
 
 export interface ProjectSystemComposerOptions
 {
@@ -41,7 +47,8 @@ export interface ProjectSystemComposerOptions
     readonly Source?: IPackageSource;
 }
 
-// Seeds the three DI-singleton registries with TODL's built-in definitions,
+// Seeds the three DI-singleton registries with TODL's browser-safe built-in definitions
+// (npm-package build system incl. its publish flavor; NOT html-bundle — see header),
 // registers the built-in services + the default presentation baker, and wires the
 // ProjectEvents bus + GeneratorScheduler. One method, self-contained (no
 // cross-module ordering) — reused by the mural IModule (Task 7) and a headless
@@ -58,7 +65,6 @@ export class ProjectSystemComposer
         container.register(LibraryProjectFactory, (p) => new LibraryProjectFactory(p));
         container.register(ArchitectureProjectFactory, (p) => new ArchitectureProjectFactory(p));
         container.register(NpmPackageBuildSystem, (p) => new NpmPackageBuildSystem(p.getRequired(PresentationBakerKey)));
-        container.register(HtmlBundleBuildSystem, () => new HtmlBundleBuildSystem());
 
         // 2. The three registries, as singletons.
         const factories = new ProjectFactoryRegistry(provider);
@@ -75,7 +81,6 @@ export class ProjectSystemComposer
 
         // 4. Seed build systems.
         buildSystems.RegisterResolved(provider.getRequired(NpmPackageBuildSystem));
-        buildSystems.RegisterResolved(provider.getRequired(HtmlBundleBuildSystem));
 
         // 5. Seed generators FROM the resolved factory instances (each factory owns its
         // own generator set — mirrors GeneratorRegistryContribution.BuildRegistry exactly).

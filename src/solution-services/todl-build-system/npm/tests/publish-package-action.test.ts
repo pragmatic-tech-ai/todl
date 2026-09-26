@@ -8,7 +8,6 @@ import { EmptyPackageSource, FakeStorageProvider } from "../../tests/fakes.js";
 import type { TodlBuildContext } from "../../todl-build-context.js";
 import { TodlProjectBuildManager } from "../../todl-project-build-manager.js";
 import { parseManifest, ProjectType, type ProjectManifest } from "../../../package-manager/manifest.js";
-import { PackageRegistryClient } from "../../../package-manager/package-registry-client.js";
 import { TarReader } from "../../../package-manager/registry/tar-reader.js";
 import type {
     ConnectionStatus,
@@ -108,6 +107,8 @@ describe("PublishPackageAction", () =>
         const published = registry.PublishCalls[0]!;
         assert.deepEqual(published.Manifest, JSON.parse(await sandbox.ReadText("package.json")));
         assert.ok(published.Tarball.length > 0, "tarball is non-empty");
+        const paths = TarReader.read(published.Tarball).map((f) => f.path).sort();
+        assert.deepEqual(paths, ["package/model.json", "package/package.json", "package/src/model.todl"], "node:zlib reads the web-gzipped tarball");
         assert.equal(ctx.Diagnostics.Count, 0);
     });
 
@@ -126,31 +127,6 @@ describe("PublishPackageAction", () =>
 
         const after = [...await sandbox.List("")];
         assert.deepEqual(after, before, "the action wrote nothing to the sandbox");
-    });
-});
-
-describe("PackageRegistryClient.PackStorage", () =>
-{
-    test("round-trips an IStorage layout's files under package/ and parses the manifest", async () =>
-    {
-        const sandbox = await sandboxLayout();
-
-        const pkg = await PackageRegistryClient.PackStorage(sandbox);
-
-        assert.deepEqual(pkg.Manifest, { name: "demo-lib", version: "1.0.0" });
-        const files = TarReader.read(pkg.Tarball);
-        const byPath = new Map(files.map((f) => [f.path, f.bytes] as const));
-        assert.equal(new TextDecoder().decode(byPath.get("package/package.json")), await sandbox.ReadText("package.json"));
-        assert.equal(new TextDecoder().decode(byPath.get("package/model.json")), await sandbox.ReadText("model.json"));
-        assert.equal(new TextDecoder().decode(byPath.get("package/src/model.todl")), await sandbox.ReadText("src/model.todl"));
-    });
-
-    test("throws when the layout has no top-level package.json", async () =>
-    {
-        const sandbox = new FakeStorage();
-        await sandbox.WriteText("model.json", "{}");
-
-        await assert.rejects(() => PackageRegistryClient.PackStorage(sandbox), /no package\.json/);
     });
 });
 

@@ -1,5 +1,5 @@
 import { type IStorage } from '@pragmatic-tech-ai/todl-runtime'
-import { TarReader } from '../../registry/index.js'
+import { WebTgz } from '../../registry/web-tgz.js'
 import {
     type IPackageRegistry,
     type PublishablePackage,
@@ -88,7 +88,7 @@ export class LocalNpmRegistry implements IPackageRegistry
             `${dir}/${LocalNpmRegistry.ManifestFile}`,
             JSON.stringify(pkg.Manifest, null, 2),
         )
-        for (const file of TarReader.read(pkg.Tarball))
+        for (const file of await WebTgz.Read(pkg.Tarball))
         {
             if (!file.path.startsWith(LocalNpmRegistry.PackagePrefix)) continue
             const rel = file.path.slice(LocalNpmRegistry.PackagePrefix.length)

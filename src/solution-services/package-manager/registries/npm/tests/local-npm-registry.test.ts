@@ -4,6 +4,7 @@ import { FakeStorage } from '@pragmatic-tech-ai/todl-runtime'
 import { LocalNpmRegistry } from '../local-npm-registry.js'
 import { createTgz } from '../../../registry/index.js'
 import { type PublishablePackage } from '../../../engine/package-registry.js'
+import { StoragePackagePacker } from '../../../registry/storage-package-packer.js'
 
 const enc = new TextEncoder()
 const dec = new TextDecoder()
@@ -84,4 +85,20 @@ test('reports an ok status for a writable directory', async () =>
     const registry = new LocalNpmRegistry(new FakeStorage())
 
     assert.equal((await registry.Test()).Ok, true)
+})
+
+test('publishes an in-memory IStorage layout packed by StoragePackagePacker, fully over IStorage', async () =>
+{
+    const sandbox = new FakeStorage()
+    await sandbox.WriteText('package.json', JSON.stringify({ name: '@x/mem', version: '2.0.0' }))
+    await sandbox.WriteText('model.json', JSON.stringify({ id: 'mem' }))
+    await sandbox.WriteText('src/model.todl', 'namespace acme {}')
+    const storage = new FakeStorage()
+    const registry = new LocalNpmRegistry(storage)
+
+    await registry.Publish(await StoragePackagePacker.Pack(sandbox))
+
+    assert.equal(JSON.parse(await storage.ReadText('@x/mem/2.0.0/model.json')).id, 'mem')
+    assert.equal(await storage.ReadText('@x/mem/2.0.0/src/model.todl'), 'namespace acme {}')
+    assert.equal((await registry.GetManifest({ name: '@x/mem' })).version, '2.0.0')
 })

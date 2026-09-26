@@ -8,9 +8,12 @@ import { MetaModelProjectFactory } from "../../meta-model-project/meta-model-pro
 import { BuildSystemRegistryKey } from "../build-system-registry-key.js";
 import { NpmPackageBuildSystem } from "../../../todl-build-system/npm/npm-package-build-system.js";
 import { TodlProjectSystemModule } from "../todl-project-system-module.js";
+import { TodlNodeProjectSystemModule } from "../todl-node-project-system-module.js";
 import { ProjectSystemContribution } from "../project-system-contribution.js";
+import { HtmlBundleBuildSystem } from "../../../todl-build-system/html-bundle/html-bundle-build-system.js";
 
 const NpmPackageId = "npm-package";
+const HtmlBundleId = "html-bundle";
 
 describe("TodlProjectSystemModule", () =>
 {
@@ -28,6 +31,30 @@ describe("TodlProjectSystemModule", () =>
         const baker = provider.getRequired(PresentationBakerKey);
         assert.ok(baker instanceof DefaultPresentationBaker);
     });
+
+    test("the browser-safe module never registers the node-bound html-bundle build system", () =>
+    {
+        const provider = new ServiceProvider();
+        new TodlProjectSystemModule().RegisterServices(provider);
+
+        assert.equal(provider.getRequired(BuildSystemRegistryKey).Get(HtmlBundleId), undefined);
+    });
+});
+
+describe("TodlNodeProjectSystemModule", () =>
+{
+    test("RegisterServices seeds the core registries plus html-bundle", () =>
+    {
+        const provider = new ServiceProvider();
+        new TodlNodeProjectSystemModule().RegisterServices(provider);
+
+        const factories = provider.getRequired(ProjectFactoryRegistryKey);
+        assert.ok(factories.factoryFor(MetaModelProjectFactory.ProjectType) instanceof MetaModelProjectFactory);
+
+        const buildSystems = provider.getRequired(BuildSystemRegistryKey);
+        assert.ok(buildSystems.Get(NpmPackageId) instanceof NpmPackageBuildSystem);
+        assert.ok(buildSystems.Get(HtmlBundleId) instanceof HtmlBundleBuildSystem);
+    });
 });
 
 describe("ProjectSystemContribution", () =>
@@ -42,6 +69,7 @@ describe("ProjectSystemContribution", () =>
 
         const buildSystems = root.Provider.getRequired(BuildSystemRegistryKey);
         assert.ok(buildSystems.Get(NpmPackageId) instanceof NpmPackageBuildSystem);
+        assert.ok(buildSystems.Get(HtmlBundleId) instanceof HtmlBundleBuildSystem, "headless keeps html-bundle");
 
         const baker = root.Provider.getRequired(PresentationBakerKey);
         assert.ok(baker instanceof DefaultPresentationBaker);

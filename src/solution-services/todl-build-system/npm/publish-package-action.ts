@@ -1,7 +1,7 @@
 import type { IBuildAction } from "../../build-system-core/build-action.js";
 import type { ArtifactKey } from "../../build-system-core/artifact-key.js";
 import { Severity } from "../../build-system-core/diagnostic-sink.js";
-import { PackageRegistryClient } from "../../package-manager/package-registry-client.js";
+import { StoragePackagePacker } from "../../package-manager/registry/storage-package-packer.js";
 import type { TodlBuildContext } from "../todl-build-context.js";
 
 // The terminal action of the publish flavor: tars the staged package layout out of the
@@ -27,7 +27,7 @@ export class PublishPackageAction implements IBuildAction<TodlBuildContext>
             return;
         }
 
-        const pkg = await PackageRegistryClient.PackStorage(ctx.Sandbox);
+        const pkg = await StoragePackagePacker.Pack(ctx.Sandbox);
         await registry.Publish(pkg);
     }
 }

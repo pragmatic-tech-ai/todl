@@ -17,4 +17,9 @@ export {
 } from "./transport.js";
 export { createTgz, type TarEntry } from "./tar.js";
 export { TarReader, type TarFile } from "./tar-reader.js";
+// Browser-safe (no node builtins): the shared USTAR layout, the async web-stream
+// `.tgz` codec, and the IStorage package packer the publish build action uses.
+export { TarArchive } from "./tar-archive.js";
+export { WebTgz } from "./web-tgz.js";
+export { StoragePackagePacker } from "./storage-package-packer.js";
 export { integrity, shasum, verifyIntegrity } from "./integrity.js";

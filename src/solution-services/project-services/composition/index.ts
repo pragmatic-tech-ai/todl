@@ -1,24 +1,23 @@
 /**
- * NODE-ONLY entry point for the project-system composition units. `ProjectSystemComposer`
- * (and therefore `TodlProjectSystemModule` / `ProjectSystemContribution`, both thin
- * wrappers around it) reaches `NpmPackageBuildSystem` and `HtmlBundleBuildSystem`, which
- * pull in esbuild + `node-fs-storage` (`node:fs`, `node:path`) — exactly the pieces the
- * browser-safe main barrel (`src/index.ts`) has always kept out (see `./todl-build-system`
- * and `./package-manager`, which are ALSO node-only subpaths for the same reason).
+ * NODE-ONLY entry point for the project-system composition units
+ * ("@pragmatic-tech-ai/todl/project-system").
  *
- * Do NOT re-export any of this from `src/index.ts`. The html-bundle build system's own
- * app bundle (`BundleAppAction`) targets the browser with `format: "iife"` and no
- * `treeShaking`/`minify` option, so esbuild does NOT auto-enable tree shaking (per its
- * docs, that only happens for `esm` output or when minifying) — every `export ... from`
- * edge in a resolved module is bundled regardless of whether any importer actually uses
- * it. A prior attempt exported `TodlProjectSystemModule`/`ProjectSystemContribution` from
- * the main barrel and broke the html-bundle app bundle for exactly that reason (see
- * `todl-project-system-module.ts`'s test + task-7-report.md, fix round 1).
+ * The browser-safe core — `ProjectSystemComposer`, `TodlProjectSystemModule`,
+ * `BuildSystemRegistryKey` — is exported from the main barrel (`src/index.ts`) and
+ * re-exported here for convenience. The node-only additions layer the html-bundle build
+ * system (esbuild + node fs) on top of that core: `NodeProjectSystemComposer`,
+ * `TodlNodeProjectSystemModule`, and the headless `ProjectSystemContribution`.
  *
- * A host that needs these (the deferred Plexus phase) imports them from
- * "@pragmatic-tech-ai/todl/project-system" instead.
+ * Do NOT re-export the node-only additions from `src/index.ts`. The html-bundle build
+ * system's own app bundle (`BundleAppAction`) targets the browser with `format: "iife"`
+ * and no `treeShaking`/`minify` option, so esbuild does NOT auto-enable tree shaking —
+ * every `export ... from` edge in a resolved module is bundled whether or not an
+ * importer uses it. `tests/browser-safe-composition.test.ts` guards the main barrel.
  */
 
-export { TodlProjectSystemModule } from "./todl-project-system-module.js";
-export { ProjectSystemContribution } from "./project-system-contribution.js";
-export { ProjectSystemComposer, type ProjectSystemComposerOptions } from "./project-system-composer.js";
+export { ProjectSystemComposer, type ProjectSystemComposerOptions } from './project-system-composer.js';
+export { TodlProjectSystemModule } from './todl-project-system-module.js';
+export { BuildSystemRegistryKey } from './build-system-registry-key.js';
+export { NodeProjectSystemComposer } from './node-project-system-composer.js';
+export { TodlNodeProjectSystemModule } from './todl-node-project-system-module.js';
+export { ProjectSystemContribution } from './project-system-contribution.js';

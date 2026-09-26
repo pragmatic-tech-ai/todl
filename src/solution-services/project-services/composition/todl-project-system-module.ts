@@ -5,6 +5,10 @@
  * every host kind (it registers no view). Hand-written (not a `.mu` `.services:`
  * block) because seeding + event wiring are side effects `.services:` cannot
  * express.
+ *
+ * BROWSER-SAFE (exported from the main barrel): registers everything EXCEPT the
+ * node-bound html-bundle build system. A node host that wants html-bundle uses
+ * `TodlNodeProjectSystemModule` from the `./project-system` subpath.
  */
 
 import { type IModule, type IServiceContainer, HostKind } from "@pragmatic-tech-ai/todl-runtime";

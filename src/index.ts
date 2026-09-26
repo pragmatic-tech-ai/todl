@@ -296,3 +296,25 @@ export {
     providesGenerators,
 } from './solution-services/project-services/core/project-factory.js';
 export { GeneratorRegistryContribution } from './application/generator-registry-contribution.js';
+
+// ── Project-system composition + publish (BROWSER-SAFE core) ──
+// The one-call project-system module a host puts at the head of its `.modules:` block,
+// and the IStorage publish path (pack via web CompressionStream, local registry unpack
+// via DecompressionStream). The node-only html-bundle additions
+// (`TodlNodeProjectSystemModule`, `NodeProjectSystemComposer`, `ProjectSystemContribution`)
+// live on the "./project-system" subpath. Guarded by
+// project-services/composition/tests/browser-safe-composition.test.ts.
+export {
+    ProjectSystemComposer,
+    type ProjectSystemComposerOptions,
+} from './solution-services/project-services/composition/project-system-composer.js';
+export { TodlProjectSystemModule } from './solution-services/project-services/composition/todl-project-system-module.js';
+export { BuildSystemRegistryKey } from './solution-services/project-services/composition/build-system-registry-key.js';
+export {
+    type IPackageRegistry,
+    type PublishablePackage,
+} from './solution-services/package-manager/engine/package-registry.js';
+export { LocalNpmRegistry } from './solution-services/package-manager/registries/npm/local-npm-registry.js';
+export { StoragePackagePacker } from './solution-services/package-manager/registry/storage-package-packer.js';
+export { WebTgz } from './solution-services/package-manager/registry/web-tgz.js';
+export { TarArchive, type TarEntry, type TarFile } from './solution-services/package-manager/registry/tar-archive.js';
