@@ -25,6 +25,13 @@ export class BuildSystemRegistry<C extends CoreBuildContext, TProject>
         this.systems.set(system.Id, system);
     }
 
+    public RegisterResolved(system: IBuildSystem<C, TProject>): void
+    {
+        if (this.systems.has(system.Id)) return;
+        BuildSystemRegistry.Validate(system);
+        this.systems.set(system.Id, system);
+    }
+
     public Get(id: string): IBuildSystem<C, TProject> | undefined
     {
         return this.systems.get(id);
