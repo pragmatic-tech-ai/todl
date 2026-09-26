@@ -1,35 +1,47 @@
+import { type IServiceProvider } from '@pragmatic-tech-ai/todl-runtime'
 import { type IProjectFactory } from './project-factory.js'
 import { type IProjectFactoryRegistry } from './host-services.js'
+import { type ProjectFactoryDefinition } from '../../project-services/core/project-factory-definition.js'
 
-// The one project-factory registry: it holds the installed factories and answers
-// both consumers — `factoryFor(typeId)` (the SolutionManagerService, opening a
-// member) and `All()` (a shell's New-Project gallery). It supersedes mural's
-// shell-side ProjectFactoryRegistry: because a factory is now self-describing
-// (typeId/title/description), the registry needs nothing but the factory list — no
-// parallel ProjectFactoryDefinition, no walk of the composed shell modules.
-//
-// Indexed by `typeId`; the first factory to claim a type id wins (a later duplicate
-// is ignored), matching the retired registry's dedupe-by-Type behaviour.
+// The one project-factory registry: DI-resolved, definition-populated. Holds
+// ProjectFactoryDefinitions and resolves each Factory token on demand (cached),
+// so registration never forces construction. Indexed by TypeId; first definition
+// to claim a type id wins (a later duplicate is ignored).
 export class ProjectFactoryRegistry implements IProjectFactoryRegistry
 {
-    private readonly byType = new Map<string, IProjectFactory>()
+    private readonly defs = new Map<string, ProjectFactoryDefinition>()
+    private readonly cache = new Map<string, IProjectFactory>()
 
-    constructor(factories: readonly IProjectFactory[])
+    constructor(private readonly provider: IServiceProvider)
     {
-        for (const factory of factories)
-        {
-            if (this.byType.has(factory.typeId)) continue
-            this.byType.set(factory.typeId, factory)
-        }
+    }
+
+    public Register(def: ProjectFactoryDefinition): void
+    {
+        if (this.defs.has(def.TypeId)) return
+        this.defs.set(def.TypeId, def)
     }
 
     public factoryFor(typeId: string): IProjectFactory | undefined
     {
-        return this.byType.get(typeId)
+        const def = this.defs.get(typeId)
+        if (def === undefined) return undefined
+        return this.resolve(typeId, def)
     }
 
     public All(): readonly IProjectFactory[]
     {
-        return [...this.byType.values()]
+        return [...this.defs.entries()].map(([id, def]) => this.resolve(id, def))
+    }
+
+    private resolve(typeId: string, def: ProjectFactoryDefinition): IProjectFactory
+    {
+        let f = this.cache.get(typeId)
+        if (f === undefined)
+        {
+            f = this.provider.getRequired(def.Factory)
+            this.cache.set(typeId, f)
+        }
+        return f
     }
 }

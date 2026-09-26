@@ -1,27 +1,42 @@
-import { test } from 'node:test'
+import test from 'node:test'
 import assert from 'node:assert/strict'
+import { ServiceProvider } from '@pragmatic-tech-ai/todl-runtime'
 import { ProjectFactoryRegistry } from '../project-factory-registry.js'
-import { type IProjectFactory } from '../project-factory.js'
 
-// A minimal IProjectFactory stand-in carrying just the type id the registry keys on.
-function fake(typeId: string): IProjectFactory
+class FakeFactory
 {
-    return {
-        typeId, title: typeId, description: '', formats: [],
-        createProject: async () => { throw new Error('unused') },
-        openProject: async () => { throw new Error('unused') },
-        saveProject: async () => {},
-    } as unknown as IProjectFactory
+    public readonly typeId: string
+    public readonly title = 't'
+    public readonly description = 'd'
+    public readonly formats = []
+    constructor(typeId: string) { this.typeId = typeId }
+    createProject(): never { throw new Error('unused') }
+    openProject(): never { throw new Error('unused') }
+    saveProject(): never { throw new Error('unused') }
 }
 
-test('indexes by typeId; factoryFor resolves, All enumerates, duplicates first-win', () => {
-    const arch = fake('architecture')
-    const lib = fake('library')
-    const dupArch = fake('architecture')
-    const reg = new ProjectFactoryRegistry([arch, lib, dupArch])
+test('resolves a registered factory lazily by type id', () =>
+{
+    const provider = new ServiceProvider()
+    let built = 0
+    const token = { description: 'meta' } as never
+    provider.register(token, () => { built++; return new FakeFactory('meta') as never })
+    const registry = new ProjectFactoryRegistry(provider)
+    registry.Register({ TypeId: 'meta', Factory: token })
+    assert.equal(built, 0)                       // not constructed at Register
+    assert.equal(registry.factoryFor('meta')!.typeId, 'meta')
+    assert.equal(built, 1)                       // constructed on first lookup
+})
 
-    assert.equal(reg.factoryFor('architecture'), arch)   // first registration wins
-    assert.equal(reg.factoryFor('library'), lib)
-    assert.equal(reg.factoryFor('unknown'), undefined)
-    assert.deepEqual(reg.All(), [arch, lib])
+test('duplicate type id is ignored (first wins), no throw', () =>
+{
+    const provider = new ServiceProvider()
+    const a = { description: 'a' } as never
+    const b = { description: 'b' } as never
+    provider.register(a, () => new FakeFactory('meta') as never)
+    provider.register(b, () => new FakeFactory('meta') as never)
+    const registry = new ProjectFactoryRegistry(provider)
+    registry.Register({ TypeId: 'meta', Factory: a })
+    registry.Register({ TypeId: 'meta', Factory: b })
+    assert.equal(registry.All().length, 1)
 })

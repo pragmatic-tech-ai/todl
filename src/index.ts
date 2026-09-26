@@ -214,6 +214,7 @@ export {
     type IPublishableProjectFactory,
     type IVersionedProjectFactory,
 } from './solution-services/project-services/core/project-factory.js';
+export { type ProjectFactoryDefinition } from './solution-services/project-services/core/project-factory-definition.js';
 export { type PublishedBaseModelReference, type ProjectBaseModelBindings } from './solution-services/project-services/core/base-binding.js';
 export {
     TodlProjectFactory,
