@@ -81,13 +81,13 @@ describe("NpmPackageBuildSystem", () =>
         assert.equal(system.AppliesTo({ type: "architecture", name: "a", version: 1 } as never), true);
     });
 
-    test("wires the fixed action pipeline: resolve -> compile -> mural -> stamp -> bake -> emit", () =>
+    test("wires the fixed action pipeline: resolve -> compile -> mural -> stamp -> bake -> emit bundle -> emit layout", () =>
     {
         const system = new NpmPackageBuildSystem(new FakePresentationBaker());
         const flavor = system.Flavors()[0];
         assert.deepEqual(flavor.Actions().map((a) => a.Name), [
             "resolve-bases", "compile-model", "compile-mural",
-            "stamp-resource-keys", "bake-resources", "emit-package-layout",
+            "stamp-resource-keys", "bake-resources", "emit-bundle", "emit-package-layout",
         ]);
     });
 
