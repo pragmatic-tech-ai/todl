@@ -1,10 +1,12 @@
 import { ServiceBase, ServiceKey, type IServiceProvider, type IStorage } from '@pragmatic-tech-ai/todl-runtime'
 import { type IPackageSource, type SourcedPackage } from '../../todl-build-system/package-source.js'
 import { PackageStoreKey } from '../../todl-build-system/package-store.js'
-import { type PackageRef } from '../../../publish/publish.js'
+import { PackageKind, type PackageRef } from '../../../publish/publish.js'
+import { type TodlDocument } from '../../../compiler-services/emit/json.js'
 import { ProjectModelProvider } from '../../project-services/generators/project-model-provider.js'
-import { ProjectType, type ProjectManifest, parseManifest } from '../../package-manager/manifest.js'
+import { ProjectType, type ProjectManifest, type DependencyRef, parseManifest } from '../../package-manager/manifest.js'
 import { PROJECT_MANIFEST_FILENAME } from '../../project-services/core/project-factory.js'
+import { WikiLocator, type WikiOrigin } from '../../project-services/core/wiki-origin.js'
 import { SolutionManagerService } from './solution-manager-service.js'
 
 // A live-first IPackageSource: a base ref that names an open, resolved producer
@@ -80,6 +82,135 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource
             if (live !== undefined) return live
         }
         return this.inner().TryGet(ref)
+    }
+
+    // Resolve a consumer's declared bases local-first (open solution members compiled
+    // live, preferred over published), tagging each base node with where its declaring
+    // artifact lives. The editor-facing counterpart of TryGet: it merges the full base
+    // closure a language server validates against and surfaces resolution diagnostics.
+    public async ResolveBasesFor(consumerStorage: IStorage): Promise<{ bases: TodlDocument[]; problems: string[]; originOf: ReadonlyMap<string, WikiOrigin> }>
+    {
+        const manifest = await this.readManifest(consumerStorage)
+        if (manifest === undefined) return { bases: [], problems: [], originOf: new Map() }
+        return this.resolveBindingsInto(consumerStorage, manifest, new Set<IStorage>([consumerStorage]), new Set<string>())
+    }
+
+    private async resolveBindingsInto(storage: IStorage, manifest: ProjectManifest, path: Set<IStorage>, seenPub: Set<string>): Promise<{ bases: TodlDocument[]; problems: string[]; originOf: Map<string, WikiOrigin> }>
+    {
+        const bases: TodlDocument[] = []
+        const problems: string[] = []
+        const originOf = new Map<string, WikiOrigin>()
+        for (const ref of manifest.metaModels ?? [])
+            await this.resolveOneBase(ref, ProjectType.MetaModel, storage, path, seenPub, bases, problems, originOf)
+        for (const ref of manifest.libraries ?? [])
+            await this.resolveOneBase(ref, ProjectType.Library, storage, path, seenPub, bases, problems, originOf)
+        return { bases, problems, originOf }
+    }
+
+    private async resolveOneBase(
+        ref: DependencyRef, kind: ProjectType, consumerStorage: IStorage,
+        path: Set<IStorage>, seenPub: Set<string>,
+        bases: TodlDocument[], problems: string[], originOf: Map<string, WikiOrigin>,
+    ): Promise<void>
+    {
+        const producer = await this.liveProducerOfKind(ref.id)
+        if (producer !== undefined && producer.storage !== consumerStorage && !path.has(producer.storage))
+        {
+            // DFS path (not a global seen-set): add on entry, remove on backtrack —
+            // catches genuine cycles while allowing diamonds.
+            path.add(producer.storage)
+            const child = await this.resolveBindingsInto(producer.storage, producer.manifest, path, seenPub)
+            path.delete(producer.storage)
+            problems.push(...child.problems)
+            const model = await new ProjectModelProvider(producer.storage, producer.manifest, this).CompileWithBases(child.bases)
+            for (const e of model.errors) problems.push(SolutionBaseResolver.localProblem(kind, ref.id, e))
+            const producerVersion = producer.manifest.packageVersion
+            if (producerVersion !== undefined && producerVersion !== ref.version)
+                problems.push(SolutionBaseResolver.versionMismatch(ref.id, ref.version, producerVersion))
+            if (model.package !== undefined)
+            {
+                bases.push(model.package.document)
+                SolutionBaseResolver.tagOrigin(originOf, model.package.document, WikiLocator.OpenProjectOrigin(producer.storage))
+                return
+            }
+            // live compile failed → fall through to the published copy so the base isn't lost
+        }
+        else if (producer !== undefined && path.has(producer.storage))
+        {
+            problems.push(SolutionBaseResolver.cyclicProblem(ref.id))
+        }
+        await this.resolvePublishedBase(ref, kind, seenPub, bases, problems, originOf)
+    }
+
+    private async resolvePublishedBase(
+        ref: DependencyRef, kind: ProjectType, seenPub: Set<string>,
+        bases: TodlDocument[], problems: string[], originOf: Map<string, WikiOrigin>,
+    ): Promise<void>
+    {
+        const key = `${kind}:${ref.id}@${ref.version}`
+        if (seenPub.has(key)) return
+        seenPub.add(key)
+        const sourced = await this.inner().TryGet({ kind: SolutionBaseResolver.packageKindOf(kind), id: ref.id, version: ref.version })
+        if (sourced === undefined)
+        {
+            problems.push(SolutionBaseResolver.notPublished(kind, ref.id, ref.version))
+            return
+        }
+        bases.push({ nodes: sourced.Document.nodes, edges: sourced.Document.edges })
+        SolutionBaseResolver.tagOrigin(originOf, sourced.Document, WikiLocator.PackageOrigin(ref.id, ref.version))
+        for (const dep of sourced.Dependencies)
+        {
+            const depKind = dep.kind === PackageKind.Library ? ProjectType.Library : ProjectType.MetaModel
+            await this.resolvePublishedBase({ id: dep.id, version: dep.version }, depKind, seenPub, bases, problems, originOf)
+        }
+    }
+
+    // A binding's `kind` (metaModels vs libraries) says which array the consumer
+    // declared the ref under, not what the producer's own manifest.type must be —
+    // a manifest may name a ref under either list independent of the target's own
+    // declared type (e.g. a library binding another library's own self-reference).
+    // liveProducerFor's own type gate (producer vs non-producer) is the only
+    // filter that applies here; matching further on `kind` would make a producer
+    // whose declared type differs from the binding's array invisible to the DFS,
+    // silently disabling cycle detection for it.
+    private async liveProducerOfKind(id: string): Promise<{ storage: IStorage; manifest: ProjectManifest } | undefined>
+    {
+        return this.liveProducerFor(id)
+    }
+
+    private async readManifest(storage: IStorage): Promise<ProjectManifest | undefined>
+    {
+        try { return parseManifest(await storage.ReadText(PROJECT_MANIFEST_FILENAME)) }
+        catch { return undefined }
+    }
+
+    private static packageKindOf(kind: ProjectType): PackageKind
+    {
+        return kind === ProjectType.Library ? PackageKind.Library : PackageKind.MetaModel
+    }
+
+    // First-writer-wins: a node reached first via a live-producer binding keeps that
+    // origin over a later published-diamond reach.
+    private static tagOrigin(originOf: Map<string, WikiOrigin>, doc: TodlDocument, origin: WikiOrigin): void
+    {
+        for (const n of doc.nodes) if (!originOf.has(n.id)) originOf.set(n.id, origin)
+    }
+
+    private static localProblem(kind: ProjectType, id: string, detail: string): string
+    {
+        return `local ${kind} "${id}" — ${detail}`
+    }
+    private static versionMismatch(id: string, requested: string, actual: string): string
+    {
+        return `using local "${id}" (open project) — binding requests @${requested}, project is @${actual}`
+    }
+    private static cyclicProblem(id: string): string
+    {
+        return `cyclic local reference to "${id}"; using published`
+    }
+    private static notPublished(kind: ProjectType, id: string, version: string): string
+    {
+        return `${kind} "${id}@${version}" is not published`
     }
 
     // The open, resolved producer member whose manifest id === id, with its parsed

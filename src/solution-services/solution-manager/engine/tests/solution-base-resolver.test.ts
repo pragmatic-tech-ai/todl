@@ -8,6 +8,8 @@ import type { IPackageSource, SourcedPackage } from '../../../todl-build-system/
 import type { PackageRef } from '../../../../publish/publish.js'
 import { ProjectType, type ProjectManifest } from '../../../package-manager/manifest.js'
 import { PROJECT_MANIFEST_FILENAME } from '../../../project-services/core/project-factory.js'
+import { WikiOriginKind } from '../../../project-services/core/wiki-origin.js'
+import type { JsonNode } from '../../../../compiler-services/emit/json.js'
 
 // Fixtures (static helpers on a test class — no free functions).
 class Fixtures
@@ -106,6 +108,33 @@ class Fixtures
         return {
             [PROJECT_MANIFEST_FILENAME]: JSON.stringify(manifest),
             [Fixtures.ModelFileName]: `namespace lib_${id} { concept ${term} : lib_${baseLibraryId}.${baseConcept} { } }`,
+        }
+    }
+
+    // A meta-model member's files whose .todl body is deliberately malformed, so
+    // ProjectModelProvider.Compile/CompileWithBases returns `errors` and no `package`
+    // — for asserting a failed live compile still falls back to the published copy.
+    static BrokenMetaModelFiles(id: string, version: string): Record<string, string>
+    {
+        const manifest: ProjectManifest = { type: ProjectType.MetaModel, name: id, version: 1, id, packageVersion: version }
+        return {
+            [PROJECT_MANIFEST_FILENAME]: JSON.stringify(manifest),
+            [Fixtures.ModelFileName]: `namespace ${Fixtures.MetaModelNamespace} { concept ??? broken !!! }`,
+        }
+    }
+
+    // A published SourcedPackage built from real (if minimal) TodlDocument nodes —
+    // for asserting which nodes/origins ResolveBasesFor surfaces from a published
+    // fallback, as opposed to Fixtures.SomeSourced()'s empty stand-in document.
+    static PublishedDoc(nodes: { id: string }[], dependencies?: { kind: string; id: string; version: string }[]): SourcedPackage
+    {
+        const jsonNodes: JsonNode[] = nodes.map((n) => ({
+            id: n.id, tier: 'Domain', type: null, metaKind: null, namespace: null,
+            localId: null, isClass: false, class: null, storageId: null, fields: [], attrs: {},
+        }))
+        return {
+            Document: { nodes: jsonNodes, edges: [] },
+            Dependencies: (dependencies ?? []).map((d) => ({ kind: d.kind, id: d.id, version: d.version }) as PackageRef),
         }
     }
 }
@@ -271,4 +300,90 @@ test('Invalidate raises StaleMemberIds with exactly the evicted id set', async (
 
     assert.deepEqual(raised, new Set(['mm', 'lib']))
     assert.deepEqual(resolver.StaleMemberIds, new Set(['mm', 'lib']))
+})
+
+test('ResolveBasesFor prefers an open producer and tags its nodes with an OpenProject origin', async () =>
+{
+    const consumer = Fixtures.Storage(Fixtures.LibraryFiles('lib', 'mm', '1.0.0', 'Gadget', 'Widget'))
+    const provider = Fixtures.Provider(
+        Fixtures.Manager([
+            { id: 'mm', type: 'meta-model', storage: Fixtures.Storage(Fixtures.MetaModelFiles('mm', '1.0.0', 'Widget')) },
+        ]),
+        Fixtures.Published({ 'mm@1.0.0': Fixtures.PublishedDoc([{ id: 'StaleWidget' }]) }),
+    )
+    const resolver = new SolutionBaseResolver(provider)
+    const { bases, problems, originOf } = await resolver.ResolveBasesFor(consumer)
+    assert.ok(bases.some((b) => b.nodes.some((n) => n.id === 'Widget')))   // live, not StaleWidget
+    assert.equal(originOf.get('Widget')!.kind, WikiOriginKind.OpenProject)
+    assert.deepEqual(problems, [])
+})
+
+test('ResolveBasesFor falls back to published and tags Package origin, recursing deps', async () =>
+{
+    const consumer = Fixtures.Storage(Fixtures.LibraryFiles('lib', 'mm', '1.0.0', 'Gadget', 'Widget'))
+    const provider = Fixtures.Provider(
+        Fixtures.Manager([]),   // no open producer
+        Fixtures.Published({ 'mm@1.0.0': Fixtures.PublishedDoc([{ id: 'Widget' }], [{ kind: 'meta-model', id: 'core', version: '2.0.0' }]),
+                             'core@2.0.0': Fixtures.PublishedDoc([{ id: 'Base' }]) }),
+    )
+    const resolver = new SolutionBaseResolver(provider)
+    const { bases, originOf } = await resolver.ResolveBasesFor(consumer)
+    assert.ok(bases.some((b) => b.nodes.some((n) => n.id === 'Widget')))
+    assert.ok(bases.some((b) => b.nodes.some((n) => n.id === 'Base')))     // transitive dep
+    assert.equal(originOf.get('Widget')!.kind, WikiOriginKind.Package)
+})
+
+test('ResolveBasesFor emits a not-published problem for an absent base', async () =>
+{
+    const consumer = Fixtures.Storage(Fixtures.LibraryFiles('lib', 'ghost', '9.9.9', 'G', 'X'))
+    const provider = Fixtures.Provider(Fixtures.Manager([]), Fixtures.Published({}))
+    const resolver = new SolutionBaseResolver(provider)
+    const { problems } = await resolver.ResolveBasesFor(consumer)
+    assert.equal(problems.length, 1)
+    assert.match(problems[0]!, /ghost@9\.9\.9.*not published/)
+})
+
+test('ResolveBasesFor reports a version mismatch against an open producer', async () =>
+{
+    const consumer = Fixtures.Storage(Fixtures.LibraryFiles('lib', 'mm', '2.0.0', 'Gadget', 'Widget')) // wants @2.0.0
+    const provider = Fixtures.Provider(
+        Fixtures.Manager([{ id: 'mm', type: 'meta-model', storage: Fixtures.Storage(Fixtures.MetaModelFiles('mm', '1.0.0', 'Widget')) }]), // is @1.0.0
+        Fixtures.Published({}),
+    )
+    const resolver = new SolutionBaseResolver(provider)
+    const { problems } = await resolver.ResolveBasesFor(consumer)
+    assert.ok(problems.some((p) => /binding requests @2\.0\.0, project is @1\.0\.0/.test(p)))
+})
+
+test('ResolveBasesFor: a self-binding producer yields one cyclic problem and falls back to published', async () =>
+{
+    // consumer binds 'a'; 'a' is an open library that binds itself. 'a' declares a
+    // concept named "SelfA" (distinct from the "A" it extends) so its own live
+    // compile doesn't collide, id-wise, with the "A" base node its self-reference
+    // falls back to publishing — an incidental clash this compiler's flat (bare,
+    // non-namespace-qualified) node-id scheme would otherwise produce, unrelated
+    // to the cyclic-detection behavior under test.
+    const consumer = Fixtures.Storage(Fixtures.LibraryFiles('c', 'a', '1.0.0', 'C', 'A'))
+    const provider = Fixtures.Provider(
+        Fixtures.Manager([{ id: 'a', type: 'library', storage: Fixtures.Storage(Fixtures.LibraryFiles('a', 'a', '1.0.0', 'SelfA', 'A')) }]),
+        Fixtures.Published({ 'a@1.0.0': Fixtures.PublishedDoc([{ id: 'A' }]) }),
+    )
+    const resolver = new SolutionBaseResolver(provider)
+    const { problems } = await resolver.ResolveBasesFor(consumer)
+    assert.equal(problems.filter((p) => /cyclic local reference to "a"/.test(p)).length, 1)
+})
+
+test('ResolveBasesFor surfaces live compile errors but still falls back to the published base', async () =>
+{
+    const consumer = Fixtures.Storage(Fixtures.LibraryFiles('lib', 'mm', '1.0.0', 'Gadget', 'Widget'))
+    const provider = Fixtures.Provider(
+        Fixtures.Manager([
+            { id: 'mm', type: 'meta-model', storage: Fixtures.Storage(Fixtures.BrokenMetaModelFiles('mm', '1.0.0')) },
+        ]),
+        Fixtures.Published({ 'mm@1.0.0': Fixtures.PublishedDoc([{ id: 'Widget' }]) }),
+    )
+    const resolver = new SolutionBaseResolver(provider)
+    const { bases, problems } = await resolver.ResolveBasesFor(consumer)
+    assert.ok(problems.length > 0)
+    assert.ok(bases.some((b) => b.nodes.some((n) => n.id === 'Widget')))
 })
