@@ -22,6 +22,9 @@ import { type INotificationService } from './notification-service.js';
 import { type PackageSource, type PackageRef } from '../../../domain/domain.js';
 import { type Diagnostic } from '../../../compiler-services/diagnostics/diagnostic.js';
 import { type IPackageRegistry } from '../../package-manager/engine/package-registry.js';
+import { parseManifest } from '../../package-manager/manifest.js';
+import { PROJECT_MANIFEST_FILENAME } from '../../project-services/core/project-factory.js';
+import { type SolutionMember } from './solution-member.js';
 
 // Owns exactly ONE active solution (the Visual Studio .sln model): create a new
 // empty solution, open/save/close one, and keep a recent-solutions list. Opening
@@ -244,6 +247,78 @@ export class SolutionManagerService extends ServiceBase
         session.IsDirty = false;
         this.setActive(session);
         this.pushRecent(location);
+    }
+
+    // Ensure there is an active solution for loose projects to live in, creating an
+    // untitled ambient one on demand. No canReplace prompt — there is nothing to
+    // replace — and no recents/lastSolution touched (ambient is not remembered).
+    private EnsureActiveSolution(): Solution
+    {
+        const existing = this.ActiveSolution;
+        if (existing !== undefined) return existing;
+        const solution = new Solution(SolutionManagerService.UntitledName);
+        this.setActive(solution);
+        return solution;
+    }
+
+    // Open one loose project into the active solution (ambient untitled if none),
+    // deduping by member path. Reads the project's own manifest for its type. Adding
+    // a project to an untitled/ambient solution does NOT dirty it (loose membership
+    // isn't unsaved solution content — so a later OpenSolution won't prompt to
+    // discard); adding to a titled solution dirties it (its manifest membership
+    // changed).
+    public async OpenProject(location: string): Promise<SolutionMember>
+    {
+        const solution = this.EnsureActiveSolution();
+        const memberPath = this.memberPathFor(solution, location);
+        const existing = solution.Members.ToArray().find((m) => m.Ref.path === memberPath);
+        if (existing !== undefined) return existing;
+        const storage = this.storages.CreateStorage(location);
+        const manifest = parseManifest(await storage.ReadText(PROJECT_MANIFEST_FILENAME));
+        const wasUntitled = !solution.HasLocation;
+        const member = solution.AddMember(memberPath, manifest.type);
+        await solution.OpenOne(
+            member,
+            (rel) => this.memberStorageFor(solution, rel),
+            (type) => this.factories.factoryFor(type),
+        );
+        if (wasUntitled) solution.IsDirty = false;
+        return member;
+    }
+
+    // The member path stored in a solution: relative to the solution root when the
+    // location is under a titled solution's folder; otherwise the absolute location
+    // (untitled/ambient, or a project outside the solution folder).
+    private memberPathFor(solution: Solution, location: string): string
+    {
+        const root = solution.Storage?.Root;
+        if (root === undefined) return location;
+        return SolutionManagerService.relativeUnderRoot(root, location) ?? location;
+    }
+
+    // Resolve a member's storage the way it was pathed: an absolute member path (or
+    // an untitled solution) goes straight to CreateStorage; a relative path is joined
+    // under the solution root — the same rule OpenSolution's storageFor uses.
+    private memberStorageFor(solution: Solution, memberPath: string): IStorage
+    {
+        const root = solution.Storage?.Root;
+        if (root === undefined || SolutionManagerService.isAbsolute(memberPath))
+            return this.storages.CreateStorage(memberPath);
+        return this.storages.CreateStorage(SolutionManagerService.joinPosix(root, memberPath));
+    }
+
+    private static relativeUnderRoot(root: string, location: string): string | undefined
+    {
+        const r = root.replace(/\\/g, '/').replace(/\/+$/, '');
+        const l = location.replace(/\\/g, '/');
+        if (l === r) return '.';
+        const prefix = `${r}/`;
+        return l.startsWith(prefix) ? l.slice(prefix.length) : undefined;
+    }
+
+    private static isAbsolute(p: string): boolean
+    {
+        return p.startsWith('/') || /^[A-Za-z]:/.test(p);
     }
 
     public async Save(): Promise<void>
