@@ -54,6 +54,30 @@ read them (`403 permission_denied`). The deploy job therefore authenticates
 with a **`PACKAGES_TOKEN`** repo secret — a PAT with `read:packages`. If you
 rotate that PAT, update the secret (`gh secret set PACKAGES_TOKEN`).
 
+## Syntax checker
+
+`todl-syntax-checker` checks `.todl` files for syntax errors only — lexer and
+parser, no semantic validation — so it runs fast in CI, pre-commit hooks and
+agent loops, without a language server.
+
+```bash
+todl-syntax-checker core/ontology core/models/app.todl
+```
+
+Arguments are files or directories; directories are searched recursively,
+skipping `node_modules` and hidden directories, and all files are loaded
+together. Each diagnostic is printed as `file:line:column  code  message`,
+followed by a summary line:
+
+```text
+core/models/app.todl:12:18  syntax.unexpected-token  expected "{" at 12:18 (got "-")
+files: 7  syntax: 1
+```
+
+Exit codes: `0` — no syntax errors, `1` — syntax errors found, `2` — nothing to
+check (bad option, unreadable path, or no `.todl` files). Options: `-h`/`--help`,
+`-v`/`--version`, and `--` to treat every following argument as a path.
+
 ## License
 
 Apache-2.0

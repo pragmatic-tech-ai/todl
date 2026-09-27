@@ -88,7 +88,8 @@
     }
   },
   "bin": {
-    "todl-language-server": "./dist/language-server/stdio.js"
+    "todl-language-server": "./dist/language-server/stdio.js",
+    "todl-syntax-checker": "./dist/syntax-checker/main.js"
   },
   "files": [
     "dist",
