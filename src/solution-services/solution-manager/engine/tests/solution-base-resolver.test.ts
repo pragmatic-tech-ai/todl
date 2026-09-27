@@ -91,6 +91,23 @@ class Fixtures
             [Fixtures.ModelFileName]: `namespace lib_${id} { concept ${term} : ${Fixtures.MetaModelNamespace}.${baseConcept} { } }`,
         }
     }
+
+    // A library member's files bound to ANOTHER LIBRARY (not a meta-model): project.plexus
+    // declares a `libraries:` binding and the .todl extends the base library's own concept
+    // by qualified name (namespace `lib_<baseLibraryId>`) — proves a two-hop live chain
+    // (library -> library -> meta-model) resolves, and gives Invalidate('mm') a transitive
+    // dependent one hop further out than a direct metaModels binding.
+    static LibraryOnLibraryFiles(id: string, baseLibraryId: string, baseLibraryVersion: string, term: string, baseConcept: string): Record<string, string>
+    {
+        const manifest: ProjectManifest = {
+            type: ProjectType.Library, name: id, version: 1, id, packageVersion: '1.0.0',
+            libraries: [{ id: baseLibraryId, version: baseLibraryVersion }],
+        }
+        return {
+            [PROJECT_MANIFEST_FILENAME]: JSON.stringify(manifest),
+            [Fixtures.ModelFileName]: `namespace lib_${id} { concept ${term} : lib_${baseLibraryId}.${baseConcept} { } }`,
+        }
+    }
 }
 
 test('a live open producer member resolves as a base, preferred over a published package of the same id', async () =>
@@ -180,4 +197,78 @@ test('an A→B→A member cycle terminates without overflow', async () =>
     // Must settle (defined or undefined) without infinite recursion / a RangeError —
     // the `resolving` DFS guard is what's under test, not the specific outcome.
     await assert.doesNotReject(resolver.TryGet({ id: 'a', version: '1.0.0' } as PackageRef))
+})
+
+test('a second TryGet for the same member returns the cached compile (no recompile)', async () =>
+{
+    const provider = Fixtures.Provider(
+        Fixtures.Manager([
+            { id: 'mm', type: 'meta-model', storage: Fixtures.Storage(Fixtures.MetaModelFiles('mm', '1.0.0', 'Widget')) },
+        ]),
+        Fixtures.Published({}),
+    )
+    const resolver = new SolutionBaseResolver(provider)
+
+    const first = await resolver.TryGet({ id: 'mm', version: '1.0.0' } as PackageRef)
+    const second = await resolver.TryGet({ id: 'mm', version: '1.0.0' } as PackageRef)
+
+    // Identity equality proves the second TryGet returned the cached SourcedPackage
+    // rather than recompiling the member.
+    assert.ok(first !== undefined)
+    assert.equal(second, first)
+})
+
+test('Invalidate drops only the member and its transitive dependents', async () =>
+{
+    const provider = Fixtures.Provider(
+        Fixtures.Manager([
+            { id: 'mm', type: 'meta-model', storage: Fixtures.Storage(Fixtures.MetaModelFiles('mm', '1.0.0', 'Widget')) },
+            { id: 'lib', type: 'library', storage: Fixtures.Storage(Fixtures.LibraryFiles('lib', 'mm', '1.0.0', 'Gadget', 'Widget')) },
+            { id: 'archConsumer', type: 'library', storage: Fixtures.Storage(Fixtures.LibraryOnLibraryFiles('archConsumer', 'lib', '1.0.0', 'Sprocket', 'Gadget')) },
+            { id: 'other', type: 'meta-model', storage: Fixtures.Storage(Fixtures.MetaModelFiles('other', '1.0.0', 'Unrelated')) },
+        ]),
+        Fixtures.Published({}),
+    )
+    const resolver = new SolutionBaseResolver(provider)
+
+    // Prime the cache by resolving all four.
+    const mm = await resolver.TryGet({ id: 'mm', version: '1.0.0' } as PackageRef)
+    const lib = await resolver.TryGet({ id: 'lib', version: '1.0.0' } as PackageRef)
+    const archConsumer = await resolver.TryGet({ id: 'archConsumer', version: '1.0.0' } as PackageRef)
+    const other = await resolver.TryGet({ id: 'other', version: '1.0.0' } as PackageRef)
+    assert.ok(mm !== undefined && lib !== undefined && archConsumer !== undefined && other !== undefined)
+
+    resolver.Invalidate('mm')
+
+    // mm, lib, and archConsumer (which transitively binds mm through lib) are
+    // evicted — re-resolving them yields a freshly-compiled (different) object.
+    assert.notEqual(await resolver.TryGet({ id: 'mm', version: '1.0.0' } as PackageRef), mm)
+    assert.notEqual(await resolver.TryGet({ id: 'lib', version: '1.0.0' } as PackageRef), lib)
+    assert.notEqual(await resolver.TryGet({ id: 'archConsumer', version: '1.0.0' } as PackageRef), archConsumer)
+    // The unrelated member's cached compile survives untouched.
+    assert.equal(await resolver.TryGet({ id: 'other', version: '1.0.0' } as PackageRef), other)
+})
+
+test('Invalidate raises StaleMemberIds with exactly the evicted id set', async () =>
+{
+    const provider = Fixtures.Provider(
+        Fixtures.Manager([
+            { id: 'mm', type: 'meta-model', storage: Fixtures.Storage(Fixtures.MetaModelFiles('mm', '1.0.0', 'Widget')) },
+            { id: 'lib', type: 'library', storage: Fixtures.Storage(Fixtures.LibraryFiles('lib', 'mm', '1.0.0', 'Gadget', 'Widget')) },
+            { id: 'other', type: 'meta-model', storage: Fixtures.Storage(Fixtures.MetaModelFiles('other', '1.0.0', 'Unrelated')) },
+        ]),
+        Fixtures.Published({}),
+    )
+    const resolver = new SolutionBaseResolver(provider)
+    await resolver.TryGet({ id: 'mm', version: '1.0.0' } as PackageRef)
+    await resolver.TryGet({ id: 'lib', version: '1.0.0' } as PackageRef)
+    await resolver.TryGet({ id: 'other', version: '1.0.0' } as PackageRef)
+
+    let raised: ReadonlySet<string> | undefined
+    resolver.PropertyChanged('StaleMemberIds').subscribe((a) => { raised = a.newValue as ReadonlySet<string> })
+
+    resolver.Invalidate('mm')
+
+    assert.deepEqual(raised, new Set(['mm', 'lib']))
+    assert.deepEqual(resolver.StaleMemberIds, new Set(['mm', 'lib']))
 })

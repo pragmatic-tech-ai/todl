@@ -13,19 +13,62 @@ import { SolutionManagerService } from './solution-manager-service.js'
 // inner published source (PackageStoreKey). Recursive + cycle-guarded: a member's
 // own bases resolve through the same instance. TODL-side, host-free.
 //
-// This is the plain live-first class only — Task 3 layers caching, the
-// dependency graph, and the stale signal (Invalidate/StaleMemberIds) on top.
+// Task 3 layers a per-member compile cache, a dependency graph derived from each
+// member's own metaModels/libraries bindings, and a stale signal on top: Invalidate
+// evicts a member plus its transitive dependents and raises StaleMemberIds so a
+// Wave-3 host can react (re-run diagnostics, re-render). The Members-collection
+// coarse trigger (any add/remove, or opening a different solution) simply clears
+// everything — Wave 1 does not try to patch the graph incrementally.
 export class SolutionBaseResolver extends ServiceBase implements IPackageSource
 {
     public static readonly Key = new ServiceKey<SolutionBaseResolver>('SolutionBaseResolver')
+
+    private static readonly ActiveSolutionPropertyName = 'ActiveSolution'
+    private static readonly StaleMemberIdsPropertyName = 'StaleMemberIds'
 
     // DFS resolution path (member ids currently being compiled) — genuine cycles
     // are blocked, diamonds allowed.
     private readonly resolving = new Set<string>()
 
+    // The per-member compile cache (keyed by manifest id) and the forward
+    // dependency graph it doubles as bookkeeping for: memberId -> the base ids its
+    // OWN manifest binds (metaModels + libraries). dependentsOf(id) is the reverse
+    // of this map, computed on demand — Wave 1's graph is small enough that a scan
+    // per Invalidate is simpler and safer than maintaining a maintained reverse index.
+    private readonly cache = new Map<string, SourcedPackage>()
+    private readonly baseIdsOf = new Map<string, ReadonlySet<string>>()
+
+    private _staleMemberIds: ReadonlySet<string> = new Set<string>()
+
+    // The live unsubscribe for the current ActiveSolution's Members collection —
+    // rewired whenever ActiveSolution itself changes (opening a different solution
+    // swaps the Members collection out from under us).
+    private membersUnsubscribe: (() => void) | undefined
+
     constructor(provider: IServiceProvider)
     {
         super(provider)
+        this.subscribeToManager()
+    }
+
+    // The id set evicted by the most recent Invalidate call (empty until the first
+    // call). Setting it (via Invalidate) raises PropertyChanged so a host can react.
+    public get StaleMemberIds(): ReadonlySet<string>
+    {
+        return this._staleMemberIds
+    }
+
+    // Drop the cached compile for `memberId` and every member that transitively
+    // binds it (directly or through another evicted member), then raise
+    // StaleMemberIds with exactly that evicted set. The next TryGet/compileMember
+    // for any evicted id recompiles from live sources.
+    public Invalidate(memberId: string): void
+    {
+        const evicted = this.withDependents(memberId)
+        for (const id of evicted) this.cache.delete(id)
+        const old = this._staleMemberIds
+        this._staleMemberIds = evicted
+        this.RaisePropertyChanged(SolutionBaseResolver.StaleMemberIdsPropertyName, old, evicted)
     }
 
     public async TryGet(ref: PackageRef): Promise<SourcedPackage | undefined>
@@ -63,17 +106,93 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource
 
     private async compileMember(id: string, storage: IStorage, manifest: ProjectManifest): Promise<SourcedPackage | undefined>
     {
+        const cached = this.cache.get(id)
+        if (cached !== undefined) return cached
+        // Record this member's own base bindings regardless of compile outcome —
+        // the graph is about declared bindings, not about whether the compile that
+        // read them happened to succeed.
+        this.baseIdsOf.set(id, SolutionBaseResolver.baseIdsOf(manifest))
         this.resolving.add(id)
         try
         {
             const model = await new ProjectModelProvider(storage, manifest, this).Compile()
             if (model.package === undefined) return undefined // live-compile failed → published fallback
-            return { Document: model.package.document, Dependencies: model.package.document.dependencies ?? [] }
+            const compiled: SourcedPackage = { Document: model.package.document, Dependencies: model.package.document.dependencies ?? [] }
+            this.cache.set(id, compiled)
+            return compiled
         }
         finally
         {
             this.resolving.delete(id)
         }
+    }
+
+    // The ids a manifest itself binds as bases (its metaModels + libraries
+    // references) — the forward edge(s) `id -> baseIds` recorded in baseIdsOf.
+    private static baseIdsOf(manifest: ProjectManifest): ReadonlySet<string>
+    {
+        const ids = new Set<string>()
+        for (const ref of manifest.metaModels ?? []) ids.add(ref.id)
+        for (const ref of manifest.libraries ?? []) ids.add(ref.id)
+        return ids
+    }
+
+    // The members that directly bind `id` as one of their own bases — the reverse
+    // of baseIdsOf, scanned on demand (Wave 1's solutions are small).
+    private dependentsOf(id: string): ReadonlySet<string>
+    {
+        const dependents = new Set<string>()
+        for (const [memberId, baseIds] of this.baseIdsOf)
+        {
+            if (baseIds.has(id)) dependents.add(memberId)
+        }
+        return dependents
+    }
+
+    // BFS over dependentsOf: `memberId` plus every member reachable by following
+    // "binds" edges outward — the full transitive-dependent set Invalidate evicts.
+    private withDependents(memberId: string): ReadonlySet<string>
+    {
+        const evicted = new Set<string>()
+        const queue: string[] = [memberId]
+        while (queue.length > 0)
+        {
+            const current = queue.shift() as string
+            if (evicted.has(current)) continue
+            evicted.add(current)
+            for (const dependent of this.dependentsOf(current)) queue.push(dependent)
+        }
+        return evicted
+    }
+
+    // Coarse Wave-1 cache-invalidation trigger: clear the cache + graph whenever
+    // the active solution's Members collection changes (a member added/removed),
+    // and rewire that subscription whenever ActiveSolution itself changes (opening
+    // a different solution swaps the Members collection out from under us). Guards
+    // against a headless run with no SolutionManagerService registered, and against
+    // a lightweight test double that doesn't implement PropertyChanged/Subscribe.
+    private subscribeToManager(): void
+    {
+        const manager = this.Provider.get(SolutionManagerService.Key)
+        if (manager === undefined) return
+        const propertyChanged = (manager as unknown as { PropertyChanged?: (name: string) => { subscribe: (handler: () => void) => unknown } }).PropertyChanged
+        propertyChanged?.call(manager, SolutionBaseResolver.ActiveSolutionPropertyName).subscribe(() => this.rewireMembers(manager))
+        this.rewireMembers(manager)
+    }
+
+    private rewireMembers(manager: SolutionManagerService): void
+    {
+        this.membersUnsubscribe?.()
+        this.membersUnsubscribe = undefined
+        this.clearCache()
+        const members = manager.ActiveSolution?.Members as unknown as { Subscribe?: (handler: () => void) => () => void } | undefined
+        this.membersUnsubscribe = members?.Subscribe?.(() => this.clearCache())
+    }
+
+    private clearCache(): void
+    {
+        this.cache.clear()
+        this.baseIdsOf.clear()
     }
 
     private inner(): IPackageSource
