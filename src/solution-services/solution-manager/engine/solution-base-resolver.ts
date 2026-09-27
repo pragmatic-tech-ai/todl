@@ -110,6 +110,37 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource
         return out
     }
 
+    // Every open, resolved member producing a base of `kind`, as { id, version } —
+    // the References-manager catalog. A sibling can be referenced before it is
+    // published (resolution prefers the open producer); a producer with no version
+    // yet is skipped, since a reference needs a concrete version to record.
+    public async WorkspaceProducers(kind: ProjectType): Promise<readonly DependencyRef[]>
+    {
+        const members = this.Provider.get(SolutionManagerService.Key)?.ActiveSolution?.Members
+        if (members === undefined) return []
+        const refs: DependencyRef[] = []
+        for (const m of members)
+        {
+            const storage = m.Storage
+            if (storage === undefined) continue
+            const manifest = await this.readManifest(storage)
+            if (manifest === undefined || manifest.type !== kind) continue
+            if (manifest.id === undefined || manifest.packageVersion === undefined) continue
+            refs.push({ id: manifest.id, version: manifest.packageVersion })
+        }
+        return refs
+    }
+
+    // The producer id a storage's manifest declares (meta-model or library), else
+    // undefined.
+    public async ProducedIdOf(consumerStorage: IStorage): Promise<string | undefined>
+    {
+        const manifest = await this.readManifest(consumerStorage)
+        if (manifest === undefined) return undefined
+        if (manifest.type !== ProjectType.MetaModel && manifest.type !== ProjectType.Library) return undefined
+        return manifest.id
+    }
+
     private async collectPublishedRef(ref: DependencyRef, kind: ProjectType, out: Set<string>): Promise<void>
     {
         const key = `${ref.id}@${ref.version}`

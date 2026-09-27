@@ -450,3 +450,25 @@ test('ReferencedPublishedRefs records an absent ref own key then stops', async (
     const refs = await resolver.ReferencedPublishedRefs(consumer)
     assert.deepEqual([...refs], ['ghost@9.9.9'])
 })
+
+test('WorkspaceProducers lists open producers of a kind, skipping versionless ones', async () => {
+    const provider = Fixtures.Provider(
+        Fixtures.Manager([
+            { id: 'mm', type: 'meta-model', storage: Fixtures.Storage(Fixtures.MetaModelFiles('mm', '1.0.0', 'W')) },
+            { id: 'lib', type: 'library', storage: Fixtures.Storage(Fixtures.LibraryFiles('lib', 'mm', '1.0.0', 'G', 'W')) },
+        ]),
+        Fixtures.Published({}),
+    )
+    const resolver = new SolutionBaseResolver(provider)
+    const mm = await resolver.WorkspaceProducers(ProjectType.MetaModel)
+    assert.deepEqual(mm, [{ id: 'mm', version: '1.0.0' }])
+})
+
+test('ProducedIdOf returns a producer id and undefined for a non-producer', async () => {
+    const provider = Fixtures.Provider(Fixtures.Manager([]), Fixtures.Published({}))
+    const resolver = new SolutionBaseResolver(provider)
+    const mmStorage = Fixtures.Storage(Fixtures.MetaModelFiles('mm', '1.0.0', 'W'))
+    const archStorage = Fixtures.Storage({ [PROJECT_MANIFEST_FILENAME]: JSON.stringify({ type: 'architecture', name: 'a', id: 'a', version: 1 }) })
+    assert.equal(await resolver.ProducedIdOf(mmStorage), 'mm')
+    assert.equal(await resolver.ProducedIdOf(archStorage), undefined)
+})

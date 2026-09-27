@@ -116,6 +116,12 @@ export {
 } from './publish/stores.js';
 export { deriveClasses, projectAnnotations } from './publish/reflect.js';
 export { StoragePackageSource } from './solution-services/package-manager/storage-package-source.js';
+export {
+    ProjectType,
+    parseManifest,
+    type ProjectManifest,
+    type DependencyRef,
+} from './solution-services/package-manager/manifest.js';
 
 export {
     ExprKind,
