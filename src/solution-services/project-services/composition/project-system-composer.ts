@@ -73,6 +73,14 @@ export class ProjectSystemComposer
         // The build bakes through PresentationBakerKey resolved at BAKE time (not here), so
         // a host that re-registers the key after composition still reaches the build.
         container.register(NpmPackageBuildSystem, (p) => new NpmPackageBuildSystem(new ProviderPresentationBaker(p)));
+        // A lazy container singleton (default register() lifetime): NOT constructed here —
+        // only on the first ResolveSource call that finds a SolutionManagerService
+        // registered. That first resolve is also the ONLY construction for the container's
+        // lifetime (ServiceProvider caches singletons at the owner), so the resolver's
+        // Task-3 per-member cache survives across every subsequent event and its
+        // ActiveSolution subscription (subscribeToManager, in its constructor) is created
+        // exactly once — never a fresh, leaked subscription per event. See ResolveSource.
+        container.register(SolutionBaseResolver.Key, (p) => new SolutionBaseResolver(p));
 
         // 2. The three registries, as singletons.
         const factories = new ProjectFactoryRegistry(provider);
@@ -114,18 +122,19 @@ export class ProjectSystemComposer
         container.registerInstance(ProjectEventsKey, events);
     }
 
-    // The package source a generator's model compile resolves bases through, picked at
-    // EVENT time (not composition time) so a host that registers its package store, or
-    // its SolutionManagerService, after composition is still reached. An explicit
-    // composer Source always wins; otherwise, an open solution's SolutionBaseResolver
-    // resolves a bound base from a live, unpublished sibling member first (falling back
-    // to the published store internally for everything else); with neither, the
-    // published store (PackageStoreKey) — Plexus registers PlexusPackageStore under it
-    // in a later module — or, failing that, the empty source.
+    // Which branch to resolve through is picked at EVENT time (not composition time) so
+    // a host that registers its package store, or its SolutionManagerService, after
+    // composition is still reached. An explicit composer Source always wins; otherwise,
+    // an open solution resolves a bound base through the ONE shared SolutionBaseResolver
+    // singleton (registered lazily in Compose, under SolutionBaseResolver.Key — resolving
+    // it here, rather than constructing a fresh instance per event, is what makes its
+    // Task-3 cache/graph and its single ActiveSolution subscription survive across every
+    // event); with neither, the published store (PackageStoreKey) — Plexus registers
+    // PlexusPackageStore under it in a later module — or, failing that, the empty source.
     private static ResolveSource(provider: IServiceProvider, explicit?: IPackageSource): IPackageSource
     {
         if (explicit !== undefined) return explicit;
-        if (provider.get(SolutionManagerService.Key) !== undefined) return new SolutionBaseResolver(provider);
+        if (provider.get(SolutionManagerService.Key) !== undefined) return provider.getRequired(SolutionBaseResolver.Key);
         return provider.get(PackageStoreKey) ?? new ProjectSystemComposer.EmptyPackageSource();
     }
 
