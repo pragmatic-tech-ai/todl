@@ -431,3 +431,22 @@ test('ResolveBasesFor catches a live compile that throws and still falls back to
     assert.ok(problems.length > 0)
     assert.ok(bases.some((b) => b.nodes.some((n) => n.id === 'Widget')))
 })
+
+test('ReferencedPublishedRefs returns the transitive published id@version closure', async () => {
+    const consumer = Fixtures.Storage(Fixtures.LibraryFiles('lib', 'mm', '1.0.0', 'G', 'W'))
+    const provider = Fixtures.Provider(Fixtures.Manager([]), Fixtures.Published({
+        'mm@1.0.0': Fixtures.PublishedDoc([{ id: 'W' }], [{ kind: 'meta-model', id: 'core', version: '2.0.0' }]),
+        'core@2.0.0': Fixtures.PublishedDoc([{ id: 'B' }]),
+    }))
+    const resolver = new SolutionBaseResolver(provider)
+    const refs = await resolver.ReferencedPublishedRefs(consumer)
+    assert.deepEqual([...refs].sort(), ['core@2.0.0', 'mm@1.0.0'])
+})
+
+test('ReferencedPublishedRefs records an absent ref own key then stops', async () => {
+    const consumer = Fixtures.Storage(Fixtures.LibraryFiles('lib', 'ghost', '9.9.9', 'G', 'X'))
+    const provider = Fixtures.Provider(Fixtures.Manager([]), Fixtures.Published({}))
+    const resolver = new SolutionBaseResolver(provider)
+    const refs = await resolver.ReferencedPublishedRefs(consumer)
+    assert.deepEqual([...refs], ['ghost@9.9.9'])
+})

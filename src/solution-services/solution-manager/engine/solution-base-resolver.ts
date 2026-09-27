@@ -96,6 +96,34 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource
         return this.resolveBindingsInto(consumerStorage, manifest, new Set<IStorage>([consumerStorage]), new Set<string>())
     }
 
+    // The transitive set of published base package keys (`id@version`) a project
+    // references — its manifest's meta-model + library bindings plus each published
+    // package's recorded dependencies. Published-only (does NOT consult open members):
+    // it is the toolbox-scoping closure. Best-effort — an absent ref contributes its
+    // own key; only its transitive deps are then unreachable.
+    public async ReferencedPublishedRefs(consumerStorage: IStorage): Promise<Set<string>>
+    {
+        const manifest = await this.readManifest(consumerStorage)
+        const out = new Set<string>()
+        for (const ref of manifest?.metaModels ?? []) await this.collectPublishedRef(ref, ProjectType.MetaModel, out)
+        for (const ref of manifest?.libraries ?? []) await this.collectPublishedRef(ref, ProjectType.Library, out)
+        return out
+    }
+
+    private async collectPublishedRef(ref: DependencyRef, kind: ProjectType, out: Set<string>): Promise<void>
+    {
+        const key = `${ref.id}@${ref.version}`
+        if (out.has(key)) return
+        out.add(key)
+        const sourced = await this.inner().TryGet({ kind: SolutionBaseResolver.packageKindOf(kind), id: ref.id, version: ref.version })
+        if (sourced === undefined) return
+        for (const dep of sourced.Dependencies)
+        {
+            const depKind = dep.kind === PackageKind.Library ? ProjectType.Library : ProjectType.MetaModel
+            await this.collectPublishedRef({ id: dep.id, version: dep.version }, depKind, out)
+        }
+    }
+
     private async resolveBindingsInto(storage: IStorage, manifest: ProjectManifest, path: Set<IStorage>, seenPub: Set<string>): Promise<{ bases: TodlDocument[]; problems: string[]; originOf: Map<string, WikiOrigin> }>
     {
         const bases: TodlDocument[] = []
