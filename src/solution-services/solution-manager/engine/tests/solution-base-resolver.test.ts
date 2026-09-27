@@ -123,6 +123,27 @@ class Fixtures
         }
     }
 
+    // A meta-model member whose OWN manifest binds another (published-only) meta-model
+    // as its base, and whose .todl declares a concept with the SAME bare name as a node
+    // in that base. This compiler's node ids are bare local names (namespace is a
+    // separate attribute, not concatenated into `id` — confirmed against
+    // Builder.defineConcept/makeNode), so the newly-declared concept collides with the
+    // base node already seeded into the graph, and Builder.commit THROWS ("node ...
+    // already exists") rather than returning a soft diagnostic — for asserting
+    // ResolveBasesFor catches that throw and still falls back to the published copy
+    // instead of crashing the whole resolve.
+    static CollidingMetaModelFiles(id: string, version: string, baseId: string, baseVersion: string, concept: string): Record<string, string>
+    {
+        const manifest: ProjectManifest = {
+            type: ProjectType.MetaModel, name: id, version: 1, id, packageVersion: version,
+            metaModels: [{ id: baseId, version: baseVersion }],
+        }
+        return {
+            [PROJECT_MANIFEST_FILENAME]: JSON.stringify(manifest),
+            [Fixtures.ModelFileName]: `namespace ${Fixtures.MetaModelNamespace} { concept ${concept} { } }`,
+        }
+    }
+
     // A published SourcedPackage built from real (if minimal) TodlDocument nodes —
     // for asserting which nodes/origins ResolveBasesFor surfaces from a published
     // fallback, as opposed to Fixtures.SomeSourced()'s empty stand-in document.
@@ -384,6 +405,29 @@ test('ResolveBasesFor surfaces live compile errors but still falls back to the p
     )
     const resolver = new SolutionBaseResolver(provider)
     const { bases, problems } = await resolver.ResolveBasesFor(consumer)
+    assert.ok(problems.length > 0)
+    assert.ok(bases.some((b) => b.nodes.some((n) => n.id === 'Widget')))
+})
+
+test('ResolveBasesFor catches a live compile that throws and still falls back to the published base', async () =>
+{
+    const consumer = Fixtures.Storage(Fixtures.LibraryFiles('lib', 'mm', '1.0.0', 'Gadget', 'Widget'))
+    const provider = Fixtures.Provider(
+        Fixtures.Manager([
+            // 'mm' binds published-only 'core' as its own base, and declares an OWN
+            // concept "Widget" — the same bare name as 'core's node — so mm's live
+            // compile throws when checked against the resolved base closure.
+            { id: 'mm', type: 'meta-model', storage: Fixtures.Storage(Fixtures.CollidingMetaModelFiles('mm', '1.0.0', 'core', '1.0.0', 'Widget')) },
+        ]),
+        Fixtures.Published({
+            'core@1.0.0': Fixtures.PublishedDoc([{ id: 'Widget' }]),
+            'mm@1.0.0': Fixtures.PublishedDoc([{ id: 'Widget' }]),
+        }),
+    )
+    const resolver = new SolutionBaseResolver(provider)
+    const result = resolver.ResolveBasesFor(consumer)
+    await assert.doesNotReject(result)
+    const { bases, problems } = await result
     assert.ok(problems.length > 0)
     assert.ok(bases.some((b) => b.nodes.some((n) => n.id === 'Widget')))
 })

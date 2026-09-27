@@ -4,6 +4,7 @@ import { PackageStoreKey } from '../../todl-build-system/package-store.js'
 import { PackageKind, type PackageRef } from '../../../publish/publish.js'
 import { type TodlDocument } from '../../../compiler-services/emit/json.js'
 import { ProjectModelProvider } from '../../project-services/generators/project-model-provider.js'
+import { type ProjectModel } from '../../project-services/generators/project-content-generator.js'
 import { ProjectType, type ProjectManifest, type DependencyRef, parseManifest } from '../../package-manager/manifest.js'
 import { PROJECT_MANIFEST_FILENAME } from '../../project-services/core/project-factory.js'
 import { WikiLocator, type WikiOrigin } from '../../project-services/core/wiki-origin.js'
@@ -122,18 +123,34 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource
             const child = await this.resolveBindingsInto(producer.storage, producer.manifest, path, seenPub)
             path.delete(producer.storage)
             problems.push(...child.problems)
-            const model = await new ProjectModelProvider(producer.storage, producer.manifest, this).CompileWithBases(child.bases)
-            for (const e of model.errors) problems.push(SolutionBaseResolver.localProblem(kind, ref.id, e))
-            const producerVersion = producer.manifest.packageVersion
-            if (producerVersion !== undefined && producerVersion !== ref.version)
-                problems.push(SolutionBaseResolver.versionMismatch(ref.id, ref.version, producerVersion))
-            if (model.package !== undefined)
+            // A live compile can fail two ways: softly (model.errors non-empty, no
+            // package) or by THROWING synchronously (e.g. compilePackage → Builder.commit
+            // on a colliding node id). Either way the base must not be lost — catch the
+            // throw, record it as a problem exactly like a soft failure, and fall through
+            // to the published copy below.
+            let model: ProjectModel | undefined
+            try
             {
-                bases.push(model.package.document)
-                SolutionBaseResolver.tagOrigin(originOf, model.package.document, WikiLocator.OpenProjectOrigin(producer.storage))
-                return
+                model = await new ProjectModelProvider(producer.storage, producer.manifest, this).CompileWithBases(child.bases)
             }
-            // live compile failed → fall through to the published copy so the base isn't lost
+            catch (err)
+            {
+                problems.push(SolutionBaseResolver.localProblem(kind, ref.id, SolutionBaseResolver.messageOf(err)))
+            }
+            if (model !== undefined)
+            {
+                for (const e of model.errors) problems.push(SolutionBaseResolver.localProblem(kind, ref.id, e))
+                const producerVersion = producer.manifest.packageVersion
+                if (producerVersion !== undefined && producerVersion !== ref.version)
+                    problems.push(SolutionBaseResolver.versionMismatch(ref.id, ref.version, producerVersion))
+                if (model.package !== undefined)
+                {
+                    bases.push(model.package.document)
+                    SolutionBaseResolver.tagOrigin(originOf, model.package.document, WikiLocator.OpenProjectOrigin(producer.storage))
+                    return
+                }
+            }
+            // live compile failed (soft or thrown) → fall through to the published copy so the base isn't lost
         }
         else if (producer !== undefined && path.has(producer.storage))
         {
@@ -187,6 +204,13 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource
     private static packageKindOf(kind: ProjectType): PackageKind
     {
         return kind === ProjectType.Library ? PackageKind.Library : PackageKind.MetaModel
+    }
+
+    // Safe message extraction from a caught live-compile exception (e.g. a
+    // Builder.commit invariant throw) — never re-throws, always yields a string.
+    private static messageOf(err: unknown): string
+    {
+        return err instanceof Error ? err.message : String(err)
     }
 
     // First-writer-wins: a node reached first via a live-producer binding keeps that
