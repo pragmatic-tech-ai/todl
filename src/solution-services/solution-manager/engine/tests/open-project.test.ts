@@ -185,3 +185,24 @@ test('OpenProject into a titled solution resolves the member under the solution 
     assert.equal(m.IsResolved, true);
     assert.equal(svc.ActiveSolution!.IsDirty, true);             // titled membership changed
 });
+
+test('CloseProject removes the member from the active solution', async () => {
+    const { svc, roots } = makeService();
+    await seedProject(roots, '/work/api', 'architecture');
+    const m = await svc.OpenProject('/work/api');
+    await svc.CloseProject(m);
+    assert.equal(svc.ActiveSolution!.Members.ToArray().length, 0);
+});
+
+test('CloseProject on an untitled solution leaves it non-dirty', async () => {
+    const { svc, roots } = makeService();
+    await seedProject(roots, '/work/api', 'architecture');
+    const m = await svc.OpenProject('/work/api');
+    await svc.CloseProject(m);
+    assert.equal(svc.ActiveSolution!.IsDirty, false);
+});
+
+test('CloseProject with no active solution is a no-op', async () => {
+    const { svc } = makeService();
+    await assert.doesNotReject(svc.CloseProject({ Ref: { path: 'x', type: 'architecture' } } as never));
+});

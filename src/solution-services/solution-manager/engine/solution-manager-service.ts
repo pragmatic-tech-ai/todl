@@ -286,6 +286,20 @@ export class SolutionManagerService extends ServiceBase
         return member;
     }
 
+    // Close one loose project: dispose its opened handle if disposable, then drop it
+    // from the active solution. No-op when there is no active solution or the member
+    // isn't one of its members. Dirty rule mirrors OpenProject (untitled stays clean).
+    public async CloseProject(member: SolutionMember): Promise<void>
+    {
+        const solution = this.ActiveSolution;
+        if (solution === undefined) return;
+        if (!solution.Members.ToArray().includes(member)) return;
+        const wasUntitled = !solution.HasLocation;
+        (member.Project as { dispose?: () => void } | undefined)?.dispose?.();
+        solution.RemoveMember(member);
+        if (wasUntitled) solution.IsDirty = false;
+    }
+
     // The member path stored in a solution: relative to the solution root when the
     // location is under a titled solution's folder; otherwise the absolute location
     // (untitled/ambient, or a project outside the solution folder).
