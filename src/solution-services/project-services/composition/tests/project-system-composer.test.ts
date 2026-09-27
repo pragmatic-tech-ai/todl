@@ -25,12 +25,17 @@ import type { BuildResult } from "../../../build-system-core/build-result.js";
 import { PackageStoreKey, type IPackageStore } from "../../../todl-build-system/package-store.js";
 import type { SourcedPackage } from "../../../todl-build-system/package-source.js";
 import type { PackageRef } from "../../../../publish/publish.js";
+import { SolutionManagerService } from "../../../solution-manager/engine/solution-manager-service.js";
 
 const ARCH_MODEL = "namespace acme { concept Widget { label : string?; } }";
 const NpmPackageId = "npm-package";
 const HtmlBundleId = "html-bundle";
 const LIBRARY_WITH_ICON = 'namespace acme { concept Widget { label : string?; annotate icon { path = "visuals/w.svg"; } } }';
 const ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M0 0h16v16H0z"/></svg>';
+// A consumer architecture's OWN model: extends the bound meta-model's concept by
+// qualified name (rather than redeclaring `acme.Widget` itself), so a successful
+// compile proves the bound base actually resolved and merged in.
+const CONSUMER_MODEL = "namespace consumer { concept Gadget : acme.Widget { } }";
 
 // A host package store that records every ref the generators' base resolution asks
 // for and holds nothing — so a bound base is REQUESTED through it and then misses.
@@ -98,6 +103,44 @@ class ComposerFixtures
         const storage = new FakeStorage();
         await storage.WriteText("model.todl", ARCH_MODEL);
         return storage;
+    }
+
+    // An open, unpublished meta-model member's storage: project.plexus (id/version
+    // matching BoundArchManifest's binding) + the .todl declaring `acme.Widget` — the
+    // live sibling a consumer's metaModels binding resolves against when a
+    // SolutionManagerService is registered (instead of the published store).
+    public static async LiveMetaModelStorage(): Promise<FakeStorage>
+    {
+        const storage = new FakeStorage();
+        const manifest: ProjectManifest = {
+            type: ProjectType.MetaModel,
+            name: "Acme Meta",
+            version: 1,
+            id: ComposerFixtures.BoundMetaModelId,
+            packageVersion: ComposerFixtures.BoundMetaModelVersion,
+        };
+        await storage.WriteText("project.plexus", JSON.stringify(manifest));
+        await storage.WriteText("model.todl", ARCH_MODEL);
+        return storage;
+    }
+
+    public static async ConsumerProject(): Promise<FakeStorage>
+    {
+        const storage = new FakeStorage();
+        await storage.WriteText("model.todl", CONSUMER_MODEL);
+        return storage;
+    }
+
+    // A fake SolutionManagerService exposing ActiveSolution.Members with { Ref, Storage }
+    // per member — the only surface SolutionBaseResolver reads (see
+    // solution-base-resolver.test.ts's identical fixture shape).
+    public static FakeSolutionManager(members: readonly { id: string; type: ProjectType; storage: FakeStorage }[]): SolutionManagerService
+    {
+        return {
+            ActiveSolution: {
+                Members: members.map((m) => ({ Ref: { path: m.id, type: m.type }, Storage: m.storage })),
+            },
+        } as unknown as SolutionManagerService;
     }
 }
 
@@ -236,6 +279,52 @@ describe("ProjectSystemComposer", () =>
         });
 
         assert.equal(store.Requested.length, 0);
+    });
+
+    test("generators resolve bases through SolutionBaseResolver when a SolutionManagerService is registered", async () =>
+    {
+        const provider = new ServiceProvider();
+        ProjectSystemComposer.Compose(provider);
+        provider.registerInstance(SolutionManagerService.Key, ComposerFixtures.FakeSolutionManager([
+            { id: ComposerFixtures.BoundMetaModelId, type: ProjectType.MetaModel, storage: await ComposerFixtures.LiveMetaModelStorage() },
+        ]));
+        const store = new RecordingPackageStore();
+        provider.registerInstance(PackageStoreKey, store);
+
+        const project = await ComposerFixtures.ConsumerProject();
+        await provider.getRequired(ProjectEventsKey).Raise({
+            Kind: ProjectEventKind.Created,
+            ProjectType: ArchitectureProjectFactory.ProjectType,
+            Project: project,
+            Manifest: ComposerFixtures.BoundArchManifest(),
+        });
+
+        // The bound base resolved from the LIVE open member, never asking the published
+        // store — an unresolved bound base is a hard compile error (see the
+        // PackageStoreKey-only test above), so the generated output only exists because
+        // the live sibling resolved.
+        assert.equal(store.Requested.length, 0, "the live sibling resolved before the published store was ever asked");
+        assert.ok(await project.Exists("generated/model.ts"), "DtoGenerator ran against a model that resolved the live base");
+        assert.ok(await project.Exists("generated/app.mu"), "UiPlaceholderGenerator ran against a model that resolved the live base");
+        const dto = await project.ReadText("generated/model.ts");
+        assert.ok(dto.includes("Widget"), "the generated DTO reflects the live base's own concept");
+    });
+
+    test("with no SolutionManagerService the composer falls back to PackageStoreKey/empty (unchanged)", async () =>
+    {
+        const provider = new ServiceProvider();
+        ProjectSystemComposer.Compose(provider);
+
+        const project = await ComposerFixtures.ArchProject();
+        await provider.getRequired(ProjectEventsKey).Raise({
+            Kind: ProjectEventKind.Created,
+            ProjectType: ArchitectureProjectFactory.ProjectType,
+            Project: project,
+            Manifest: ComposerFixtures.ArchManifest(),
+        });
+
+        assert.ok(await project.Exists("generated/app.mu"), "UiPlaceholderGenerator should still run with no SolutionManagerService registered");
+        assert.ok(await project.Exists("generated/model.ts"), "DtoGenerator should still run with no SolutionManagerService registered");
     });
 });
 

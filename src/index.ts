@@ -173,6 +173,7 @@ export { tokenize, TokenKind, type Token } from './compiler-services/parse/lexer
 // Module) and compiled to .mu.js by `npm run compile:mu`.
 export { SolutionServicesEngine } from './solution-services/solution-services-module.mu.js';
 export { SolutionManagerService } from './solution-services/solution-manager/engine/solution-manager-service.js';
+export { SolutionBaseResolver } from './solution-services/solution-manager/engine/solution-base-resolver.js';
 export {
     ProjectFactoryRegistryKey,
     type IStorageProviderRegistry,

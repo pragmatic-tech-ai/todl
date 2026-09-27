@@ -38,6 +38,8 @@ import { providesGenerators } from "../core/project-factory.js";
 import type { IPackageSource, SourcedPackage } from "../../todl-build-system/package-source.js";
 import { PackageStoreKey } from "../../todl-build-system/package-store.js";
 import type { PackageRef } from "../../../publish/publish.js";
+import { SolutionManagerService } from "../../solution-manager/engine/solution-manager-service.js";
+import { SolutionBaseResolver } from "../../solution-manager/engine/solution-base-resolver.js";
 // Built-in factories / build systems.
 import { MetaModelProjectFactory } from "../meta-model-project/meta-model-project-factory.js";
 import { LibraryProjectFactory } from "../library-project/library-project-factory.js";
@@ -113,13 +115,18 @@ export class ProjectSystemComposer
     }
 
     // The package source a generator's model compile resolves bases through, picked at
-    // EVENT time (not composition time) so a host that registers its package store
-    // after composition — Plexus registers PlexusPackageStore under PackageStoreKey in a
-    // later module — is still reached. An explicit composer Source wins; a headless host
-    // with neither falls back to the empty source.
+    // EVENT time (not composition time) so a host that registers its package store, or
+    // its SolutionManagerService, after composition is still reached. An explicit
+    // composer Source always wins; otherwise, an open solution's SolutionBaseResolver
+    // resolves a bound base from a live, unpublished sibling member first (falling back
+    // to the published store internally for everything else); with neither, the
+    // published store (PackageStoreKey) — Plexus registers PlexusPackageStore under it
+    // in a later module — or, failing that, the empty source.
     private static ResolveSource(provider: IServiceProvider, explicit?: IPackageSource): IPackageSource
     {
-        return explicit ?? provider.get(PackageStoreKey) ?? new ProjectSystemComposer.EmptyPackageSource();
+        if (explicit !== undefined) return explicit;
+        if (provider.get(SolutionManagerService.Key) !== undefined) return new SolutionBaseResolver(provider);
+        return provider.get(PackageStoreKey) ?? new ProjectSystemComposer.EmptyPackageSource();
     }
 
     private static BuildContext(event: ProjectEvent, reason: GeneratorTrigger, source: IPackageSource): GeneratorContext
