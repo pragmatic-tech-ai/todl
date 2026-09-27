@@ -2,6 +2,9 @@ node_modules/
 dist/
 *.tsbuildinfo
 
+# macOS Finder metadata
+.DS_Store
+
 # Verdaccio auth (contains local registry token) — never commit
 .npmrc
 
