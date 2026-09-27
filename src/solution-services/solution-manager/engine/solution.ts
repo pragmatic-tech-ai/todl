@@ -87,19 +87,28 @@ export class Solution extends Observable
         factoryFor: ProjectFactoryResolver,
     ): Promise<void>
     {
-        for (const member of this.Members)
+        for (const member of this.Members) await this.OpenOne(member, storageFor, factoryFor);
+    }
+
+    // Open exactly one member: resolve its factory + storage and stash the handle.
+    // A member whose type has no registered factory stays unresolved (Project/Storage
+    // undefined) — no throw, so one missing module doesn't break the solution.
+    public async OpenOne(
+        member: SolutionMember,
+        storageFor: MemberStorageResolver,
+        factoryFor: ProjectFactoryResolver,
+    ): Promise<void>
+    {
+        const factory = factoryFor(member.Ref.type);
+        if (factory === undefined)
         {
-            const factory = factoryFor(member.Ref.type);
-            if (factory === undefined)
-            {
-                member.Project = undefined;
-                member.Storage = undefined;
-                continue;
-            }
-            const storage = storageFor(member.Ref.path);
-            member.Storage = storage;
-            member.Project = await factory.openProject(storage);
+            member.Project = undefined;
+            member.Storage = undefined;
+            return;
         }
+        const storage = storageFor(member.Ref.path);
+        member.Storage = storage;
+        member.Project = await factory.openProject(storage);
     }
 
     // Stash persisted setting values (from the manifest) to overlay when bags bind.

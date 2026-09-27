@@ -51,3 +51,21 @@ test('OpenMembers stashes each resolved member storage; unresolved stays undefin
     assert.equal(unknown!.Storage, undefined)
     assert.equal(unknown!.IsResolved, false)
 })
+
+test('OpenOne opens a single member; OpenMembers delegates to it', async () => {
+    const s = new Solution('S', new FakeStorage())
+    const m = s.AddMember('./api', 'architecture')
+    const arch = new FakeProjectFactory()
+    await s.OpenOne(m, (rel) => new FakeStorage(`root:${rel}`), () => arch)
+    assert.equal(m.IsResolved, true)
+    assert.equal(m.Storage!.Root, 'root:./api')
+    assert.equal(arch.openCount, 1)
+})
+
+test('OpenOne leaves a member with no factory unresolved', async () => {
+    const s = new Solution('S', new FakeStorage())
+    const m = s.AddMember('./x', 'not-installed')
+    await s.OpenOne(m, () => new FakeStorage(), () => undefined)
+    assert.equal(m.IsResolved, false)
+    assert.equal(m.Storage, undefined)
+})
