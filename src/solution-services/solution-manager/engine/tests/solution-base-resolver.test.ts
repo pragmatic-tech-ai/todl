@@ -158,6 +158,22 @@ class Fixtures
             Dependencies: (dependencies ?? []).map((d) => ({ kind: d.kind, id: d.id, version: d.version }) as PackageRef),
         }
     }
+
+    // A consumer bound to two libraries (project.plexus `libraries: [{id:libA},{id:libB}]`)
+    // plus a trivial, base-free concept so the project's own .todl compiles standalone —
+    // for a live-diamond test where the consumer itself binds two open producers that
+    // both, in turn, bind the same open producer further down.
+    static TwoLibraryConsumer(id: string, libA: string, libB: string): Record<string, string>
+    {
+        const manifest: ProjectManifest = {
+            type: ProjectType.Library, name: id, version: 1, id,
+            libraries: [{ id: libA, version: '1.0.0' }, { id: libB, version: '1.0.0' }],
+        }
+        return {
+            [PROJECT_MANIFEST_FILENAME]: JSON.stringify(manifest),
+            [Fixtures.ModelFileName]: `namespace lib_${id} { concept Consumer { } }`,
+        }
+    }
 }
 
 test('a live open producer member resolves as a base, preferred over a published package of the same id', async () =>
@@ -452,15 +468,18 @@ test('ReferencedPublishedRefs records an absent ref own key then stops', async (
 })
 
 test('WorkspaceProducers lists open producers of a kind, skipping versionless ones', async () => {
+    const versionlessManifest = { type: 'meta-model', name: 'mmNoVersion', version: 1, id: 'mmNoVersion' } // packageVersion absent
     const provider = Fixtures.Provider(
         Fixtures.Manager([
             { id: 'mm', type: 'meta-model', storage: Fixtures.Storage(Fixtures.MetaModelFiles('mm', '1.0.0', 'W')) },
             { id: 'lib', type: 'library', storage: Fixtures.Storage(Fixtures.LibraryFiles('lib', 'mm', '1.0.0', 'G', 'W')) },
+            { id: 'mmNoVersion', type: 'meta-model', storage: Fixtures.Storage({ [PROJECT_MANIFEST_FILENAME]: JSON.stringify(versionlessManifest) }) },
         ]),
         Fixtures.Published({}),
     )
     const resolver = new SolutionBaseResolver(provider)
     const mm = await resolver.WorkspaceProducers(ProjectType.MetaModel)
+    // The versionless member is skipped — only 'mm' (which has a packageVersion) is listed.
     assert.deepEqual(mm, [{ id: 'mm', version: '1.0.0' }])
 })
 
@@ -471,4 +490,41 @@ test('ProducedIdOf returns a producer id and undefined for a non-producer', asyn
     const archStorage = Fixtures.Storage({ [PROJECT_MANIFEST_FILENAME]: JSON.stringify({ type: 'architecture', name: 'a', id: 'a', version: 1 }) })
     assert.equal(await resolver.ProducedIdOf(mmStorage), 'mm')
     assert.equal(await resolver.ProducedIdOf(archStorage), undefined)
+})
+
+test('ResolveBasesFor surfaces an open producer\'s transitive live bases (two-level live chain)', async () =>
+{
+    // consumer → open library L → open meta-model M ; M's nodes must appear in the closure.
+    const consumer = Fixtures.Storage(Fixtures.LibraryFiles('c', 'L', '1.0.0', 'C', 'Gadget'))
+    const provider = Fixtures.Provider(
+        Fixtures.Manager([
+            { id: 'M', type: 'meta-model', storage: Fixtures.Storage(Fixtures.MetaModelFiles('M', '1.0.0', 'Widget')) },
+            { id: 'L', type: 'library', storage: Fixtures.Storage(Fixtures.LibraryFiles('L', 'M', '1.0.0', 'Gadget', 'Widget')) },
+        ]),
+        Fixtures.Published({}),
+    )
+    const resolver = new SolutionBaseResolver(provider)
+    const { bases, originOf } = await resolver.ResolveBasesFor(consumer)
+    assert.ok(bases.some((b) => b.nodes.some((n) => n.id === 'Gadget')))  // L (direct)
+    assert.ok(bases.some((b) => b.nodes.some((n) => n.id === 'Widget')))  // M (transitive live)
+    assert.equal(originOf.get('Widget')!.kind, WikiOriginKind.OpenProject)
+})
+
+test('ResolveBasesFor resolves a live diamond once (no duplicate, no cyclic problem)', async () =>
+{
+    // consumer binds A and B; both A and B (open libraries) bind the same open
+    // meta-model D — a diamond. D must be compiled/pushed into the closure once.
+    const consumer = Fixtures.Storage(Fixtures.TwoLibraryConsumer('c', 'A', 'B'))
+    const provider = Fixtures.Provider(
+        Fixtures.Manager([
+            { id: 'D', type: 'meta-model', storage: Fixtures.Storage(Fixtures.MetaModelFiles('D', '1.0.0', 'Dnode')) },
+            { id: 'A', type: 'library', storage: Fixtures.Storage(Fixtures.LibraryFiles('A', 'D', '1.0.0', 'Anode', 'Dnode')) },
+            { id: 'B', type: 'library', storage: Fixtures.Storage(Fixtures.LibraryFiles('B', 'D', '1.0.0', 'Bnode', 'Dnode')) },
+        ]),
+        Fixtures.Published({}),
+    )
+    const resolver = new SolutionBaseResolver(provider)
+    const { bases, problems } = await resolver.ResolveBasesFor(consumer)
+    assert.equal(problems.filter((p) => /cyclic/.test(p)).length, 0)
+    assert.equal(bases.filter((b) => b.nodes.some((n) => n.id === 'Dnode')).length, 1)  // deduped
 })

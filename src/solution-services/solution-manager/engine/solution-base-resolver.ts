@@ -93,7 +93,7 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource
     {
         const manifest = await this.readManifest(consumerStorage)
         if (manifest === undefined) return { bases: [], problems: [], originOf: new Map() }
-        return this.resolveBindingsInto(consumerStorage, manifest, new Set<IStorage>([consumerStorage]), new Set<string>())
+        return this.resolveBindingsInto(consumerStorage, manifest, new Set<IStorage>([consumerStorage]), new Set<string>(), new Set<IStorage>())
     }
 
     // The transitive set of published base package keys (`id@version`) a project
@@ -155,31 +155,39 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource
         }
     }
 
-    private async resolveBindingsInto(storage: IStorage, manifest: ProjectManifest, path: Set<IStorage>, seenPub: Set<string>): Promise<{ bases: TodlDocument[]; problems: string[]; originOf: Map<string, WikiOrigin> }>
+    private async resolveBindingsInto(storage: IStorage, manifest: ProjectManifest, path: Set<IStorage>, seenPub: Set<string>, seenLive: Set<IStorage>): Promise<{ bases: TodlDocument[]; problems: string[]; originOf: Map<string, WikiOrigin> }>
     {
         const bases: TodlDocument[] = []
         const problems: string[] = []
         const originOf = new Map<string, WikiOrigin>()
         for (const ref of manifest.metaModels ?? [])
-            await this.resolveOneBase(ref, ProjectType.MetaModel, storage, path, seenPub, bases, problems, originOf)
+            await this.resolveOneBase(ref, ProjectType.MetaModel, storage, path, seenPub, seenLive, bases, problems, originOf)
         for (const ref of manifest.libraries ?? [])
-            await this.resolveOneBase(ref, ProjectType.Library, storage, path, seenPub, bases, problems, originOf)
+            await this.resolveOneBase(ref, ProjectType.Library, storage, path, seenPub, seenLive, bases, problems, originOf)
         return { bases, problems, originOf }
     }
 
     private async resolveOneBase(
         ref: DependencyRef, kind: ProjectType, consumerStorage: IStorage,
-        path: Set<IStorage>, seenPub: Set<string>,
+        path: Set<IStorage>, seenPub: Set<string>, seenLive: Set<IStorage>,
         bases: TodlDocument[], problems: string[], originOf: Map<string, WikiOrigin>,
     ): Promise<void>
     {
-        const producer = await this.liveProducerOfKind(ref.id)
+        // A binding's `kind` (metaModels vs libraries) says which array the consumer
+        // declared the ref under, not what the producer's own manifest.type must be —
+        // a manifest may name a ref under either list independent of the target's own
+        // declared type (e.g. a library binding another library's own self-reference).
+        // liveProducerFor's own type gate (producer vs non-producer) is the only
+        // filter that applies here; matching further on `kind` would make a producer
+        // whose declared type differs from the binding's array invisible to the DFS,
+        // silently disabling cycle detection for it.
+        const producer = await this.liveProducerFor(ref.id)
         if (producer !== undefined && producer.storage !== consumerStorage && !path.has(producer.storage))
         {
             // DFS path (not a global seen-set): add on entry, remove on backtrack —
             // catches genuine cycles while allowing diamonds.
             path.add(producer.storage)
-            const child = await this.resolveBindingsInto(producer.storage, producer.manifest, path, seenPub)
+            const child = await this.resolveBindingsInto(producer.storage, producer.manifest, path, seenPub, seenLive)
             path.delete(producer.storage)
             problems.push(...child.problems)
             // A live compile can fail two ways: softly (model.errors non-empty, no
@@ -204,8 +212,21 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource
                     problems.push(SolutionBaseResolver.versionMismatch(ref.id, ref.version, producerVersion))
                 if (model.package !== undefined)
                 {
+                    // A live diamond (two bindings sharing the same open producer further
+                    // down) must resolve that shared producer once: the second reach
+                    // returns without contributing anything further — its content already
+                    // flattened into the closure the first time.
+                    if (seenLive.has(producer.storage)) return
+                    seenLive.add(producer.storage)
                     bases.push(model.package.document)
                     SolutionBaseResolver.tagOrigin(originOf, model.package.document, WikiLocator.OpenProjectOrigin(producer.storage))
+                    // Flatten the producer's OWN transitive live (+ published) base
+                    // closure into ours too — symmetric with the published branch below
+                    // (resolvePublishedBase's recursion into sourced.Dependencies): an
+                    // open producer contributes its own transitive bases, not just its
+                    // own document.
+                    for (const b of child.bases) bases.push(b)
+                    SolutionBaseResolver.mergeOrigins(originOf, child.originOf)
                     return
                 }
             }
@@ -241,19 +262,6 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource
         }
     }
 
-    // A binding's `kind` (metaModels vs libraries) says which array the consumer
-    // declared the ref under, not what the producer's own manifest.type must be —
-    // a manifest may name a ref under either list independent of the target's own
-    // declared type (e.g. a library binding another library's own self-reference).
-    // liveProducerFor's own type gate (producer vs non-producer) is the only
-    // filter that applies here; matching further on `kind` would make a producer
-    // whose declared type differs from the binding's array invisible to the DFS,
-    // silently disabling cycle detection for it.
-    private async liveProducerOfKind(id: string): Promise<{ storage: IStorage; manifest: ProjectManifest } | undefined>
-    {
-        return this.liveProducerFor(id)
-    }
-
     private async readManifest(storage: IStorage): Promise<ProjectManifest | undefined>
     {
         try { return parseManifest(await storage.ReadText(PROJECT_MANIFEST_FILENAME)) }
@@ -277,6 +285,13 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource
     private static tagOrigin(originOf: Map<string, WikiOrigin>, doc: TodlDocument, origin: WikiOrigin): void
     {
         for (const n of doc.nodes) if (!originOf.has(n.id)) originOf.set(n.id, origin)
+    }
+
+    // The same first-writer-wins idiom as tagOrigin, merging an already-built origin
+    // map (a child closure's) into the caller's instead of tagging a single document.
+    private static mergeOrigins(originOf: Map<string, WikiOrigin>, child: ReadonlyMap<string, WikiOrigin>): void
+    {
+        for (const [id, origin] of child) if (!originOf.has(id)) originOf.set(id, origin)
     }
 
     private static localProblem(kind: ProjectType, id: string, detail: string): string
