@@ -10,6 +10,20 @@ import { PROJECT_MANIFEST_FILENAME } from '../../project-services/core/project-f
 import { WikiLocator, type WikiOrigin } from '../../project-services/core/wiki-origin.js'
 import { SolutionManagerService } from './solution-manager-service.js'
 
+// A resolved base document paired with the live producer storage that contributed
+// it (undefined for a published-origin document). Carried internally through the
+// recursive resolution so the FINAL closure can flatten a live diamond's shared
+// producer down to a single contribution — via dedupeLiveBases, by producer
+// identity — while every intermediate CompileWithBases call along the way still
+// sees that producer's COMPLETE content: nothing is gated mid-recursion, so a
+// second branch reaching the same open producer still gets it in its own compile
+// inputs; only the very top collapses the resulting duplicates.
+interface LiveBase
+{
+    document: TodlDocument
+    producer: IStorage | undefined
+}
+
 // A live-first IPackageSource: a base ref that names an open, resolved producer
 // member of the current solution is compiled from that member's LIVE sources
 // (so an unpublished sibling still resolves); every other ref delegates to the
@@ -93,7 +107,8 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource
     {
         const manifest = await this.readManifest(consumerStorage)
         if (manifest === undefined) return { bases: [], problems: [], originOf: new Map() }
-        return this.resolveBindingsInto(consumerStorage, manifest, new Set<IStorage>([consumerStorage]), new Set<string>(), new Set<IStorage>())
+        const resolved = await this.resolveBindingsInto(consumerStorage, manifest, new Set<IStorage>([consumerStorage]), new Set<string>())
+        return { bases: SolutionBaseResolver.dedupeLiveBases(resolved.bases), problems: resolved.problems, originOf: resolved.originOf }
     }
 
     // The transitive set of published base package keys (`id@version`) a project
@@ -155,22 +170,22 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource
         }
     }
 
-    private async resolveBindingsInto(storage: IStorage, manifest: ProjectManifest, path: Set<IStorage>, seenPub: Set<string>, seenLive: Set<IStorage>): Promise<{ bases: TodlDocument[]; problems: string[]; originOf: Map<string, WikiOrigin> }>
+    private async resolveBindingsInto(storage: IStorage, manifest: ProjectManifest, path: Set<IStorage>, seenPub: Set<string>): Promise<{ bases: LiveBase[]; problems: string[]; originOf: Map<string, WikiOrigin> }>
     {
-        const bases: TodlDocument[] = []
+        const bases: LiveBase[] = []
         const problems: string[] = []
         const originOf = new Map<string, WikiOrigin>()
         for (const ref of manifest.metaModels ?? [])
-            await this.resolveOneBase(ref, ProjectType.MetaModel, storage, path, seenPub, seenLive, bases, problems, originOf)
+            await this.resolveOneBase(ref, ProjectType.MetaModel, storage, path, seenPub, bases, problems, originOf)
         for (const ref of manifest.libraries ?? [])
-            await this.resolveOneBase(ref, ProjectType.Library, storage, path, seenPub, seenLive, bases, problems, originOf)
+            await this.resolveOneBase(ref, ProjectType.Library, storage, path, seenPub, bases, problems, originOf)
         return { bases, problems, originOf }
     }
 
     private async resolveOneBase(
         ref: DependencyRef, kind: ProjectType, consumerStorage: IStorage,
-        path: Set<IStorage>, seenPub: Set<string>, seenLive: Set<IStorage>,
-        bases: TodlDocument[], problems: string[], originOf: Map<string, WikiOrigin>,
+        path: Set<IStorage>, seenPub: Set<string>,
+        bases: LiveBase[], problems: string[], originOf: Map<string, WikiOrigin>,
     ): Promise<void>
     {
         // A binding's `kind` (metaModels vs libraries) says which array the consumer
@@ -187,7 +202,15 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource
             // DFS path (not a global seen-set): add on entry, remove on backtrack —
             // catches genuine cycles while allowing diamonds.
             path.add(producer.storage)
-            const child = await this.resolveBindingsInto(producer.storage, producer.manifest, path, seenPub, seenLive)
+            // Deliberately NOT deduped against anything seen elsewhere in the tree:
+            // this producer's OWN CompileWithBases below needs its COMPLETE transitive
+            // base content regardless of whether a sibling branch already resolved the
+            // same shared dependency — starving this call to avoid a later duplicate
+            // was the Task-1-round-1 regression (a diamond's second branch compiled
+            // against an incomplete closure and silently lost its own base). The
+            // closure-level dedup happens exactly once, at the very end, in
+            // dedupeLiveBases — never here.
+            const child = await this.resolveBindingsInto(producer.storage, producer.manifest, path, seenPub)
             path.delete(producer.storage)
             problems.push(...child.problems)
             // A live compile can fail two ways: softly (model.errors non-empty, no
@@ -198,7 +221,7 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource
             let model: ProjectModel | undefined
             try
             {
-                model = await new ProjectModelProvider(producer.storage, producer.manifest, this).CompileWithBases(child.bases)
+                model = await new ProjectModelProvider(producer.storage, producer.manifest, this).CompileWithBases(child.bases.map((b) => b.document))
             }
             catch (err)
             {
@@ -212,19 +235,15 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource
                     problems.push(SolutionBaseResolver.versionMismatch(ref.id, ref.version, producerVersion))
                 if (model.package !== undefined)
                 {
-                    // A live diamond (two bindings sharing the same open producer further
-                    // down) must resolve that shared producer once: the second reach
-                    // returns without contributing anything further — its content already
-                    // flattened into the closure the first time.
-                    if (seenLive.has(producer.storage)) return
-                    seenLive.add(producer.storage)
-                    bases.push(model.package.document)
+                    bases.push({ document: model.package.document, producer: producer.storage })
                     SolutionBaseResolver.tagOrigin(originOf, model.package.document, WikiLocator.OpenProjectOrigin(producer.storage))
                     // Flatten the producer's OWN transitive live (+ published) base
                     // closure into ours too — symmetric with the published branch below
                     // (resolvePublishedBase's recursion into sourced.Dependencies): an
                     // open producer contributes its own transitive bases, not just its
-                    // own document.
+                    // own document. Each entry still carries its own producer tag, so a
+                    // diamond's shared dependency collapses to one contribution only
+                    // once dedupeLiveBases runs at the top — never mid-flatten.
                     for (const b of child.bases) bases.push(b)
                     SolutionBaseResolver.mergeOrigins(originOf, child.originOf)
                     return
@@ -241,7 +260,7 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource
 
     private async resolvePublishedBase(
         ref: DependencyRef, kind: ProjectType, seenPub: Set<string>,
-        bases: TodlDocument[], problems: string[], originOf: Map<string, WikiOrigin>,
+        bases: LiveBase[], problems: string[], originOf: Map<string, WikiOrigin>,
     ): Promise<void>
     {
         const key = `${kind}:${ref.id}@${ref.version}`
@@ -253,7 +272,10 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource
             problems.push(SolutionBaseResolver.notPublished(kind, ref.id, ref.version))
             return
         }
-        bases.push({ nodes: sourced.Document.nodes, edges: sourced.Document.edges })
+        // No producer tag (undefined): a published package is fetched at most once
+        // per id@version already (the seenPub guard just above), so it needs no
+        // further dedup at the dedupeLiveBases step.
+        bases.push({ document: { nodes: sourced.Document.nodes, edges: sourced.Document.edges }, producer: undefined })
         SolutionBaseResolver.tagOrigin(originOf, sourced.Document, WikiLocator.PackageOrigin(ref.id, ref.version))
         for (const dep of sourced.Dependencies)
         {
@@ -292,6 +314,29 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource
     private static mergeOrigins(originOf: Map<string, WikiOrigin>, child: ReadonlyMap<string, WikiOrigin>): void
     {
         for (const [id, origin] of child) if (!originOf.has(id)) originOf.set(id, origin)
+    }
+
+    // The ONE dedup pass for the whole resolved tree, run once at the top
+    // (ResolveBasesFor) after every producer's own compile has already seen its
+    // complete, ungated closure: a live diamond's shared producer (same IStorage
+    // reached via more than one binding path) contributes its document exactly
+    // once — first path to resolve it wins. A published-origin entry (producer
+    // undefined) is never deduped here — resolvePublishedBase's own seenPub key
+    // already ensures it is fetched, and so pushed, at most once.
+    private static dedupeLiveBases(bases: readonly LiveBase[]): TodlDocument[]
+    {
+        const seenProducers = new Set<IStorage>()
+        const documents: TodlDocument[] = []
+        for (const base of bases)
+        {
+            if (base.producer !== undefined)
+            {
+                if (seenProducers.has(base.producer)) continue
+                seenProducers.add(base.producer)
+            }
+            documents.push(base.document)
+        }
+        return documents
     }
 
     private static localProblem(kind: ProjectType, id: string, detail: string): string

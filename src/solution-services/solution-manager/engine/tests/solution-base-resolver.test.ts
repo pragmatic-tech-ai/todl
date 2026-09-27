@@ -513,7 +513,11 @@ test('ResolveBasesFor surfaces an open producer\'s transitive live bases (two-le
 test('ResolveBasesFor resolves a live diamond once (no duplicate, no cyclic problem)', async () =>
 {
     // consumer binds A and B; both A and B (open libraries) bind the same open
-    // meta-model D — a diamond. D must be compiled/pushed into the closure once.
+    // meta-model D — a diamond. D must be compiled/pushed into the closure once,
+    // and — the Task-1-round-1 regression this guards against — BOTH A's and B's
+    // own concepts must still be present: each branch's own compile needs D's
+    // COMPLETE content regardless of which branch resolves the shared dependency
+    // "first" for the purposes of the final closure's dedup.
     const consumer = Fixtures.Storage(Fixtures.TwoLibraryConsumer('c', 'A', 'B'))
     const provider = Fixtures.Provider(
         Fixtures.Manager([
@@ -526,5 +530,11 @@ test('ResolveBasesFor resolves a live diamond once (no duplicate, no cyclic prob
     const resolver = new SolutionBaseResolver(provider)
     const { bases, problems } = await resolver.ResolveBasesFor(consumer)
     assert.equal(problems.filter((p) => /cyclic/.test(p)).length, 0)
+    // Neither branch fell back to published (which is empty here) or reported an
+    // unresolved/undefined-symbol diagnostic — both A and B compiled cleanly
+    // against a complete view of D.
+    assert.equal(problems.filter((p) => /not published|undefined symbol/.test(p)).length, 0)
     assert.equal(bases.filter((b) => b.nodes.some((n) => n.id === 'Dnode')).length, 1)  // deduped
+    assert.ok(bases.some((b) => b.nodes.some((n) => n.id === 'Anode')))  // A's own compile succeeded
+    assert.ok(bases.some((b) => b.nodes.some((n) => n.id === 'Bnode')))  // B's own compile succeeded too
 })
