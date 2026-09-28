@@ -27,7 +27,7 @@ export class ModelBrowserResources extends ResourceDictionary {
             _textBlock3.set_property_value(TextBlock.TextKey, DataContextBinding(_textBlock3, "Concept"));
             _textBlock3.set_property_value(TextBlock.FontSizeKey, 16);
             _textBlock3.set_property_value(TextBlock.FontWeightKey, FontWeight.Bold);
-            _textBlock3.set_property_value(TextBlock.ForegroundKey, DynamicResource(_textBlock3, "OnSurface"));
+            _textBlock3.set_property_value(TextBlock.ForegroundKey, DynamicResource(_textBlock3, "Fg1"));
             _textBlock3.set_property_value(TextBlock.MarginKey, new Thickness(12, 10, 12, 4));
             return _textBlock3;
         }, ConceptHeaderVM);
@@ -36,14 +36,14 @@ export class ModelBrowserResources extends ResourceDictionary {
             const _textBlock5 = new TextBlock();
             _textBlock5.set_property_value(TextBlock.TextKey, DataContextBinding(_textBlock5, "Text"));
             _textBlock5.set_property_value(TextBlock.FontSizeKey, 13);
-            _textBlock5.set_property_value(TextBlock.ForegroundKey, DynamicResource(_textBlock5, "OnSurfaceVariant"));
+            _textBlock5.set_property_value(TextBlock.ForegroundKey, DynamicResource(_textBlock5, "Fg2"));
             _textBlock5.set_property_value(TextBlock.MarginKey, new Thickness(24, 2, 12, 2));
             return _textBlock5;
         }, InstanceRowVM);
         t.Set(InstanceRowVM, _tmpl4);
         const _border6 = new Border();
         _border6.SetNameScope(new NameScope());
-        _border6.set_property_value(Border.FillKey, DynamicResource(_border6, "Surface"));
+        _border6.set_property_value(Border.FillKey, DynamicResource(_border6, "Bg1"));
         const _scrollViewer7 = new ScrollViewer();
         const _itemsControl8 = new ItemsControl();
         _itemsControl8.set_property_value(ItemsControl.ItemsSourceKey, DataContextBinding(_itemsControl8, "Rows"));

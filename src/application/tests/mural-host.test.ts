@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Application, type ApplicationInitOptions } from "@pragmatic-tech-ai/mural";
-import { Material, MaterialLight } from "@pragmatic-tech-ai/mural/resources/material";
-import { HeadlessTarget, SvgDrawingContext } from "@pragmatic-tech-ai/mural/visual-engine";
+import { Pragmatic, PragmaticLight } from "@pragmatic-tech-ai/mural/resources/pragmatic";
+import { HeadlessTarget, SvgDrawingContext, ThemeManager } from "@pragmatic-tech-ai/mural/visual-engine";
 import { CompositionRoot } from "@pragmatic-tech-ai/todl-runtime";
 import { Repository } from "../../compiler-services/model/model.js";
 import { toJSON, type TodlDocument } from "../../compiler-services/emit/json.js";
@@ -24,7 +24,7 @@ class Probe extends ModelDataSource
 
 class Fixtures
 {
-    public static readonly Theme: ApplicationInitOptions = { theme: Material, scheme: MaterialLight };
+    public static readonly Theme: ApplicationInitOptions = { theme: Pragmatic, scheme: PragmaticLight };
 
     public static WidgetDoc(id: string): TodlDocument
     {
@@ -89,4 +89,10 @@ test("the mounted view paints headlessly without throwing", async () =>
     const dc = new SvgDrawingContext();
     target.Render(dc);
     assert.ok(dc.ToFragment().length > 0, "expected a non-empty SVG fragment");
+});
+
+test("MuralHost.Run defaults to the Pragmatic theme", async () =>
+{
+    await MuralHost.Run(Fixtures.RegistryWith());
+    assert.equal(ThemeManager.ActiveTheme?.name, "Pragmatic");
 });
