@@ -319,6 +319,12 @@ export {
 } from './solution-services/project-services/composition/project-system-composer.js';
 export { TodlProjectSystemModule } from './solution-services/project-services/composition/todl-project-system-module.js';
 export { BuildSystemRegistryKey } from './solution-services/project-services/composition/build-system-registry-key.js';
+// The project build runner a browser host drives to publish one project (npm-publish
+// flavor). Browser-safe (build-system-core + todl-build-context types only) — exposed
+// here so renderer hosts need not import the ./todl-build-system barrel, which also
+// re-exports the node-only html-bundle build system (esbuild). Guarded browser-safe by
+// project-services/composition/tests/browser-safe-composition.test.ts.
+export { TodlProjectBuildManager } from './solution-services/todl-build-system/todl-project-build-manager.js';
 export {
     type IPackageRegistry,
     type PublishablePackage,
