@@ -36,6 +36,7 @@ export class ProjectContentStore
     // after this delay, and events within one window batch into a single flush.
     private static readonly DefaultSettleMs = 250
     private readonly settleMs: number
+    private disposed = false
     private nextId = 1
     private readonly folders = new Map<ContentNodeId, FolderState>()   // folder id -> its state
     private readonly nodeById = new Map<ContentNodeId, ProjectContentNode>()
@@ -62,6 +63,7 @@ export class ProjectContentStore
             state.sinks.delete(sink)
             if (state.sinks.size > 0) return;
             if (state.watchOff !== undefined) { state.watchOff(); state.watchOff = undefined }
+            if (state.timer !== undefined) { clearTimeout(state.timer); state.timer = undefined }
             // Last observer left: drop the watcher and mark unloaded so a re-subscribe
             // re-Lists (catching changes missed while collapsed) and restarts the watcher.
             // The id maps (byPath/byIno) are kept so re-realized children keep their ids.
@@ -72,7 +74,15 @@ export class ProjectContentStore
 
     public dispose(): void
     {
-        for (const s of this.folders.values()) { s.watchOff?.(); s.watchOff = undefined }
+        // Guard first so an in-flight fs-change callback (its inode lookup awaits, then
+        // schedules) cannot arm a new settle timer after teardown; then drop watchers and
+        // cancel any already-scheduled flush.
+        this.disposed = true
+        for (const s of this.folders.values())
+        {
+            s.watchOff?.(); s.watchOff = undefined
+            if (s.timer !== undefined) { clearTimeout(s.timer); s.timer = undefined }
+        }
     }
 
     // Test seam: await any in-flight folder load so assertions need no sleeps.
@@ -168,7 +178,7 @@ export class ProjectContentStore
     // removals → ContentRemoved. Order-independent, so add-before-unlink is handled.
     private scheduleFlush(state: FolderState): void
     {
-        if (state.timer !== undefined) return
+        if (this.disposed || state.timer !== undefined) return
         const flush = (): void =>
         {
             state.timer = undefined

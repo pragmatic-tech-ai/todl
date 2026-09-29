@@ -98,3 +98,24 @@ test('deleting an expanded folder disposes its watcher and drops its state', asy
 });
 
 const tick = () => new Promise((r) => setTimeout(r, 5));       // settleMs is 0; one macrotask flush
+
+// dispose() must cancel any pending settle-window flush, or a timer scheduled just
+// before teardown (e.g. a file change arriving as the solution swaps) fires after
+// dispose and emits to sinks the owner has already torn down.
+test('dispose() cancels a pending settle flush — no emit after dispose', async () =>
+{
+    const s = new FakeStorage();
+    const store = new ProjectContentStore(s, { settleMs: 20 });
+    const seen: ContentChange[] = [];
+    store.ObserveChildren(store.Root.Id, (c) => seen.push(c));
+    await store.WhenIdle();
+
+    await s.WriteText('a.todl', '');
+    s.EmitFileChange('a.todl', FileChangeKind.Added, false);   // schedules a flush at +settleMs
+    const beforeDispose = seen.length;
+
+    store.dispose();                                           // must clear the pending timer
+    await new Promise((r) => setTimeout(r, 60));               // past settleMs
+
+    assert.equal(seen.length, beforeDispose);                  // the cancelled flush never emitted
+});
