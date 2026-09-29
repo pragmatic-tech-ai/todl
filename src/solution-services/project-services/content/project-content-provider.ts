@@ -1,7 +1,7 @@
 import {
     type IHierarchyProvider, HierarchyItemId, type HierarchyChange,
     ChildAdded, ChildUpdated, ChildRemoved,
-    type HierarchyNode, HierarchyPropertyId, NodeSeverity, type DropData,
+    type HierarchyNode, HierarchyPropertyId, NodeSeverity, type DropData, HierarchyItemsDrop,
 } from '@pragmatic-tech-ai/mural/framework/hierarchy'
 import { type ProjectContentStore } from './project-content-store.js'
 import { type ProjectContentNode, type ContentNodeId } from './content-node.js'
@@ -64,9 +64,23 @@ export class ProjectContentProvider implements IHierarchyProvider
         return this.itemByPath.get(name) ?? HierarchyItemId.Nil
     }
 
-    public CanAccept(_target: HierarchyItemId, _drop: DropData): boolean
+    // Accept only when `target` is a folder in THIS provider and no dragged id is the
+    // target itself or an ancestor of it (a folder cannot move under its own subtree).
+    // A foreign id (nodeFor undefined) rejects — cross-provider drops are out of scope.
+    public CanAccept(target: HierarchyItemId, drop: DropData): boolean
     {
-        return false   // real drop rules are P3
+        const items = HierarchyItemsDrop.ItemsOf(drop)
+        if (items === undefined || items.length === 0) return false
+        const targetNode = this.nodeFor(target)
+        if (targetNode === undefined || targetNode.Kind !== ProjectNodeKind.Folder) return false
+        for (const id of items)
+        {
+            const node = this.nodeFor(id)
+            if (node === undefined) return false                                   // foreign / cross-provider
+            if (node.Path === targetNode.Path) return false                        // onto itself
+            if (targetNode.Path.startsWith(`${node.Path}/`)) return false          // into own descendant
+        }
+        return true
     }
 
     private hierarchyNode(node: ProjectContentNode): HierarchyNode
