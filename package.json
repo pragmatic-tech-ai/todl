@@ -121,7 +121,7 @@
   },
   "license": "Apache-2.0",
   "dependencies": {
-    "@pragmatic-tech-ai/mural": "^0.55.13 || ^0.56.0",
+    "@pragmatic-tech-ai/mural": "^0.57.0",
     "@pragmatic-tech-ai/todl-runtime": "^0.5.7",
     "vscode-languageserver": "^9.0.1",
     "vscode-languageserver-textdocument": "^1.0.12",
