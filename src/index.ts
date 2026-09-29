@@ -195,6 +195,7 @@ export { SolutionSession } from './solution-services/solution-manager/engine/sol
 export { SolutionMember } from './solution-services/solution-manager/engine/solution-member.js';
 export { SolutionManifest } from './solution-services/solution-manager/engine/solution-manifest.js';
 export { type SolutionMemberRef, SolutionPath } from './solution-services/solution-manager/engine/solution-member-ref.js';
+export { SolutionMemberStatus } from './solution-services/solution-manager/engine/solution-member-status.js';
 export {
     SolutionTreeVM,
     SolutionNodeVM,
@@ -210,6 +211,14 @@ export {
 
 // ── Projects (headless Project model + factory contracts + TODL-authoring base) ──
 export { Project, ProjectNode, ProjectNodeKind } from './solution-services/project-services/core/project.js';
+
+// ── Project content (P1: reactive, lazy, disk-watched per-project content store +
+//    the IHierarchyProvider adapter over it; consumed by front-end hierarchy contributors) ──
+export { ProjectContentNode, type ContentNodeId } from './solution-services/project-services/content/content-node.js';
+export { ContentChange, ContentAdded, ContentUpdated, ContentRemoved } from './solution-services/project-services/content/content-change.js';
+export { ContentNodeKey } from './solution-services/project-services/content/content-node-key.js';
+export { ProjectContentStore } from './solution-services/project-services/content/project-content-store.js';
+export { ProjectContentProvider } from './solution-services/project-services/content/project-content-provider.js';
 export {
     PROJECT_MANIFEST_FILENAME,
     ProducerKind,
