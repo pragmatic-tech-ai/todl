@@ -2,13 +2,14 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { FakeStorage } from '@pragmatic-tech-ai/todl-runtime'
 import { Solution } from '../../engine/solution.js'
+import { SolutionMemberStatus } from '../../engine/solution-member-status.js'
 import { SolutionTreeVM } from '../solution-tree-vm.js'
 
 test('tree has one root per member; unresolved flagged', () => {
     const s = new Solution('S', new FakeStorage())
     const a = s.AddMember('./api', 'architecture')
-    a.Project = { kind: 'fake' }          // resolved
-    s.AddMember('./x', 'missing')         // unresolved (no Project)
+    a.Project = { kind: 'fake' }; a.Status = SolutionMemberStatus.Resolved   // resolved
+    s.AddMember('./x', 'missing')         // unresolved (Unopened)
     const tree = new SolutionTreeVM(s, () => new FakeStorage())
     const roots = tree.Roots.ToArray()
     assert.equal(roots.length, 2)
@@ -18,7 +19,7 @@ test('tree has one root per member; unresolved flagged', () => {
 
 test('expanding a resolved member lists its folder structure (folders first)', async () => {
     const s = new Solution('S', new FakeStorage())
-    const a = s.AddMember('./api', 'architecture'); a.Project = {}
+    const a = s.AddMember('./api', 'architecture'); a.Project = {}; a.Status = SolutionMemberStatus.Resolved
     const storage = new FakeStorage()
     await storage.WriteText('src/main.todl', 'x')
     await storage.WriteText('project.plexus', '{}')
@@ -36,7 +37,7 @@ test('expanding a resolved member lists its folder structure (folders first)', a
 
 test('a file node has no children and expands to nothing', async () => {
     const s = new Solution('S', new FakeStorage())
-    const a = s.AddMember('./api', 'architecture'); a.Project = {}
+    const a = s.AddMember('./api', 'architecture'); a.Project = {}; a.Status = SolutionMemberStatus.Resolved
     const storage = new FakeStorage()
     await storage.WriteText('readme.md', 'hi')
     const tree = new SolutionTreeVM(s, () => storage)

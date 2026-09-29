@@ -15,8 +15,11 @@ interface FolderState
     readonly byIno: Map<string, ContentNodeId>                  // 'dev:ino' -> id (nonzero ino only)
     readonly sinks: Set<(c: ContentChange) => void>
     watchOff?: (() => void) | undefined
-    // Buffered removals (keyed by path) awaiting rename correlation within the settle window.
+    // Buffered adds + removals awaiting rename correlation within the settle window.
+    // Both are buffered so a rename correlates regardless of which event the OS emits
+    // first (Windows chokidar reports the add before the unlink).
     readonly pendingRemovals: Map<string, { id: ContentNodeId; inoKey: string; isDir: boolean }>
+    readonly pendingAdds: Map<string, { inoKey: string; isDir: boolean }>
     timer?: ReturnType<typeof setTimeout> | undefined
 }
 
@@ -28,7 +31,10 @@ export class ProjectContentStore
 {
     private static readonly RootPath = ''
     private static readonly DiagramExts = ['.archdiagram', '.diagram']
-    private static readonly DefaultSettleMs = 75
+    // Rename correlation window. Sized to bridge the gap between a rename's add and
+    // unlink events (measured ~107ms on Windows chokidar); a new/removed file surfaces
+    // after this delay, and events within one window batch into a single flush.
+    private static readonly DefaultSettleMs = 250
     private readonly settleMs: number
     private nextId = 1
     private readonly folders = new Map<ContentNodeId, FolderState>()   // folder id -> its state
@@ -77,7 +83,7 @@ export class ProjectContentStore
         let s = this.folders.get(folder)
         if (s === undefined)
         {
-            s = { loaded: false, children: new Map(), byPath: new Map(), byIno: new Map(), sinks: new Set(), pendingRemovals: new Map() }
+            s = { loaded: false, children: new Map(), byPath: new Map(), byIno: new Map(), sinks: new Set(), pendingRemovals: new Map(), pendingAdds: new Map() }
             this.folders.set(folder, s)
         }
         return s
@@ -119,30 +125,18 @@ export class ProjectContentStore
         if (c.Kind === FileChangeKind.Added)
         {
             const inoKey = await this.inoKeyFor(c.Path)
-            const match = this.matchPendingRename(state, inoKey, c.IsDirectory)
-            if (match !== undefined)                       // rename: reuse id, update in place
-            {
-                state.pendingRemovals.delete(match.path)
-                const node = state.children.get(match.id)!
-                state.byPath.delete(node.Path)
-                node.Name = ProjectContentStore.baseName(c.Path)
-                node.Path = c.Path
-                state.byPath.set(c.Path, match.id)
-                if (inoKey !== '') state.byIno.set(inoKey, match.id)
-                for (const sink of [...state.sinks]) sink(new ContentUpdated(node))
-                return
-            }
-            const node = this.internChild(state, c.Path, ProjectContentStore.baseName(c.Path), ProjectContentStore.kindOf(ProjectContentStore.baseName(c.Path), c.IsDirectory))
-            if (inoKey !== '') state.byIno.set(inoKey, node.Id)
-            for (const sink of [...state.sinks]) sink(new ContentAdded(node))
+            state.pendingAdds.set(c.Path, { inoKey, isDir: c.IsDirectory })
+            this.scheduleFlush(state)
             return
         }
         // Changed: content-only; the P1 tree surfaces Name/Kind only → no delta.
     }
 
-    private matchPendingRename(state: FolderState, inoKey: string, isDir: boolean): { path: string; id: ContentNodeId } | undefined
+    // A buffered removal matching this add by inode+kind — a rename, whichever event
+    // the OS emitted first. '' inode cannot correlate (returns undefined → plain add).
+    private matchPendingRemoval(state: FolderState, inoKey: string, isDir: boolean): { path: string; id: ContentNodeId } | undefined
     {
-        if (inoKey === '') return undefined                // no inode → cannot correlate; treat as add
+        if (inoKey === '') return undefined
         for (const [path, p] of state.pendingRemovals)
         {
             if (p.inoKey === inoKey && p.isDir === isDir) return { path, id: p.id }
@@ -150,12 +144,31 @@ export class ProjectContentStore
         return undefined
     }
 
+    // At settle-window end, pair buffered adds to buffered removals by inode+kind
+    // (renames → ContentUpdated, id preserved); unpaired adds → ContentAdded; unpaired
+    // removals → ContentRemoved. Order-independent, so add-before-unlink is handled.
     private scheduleFlush(state: FolderState): void
     {
         if (state.timer !== undefined) return
         const flush = (): void =>
         {
             state.timer = undefined
+            // Pass 1: pair adds to removals by inode+kind → renames (id preserved).
+            for (const [addPath, add] of [...state.pendingAdds])
+            {
+                const match = this.matchPendingRemoval(state, add.inoKey, add.isDir)
+                if (match === undefined) continue
+                state.pendingAdds.delete(addPath)
+                state.pendingRemovals.delete(match.path)
+                const node = state.children.get(match.id)!
+                state.byPath.delete(node.Path)
+                node.Name = ProjectContentStore.baseName(addPath)
+                node.Path = addPath
+                state.byPath.set(addPath, match.id)
+                if (add.inoKey !== '') state.byIno.set(add.inoKey, match.id)
+                for (const sink of [...state.sinks]) sink(new ContentUpdated(node))
+            }
+            // Pass 2: unmatched removals → ContentRemoved (frees their paths before pass 3).
             for (const [path, p] of [...state.pendingRemovals])
             {
                 state.pendingRemovals.delete(path)
@@ -169,6 +182,14 @@ export class ProjectContentStore
                 if (childState !== undefined) { childState.watchOff?.(); this.folders.delete(p.id) }
                 this.pathById.delete(p.id)
                 for (const sink of [...state.sinks]) sink(new ContentRemoved(p.id))
+            }
+            // Pass 3: unmatched adds → ContentAdded.
+            for (const [addPath, add] of [...state.pendingAdds])
+            {
+                state.pendingAdds.delete(addPath)
+                const node = this.internChild(state, addPath, ProjectContentStore.baseName(addPath), ProjectContentStore.kindOf(ProjectContentStore.baseName(addPath), add.isDir))
+                if (add.inoKey !== '') state.byIno.set(add.inoKey, node.Id)
+                for (const sink of [...state.sinks]) sink(new ContentAdded(node))
             }
         }
         state.timer = setTimeout(flush, this.settleMs)

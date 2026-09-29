@@ -39,6 +39,20 @@ test('same-ino rename emits ContentUpdated with a stable id (not remove+add)', a
     assert.equal(seen.filter((c) => c instanceof ContentRemoved).length, 0);
 });
 
+test('add-before-unlink rename ordering still correlates to ContentUpdated', async () =>
+{
+    const { s, seen } = await watchedRoot(async (st) => { await st.WriteText('a.todl', ''); });
+    const addedId = (seen.find((c) => c instanceof ContentAdded) as ContentAdded).Node.Id;
+    await s.Rename('a.todl', 'b.todl');
+    s.EmitFileChange('b.todl', FileChangeKind.Added, false);    // add first (Windows ordering)
+    s.EmitFileChange('a.todl', FileChangeKind.Removed, false);  // unlink second
+    await tick();
+    const updated = seen.filter((c): c is ContentUpdated => c instanceof ContentUpdated);
+    assert.equal(updated.length, 1);
+    assert.equal(updated[0]!.Node.Id, addedId);
+    assert.equal(seen.filter((c) => c instanceof ContentRemoved).length, 0);
+});
+
 test('ino-unavailable rename degrades to remove+add', async () =>
 {
     const { s, seen } = await watchedRoot(async (st) => { await st.WriteText('a.todl', ''); });
