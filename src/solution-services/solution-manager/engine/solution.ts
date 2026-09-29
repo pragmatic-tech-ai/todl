@@ -3,6 +3,7 @@ import { SolutionMember } from './solution-member.js';
 import { SolutionSettingBag } from './solution-setting-bag.js';
 import { type SettingBagDefinition } from './setting-bag-definition.js';
 import { type MemberStorageResolver, type ProjectFactoryResolver } from './project-factory.js';
+import { SolutionMemberStatus } from './solution-member-status.js';
 
 // The authoritative model of an open solution the SolutionManagerService owns: a
 // name, the storage it is rooted at, its ordered member projects (opened
@@ -104,11 +105,24 @@ export class Solution extends Observable
         {
             member.Project = undefined;
             member.Storage = undefined;
+            member.Status = SolutionMemberStatus.UnknownType;
             return;
         }
         const storage = storageFor(member.Ref.path);
         member.Storage = storage;
-        member.Project = await factory.openProject(storage);
+        try
+        {
+            member.Project = await factory.openProject(storage);
+            member.Error = undefined;
+            member.Status = SolutionMemberStatus.Resolved;
+        }
+        catch (e)
+        {
+            member.Project = undefined;
+            member.Error = e instanceof Error ? e.message : String(e);
+            member.Status = SolutionMemberStatus.LoadFailed;
+            // swallow — one broken member must not abort the whole solution open
+        }
     }
 
     // Stash persisted setting values (from the manifest) to overlay when bags bind.

@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { FakeStorage } from '@pragmatic-tech-ai/todl-runtime'
 import { Solution } from '../solution.js'
+import { SolutionMemberStatus } from '../solution-member-status.js'
 
 test('AddMember appends and marks dirty', () => {
     const s = new Solution('S', new FakeStorage())
@@ -32,10 +33,11 @@ test('setting Name raises PropertyChanged and marks dirty', () => {
     assert.equal(s.IsDirty, true)
 })
 
-test('a fresh member is unresolved until a Project is set', () => {
+test('a fresh member is Unopened; IsResolved tracks Status Resolved', () => {
     const s = new Solution('S', new FakeStorage())
     const m = s.AddMember('./api', 'architecture')
+    assert.equal(m.Status, SolutionMemberStatus.Unopened)
     assert.equal(m.IsResolved, false)
-    m.Project = { kind: 'x' }
+    m.Status = SolutionMemberStatus.Resolved
     assert.equal(m.IsResolved, true)
 })
