@@ -30,6 +30,7 @@ interface FolderState
 export class ProjectContentStore
 {
     private static readonly RootPath = ''
+    private static readonly InvalidNameMessage = 'Invalid name'
     private static readonly DiagramExts = ['.archdiagram', '.diagram']
     // Rename correlation window. Sized to bridge the gap between a rename's add and
     // unlink events (measured ~107ms on Windows chokidar); a new/removed file surfaces
@@ -94,6 +95,68 @@ export class ProjectContentStore
     public NodeById(id: ContentNodeId): ProjectContentNode | undefined
     {
         return this.nodeById.get(id)
+    }
+
+    // Mutations. Writes flow UI → store → disk → watcher delta → tree: the store never
+    // optimistically mutates its own model, so a failed IStorage call (e.g. an FS
+    // collision throwing from Rename) leaves the tree unchanged and the row reverts.
+    public async CreateFile(parentId: ContentNodeId, name: string, content = ''): Promise<void>
+    {
+        await this.storage.WriteText(this.childPath(parentId, name), content)
+    }
+
+    public async CreateFolder(parentId: ContentNodeId, name: string): Promise<void>
+    {
+        await this.storage.CreateDirectory(this.childPath(parentId, name))
+    }
+
+    public async Rename(id: ContentNodeId, newName: string): Promise<void>
+    {
+        if (newName === '' || newName.includes('/')) throw new Error(ProjectContentStore.InvalidNameMessage)
+        const path = this.pathOf(id)
+        if (path === undefined) return
+        const dir = ProjectContentStore.parentDir(path)
+        const target = dir === '' ? newName : `${dir}/${newName}`
+        if (target === path) return
+        await this.storage.Rename(path, target)   // watcher + settle reconciliation → ContentUpdated (same id)
+    }
+
+    public async Delete(id: ContentNodeId): Promise<void>
+    {
+        const path = this.pathOf(id)
+        if (path !== undefined) await this.storage.Delete(path)
+    }
+
+    public async Move(ids: readonly ContentNodeId[], destFolderId: ContentNodeId): Promise<void>
+    {
+        const dest = this.pathById.get(destFolderId) ?? this.pathOf(destFolderId) ?? ''
+        for (const id of ids)
+        {
+            const path = this.pathOf(id)
+            if (path === undefined) continue
+            const target = dest === '' ? ProjectContentStore.baseName(path) : `${dest}/${ProjectContentStore.baseName(path)}`
+            if (target !== path) await this.storage.Rename(path, target)
+        }
+    }
+
+    // Project-relative parent directory of a path ('' for a root-level entry). Public so
+    // the Plexus FileTreeContributor can resolve a node's containing folder.
+    public static parentDir(path: string): string
+    {
+        const i = path.lastIndexOf('/')
+        return i === -1 ? '' : path.slice(0, i)
+    }
+
+    private childPath(parentId: ContentNodeId, name: string): string
+    {
+        const dir = this.pathById.get(parentId) ?? this.pathOf(parentId) ?? ''
+        return dir === '' ? name : `${dir}/${name}`
+    }
+
+    private pathOf(id: ContentNodeId): string | undefined
+    {
+        if (id === this.Root.Id) return ProjectContentStore.RootPath
+        return this.nodeById.get(id)?.Path
     }
 
     private stateFor(folder: ContentNodeId): FolderState
