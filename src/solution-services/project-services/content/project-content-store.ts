@@ -14,10 +14,10 @@ interface FolderState
     readonly byPath: Map<string, ContentNodeId>
     readonly byIno: Map<string, ContentNodeId>                  // 'dev:ino' -> id (nonzero ino only)
     readonly sinks: Set<(c: ContentChange) => void>
-    watchOff?: () => void
+    watchOff?: (() => void) | undefined
     // Buffered removals (keyed by path) awaiting rename correlation within the settle window.
     readonly pendingRemovals: Map<string, { id: ContentNodeId; inoKey: string; isDir: boolean }>
-    timer?: ReturnType<typeof setTimeout>
+    timer?: ReturnType<typeof setTimeout> | undefined
 }
 
 // A reactive, lazy per-project content store over an IStorage: enumerates a folder

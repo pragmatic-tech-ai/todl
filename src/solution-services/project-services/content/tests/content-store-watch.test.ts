@@ -34,8 +34,8 @@ test('same-ino rename emits ContentUpdated with a stable id (not remove+add)', a
     await tick();
     const updated = seen.filter((c): c is ContentUpdated => c instanceof ContentUpdated);
     assert.equal(updated.length, 1);
-    assert.equal(updated[0].Node.Id, addedId);                  // SAME id
-    assert.equal(updated[0].Node.Name, 'b.todl');
+    assert.equal(updated[0]!.Node.Id, addedId);                 // SAME id
+    assert.equal(updated[0]!.Node.Name, 'b.todl');
     assert.equal(seen.filter((c) => c instanceof ContentRemoved).length, 0);
 });
 
