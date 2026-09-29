@@ -1,7 +1,10 @@
-import { type IStorage, compareStorageEntries } from '@pragmatic-tech-ai/todl-runtime'
+import {
+    type IStorage, compareStorageEntries,
+    isStatStorage, isWatchableStorage, FileChangeKind, type FileChange,
+} from '@pragmatic-tech-ai/todl-runtime'
 import { ProjectNodeKind } from '../core/project.js'
 import { ProjectContentNode, type ContentNodeId } from './content-node.js'
-import { ContentAdded, type ContentChange } from './content-change.js'
+import { ContentAdded, ContentRemoved, ContentUpdated, type ContentChange } from './content-change.js'
 
 interface FolderState
 {
@@ -12,6 +15,9 @@ interface FolderState
     readonly byIno: Map<string, ContentNodeId>                  // 'dev:ino' -> id (nonzero ino only)
     readonly sinks: Set<(c: ContentChange) => void>
     watchOff?: () => void
+    // Buffered removals (keyed by path) awaiting rename correlation within the settle window.
+    readonly pendingRemovals: Map<string, { id: ContentNodeId; inoKey: string; isDir: boolean }>
+    timer?: ReturnType<typeof setTimeout>
 }
 
 // A reactive, lazy per-project content store over an IStorage: enumerates a folder
@@ -22,14 +28,17 @@ export class ProjectContentStore
 {
     private static readonly RootPath = ''
     private static readonly DiagramExts = ['.archdiagram', '.diagram']
+    private static readonly DefaultSettleMs = 75
+    private readonly settleMs: number
     private nextId = 1
     private readonly folders = new Map<ContentNodeId, FolderState>()   // folder id -> its state
     private readonly nodeById = new Map<ContentNodeId, ProjectContentNode>()
     private readonly pathById = new Map<ContentNodeId, string>()       // folder id -> its project path
     public readonly Root: ProjectContentNode
 
-    constructor(private readonly storage: IStorage)
+    constructor(private readonly storage: IStorage, options?: { settleMs?: number })
     {
+        this.settleMs = options?.settleMs ?? ProjectContentStore.DefaultSettleMs
         this.Root = new ProjectContentNode(this.mintId(), ProjectContentStore.RootPath, '', ProjectNodeKind.Folder)
         this.pathById.set(this.Root.Id, ProjectContentStore.RootPath)
     }
@@ -68,7 +77,7 @@ export class ProjectContentStore
         let s = this.folders.get(folder)
         if (s === undefined)
         {
-            s = { loaded: false, children: new Map(), byPath: new Map(), byIno: new Map(), sinks: new Set() }
+            s = { loaded: false, children: new Map(), byPath: new Map(), byIno: new Map(), sinks: new Set(), pendingRemovals: new Map() }
             this.folders.set(folder, s)
         }
         return s
@@ -82,10 +91,106 @@ export class ProjectContentStore
         {
             const childPath = dirPath === '' ? entry.Name : `${dirPath}/${entry.Name}`
             const node = this.internChild(state, childPath, entry.Name, ProjectContentStore.kindOf(entry.Name, entry.IsDirectory))
+            const inoKey = await this.inoKeyFor(childPath)
+            if (inoKey !== '') state.byIno.set(inoKey, node.Id)
             for (const sink of [...state.sinks]) sink(new ContentAdded(node))
         }
         state.loaded = true
-        // A later slice starts the watcher here.
+        if (isWatchableStorage(this.storage))
+        {
+            state.watchOff = this.storage.Watch(dirPath, (c) => { void this.onFileChange(state, c) })
+        }
+    }
+
+    // Reconcile a raw fs event into a ContentChange. A Removed is buffered for the
+    // settle window so a following Added with the same inode+kind is recognised as a
+    // rename (ContentUpdated, stable id) rather than remove+add.
+    private async onFileChange(state: FolderState, c: FileChange): Promise<void>
+    {
+        if (c.Kind === FileChangeKind.Removed)
+        {
+            const id = state.byPath.get(c.Path)
+            if (id === undefined) return
+            const node = state.children.get(id)!
+            state.pendingRemovals.set(c.Path, { id, inoKey: this.inoKeyForNode(state, id), isDir: node.Kind === ProjectNodeKind.Folder })
+            this.scheduleFlush(state)
+            return
+        }
+        if (c.Kind === FileChangeKind.Added)
+        {
+            const inoKey = await this.inoKeyFor(c.Path)
+            const match = this.matchPendingRename(state, inoKey, c.IsDirectory)
+            if (match !== undefined)                       // rename: reuse id, update in place
+            {
+                state.pendingRemovals.delete(match.path)
+                const node = state.children.get(match.id)!
+                state.byPath.delete(node.Path)
+                node.Name = ProjectContentStore.baseName(c.Path)
+                node.Path = c.Path
+                state.byPath.set(c.Path, match.id)
+                if (inoKey !== '') state.byIno.set(inoKey, match.id)
+                for (const sink of [...state.sinks]) sink(new ContentUpdated(node))
+                return
+            }
+            const node = this.internChild(state, c.Path, ProjectContentStore.baseName(c.Path), ProjectContentStore.kindOf(ProjectContentStore.baseName(c.Path), c.IsDirectory))
+            if (inoKey !== '') state.byIno.set(inoKey, node.Id)
+            for (const sink of [...state.sinks]) sink(new ContentAdded(node))
+            return
+        }
+        // Changed: content-only; the P1 tree surfaces Name/Kind only → no delta.
+    }
+
+    private matchPendingRename(state: FolderState, inoKey: string, isDir: boolean): { path: string; id: ContentNodeId } | undefined
+    {
+        if (inoKey === '') return undefined                // no inode → cannot correlate; treat as add
+        for (const [path, p] of state.pendingRemovals)
+        {
+            if (p.inoKey === inoKey && p.isDir === isDir) return { path, id: p.id }
+        }
+        return undefined
+    }
+
+    private scheduleFlush(state: FolderState): void
+    {
+        if (state.timer !== undefined) return
+        const flush = (): void =>
+        {
+            state.timer = undefined
+            for (const [path, p] of [...state.pendingRemovals])
+            {
+                state.pendingRemovals.delete(path)
+                state.children.delete(p.id)
+                state.byPath.delete(path)
+                this.nodeById.delete(p.id)
+                if (p.inoKey !== '') state.byIno.delete(p.inoKey)
+                // If the removed node was an expanded folder, dispose its watcher and drop
+                // its state so no watcher leaks and no late delta reaches its subscribers.
+                const childState = this.folders.get(p.id)
+                if (childState !== undefined) { childState.watchOff?.(); this.folders.delete(p.id) }
+                this.pathById.delete(p.id)
+                for (const sink of [...state.sinks]) sink(new ContentRemoved(p.id))
+            }
+        }
+        state.timer = setTimeout(flush, this.settleMs)
+    }
+
+    private async inoKeyFor(path: string): Promise<string>
+    {
+        if (!isStatStorage(this.storage)) return ''
+        const st = await this.storage.Stat(path)
+        return st.Ino === '' ? '' : `${st.Dev}:${st.Ino}`
+    }
+
+    private inoKeyForNode(state: FolderState, id: ContentNodeId): string
+    {
+        for (const [k, v] of state.byIno) if (v === id) return k
+        return ''
+    }
+
+    private static baseName(path: string): string
+    {
+        const i = path.lastIndexOf('/')
+        return i === -1 ? path : path.slice(i + 1)
     }
 
     // Mint-or-reuse a child node by path (a later slice adds ino reconciliation).
