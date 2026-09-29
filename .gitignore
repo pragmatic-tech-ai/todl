@@ -10,3 +10,4 @@ dist/
 
 # User smoke-test run outputs (per-run <date-time> dirs)
 user-smoke-tests/*/
+.claude/worktrees/
