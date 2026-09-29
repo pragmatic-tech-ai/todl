@@ -9,7 +9,7 @@ import { ContentAdded, ContentRemoved, ContentUpdated, type ContentChange } from
 interface FolderState
 {
     loaded: boolean
-    loading?: Promise<void>
+    loading?: Promise<void> | undefined
     readonly children: Map<ContentNodeId, ProjectContentNode>   // insertion = child set
     readonly byPath: Map<string, ContentNodeId>
     readonly byIno: Map<string, ContentNodeId>                  // 'dev:ino' -> id (nonzero ino only)
@@ -53,12 +53,20 @@ export class ProjectContentStore
     {
         const state = this.stateFor(folder)
         state.sinks.add(sink)
-        if (!state.loaded) { state.loading = this.load(folder, state) }
-        else { for (const node of state.children.values()) sink(new ContentAdded(node)) }
+        if (!state.loaded && state.loading === undefined) { state.loading = this.load(folder, state) }
+        else if (state.loaded) { for (const node of state.children.values()) sink(new ContentAdded(node)) }
+        // else: a load is in flight — it emits ContentAdded to every current sink,
+        // including this one, so a concurrent subscriber neither re-loads nor double-emits.
         return () =>
         {
             state.sinks.delete(sink)
-            if (state.sinks.size === 0 && state.watchOff !== undefined) { state.watchOff(); state.watchOff = undefined }
+            if (state.sinks.size > 0) return;
+            if (state.watchOff !== undefined) { state.watchOff(); state.watchOff = undefined }
+            // Last observer left: drop the watcher and mark unloaded so a re-subscribe
+            // re-Lists (catching changes missed while collapsed) and restarts the watcher.
+            // The id maps (byPath/byIno) are kept so re-realized children keep their ids.
+            state.loaded = false
+            state.loading = undefined
         }
     }
 
@@ -93,13 +101,24 @@ export class ProjectContentStore
     {
         const dirPath = this.pathById.get(folder) ?? ProjectContentStore.RootPath
         const entries = [...await this.storage.List(dirPath)].sort(compareStorageEntries)
+        const seen = new Set<string>()
         for (const entry of entries)
         {
             const childPath = dirPath === '' ? entry.Name : `${dirPath}/${entry.Name}`
+            seen.add(childPath)
             const node = this.internChild(state, childPath, entry.Name, ProjectContentStore.kindOf(entry.Name, entry.IsDirectory))
             const inoKey = await this.inoKeyFor(childPath)
             if (inoKey !== '') state.byIno.set(inoKey, node.Id)
             for (const sink of [...state.sinks]) sink(new ContentAdded(node))
+        }
+        // Re-list catch-up: drop children that vanished while this folder was unwatched.
+        // Silent (no ContentRemoved) — a fresh post-collapse subscriber never saw their add.
+        for (const [path, id] of [...state.byPath])
+        {
+            if (seen.has(path)) continue
+            state.byPath.delete(path)
+            state.children.delete(id)
+            this.dropSubtree(id)
         }
         state.loaded = true
         if (isWatchableStorage(this.storage))
@@ -161,11 +180,15 @@ export class ProjectContentStore
                 state.pendingAdds.delete(addPath)
                 state.pendingRemovals.delete(match.path)
                 const node = state.children.get(match.id)!
-                state.byPath.delete(node.Path)
+                const oldPath = node.Path
+                state.byPath.delete(oldPath)
                 node.Name = ProjectContentStore.baseName(addPath)
                 node.Path = addPath
                 state.byPath.set(addPath, match.id)
                 if (add.inoKey !== '') state.byIno.set(add.inoKey, match.id)
+                // A folder moved: rewrite its subtree's paths and re-point watchers to the
+                // new location, so descendants aren't stale and live updates keep flowing.
+                if (node.Kind === ProjectNodeKind.Folder) this.renameSubtree(match.id, oldPath, addPath)
                 for (const sink of [...state.sinks]) sink(new ContentUpdated(node))
             }
             // Pass 2: unmatched removals → ContentRemoved (frees their paths before pass 3).
@@ -174,13 +197,10 @@ export class ProjectContentStore
                 state.pendingRemovals.delete(path)
                 state.children.delete(p.id)
                 state.byPath.delete(path)
-                this.nodeById.delete(p.id)
                 if (p.inoKey !== '') state.byIno.delete(p.inoKey)
-                // If the removed node was an expanded folder, dispose its watcher and drop
-                // its state so no watcher leaks and no late delta reaches its subscribers.
-                const childState = this.folders.get(p.id)
-                if (childState !== undefined) { childState.watchOff?.(); this.folders.delete(p.id) }
-                this.pathById.delete(p.id)
+                // Recursively tear down the removed subtree (descendant watchers + nodes),
+                // then emit the removal for the node itself.
+                this.dropSubtree(p.id)
                 for (const sink of [...state.sinks]) sink(new ContentRemoved(p.id))
             }
             // Pass 3: unmatched adds → ContentAdded.
@@ -193,6 +213,44 @@ export class ProjectContentStore
             }
         }
         state.timer = setTimeout(flush, this.settleMs)
+    }
+
+    // Recursively tear down a subtree's realized state: this node's global entries plus,
+    // if it is an expanded folder, its watcher and every descendant. Used on folder
+    // removal and on re-list catch-up for vanished children.
+    private dropSubtree(id: ContentNodeId): void
+    {
+        this.nodeById.delete(id)
+        this.pathById.delete(id)
+        const sub = this.folders.get(id)
+        if (sub === undefined) return
+        sub.watchOff?.()
+        sub.watchOff = undefined
+        this.folders.delete(id)
+        for (const childId of [...sub.children.keys()]) this.dropSubtree(childId)
+    }
+
+    // A folder moved oldPath → newPath: re-point its watcher and rewrite the paths of its
+    // already-realized descendants (prefix swap), recursing into expanded subfolders. The
+    // folder node's own Path/parent byPath were already updated by the caller.
+    private renameSubtree(id: ContentNodeId, oldPath: string, newPath: string): void
+    {
+        this.pathById.set(id, newPath)
+        const sub = this.folders.get(id)
+        if (sub === undefined) return
+        if (sub.watchOff !== undefined) { sub.watchOff(); sub.watchOff = undefined }
+        if (isWatchableStorage(this.storage)) sub.watchOff = this.storage.Watch(newPath, (c) => { void this.onFileChange(sub, c) })
+        const rewritten = new Map<string, ContentNodeId>()
+        for (const [childPath, childId] of sub.byPath)
+        {
+            const childNew = newPath + childPath.slice(oldPath.length)   // childPath === oldPath + '/' + rest
+            const childNode = sub.children.get(childId)!
+            childNode.Path = childNew
+            rewritten.set(childNew, childId)
+            if (childNode.Kind === ProjectNodeKind.Folder) this.renameSubtree(childId, childPath, childNew)
+        }
+        sub.byPath.clear()
+        for (const [p, i] of rewritten) sub.byPath.set(p, i)
     }
 
     private async inoKeyFor(path: string): Promise<string>

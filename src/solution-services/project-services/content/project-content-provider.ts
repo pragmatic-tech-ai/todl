@@ -34,7 +34,7 @@ export class ProjectContentProvider implements IHierarchyProvider
         {
             if (c instanceof ContentAdded)        sink(new ChildAdded(this.idFor(c.Node), this.hierarchyNode(c.Node)))
             else if (c instanceof ContentUpdated) sink(new ChildUpdated(this.idFor(c.Node), this.hierarchyNode(c.Node)))
-            else if (c instanceof ContentRemoved) sink(new ChildRemoved(this.idForContentId(c.Id)))
+            else if (c instanceof ContentRemoved) sink(new ChildRemoved(this.release(c.Id)))
         })
     }
 
@@ -77,13 +77,29 @@ export class ProjectContentProvider implements IHierarchyProvider
     private idFor(node: ProjectContentNode): HierarchyItemId
     {
         const hit = this.idByContent.get(node.Id)
-        if (hit !== undefined) { this.pathByItem.set(hit, node.Path); this.itemByPath.set(node.Path, hit); return hit }
+        if (hit !== undefined)
+        {
+            const oldPath = this.pathByItem.get(hit)
+            if (oldPath !== undefined && oldPath !== node.Path) this.itemByPath.delete(oldPath)   // rename: drop stale key
+            this.pathByItem.set(hit, node.Path)
+            this.itemByPath.set(node.Path, hit)
+            return hit
+        }
         return this.bind(node)
     }
 
-    private idForContentId(cid: ContentNodeId): HierarchyItemId
+    // Resolve a removed content node's id and forget it, so the maps do not grow
+    // unbounded and ParseCanonicalName of its path returns Nil afterwards.
+    private release(cid: ContentNodeId): HierarchyItemId
     {
-        return this.idByContent.get(cid) ?? HierarchyItemId.Nil
+        const id = this.idByContent.get(cid)
+        if (id === undefined) return HierarchyItemId.Nil
+        this.idByContent.delete(cid)
+        this.contentById.delete(id)
+        const path = this.pathByItem.get(id)
+        if (path !== undefined) this.itemByPath.delete(path)
+        this.pathByItem.delete(id)
+        return id
     }
 
     private bind(node: ProjectContentNode): HierarchyItemId

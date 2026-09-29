@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { FakeStorage } from '@pragmatic-tech-ai/todl-runtime';
+import { FakeStorage, FileChangeKind } from '@pragmatic-tech-ai/todl-runtime';
 import { ChildAdded, HierarchyItemId, type HierarchyChange } from '@pragmatic-tech-ai/mural/framework/hierarchy';
 import { ProjectContentStore } from '../project-content-store.js';
 import { ProjectContentProvider } from '../project-content-provider.js';
@@ -24,4 +24,20 @@ test('maps ContentAdded → ChildAdded carrying a minted, reused HierarchyItemId
     // GetCanonicalName round-trips to the SAME id instance
     const name = provider.GetCanonicalName(a.Id);
     assert.equal(provider.ParseCanonicalName(name), a.Id);
+});
+
+test('ParseCanonicalName returns Nil after the node is removed (maps pruned)', async () =>
+{
+    const s = new FakeStorage();
+    await s.WriteText('a.todl', '');
+    const store = new ProjectContentStore(s, { settleMs: 0 });
+    const provider = new ProjectContentProvider(store);
+    provider.ObserveChildren(provider.ParseCanonicalName(''), () => {});
+    await store.WhenIdle();
+    assert.notEqual(provider.ParseCanonicalName('a.todl'), HierarchyItemId.Nil);
+
+    await s.Delete('a.todl');
+    s.EmitFileChange('a.todl', FileChangeKind.Removed, false);
+    await new Promise((r) => setTimeout(r, 5));
+    assert.equal(provider.ParseCanonicalName('a.todl'), HierarchyItemId.Nil);   // pruned on removal
 });
