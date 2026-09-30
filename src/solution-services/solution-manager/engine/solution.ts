@@ -4,6 +4,7 @@ import { SolutionSettingBag } from './solution-setting-bag.js';
 import { type SettingBagDefinition } from './setting-bag-definition.js';
 import { type MemberStorageResolver, type ProjectFactoryResolver } from './project-factory.js';
 import { SolutionMemberStatus } from './solution-member-status.js';
+import { type BagValues } from './solution-manifest.js';
 
 // The authoritative model of an open solution the SolutionManagerService owns: a
 // name, the storage it is rooted at, its ordered member projects (opened
@@ -27,6 +28,9 @@ export class Solution extends Observable
     // Persisted setting values from the manifest, applied when bags bind (Task 13
     // enriches this; for now it is a pass-through store for load/collect).
     private loadedSettings: Record<string, Record<string, string | number | boolean>> = {};
+    // Live property bags for the solution scope: kind → id → (name → value). Written through
+    // by SolutionBagPersister; serialized by CollectBags; seeded by LoadBags.
+    private readonly liveBags = new Map<string, Map<string, Map<string, unknown>>>();
 
     constructor(name: string, storage?: IStorage)
     {
@@ -158,6 +162,52 @@ export class Solution extends Observable
         for (const [id, vals] of Object.entries(this.loadedSettings))
         {
             if (!bound.has(id) && !(id in out)) out[id] = vals;
+        }
+        return out;
+    }
+
+    // The live instances of a bag kind (kind → id → value map), created on first access.
+    // SolutionBagPersister reads and writes through this.
+    public InstancesOf(kind: string): Map<string, Map<string, unknown>>
+    {
+        let byId = this.liveBags.get(kind);
+        if (byId === undefined)
+        {
+            byId = new Map<string, Map<string, unknown>>();
+            this.liveBags.set(kind, byId);
+        }
+        return byId;
+    }
+
+    // Marks the solution dirty when a bag value changes (mirrors a setting write).
+    public MarkBagsDirty(): void
+    {
+        this.markDirty();
+    }
+
+    // Seed the live bags from a persisted snapshot (solution open).
+    public LoadBags(bags: BagValues): void
+    {
+        this.liveBags.clear();
+        for (const [kind, byId] of Object.entries(bags))
+        {
+            const instances = this.InstancesOf(kind);
+            for (const [id, values] of Object.entries(byId))
+            {
+                instances.set(id, new Map<string, unknown>(Object.entries(values)));
+            }
+        }
+    }
+
+    // Serialize the live bags for persistence (solution save). Empty instances round-trip.
+    public CollectBags(): BagValues
+    {
+        const out: BagValues = {};
+        for (const [kind, byId] of this.liveBags)
+        {
+            const outKind: Record<string, Record<string, unknown>> = {};
+            for (const [id, values] of byId) outKind[id] = Object.fromEntries(values);
+            if (Object.keys(outKind).length > 0) out[kind] = outKind;
         }
         return out;
     }

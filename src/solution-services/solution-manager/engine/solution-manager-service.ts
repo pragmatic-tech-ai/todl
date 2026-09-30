@@ -240,6 +240,7 @@ export class SolutionManagerService extends ServiceBase
         );
         for (const ref of manifest.members) session.AddMember(ref.path, ref.type);
         session.LoadSettings(manifest.settings);
+        session.LoadBags(manifest.bags);
         await session.OpenMembers(
             (rel) => this.storages.CreateStorage(SolutionManagerService.joinPosix(location, rel)),
             (type) => this.factories.factoryFor(type),
@@ -351,6 +352,7 @@ export class SolutionManagerService extends ServiceBase
             s.Name,
             s.Members.ToArray().map((m) => m.Ref),
             s.CollectSettings(),
+            s.CollectBags(),
         );
         await storage.WriteText(
             SolutionManagerService.manifestFileName(s.Name),
@@ -370,6 +372,7 @@ export class SolutionManagerService extends ServiceBase
             s.Name,
             s.Members.ToArray().map((m) => m.Ref),
             s.CollectSettings(),
+            s.CollectBags(),
         );
         await target.WriteText(
             SolutionManagerService.manifestFileName(s.Name),
@@ -378,6 +381,7 @@ export class SolutionManagerService extends ServiceBase
         const reopened = new Solution(s.Name, target);
         for (const m of s.Members) reopened.AddMember(m.Ref.path, m.Ref.type);
         reopened.LoadSettings(s.CollectSettings());
+        reopened.LoadBags(s.CollectBags());
         reopened.IsDirty = false;
         this.setActive(reopened);
         this.pushRecent(location);

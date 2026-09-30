@@ -192,6 +192,8 @@ export { SettingBagDefinition } from './solution-services/solution-manager/engin
 export { SolutionSettingBag } from './solution-services/solution-manager/engine/solution-setting-bag.js';
 export { BagAddress, BagScope, ProjectStore } from './solution-services/property-bags/bag-address.js';
 export { type IBagPersister } from './solution-services/property-bags/bag-persister.js';
+export { RecordPropertyBag } from './solution-services/property-bags/record-property-bag.js';
+export { SolutionBagPersister } from './solution-services/property-bags/solution-bag-persister.js';
 export { Solution } from './solution-services/solution-manager/engine/solution.js';
 export { SolutionSession } from './solution-services/solution-manager/engine/solution-session.js';
 export { SolutionMember } from './solution-services/solution-manager/engine/solution-member.js';

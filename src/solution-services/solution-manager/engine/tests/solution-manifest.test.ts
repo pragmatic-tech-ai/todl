@@ -6,6 +6,7 @@ const SAMPLE = JSON.stringify({
     kind: 'todl-solution', version: 1, name: 'My Solution',
     members: [{ path: './api', type: 'architecture' }, { path: '../lib', type: 'library' }],
     settings: { 'npm-registry': { registry: 'https://x', org: 'acme' } },
+    bags: { 'npm-connection': { gh: { DisplayName: 'GitHub' } } },
 })
 
 test('parse exposes name/members/settings', () => {

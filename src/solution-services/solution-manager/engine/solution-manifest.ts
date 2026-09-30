@@ -1,6 +1,8 @@
 import { type SolutionMemberRef, SolutionPath } from './solution-member-ref.js'
 
 type SettingValues = Record<string, string | number | boolean>
+// A scope's property bags: kind → instance id → { property name → value }.
+export type BagValues = Record<string, Record<string, Record<string, unknown>>>
 
 // The persisted shape of a solution: a name, an ordered list of member project
 // references, and per-bag cross-project setting values. Parsed from / written to
@@ -16,11 +18,12 @@ export class SolutionManifest
         public readonly name: string,
         public readonly members: SolutionMemberRef[],
         public readonly settings: Record<string, SettingValues>,
+        public readonly bags: BagValues = {},
     ) {}
 
     static create(name: string): SolutionManifest
     {
-        return new SolutionManifest(name, [], {})
+        return new SolutionManifest(name, [], {}, {})
     }
 
     static parse(text: string): SolutionManifest
@@ -45,7 +48,10 @@ export class SolutionManifest
         const settings = (raw.settings !== null && typeof raw.settings === 'object')
             ? raw.settings as Record<string, SettingValues>
             : {}
-        return new SolutionManifest(name, members, settings)
+        const bags = (raw.bags !== null && typeof raw.bags === 'object')
+            ? raw.bags as BagValues
+            : {}
+        return new SolutionManifest(name, members, settings, bags)
     }
 
     stringify(): string
@@ -56,6 +62,7 @@ export class SolutionManifest
             name: this.name,
             members: this.members.map((m) => ({ path: SolutionPath.toPosix(m.path), type: m.type })),
             settings: this.settings,
+            bags: this.bags,
         }, null, 2)
     }
 }

@@ -17,4 +17,8 @@ export interface IBagPersister
     Create(kind: string, id: string): IPropertyBag;
     // Remove an instance and its bag.
     Delete(kind: string, id: string): void;
+    // Persist the current bags to the owner's backing store. A persister whose owner is
+    // saved elsewhere (the solution, via SolutionManagerService.Save) implements this as a
+    // no-op; a file-backed persister (a project sidecar) writes its document.
+    Flush(): Promise<void>;
 }
