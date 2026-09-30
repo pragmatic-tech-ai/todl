@@ -198,6 +198,7 @@ export { ProjectSharedBagPersister, ProjectLocalBagPersister } from './solution-
 export { BagCatalog, type IBagCatalog, type BagVantage, type ResolvedBag } from './solution-services/property-bags/bag-catalog.js';
 export { ConnectionBag, ConnectionBagKind, TokenSource } from './solution-services/property-bags/connection-bag.js';
 export { ConnectionResolution, ConnectionPurpose, ConnectionSelectionKind } from './solution-services/property-bags/connection-resolution.js';
+export { BagMigration } from './solution-services/property-bags/bag-migration.js';
 export { Solution } from './solution-services/solution-manager/engine/solution.js';
 export { SolutionSession } from './solution-services/solution-manager/engine/solution-session.js';
 export { SolutionMember } from './solution-services/solution-manager/engine/solution-member.js';
