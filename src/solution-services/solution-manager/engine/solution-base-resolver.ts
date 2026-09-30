@@ -109,8 +109,10 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource
         if (manifest === undefined) return { bases: [], problems: [], originOf: new Map() }
         // Carry the consumer's id as the resolution context so an app-side connection-aware
         // published source can pick THIS project's effective connection for every published
-        // base in the closure (the top consumer owns the whole closure's registry choice).
-        const context: PackageResolutionContext = manifest.id !== undefined ? { consumerId: manifest.id } : {}
+        // base in the closure (the top consumer owns the whole closure's registry choice). A
+        // producer is identified by its package id; an architecture (no id) by its name, so the
+        // closure still carries a consumer identity the app can match to a member.
+        const context: PackageResolutionContext = { consumerId: SolutionBaseResolver.consumerIdOf(manifest) }
         const resolved = await this.resolveBindingsInto(consumerStorage, manifest, new Set<IStorage>([consumerStorage]), new Set<string>(), context)
         return { bases: SolutionBaseResolver.dedupeLiveBases(resolved.bases), problems: resolved.problems, originOf: resolved.originOf }
     }
@@ -158,6 +160,21 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource
         if (manifest === undefined) return undefined
         if (manifest.type !== ProjectType.MetaModel && manifest.type !== ProjectType.Library) return undefined
         return manifest.id
+    }
+
+    // The identity a consumer carries as its resolution context (see ResolveBasesFor) and the
+    // app matches back to a member to pick that member's effective connection: a producer's
+    // package id, else (an architecture, which has no id) its name. Every valid manifest yields
+    // one, so an architecture project is no longer resolution-anonymous.
+    public async ConsumerIdOf(consumerStorage: IStorage): Promise<string | undefined>
+    {
+        const manifest = await this.readManifest(consumerStorage)
+        return manifest === undefined ? undefined : SolutionBaseResolver.consumerIdOf(manifest)
+    }
+
+    private static consumerIdOf(manifest: ProjectManifest): string
+    {
+        return manifest.id ?? manifest.name
     }
 
     private async collectPublishedRef(ref: DependencyRef, kind: ProjectType, out: Set<string>): Promise<void>
