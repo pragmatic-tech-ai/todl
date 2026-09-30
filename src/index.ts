@@ -196,6 +196,7 @@ export { RecordPropertyBag } from './solution-services/property-bags/record-prop
 export { SolutionBagPersister } from './solution-services/property-bags/solution-bag-persister.js';
 export { ProjectSharedBagPersister, ProjectLocalBagPersister } from './solution-services/property-bags/project-bag-persisters.js';
 export { BagCatalog, type IBagCatalog, type BagVantage, type ResolvedBag } from './solution-services/property-bags/bag-catalog.js';
+export { ConnectionBag, ConnectionBagKind, TokenSource } from './solution-services/property-bags/connection-bag.js';
 export { Solution } from './solution-services/solution-manager/engine/solution.js';
 export { SolutionSession } from './solution-services/solution-manager/engine/solution-session.js';
 export { SolutionMember } from './solution-services/solution-manager/engine/solution-member.js';
