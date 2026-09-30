@@ -1,5 +1,5 @@
 import { ServiceBase, ServiceKey, type IServiceProvider, type IStorage } from '@pragmatic-tech-ai/todl-runtime'
-import { type IPackageSource, type SourcedPackage } from '../../todl-build-system/package-source.js'
+import { type IPackageSource, type SourcedPackage, type PackageResolutionContext } from '../../todl-build-system/package-source.js'
 import { PackageStoreKey } from '../../todl-build-system/package-store.js'
 import { PackageKind, type PackageRef } from '../../../publish/publish.js'
 import { type TodlDocument } from '../../../compiler-services/emit/json.js'
@@ -107,7 +107,11 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource
     {
         const manifest = await this.readManifest(consumerStorage)
         if (manifest === undefined) return { bases: [], problems: [], originOf: new Map() }
-        const resolved = await this.resolveBindingsInto(consumerStorage, manifest, new Set<IStorage>([consumerStorage]), new Set<string>())
+        // Carry the consumer's id as the resolution context so an app-side connection-aware
+        // published source can pick THIS project's effective connection for every published
+        // base in the closure (the top consumer owns the whole closure's registry choice).
+        const context: PackageResolutionContext = manifest.id !== undefined ? { consumerId: manifest.id } : {}
+        const resolved = await this.resolveBindingsInto(consumerStorage, manifest, new Set<IStorage>([consumerStorage]), new Set<string>(), context)
         return { bases: SolutionBaseResolver.dedupeLiveBases(resolved.bases), problems: resolved.problems, originOf: resolved.originOf }
     }
 
@@ -170,15 +174,15 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource
         }
     }
 
-    private async resolveBindingsInto(storage: IStorage, manifest: ProjectManifest, path: Set<IStorage>, seenPub: Set<string>): Promise<{ bases: LiveBase[]; problems: string[]; originOf: Map<string, WikiOrigin> }>
+    private async resolveBindingsInto(storage: IStorage, manifest: ProjectManifest, path: Set<IStorage>, seenPub: Set<string>, context: PackageResolutionContext): Promise<{ bases: LiveBase[]; problems: string[]; originOf: Map<string, WikiOrigin> }>
     {
         const bases: LiveBase[] = []
         const problems: string[] = []
         const originOf = new Map<string, WikiOrigin>()
         for (const ref of manifest.metaModels ?? [])
-            await this.resolveOneBase(ref, ProjectType.MetaModel, storage, path, seenPub, bases, problems, originOf)
+            await this.resolveOneBase(ref, ProjectType.MetaModel, storage, path, seenPub, bases, problems, originOf, context)
         for (const ref of manifest.libraries ?? [])
-            await this.resolveOneBase(ref, ProjectType.Library, storage, path, seenPub, bases, problems, originOf)
+            await this.resolveOneBase(ref, ProjectType.Library, storage, path, seenPub, bases, problems, originOf, context)
         return { bases, problems, originOf }
     }
 
@@ -186,6 +190,7 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource
         ref: DependencyRef, kind: ProjectType, consumerStorage: IStorage,
         path: Set<IStorage>, seenPub: Set<string>,
         bases: LiveBase[], problems: string[], originOf: Map<string, WikiOrigin>,
+        context: PackageResolutionContext,
     ): Promise<void>
     {
         // A binding's `kind` (metaModels vs libraries) says which array the consumer
@@ -210,7 +215,7 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource
             // against an incomplete closure and silently lost its own base). The
             // closure-level dedup happens exactly once, at the very end, in
             // dedupeLiveBases — never here.
-            const child = await this.resolveBindingsInto(producer.storage, producer.manifest, path, seenPub)
+            const child = await this.resolveBindingsInto(producer.storage, producer.manifest, path, seenPub, context)
             path.delete(producer.storage)
             problems.push(...child.problems)
             // A live compile can fail two ways: softly (model.errors non-empty, no
@@ -255,18 +260,19 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource
         {
             problems.push(SolutionBaseResolver.cyclicProblem(ref.id))
         }
-        await this.resolvePublishedBase(ref, kind, seenPub, bases, problems, originOf)
+        await this.resolvePublishedBase(ref, kind, seenPub, bases, problems, originOf, context)
     }
 
     private async resolvePublishedBase(
         ref: DependencyRef, kind: ProjectType, seenPub: Set<string>,
         bases: LiveBase[], problems: string[], originOf: Map<string, WikiOrigin>,
+        context: PackageResolutionContext,
     ): Promise<void>
     {
         const key = `${kind}:${ref.id}@${ref.version}`
         if (seenPub.has(key)) return
         seenPub.add(key)
-        const sourced = await this.inner().TryGet({ kind: SolutionBaseResolver.packageKindOf(kind), id: ref.id, version: ref.version })
+        const sourced = await this.inner().TryGet({ kind: SolutionBaseResolver.packageKindOf(kind), id: ref.id, version: ref.version }, context)
         if (sourced === undefined)
         {
             problems.push(SolutionBaseResolver.notPublished(kind, ref.id, ref.version))
@@ -280,7 +286,7 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource
         for (const dep of sourced.Dependencies)
         {
             const depKind = dep.kind === PackageKind.Library ? ProjectType.Library : ProjectType.MetaModel
-            await this.resolvePublishedBase({ id: dep.id, version: dep.version }, depKind, seenPub, bases, problems, originOf)
+            await this.resolvePublishedBase({ id: dep.id, version: dep.version }, depKind, seenPub, bases, problems, originOf, context)
         }
     }
 
