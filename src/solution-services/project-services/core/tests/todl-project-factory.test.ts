@@ -74,6 +74,13 @@ test('createProject writes base scaffold ∪ subclass contribution', async (t) =
     assert.match(await storage.ReadText('.claude/todl-rules.md'), /golden rules/i)
 })
 
+test('createProject scaffolds a .gitignore that ignores the project-local bag sidecar', async (t) => {
+    const storage = await tempStorage(t)
+    await factory().createProject(storage, 'P')
+    assert.equal(await storage.Exists('.gitignore'), true)
+    assert.match(await storage.ReadText('.gitignore'), /project\.local\.json/)
+})
+
 test('ensureScaffold is write-once (never clobbers an author edit)', async (t) => {
     const storage = await tempStorage(t)
     await storage.WriteText(PROJECT_MANIFEST_FILENAME, JSON.stringify({ type: 'fake', name: 'P', version: 1 }))

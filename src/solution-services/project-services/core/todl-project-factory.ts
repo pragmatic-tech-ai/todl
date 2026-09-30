@@ -34,9 +34,16 @@ export interface ScaffoldFile
 // string constants (scaffold.generated.ts) so it survives headless bundling — the
 // .md files under scaffold/ stay the source of truth (run `npm run gen:scaffold`).
 // Subclasses add their own CLAUDE.md and type-specific guides via scaffoldContributions().
+// Keep the per-project LOCAL bag sidecar (user-specific connections/selections) out of version
+// control — it must never be committed. Filename matches ProjectLocalBagPersister.FileName.
+const ProjectLocalSidecarName = 'project.local.json'
+const GitIgnorePath = '.gitignore'
+const GitIgnoreSource = `# User-specific project-local property bags (connections, selections) — never commit.\n${ProjectLocalSidecarName}\n`
+
 export const TODL_BASE_SCAFFOLD: readonly ScaffoldFile[] = [
     { path: `${CLAUDE_DIR}/todl-manual.md`, content: TODL_MANUAL_SOURCE },
     { path: `${CLAUDE_DIR}/todl-rules.md`, content: TODL_RULES_SOURCE },
+    { path: GitIgnorePath, content: GitIgnoreSource },
 ]
 
 export abstract class TodlProjectFactory extends ServiceBase implements IProjectFactory
