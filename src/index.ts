@@ -190,6 +190,8 @@ export { type INotificationService } from './solution-services/solution-manager/
 export { SolutionSettingsRegistry } from './solution-services/solution-manager/engine/solution-settings-registry.js';
 export { SettingBagDefinition } from './solution-services/solution-manager/engine/setting-bag-definition.js';
 export { SolutionSettingBag } from './solution-services/solution-manager/engine/solution-setting-bag.js';
+export { BagAddress, BagScope, ProjectStore } from './solution-services/property-bags/bag-address.js';
+export { type IBagPersister } from './solution-services/property-bags/bag-persister.js';
 export { Solution } from './solution-services/solution-manager/engine/solution.js';
 export { SolutionSession } from './solution-services/solution-manager/engine/solution-session.js';
 export { SolutionMember } from './solution-services/solution-manager/engine/solution-member.js';
