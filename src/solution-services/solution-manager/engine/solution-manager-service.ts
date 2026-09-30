@@ -7,7 +7,7 @@ import {
 import { ConfirmAsk, type IPromptService } from '@pragmatic-tech-ai/todl-runtime';
 import {
     MapPropertyBag,
-    SessionStoreKey,
+    DurableApplicationStoreKey,
     type PropertyAccessor,
 } from '@pragmatic-tech-ai/todl-runtime';
 import { Solution } from './solution.js';
@@ -90,7 +90,7 @@ export class SolutionManagerService extends ServiceBase
     // for an untitled/closed solution — nothing to reopen. Backed by the session bag.
     private lastSolution = '';
     // The session-persisted slice (lastSolution + recentSolutions), registered with
-    // the host's SessionStore so it survives across runs.
+    // the host's DurableApplicationStore so it survives across runs.
     private readonly sessionBag: MapPropertyBag;
     private readonly storages: IStorageProviderRegistry;
     private readonly factories: IProjectFactoryRegistry;
@@ -114,15 +114,15 @@ export class SolutionManagerService extends ServiceBase
         this.packages = provider.getRequired(SolutionManagerService.PackageSourceKey);
         this.notifications = provider.get(SolutionManagerService.NotificationServiceKey);
         this.sessionBag = this.buildSessionBag();
-        // Optional: a host that persists session state registers a SessionStore; a
+        // Optional: a host that persists session state registers a DurableApplicationStore; a
         // headless batch or a test omits it, and the bag simply isn't tracked. The
         // store applies any stored slice to the bag on Register (or on its Restore).
         provider
-            .get(SessionStoreKey)
+            .get(DurableApplicationStoreKey)
             ?.Register(SolutionManagerService.SessionRegistrationKey, this.sessionBag);
     }
 
-    // The bag the SessionStore persists: the last-active solution's location and the
+    // The bag the DurableApplicationStore persists: the last-active solution's location and the
     // recent-solutions list. The accessors read/write this manager's own fields, so a
     // restore (bag.SetValue on load) seeds them and a change (pushRecent) notifies.
     private buildSessionBag(): MapPropertyBag
@@ -201,7 +201,7 @@ export class SolutionManagerService extends ServiceBase
 
     // Startup: reopen the remembered solution, else create an empty untitled one. The
     // session slice (lastSolution + recentSolutions) is already applied to the bag by
-    // the SessionStore — on Register, or on its Restore — before this runs.
+    // the DurableApplicationStore — on Register, or on its Restore — before this runs.
     public async RestoreSession(): Promise<void>
     {
         const last = this.lastSolution;
@@ -423,7 +423,7 @@ export class SolutionManagerService extends ServiceBase
 
     // Record a solution's disk root as the most-recent entry (move-to-front, deduped)
     // and remember it as the last-active solution. Routed through the session bag so
-    // both changes persist (the SessionStore schedules a debounced save) in one place.
+    // both changes persist (the DurableApplicationStore schedules a debounced save) in one place.
     private pushRecent(location: string): void
     {
         const next = this.recentSolutions.filter((p) => p !== location);

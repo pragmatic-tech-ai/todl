@@ -2,11 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
     ServiceProvider,
-    SessionStore,
+    DurableApplicationStore,
     FakeStorage,
     EnvironmentKey,
     StorageProviderKey,
-    SessionStoreKey,
+    DurableApplicationStoreKey,
     Ask,
     ConfirmAsk,
     type IStorage,
@@ -18,17 +18,17 @@ import { SolutionManagerService } from '../solution-manager-service.js';
 import { type IProjectFactoryRegistry } from '../host-services.js';
 import { FakeProjectFactory } from './fake-project-factory.js';
 
-// Integration coverage for the SolutionManager ↔ SessionStore round-trip: the manager
-// runs against the REAL todl-runtime SessionStore and a rooted IStorage, and each test
+// Integration coverage for the SolutionManager ↔ DurableApplicationStore round-trip: the manager
+// runs against the REAL todl-runtime DurableApplicationStore and a rooted IStorage, and each test
 // models one or two application "runs" that share the same storage — the way disk would
-// persist session.json + the `<name>.pksln` solution manifest between launches.
+// persist application-bags.json + the `<name>.pksln` solution manifest between launches.
 
 const USER_DIR = '/user';
 
 // A storage backend shared across runs: one FakeStorage per location, kept in a map the
-// test owns. session.json (under USER_DIR) and every `<name>.pksln` therefore survive a
-// fresh provider + SessionStore, exactly as files on disk would. Satisfies both the
-// SessionStore's IStorageProvider seam and the manager's IStorageProviderRegistry (same
+// test owns. application-bags.json (under USER_DIR) and every `<name>.pksln` therefore survive a
+// fresh provider + DurableApplicationStore, exactly as files on disk would. Satisfies both the
+// DurableApplicationStore's IStorageProvider seam and the manager's IStorageProviderRegistry (same
 // CreateStorage shape), so one instance backs both.
 class SharedStorage implements IStorageProvider
 {
@@ -74,12 +74,12 @@ class AllowPrompts implements IPromptService
     }
 }
 
-// Compose one application "run": a provider wiring the manager against a real SessionStore
+// Compose one application "run": a provider wiring the manager against a real DurableApplicationStore
 // (0ms debounce → deterministic flush) and the shared storage. `roots` is threaded across
 // runs to model persistent disk.
 function bootRun(roots: Map<string, FakeStorage>): {
     provider: ServiceProvider;
-    store: SessionStore;
+    store: DurableApplicationStore;
 }
 {
     const provider = new ServiceProvider();
@@ -101,8 +101,8 @@ function bootRun(roots: Map<string, FakeStorage>): {
             throw new Error('no compose');
         },
     });
-    const store = new SessionStore(provider, 0);
-    provider.registerInstance(SessionStoreKey, store);
+    const store = new DurableApplicationStore(provider, 0);
+    provider.registerInstance(DurableApplicationStoreKey, store);
     return { provider, store };
 }
 
@@ -116,12 +116,12 @@ test('a saved solution is remembered and reopened after a restart', async () => 
     await m1.NewSolution('/work/proj');
     m1.ActiveSolution!.Name = 'My Work';
     await m1.Save(); // writes <name>.pksln + remembers lastSolution
-    await run1.store.Save(); // flush session.json under USER_DIR
+    await run1.store.Save(); // flush application-bags.json under USER_DIR
 
-    // Run 2: a fresh provider + SessionStore over the SAME storage — a "restart".
+    // Run 2: a fresh provider + DurableApplicationStore over the SAME storage — a "restart".
     const run2 = bootRun(roots);
     const m2 = new SolutionManagerService(run2.provider);
-    await run2.store.Restore(); // reads session.json → applies the slice to m2's bag
+    await run2.store.Restore(); // reads application-bags.json → applies the slice to m2's bag
     await m2.RestoreSession(); // reopens the remembered solution
 
     assert.equal(m2.ActiveSolution!.Name, 'My Work');
@@ -130,7 +130,7 @@ test('a saved solution is remembered and reopened after a restart', async () => 
     assert.deepEqual([...m2.RecentSolutions], ['/work/proj']);
 });
 
-test('session.json records lastSolution + recentSolutions under the user dir', async () => {
+test('application-bags.json records lastSolution + recentSolutions under the user dir', async () => {
     const roots = new Map<string, FakeStorage>();
     const run = bootRun(roots);
     const m = new SolutionManagerService(run.provider);
@@ -139,7 +139,7 @@ test('session.json records lastSolution + recentSolutions under the user dir', a
     await m.Save();
     await run.store.Save();
 
-    const doc = JSON.parse(await roots.get(USER_DIR)!.ReadText('session.json'));
+    const doc = JSON.parse(await roots.get(USER_DIR)!.ReadText('application-bags.json'));
     assert.equal(doc['solution-manager'].lastSolution, '/work/a');
     assert.deepEqual(doc['solution-manager'].recentSolutions, ['/work/a']);
 });
@@ -153,7 +153,7 @@ test('a solution change auto-persists through the debounced save (no explicit fl
     await m.Save(); // schedules a debounced session save
     await new Promise((r) => setTimeout(r, 10)); // let the 0ms debounce fire
 
-    const doc = JSON.parse(await roots.get(USER_DIR)!.ReadText('session.json'));
+    const doc = JSON.parse(await roots.get(USER_DIR)!.ReadText('application-bags.json'));
     assert.equal(doc['solution-manager'].lastSolution, '/work/b');
 });
 
@@ -183,9 +183,9 @@ test('after a restart, a remembered solution whose folder is gone falls back to 
     assert.deepEqual([...m2.RecentSolutions], ['/work/kept']); // the dead entry was pruned
 });
 
-test('with no SessionStore registered, RestoreSession still creates an untitled solution', async () => {
+test('with no DurableApplicationStore registered, RestoreSession still creates an untitled solution', async () => {
     // Models devUI today: the host persists no session, so the manager resolves no
-    // SessionStore and simply starts fresh — no throw, an empty untitled solution.
+    // DurableApplicationStore and simply starts fresh — no throw, an empty untitled solution.
     const roots = new Map<string, FakeStorage>();
     const provider = new ServiceProvider();
     const storage = new SharedStorage(roots);
@@ -198,7 +198,7 @@ test('with no SessionStore registered, RestoreSession still creates an untitled 
             throw new Error('no compose');
         },
     });
-    // Deliberately no SessionStoreKey / EnvironmentKey / StorageProviderKey.
+    // Deliberately no DurableApplicationStoreKey / EnvironmentKey / StorageProviderKey.
 
     const m = new SolutionManagerService(provider);
     await m.RestoreSession();

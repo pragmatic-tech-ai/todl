@@ -4,10 +4,10 @@ import {
     FakeStorage,
     Ask,
     ConfirmAsk,
-    SessionStoreKey,
+    DurableApplicationStoreKey,
     type IPromptService,
     type IServiceProvider,
-    type ISessionStore,
+    type IPropertyBagStore,
     type IPropertyBag,
     type Disposable,
 } from '@pragmatic-tech-ai/todl-runtime';
@@ -20,7 +20,7 @@ import { PROJECT_MANIFEST_FILENAME } from '../../../project-services/core/projec
 // A stand-in SessionStore: on Register it applies a preset slice to the bag (as the
 // real store does once loaded) and holds the bag so a test can read what the manager
 // persisted. Change subscriptions count as "scheduled saves".
-class FakeSessionStore implements ISessionStore
+class FakeSessionStore implements IPropertyBagStore
 {
     public bag: IPropertyBag | undefined;
     public saveScheduled = 0;
@@ -95,7 +95,7 @@ class ScriptedPrompts implements IPromptService
 function makeService(opts?: {
     confirmDiscard?: () => Promise<boolean>;
     notifier?: INotificationService;
-    sessionStore?: ISessionStore;
+    sessionStore?: IPropertyBagStore;
     pickFolder?: () => Promise<string | undefined>;
 })
 {
@@ -127,7 +127,7 @@ function makeService(opts?: {
         // that doesn't opt into session persistence).
         get: (token: unknown) => {
             if (token === SolutionManagerService.NotificationServiceKey) return opts?.notifier;
-            if (token === SessionStoreKey) return opts?.sessionStore;
+            if (token === DurableApplicationStoreKey) return opts?.sessionStore;
             return undefined;
         },
         getRequired: (token: unknown) => {
