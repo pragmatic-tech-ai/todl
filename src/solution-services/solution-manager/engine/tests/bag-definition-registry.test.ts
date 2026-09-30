@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { SettingDefinition, SettingKind } from '@pragmatic-tech-ai/mural/framework'
 import { SettingBagDefinition } from '../setting-bag-definition.js'
-import { SolutionSettingsRegistry } from '../solution-settings-registry.js'
+import { BagDefinitionRegistry } from '../bag-definition-registry.js'
 
 function field(key: string, kind = SettingKind.String, def: unknown = ''): SettingDefinition
 {
@@ -12,7 +12,7 @@ function field(key: string, kind = SettingKind.String, def: unknown = ''): Setti
 }
 
 test('Contribute is idempotent by Id', () => {
-    const reg = SolutionSettingsRegistry.createForTest()
+    const reg = BagDefinitionRegistry.createForTest()
     const bag = new SettingBagDefinition('npm-registry', 'NPM Registry', [field('registry')])
     reg.Contribute(bag)
     reg.Contribute(bag)
@@ -21,7 +21,7 @@ test('Contribute is idempotent by Id', () => {
 })
 
 test('GetById returns undefined for an unknown bag', () => {
-    const reg = SolutionSettingsRegistry.createForTest()
+    const reg = BagDefinitionRegistry.createForTest()
     assert.equal(reg.GetById('nope'), undefined)
 })
 

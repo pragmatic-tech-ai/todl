@@ -187,7 +187,7 @@ export {
 } from './solution-services/solution-manager/engine/host-services.js';
 export { ProjectFactoryRegistry } from './solution-services/solution-manager/engine/project-factory-registry.js';
 export { type INotificationService } from './solution-services/solution-manager/engine/notification-service.js';
-export { SolutionSettingsRegistry } from './solution-services/solution-manager/engine/solution-settings-registry.js';
+export { BagDefinitionRegistry } from './solution-services/solution-manager/engine/bag-definition-registry.js';
 export { SettingBagDefinition } from './solution-services/solution-manager/engine/setting-bag-definition.js';
 export { SolutionSettingBag } from './solution-services/solution-manager/engine/solution-setting-bag.js';
 export { BagAddress, BagScope, ProjectStore } from './solution-services/property-bags/bag-address.js';

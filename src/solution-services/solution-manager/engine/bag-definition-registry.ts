@@ -8,9 +8,9 @@ import { SettingBagDefinition } from './setting-bag-definition.js'
 // are registered imperatively (the ApplicationSettings.Contribute precedent) —
 // no new Mural module block. Definitions is a bindable collection so a picker /
 // settings pane can list the bags; GetById gives O(1) lookup.
-export class SolutionSettingsRegistry extends ServiceBase
+export class BagDefinitionRegistry extends ServiceBase
 {
-    public static readonly Key = new ServiceKey<SolutionSettingsRegistry>('SolutionSettingsRegistry')
+    public static readonly Key = new ServiceKey<BagDefinitionRegistry>('BagDefinitionRegistry')
 
     private readonly _definitions = new ObservableCollection<SettingBagDefinition>()
     private readonly byId = new Map<string, SettingBagDefinition>()
@@ -20,13 +20,13 @@ export class SolutionSettingsRegistry extends ServiceBase
         super(provider)
     }
 
-    public static createForTest(): SolutionSettingsRegistry
+    public static createForTest(): BagDefinitionRegistry
     {
         const noProvider = {
             get: () => undefined,
             getRequired: () => { throw new Error('no container in test') },
         } as unknown as IServiceProvider
-        return new SolutionSettingsRegistry(noProvider)
+        return new BagDefinitionRegistry(noProvider)
     }
 
     public get Definitions(): ObservableCollection<SettingBagDefinition>

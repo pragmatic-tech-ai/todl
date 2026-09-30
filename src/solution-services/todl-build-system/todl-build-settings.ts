@@ -1,6 +1,6 @@
 import { SettingDefinition, SettingKind } from "@pragmatic-tech-ai/mural/framework";
 import { SettingBagDefinition } from "../solution-manager/engine/setting-bag-definition.js";
-import type { SolutionSettingsRegistry } from "../solution-manager/engine/solution-settings-registry.js";
+import type { BagDefinitionRegistry } from "../solution-manager/engine/bag-definition-registry.js";
 
 // The solution-scoped "build" setting bag todl-build-system contributes: the build
 // output directory name and whether presentation bakes colored icons by default.
@@ -25,7 +25,7 @@ export class TodlBuildSettings
         ]);
     }
 
-    public static Contribute(registry: SolutionSettingsRegistry): void
+    public static Contribute(registry: BagDefinitionRegistry): void
     {
         registry.Contribute(TodlBuildSettings.Definition());
     }

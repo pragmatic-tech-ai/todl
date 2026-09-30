@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { SolutionSettingsRegistry } from '../engine/solution-settings-registry.js';
+import { BagDefinitionRegistry } from '../engine/bag-definition-registry.js';
 import { create } from './solutions-test-composition-root.mu.js';
 
 // Creates the composition root from the mural file — which instantiates
@@ -11,8 +11,8 @@ import { create } from './solutions-test-composition-root.mu.js';
 test('the composition root composes the engine module and releases', () => {
     const root = create();
 
-    const settings = root.Provider.getRequired(SolutionSettingsRegistry.Key);
-    assert.ok(settings instanceof SolutionSettingsRegistry);
+    const settings = root.Provider.getRequired(BagDefinitionRegistry.Key);
+    assert.ok(settings instanceof BagDefinitionRegistry);
 
     root.Provider.dispose();
     root.Provider.dispose(); // idempotent

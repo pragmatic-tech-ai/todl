@@ -6,11 +6,11 @@
 // TodlProjectSystemModule), storage-provider registry, prompt service and package
 // source under their keys.
 import SolutionManagerService from "../engine/solution-manager-service.js"
-import SolutionSettingsRegistry from "../engine/solution-settings-registry.js"
+import BagDefinitionRegistry from "../engine/bag-definition-registry.js"
 
 module SolutionServicesEngine {
     .services: {
         SolutionManagerService
-        SolutionSettingsRegistry
+        BagDefinitionRegistry
     }
 }
