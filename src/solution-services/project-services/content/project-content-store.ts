@@ -100,6 +100,12 @@ export class ProjectContentStore
     // Mutations. Writes flow UI → store → disk → watcher delta → tree: the store never
     // optimistically mutates its own model, so a failed IStorage call (e.g. an FS
     // collision throwing from Rename) leaves the tree unchanged and the row reverts.
+    //
+    // These are the ENGINE-level mutation API (headless / devUI). The Plexus desktop UI
+    // does NOT call them directly: it routes through ProjectExplorerService, which layers
+    // the delete confirmation, the open-document close-guard, and open-editor relocation
+    // on top before hitting storage. Both paths ultimately mutate the same IStorage, so
+    // the same watcher delta feeds the tree either way.
     public async CreateFile(parentId: ContentNodeId, name: string, content = ''): Promise<void>
     {
         await this.storage.WriteText(this.childPath(parentId, name), content)
