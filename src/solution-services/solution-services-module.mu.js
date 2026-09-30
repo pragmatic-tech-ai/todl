@@ -1,5 +1,5 @@
-import { SolutionManagerService } from "./solution-manager/engine/solution-manager-service.js";
 import { BagDefinitionRegistry } from "./solution-manager/engine/bag-definition-registry.js";
+import { SolutionManagerService } from "./solution-manager/engine/solution-manager-service.js";
 import { Module, ServiceProvider } from "@pragmatic-tech-ai/mural/runtime";
 
 export const SolutionServicesEngine = (() => {
