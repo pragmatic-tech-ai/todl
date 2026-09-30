@@ -23,8 +23,11 @@ export class SolutionBagPersister implements IBagPersister
 
     public Bag(kind: string, id: string): IPropertyBag
     {
-        const values = this.solution.InstancesOf(kind).get(id) ?? new Map<string, unknown>();
-        return new RecordPropertyBag(values, () => this.solution.MarkBagsDirty());
+        const instances = this.solution.InstancesOf(kind);
+        const values = instances.get(id) ?? new Map<string, unknown>();
+        // Create-on-write (matches GlobalBagPersister): the first write attaches the instance to the
+        // live bags so it is collected on save; a read-only Bag never adds an empty instance.
+        return new RecordPropertyBag(values, () => { instances.set(id, values); this.solution.MarkBagsDirty(); });
     }
 
     public Create(kind: string, id: string): IPropertyBag

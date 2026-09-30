@@ -81,6 +81,35 @@ test('createProject scaffolds a .gitignore that ignores the project-local bag si
     assert.match(await storage.ReadText('.gitignore'), /project\.local\.json/)
 })
 
+test('scaffolding a project that already has a .gitignore appends the sidecar rule, preserving author rules', async (t) => {
+    const storage = await tempStorage(t)
+    await storage.WriteText(PROJECT_MANIFEST_FILENAME, JSON.stringify({ type: 'fake', name: 'P', version: 1 }))
+    await storage.WriteText('.gitignore', 'node_modules/\ndist/\n')
+    await factory().openProject(storage)
+    const gi = await storage.ReadText('.gitignore')
+    assert.match(gi, /node_modules\//)          // author rule preserved
+    assert.match(gi, /dist\//)
+    assert.match(gi, /project\.local\.json/)     // sidecar rule appended
+})
+
+test('ensureGitignore is idempotent — a second scaffold does not duplicate the rule', async (t) => {
+    const storage = await tempStorage(t)
+    await factory().createProject(storage, 'P')
+    await factory().openProject(storage)         // scaffold runs again
+    const occurrences = (await storage.ReadText('.gitignore')).split(/\r?\n/).filter((l) => l.trim() === 'project.local.json').length
+    assert.equal(occurrences, 1)
+})
+
+test('updateScaffold never clobbers a hand-maintained .gitignore', async (t) => {
+    const storage = await tempStorage(t)
+    await factory().createProject(storage, 'P')
+    await storage.WriteText('.gitignore', 'node_modules/\ncustom-rule\n')   // author replaces it
+    await factory().updateScaffold(storage)
+    const gi = await storage.ReadText('.gitignore')
+    assert.match(gi, /custom-rule/)              // preserved, not overwritten
+    assert.match(gi, /project\.local\.json/)     // still ensured
+})
+
 test('ensureScaffold is write-once (never clobbers an author edit)', async (t) => {
     const storage = await tempStorage(t)
     await storage.WriteText(PROJECT_MANIFEST_FILENAME, JSON.stringify({ type: 'fake', name: 'P', version: 1 }))

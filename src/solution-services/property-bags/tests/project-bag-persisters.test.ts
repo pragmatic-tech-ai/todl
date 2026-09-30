@@ -31,6 +31,16 @@ test('project-shared bags persist in the manifest bags section, preserving other
     assert.equal(manifest.name, 'a')
 })
 
+test('Bag() on a not-yet-created instance persists writes on Flush (create-on-write)', async () =>
+{
+    const storage = new FakeStorage('/p')
+    const local = await ProjectLocalBagPersister.Open(storage)
+    local.Bag('npm-connection', 'fresh').SetValue('DisplayName', 'Fresh')   // write via Bag, never Create
+    await local.Flush()
+    const sidecar = JSON.parse(await storage.ReadText('project.local.json'))
+    assert.equal(sidecar['npm-connection'].fresh.DisplayName, 'Fresh')
+})
+
 test('both read empty when their file/section is absent (defensive)', async () =>
 {
     const storage = new FakeStorage('/p')

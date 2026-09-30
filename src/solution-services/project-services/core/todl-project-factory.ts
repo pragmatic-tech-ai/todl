@@ -35,15 +35,16 @@ export interface ScaffoldFile
 // .md files under scaffold/ stay the source of truth (run `npm run gen:scaffold`).
 // Subclasses add their own CLAUDE.md and type-specific guides via scaffoldContributions().
 // Keep the per-project LOCAL bag sidecar (user-specific connections/selections) out of version
-// control — it must never be committed. Filename matches ProjectLocalBagPersister.FileName.
+// control — it must never be committed. Filename matches ProjectLocalBagPersister.FileName. The
+// rule is ensured via ensureGitignore (append-if-missing), NOT the blind scaffold set, because a
+// .gitignore is author-owned and mergeable — never overwritten.
 const ProjectLocalSidecarName = 'project.local.json'
 const GitIgnorePath = '.gitignore'
-const GitIgnoreSource = `# User-specific project-local property bags (connections, selections) — never commit.\n${ProjectLocalSidecarName}\n`
+const GitIgnoreRule = `# User-specific project-local property bags (connections, selections) — never commit.\n${ProjectLocalSidecarName}\n`
 
 export const TODL_BASE_SCAFFOLD: readonly ScaffoldFile[] = [
     { path: `${CLAUDE_DIR}/todl-manual.md`, content: TODL_MANUAL_SOURCE },
     { path: `${CLAUDE_DIR}/todl-rules.md`, content: TODL_RULES_SOURCE },
-    { path: GitIgnorePath, content: GitIgnoreSource },
 ]
 
 export abstract class TodlProjectFactory extends ServiceBase implements IProjectFactory
@@ -102,6 +103,20 @@ export abstract class TodlProjectFactory extends ServiceBase implements IProject
             if (await storage.Exists(file.path)) continue
             await storage.WriteText(file.path, file.content)
         }
+        await TodlProjectFactory.ensureGitignore(storage)
+    }
+
+    // Ensure `.gitignore` ignores the project-local bag sidecar, appending the rule only when it is
+    // absent and never touching the author's existing entries. Returns whether it wrote.
+    private static async ensureGitignore(storage: IStorage): Promise<boolean>
+    {
+        let current = ''
+        try { current = await storage.ReadText(GitIgnorePath) }
+        catch { current = '' }
+        if (current.split(/\r?\n/).some((line) => line.trim() === ProjectLocalSidecarName)) return false
+        const prefix = current.length === 0 || current.endsWith('\n') ? current : `${current}\n`
+        await storage.WriteText(GitIgnorePath, `${prefix}${GitIgnoreRule}`)
+        return true
     }
 
     // Refresh the scaffold to the current bundled content: overwrite every entry
@@ -119,6 +134,7 @@ export abstract class TodlProjectFactory extends ServiceBase implements IProject
             await storage.WriteText(file.path, file.content)
             written.push(file.path)
         }
+        if (await TodlProjectFactory.ensureGitignore(storage)) written.push(GitIgnorePath)
         return written
     }
 

@@ -27,7 +27,9 @@ abstract class FileBagPersister implements IBagPersister
     public Bag(kind: string, id: string): IPropertyBag
     {
         const values = this.live.get(kind)?.get(id) ?? new Map<string, unknown>();
-        return new RecordPropertyBag(values, () => { this.dirty = true; });
+        // Create-on-write (matches GlobalBagPersister): the first write attaches the instance to the
+        // live map so Flush serializes it; a read-only Bag never adds an empty instance.
+        return new RecordPropertyBag(values, () => { this.ensure(kind).set(id, values); this.dirty = true; });
     }
 
     public Create(kind: string, id: string): IPropertyBag

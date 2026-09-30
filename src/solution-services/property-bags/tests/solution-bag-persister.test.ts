@@ -25,6 +25,17 @@ test('SolutionBagPersister creates, reads, round-trips (CollectBags→LoadBags),
     assert.deepEqual(p2.Ids('npm-connection'), [])
 })
 
+test('Bag() on a not-yet-created instance persists writes (create-on-write, consistent with GlobalBagPersister)', () =>
+{
+    const solution = new Solution('S')
+    const p = new SolutionBagPersister(solution)
+    p.Bag('npm-connection', 'fresh').SetValue('DisplayName', 'Fresh')   // write via Bag, never Create
+    assert.deepEqual(p.Ids('npm-connection'), ['fresh'])
+    const reloaded = new Solution('S')
+    reloaded.LoadBags(solution.CollectBags())
+    assert.equal(new SolutionBagPersister(reloaded).Bag('npm-connection', 'fresh').GetValue('DisplayName'), 'Fresh')
+})
+
 test('SolutionManifest carries a bags section through stringify/parse (defensive when absent)', () =>
 {
     const m = new SolutionManifest('S', [], {}, { 'npm-connection': { gh: { DisplayName: 'GitHub' } } })
