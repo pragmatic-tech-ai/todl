@@ -194,6 +194,7 @@ export { BagAddress, BagScope, ProjectStore } from './solution-services/property
 export { type IBagPersister } from './solution-services/property-bags/bag-persister.js';
 export { RecordPropertyBag } from './solution-services/property-bags/record-property-bag.js';
 export { SolutionBagPersister } from './solution-services/property-bags/solution-bag-persister.js';
+export { ProjectSharedBagPersister, ProjectLocalBagPersister } from './solution-services/property-bags/project-bag-persisters.js';
 export { Solution } from './solution-services/solution-manager/engine/solution.js';
 export { SolutionSession } from './solution-services/solution-manager/engine/solution-session.js';
 export { SolutionMember } from './solution-services/solution-manager/engine/solution-member.js';
