@@ -1,7 +1,7 @@
 import { type ProjectContentNode, type ContentNodeId } from './content-node.js'
 
-// The store's native, mural-independent change delta. A provider maps these onto
-// mural's ChildAdded/ChildUpdated/ChildRemoved.
+// The store's native, mural-independent change delta. A UI-layer provider
+// (in plexus-core) maps these onto the mural hierarchy's child deltas.
 export abstract class ContentChange {}
 
 export class ContentAdded extends ContentChange
