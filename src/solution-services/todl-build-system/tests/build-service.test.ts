@@ -25,6 +25,7 @@ import type { IStorageProviderRegistry, IProjectFactoryRegistry } from '../../so
 import { LocalNpmRegistry } from '../../package-manager/registries/npm/local-npm-registry.js';
 import { type IPackageRegistry } from '../../package-manager/engine/package-registry.js';
 import { FakeRegistry } from '../../package-manager/engine/tests/fakes.js';
+import { PROJECT_MANIFEST_FILENAME } from '../../project-services/core/project-factory.js';
 import { BuildService } from '../build-service.js';
 
 // Records the PublishRegistry the manager's TodlBuildContext carried — the single
@@ -48,29 +49,41 @@ class RecordingPublishAction implements IBuildAction<TodlBuildContext>
 }
 
 // The minimal fake IBuildSystem the test registers under BuildSystemRegistryKey: id
-// 'npm-package' (AppliesTo always true), a single 'npm-publish' flavor wrapping one
-// RecordingPublishAction. No Consumes/Produces, so BuildSystemRegistry.Register's
-// consume-before-produce validation passes trivially.
+// 'npm-package' (AppliesTo always true), a 'npm-publish' flavor wrapping the publish
+// action (BuildService.Publish's flavor) plus a second, non-publish 'npm-build' flavor
+// wrapping a plain build action (BuildService.Build's target), each a single action. No
+// Consumes/Produces, so BuildSystemRegistry.Register's consume-before-produce validation
+// passes trivially. Ids are public so the test can pass them straight to BuildService.
 class FakeNpmPackageBuildSystem implements IBuildSystem<TodlBuildContext, ProjectManifest>
 {
-    private static readonly SystemId = 'npm-package';
-    private static readonly FlavorId = 'npm-publish';
-    private static readonly FlavorDisplayName = 'Publish';
+    public static readonly SystemId = 'npm-package';
+    public static readonly PublishFlavorId = 'npm-publish';
+    public static readonly BuildFlavorId = 'npm-build';
+    private static readonly PublishFlavorDisplayName = 'Publish';
+    private static readonly BuildFlavorDisplayName = 'Build';
     private static readonly OutputName = 'dist';
     private static readonly SystemDisplayName = 'Fake npm package';
 
     public readonly Id = FakeNpmPackageBuildSystem.SystemId;
     public readonly DisplayName = FakeNpmPackageBuildSystem.SystemDisplayName;
-    private readonly flavor: BuildFlavor<TodlBuildContext>;
+    private readonly flavors: readonly BuildFlavor<TodlBuildContext>[];
 
-    constructor(action: IBuildAction<TodlBuildContext>)
+    constructor(publishAction: IBuildAction<TodlBuildContext>, buildAction: IBuildAction<TodlBuildContext> = publishAction)
     {
-        this.flavor = new StaticBuildFlavor<TodlBuildContext>(
-            FakeNpmPackageBuildSystem.FlavorId,
-            FakeNpmPackageBuildSystem.FlavorDisplayName,
-            FakeNpmPackageBuildSystem.OutputName,
-            [action],
-        );
+        this.flavors = [
+            new StaticBuildFlavor<TodlBuildContext>(
+                FakeNpmPackageBuildSystem.PublishFlavorId,
+                FakeNpmPackageBuildSystem.PublishFlavorDisplayName,
+                FakeNpmPackageBuildSystem.OutputName,
+                [publishAction],
+            ),
+            new StaticBuildFlavor<TodlBuildContext>(
+                FakeNpmPackageBuildSystem.BuildFlavorId,
+                FakeNpmPackageBuildSystem.BuildFlavorDisplayName,
+                FakeNpmPackageBuildSystem.OutputName,
+                [buildAction],
+            ),
+        ];
     }
 
     public AppliesTo(_project: ProjectManifest): boolean
@@ -80,7 +93,7 @@ class FakeNpmPackageBuildSystem implements IBuildSystem<TodlBuildContext, Projec
 
     public Flavors(): readonly BuildFlavor<TodlBuildContext>[]
     {
-        return [this.flavor];
+        return this.flavors;
     }
 }
 
@@ -129,7 +142,7 @@ class TestFixture
     public static async MakeProject(): Promise<FakeStorage>
     {
         const storage = new FakeStorage();
-        await storage.WriteText('project.plexus', JSON.stringify({
+        await storage.WriteText(PROJECT_MANIFEST_FILENAME, JSON.stringify({
             type: 'library',
             name: TestFixture.PackageId,
             version: 1,
@@ -181,11 +194,17 @@ class TestFixture
     }
 
     // Builds the provider BuildService resolves against: the fake registry (wrapping
-    // `action`), a fresh package store, and `solutionManager`.
-    public static MakeProvider(action: IBuildAction<TodlBuildContext>, solutionManager: SolutionManagerService): IServiceProvider
+    // `publishAction` under 'npm-publish' and `buildAction` under 'npm-build'), a fresh
+    // package store, and `solutionManager`. `buildAction` defaults to `publishAction` for
+    // callers that only exercise Publish.
+    public static MakeProvider(
+        publishAction: IBuildAction<TodlBuildContext>,
+        solutionManager: SolutionManagerService,
+        buildAction: IBuildAction<TodlBuildContext> = publishAction,
+    ): IServiceProvider
     {
         const buildSystems = new BuildSystemRegistry<TodlBuildContext, ProjectManifest>();
-        buildSystems.Register(new FakeNpmPackageBuildSystem(action));
+        buildSystems.Register(new FakeNpmPackageBuildSystem(publishAction, buildAction));
 
         const provider = new ServiceProvider();
         provider.registerInstance(PackageStoreKey, new StoragePackageStore(new FakeStorage()));
@@ -245,5 +264,22 @@ describe('BuildService.Publish', () =>
 
         assert.ok(action.SeenRegistry instanceof LocalNpmRegistry);
         assert.equal(outcome.Ok, true);
+    });
+});
+
+describe('BuildService.Build', () =>
+{
+    test('builds a non-publish flavor and returns a successful ProjectBuildOutput', async () =>
+    {
+        const publishAction = new RecordingPublishAction();
+        const buildAction = new RecordingPublishAction();
+        const solutionManager = TestFixture.MakeSolutionManagerService();
+        const provider = TestFixture.MakeProvider(publishAction, solutionManager, buildAction);
+        const service = new BuildService(provider);
+        const project = await TestFixture.MakeProject();
+
+        const output = await service.Build(project, FakeNpmPackageBuildSystem.SystemId, FakeNpmPackageBuildSystem.BuildFlavorId);
+
+        assert.equal(output.Result.Ok, true);
     });
 });
