@@ -206,13 +206,6 @@ export { SolutionManifest } from './solution-services/solution-manager/engine/so
 export { type SolutionMemberRef, SolutionPath } from './solution-services/solution-manager/engine/solution-member-ref.js';
 export { SolutionMemberStatus } from './solution-services/solution-manager/engine/solution-member-status.js';
 export {
-    SolutionTreeVM,
-    SolutionNodeVM,
-    SolutionMemberNodeVM,
-    type MemberStorageFor,
-} from './solution-services/solution-manager/presentation/solution-tree-vm.js';
-export { SettingBagGrid } from './solution-services/solution-manager/presentation/setting-bag-grid.js';
-export {
     type IProjectFactory,
     type MemberStorageResolver,
     type ProjectFactoryResolver,
