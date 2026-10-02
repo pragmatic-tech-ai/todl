@@ -343,3 +343,11 @@ export { LocalNpmRegistry } from './solution-services/package-manager/registries
 export { StoragePackagePacker } from './solution-services/package-manager/registry/storage-package-packer.js';
 export { WebTgz } from './solution-services/package-manager/registry/web-tgz.js';
 export { TarArchive, type TarEntry, type TarFile } from './solution-services/package-manager/registry/tar-archive.js';
+// The engine-pure build/publish facade (relocated from plexus-core's PackagePublisher) +
+// its two zero-dependency storage helpers — browser-safe (resolves the build system
+// registry via BuildSystemRegistryKey at runtime; never imports TodlBuildSystemRegistry).
+// Its PublishOutcome is aliased on this barrel (BuildPublishOutcome) — the bare name
+// already names the unrelated compile-pipeline outcome from publish/publish.js above.
+export { BuildService, type PublishOutcome as BuildPublishOutcome } from './solution-services/todl-build-system/build-service.js';
+export { InMemoryBuildStorage } from './solution-services/todl-build-system/in-memory-build-storage.js';
+export { ScopeFlatteningStorage } from './solution-services/todl-build-system/scope-flattening-storage.js';
