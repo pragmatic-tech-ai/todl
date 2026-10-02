@@ -17,8 +17,7 @@ test('no solution-services file imports the mural UI framework', () => {
     const testDir = dirname(testFileUrl)
     const solutionServicesRoot = join(testDir, '../../..')   // …/solution-services
 
-    const offenders: string[] = []
-    CollectOffenders(solutionServicesRoot, solutionServicesRoot, testFileUrl, offenders)
+    const offenders = BoundaryScan.Collect(solutionServicesRoot, testFileUrl)
 
     assert.deepEqual(
         offenders,
@@ -27,29 +26,35 @@ test('no solution-services file imports the mural UI framework', () => {
     )
 })
 
-function CollectOffenders(current: string, root: string, guardPath: string, offenders: string[]): void
+// Recursively collects the relative paths of solution-services .ts files that
+// import the forbidden mural UI framework, skipping this guard file itself.
+class BoundaryScan
 {
-    const entries = readdirSync(current, { withFileTypes: true })
-    for (const entry of entries)
+    public static Collect(root: string, guardPath: string): string[]
     {
-        const fullPath = join(current, entry.name)
+        const offenders: string[] = []
+        BoundaryScan.walk(root, root, guardPath, offenders)
+        return offenders
+    }
 
-        // Skip the guard file itself
-        if (fullPath === guardPath) continue
+    private static walk(current: string, root: string, guardPath: string, offenders: string[]): void
+    {
+        for (const entry of readdirSync(current, { withFileTypes: true }))
+        {
+            const fullPath = join(current, entry.name)
+            if (fullPath === guardPath) continue
 
-        if (entry.isDirectory())
-        {
-            CollectOffenders(fullPath, root, guardPath, offenders)
-        }
-        else if (entry.name.endsWith(TsFileExtension))
-        {
-            if (ALLOWLIST.has(entry.name)) continue
-            const text = readFileSync(fullPath, 'utf8')
-            if (text.includes(ForbiddenImport))
+            if (entry.isDirectory())
             {
-                // Report relative path from solution-services root for clarity
-                const relPath = relative(root, fullPath)
-                offenders.push(relPath)
+                BoundaryScan.walk(fullPath, root, guardPath, offenders)
+            }
+            else if (entry.name.endsWith(TsFileExtension))
+            {
+                if (ALLOWLIST.has(entry.name)) continue
+                if (readFileSync(fullPath, 'utf8').includes(ForbiddenImport))
+                {
+                    offenders.push(relative(root, fullPath))
+                }
             }
         }
     }

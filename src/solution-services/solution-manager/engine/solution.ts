@@ -11,7 +11,7 @@ import { type BagValues } from './solution-manifest.js';
 // all-at-once when the solution opens), its cross-project setting bags, and a
 // dirty flag. Extends Observable so a presentation View subscribes to Name/IsDirty
 // and re-projects on Members changes — but it is NOT a view: the projection VMs
-// (SolutionTreeVM) live in the presentation band. The headless composition engine
+// live in the UI layer (plexus-core). The headless composition engine
 // (compile → package layer → Domain graph) lives in SolutionSession; this class
 // carries the authoritative state a View reads and the manager mutates.
 export class Solution extends Observable
