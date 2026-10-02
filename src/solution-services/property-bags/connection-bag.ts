@@ -1,5 +1,5 @@
 import { type IPropertyBag } from '@pragmatic-tech-ai/todl-runtime';
-import { SettingDefinition, SettingKind } from '@pragmatic-tech-ai/mural/framework';
+import { SettingDefinition, SettingKind } from '@pragmatic-tech-ai/todl-runtime';
 import { SettingBagDefinition } from '../solution-manager/engine/setting-bag-definition.js';
 
 // The bag KIND under which registry connections are stored as property bags. One instance per

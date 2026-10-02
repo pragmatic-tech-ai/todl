@@ -1,4 +1,4 @@
-import { type SettingDefinition } from '@pragmatic-tech-ai/mural/framework'
+import { type SettingDefinition } from '@pragmatic-tech-ai/todl-runtime'
 
 // A named, solution-scoped group of typed setting fields (e.g. "npm-registry").
 // Reuses Mural's SettingDefinition for each field, so the same schema drives the

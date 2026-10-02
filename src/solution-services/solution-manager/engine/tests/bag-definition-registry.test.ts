@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { SettingDefinition, SettingKind } from '@pragmatic-tech-ai/mural/framework'
+import { SettingDefinition, SettingKind } from '@pragmatic-tech-ai/todl-runtime'
 import { SettingBagDefinition } from '../setting-bag-definition.js'
 import { BagDefinitionRegistry } from '../bag-definition-registry.js'
 

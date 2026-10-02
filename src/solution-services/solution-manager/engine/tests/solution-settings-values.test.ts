@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { FakeStorage } from '@pragmatic-tech-ai/todl-runtime'
-import { SettingDefinition, SettingKind } from '@pragmatic-tech-ai/mural/framework'
+import { SettingDefinition, SettingKind } from '@pragmatic-tech-ai/todl-runtime'
 import { SettingBagDefinition } from '../setting-bag-definition.js'
 import { Solution } from '../solution.js'
 

@@ -1,4 +1,4 @@
-import { SettingDefinition, SettingKind } from "@pragmatic-tech-ai/mural/framework";
+import { SettingDefinition, SettingKind } from "@pragmatic-tech-ai/todl-runtime";
 import { SettingBagDefinition } from "../solution-manager/engine/setting-bag-definition.js";
 import type { BagDefinitionRegistry } from "../solution-manager/engine/bag-definition-registry.js";
 
