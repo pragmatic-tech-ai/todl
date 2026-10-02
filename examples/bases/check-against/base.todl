@@ -1,3 +1,0 @@
-namespace acme.ea {
-  concept Component { label : string; }
-}

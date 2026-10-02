@@ -1,7 +1,0 @@
-namespace tech {
-  concept Platform { parent : Platform?; }
-  taxonomy Stack : represents Platform {
-    term azure {}
-    term m365 { parent = azure; }
-  }
-}

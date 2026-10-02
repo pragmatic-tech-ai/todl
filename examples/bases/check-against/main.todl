@@ -1,3 +1,0 @@
-namespace acme.app {
-  model AppModel : acme.ea { acme.ea.Component web { label = "Web"; } }
-}

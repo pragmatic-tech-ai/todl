@@ -1,3 +1,0 @@
-namespace app {
-  concept Widget : lib.Base { color : string; }
-}

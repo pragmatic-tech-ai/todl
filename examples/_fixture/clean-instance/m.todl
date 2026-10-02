@@ -1,4 +1,0 @@
-namespace app {
-  concept Component { label : string; }
-  model M : app { Component c { label = "x"; } }
-}
