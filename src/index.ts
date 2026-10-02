@@ -221,13 +221,12 @@ export {
 // ── Projects (headless Project model + factory contracts + TODL-authoring base) ──
 export { Project, ProjectNode, ProjectNodeKind } from './solution-services/project-services/core/project.js';
 
-// ── Project content (P1: reactive, lazy, disk-watched per-project content store +
-//    the IHierarchyProvider adapter over it; consumed by front-end hierarchy contributors) ──
+// ── Project content (P1: reactive, lazy, disk-watched per-project content store;
+//    mural-free — consumed by front-end hierarchy contributors via its own adapter) ──
 export { ProjectContentNode, type ContentNodeId } from './solution-services/project-services/content/content-node.js';
 export { ContentChange, ContentAdded, ContentUpdated, ContentRemoved } from './solution-services/project-services/content/content-change.js';
 export { ContentNodeKey } from './solution-services/project-services/content/content-node-key.js';
 export { ProjectContentStore } from './solution-services/project-services/content/project-content-store.js';
-export { ProjectContentProvider } from './solution-services/project-services/content/project-content-provider.js';
 export {
     PROJECT_MANIFEST_FILENAME,
     ProducerKind,
