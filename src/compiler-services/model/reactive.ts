@@ -10,7 +10,7 @@
  * entry are treated as single-valued.
  */
 
-import { Signal, type Disposable } from "@pragmatic-tech-ai/todl-runtime";
+import { Signal, type IDisposable } from "@pragmatic-tech-ai/todl-runtime";
 import {
   EdgeKind,
   Direction,
@@ -61,7 +61,7 @@ export class ReactiveNode implements INotifyPropertyChanged, INotifyCollectionCh
 {
   readonly propertyChanged = new Signal<PropertyChangedArgs>();
   readonly collectionChanged = new Signal<CollectionChangedArgs>();
-  private readonly subscription: Disposable;
+  private readonly subscription: IDisposable;
 
   constructor(
     private readonly model: Repository,
