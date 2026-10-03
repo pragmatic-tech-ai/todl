@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { createConnection } from "vscode-languageserver/node.js";
 import { createServer } from "./server.js";
 import { FsSourceProvider } from "./workspace-fs.js";
