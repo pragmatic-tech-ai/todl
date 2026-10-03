@@ -1,0 +1,258 @@
+==================
+namespace imports and declarations
+==================
+namespace demo.types {
+  import demo.base.Identifier;
+
+  internal primitive Identifier : string {
+    description = "A stable identifier";
+    regex = "^[a-z]+$";
+  }
+
+  taxonomy TaskType : represents Task, demo.other.Work uses SharedTypes {
+    description = "Kinds of task";
+    term User {
+      label = "User Task";
+    }
+    Task Automated {
+      label = "Automated Task";
+    }
+  }
+
+  viewpoint Process : frames Task, Event
+
+  concept Task : Activity {
+    description = "An activity";
+    label : string;
+    assignee : Identifier?;
+    relationship incoming -> SequenceFlow[];
+    invariant "Task ids are unique.";
+    invariant {
+      description = "The task has a type.";
+      predicate = this.type == service implies this.assignee == none;
+    }
+    annotate Icon { name = "task"; }
+  }
+}
+
+---
+
+(source_file
+  (namespace_definition
+    (dotted_path
+      (identifier)
+      (identifier))
+    (import_statement
+      (dotted_path
+        (identifier)
+        (identifier)
+        (identifier)))
+    (primitive_declaration
+      (identifier)
+      (identifier)
+      (string_member
+        (identifier)
+        (value
+          (string)))
+      (string_member
+        (identifier)
+        (value
+          (string))))
+    (taxonomy_declaration
+      (identifier)
+      (dotted_path
+        (identifier))
+      (dotted_path
+        (identifier)
+        (identifier)
+        (identifier))
+      (dotted_path
+        (identifier))
+      (string_member
+        (identifier)
+        (value
+          (string)))
+      (term_declaration
+        (identifier)
+        (term_body
+          (assignment
+            (identifier)
+            (value
+              (string)))))
+      (concept_term_declaration
+        (identifier)
+        (identifier)
+        (term_body
+          (assignment
+            (identifier)
+            (value
+              (string))))))
+    (viewpoint_declaration
+      (identifier)
+      (dotted_path
+        (identifier))
+      (dotted_path
+        (identifier)))
+    (concept_declaration
+      (identifier)
+      (dotted_path
+        (identifier))
+      (doc_assignment
+        (identifier)
+        (doc_value
+          (value
+            (string))))
+      (field_declaration
+        (identifier)
+        (dotted_path
+          (identifier)))
+      (field_declaration
+        (identifier)
+        (dotted_path
+          (identifier))
+        (cardinality))
+      (relationship_declaration
+        (identifier)
+        (dotted_path
+          (identifier))
+        (cardinality))
+      (invariant_declaration
+        (string))
+      (invariant_declaration
+        (invariant_string_member
+          (identifier)
+          (string))
+        (predicate_member
+          (predicate_token
+            (identifier))
+          (predicate_token)
+          (predicate_token
+            (identifier))
+          (predicate_token
+            (symbol_operator))
+          (predicate_token
+            (identifier))
+          (predicate_token
+            (identifier))
+          (predicate_token
+            (identifier))
+          (predicate_token)
+          (predicate_token
+            (identifier))
+          (predicate_token
+            (symbol_operator))
+          (predicate_token
+            (identifier))))
+      (annotation_application
+        (dotted_path
+          (identifier))
+        (assignment
+          (identifier)
+          (value
+            (string)))))))
+
+==================
+models and nested records
+==================
+namespace demo.models {
+  model process : meta.Process uses demo.enums.TaskType conforms demo.views.Basic {
+    Lane sales { label = "Sales"; }
+    Event orderPlaced instanceof StartEvent {
+      outgoing = [orderToValidate,];
+    }
+    orderPlaced ==> orderToValidate {
+      label = "starts";
+    }
+    annotate Metadata { owner = "workflow"; }
+  }
+
+  class Component teamsChat { realisedBy = microsoftTeams; }
+  Component chatHq instanceof teamsChat { in = hq; }
+}
+
+---
+
+(source_file
+  (namespace_definition
+    (dotted_path
+      (identifier)
+      (identifier))
+    (model_declaration
+      (identifier)
+      (dotted_path
+        (identifier)
+        (identifier))
+      (dotted_path
+        (identifier)
+        (identifier)
+        (identifier))
+      (dotted_path
+        (identifier)
+        (identifier)
+        (identifier))
+      (instance_declaration
+        (dotted_path
+          (identifier))
+        (record_id
+          (identifier))
+        (record_body
+          (assignment
+            (identifier)
+            (value
+              (string)))))
+      (instance_declaration
+        (dotted_path
+          (identifier))
+        (record_id
+          (identifier))
+        (dotted_path
+          (identifier))
+        (record_body
+          (assignment
+            (identifier)
+            (value
+              (list_value
+                (value
+                  (dotted_path
+                    (identifier))))))))
+      (edge_statement
+        (dotted_path
+          (identifier))
+        (symbol_operator)
+        (dotted_path
+          (identifier))
+        (edge_body
+          (assignment
+            (identifier)
+            (value
+              (string)))))
+      (annotation_application
+        (dotted_path
+          (identifier))
+        (assignment
+          (identifier)
+          (value
+            (string)))))
+    (class_declaration
+      (identifier)
+      (record_id
+        (identifier))
+      (record_body
+        (assignment
+          (identifier)
+          (value
+            (dotted_path
+              (identifier))))))
+    (instance_declaration
+      (dotted_path
+        (identifier))
+      (record_id
+        (identifier))
+      (dotted_path
+        (identifier))
+      (record_body
+        (assignment
+          (identifier)
+          (value
+            (dotted_path
+              (identifier))))))))

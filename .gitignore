@@ -10,4 +10,13 @@ dist/
 
 # User smoke-test run outputs (per-run <date-time> dirs)
 user-smoke-tests/*/
+
+# Graphify-generated analysis artifacts and cache output
+graphify-out/
+.graphifyignore
+.graphifycache/
+**/graphify-out/
+**/.graphifyignore
+**/.graphifycache/
+
 .claude/worktrees/

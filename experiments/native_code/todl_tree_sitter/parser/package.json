@@ -1,0 +1,16 @@
+{
+  "name": "tree-sitter-todl",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Tree-sitter grammar for the current TODL parser syntax",
+  "scripts": {
+    "generate:ast": "tree-sitter generate src/ast_parser/grammar.js --output src/ast_parser",
+    "generate:cst": "tree-sitter generate src/cst_parser/grammar.js --output src/cst_parser",
+    "generate": "npm run generate:ast && npm run generate:cst",
+    "test": "tree-sitter test",
+    "parse:fixture": "tree-sitter parse"
+  },
+  "devDependencies": {
+    "tree-sitter-cli": "^0.25.10"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "grammars": [
+    {
+      "name": "ast_todl",
+      "camelcase": "AstTodl",
+      "scope": "source.ast_todl",
+      "path": "src/ast_parser",
+      "file-types": ["todl"]
+    },
+    {
+      "name": "cst_todl",
+      "camelcase": "CstTodl",
+      "scope": "source.cst_todl",
+      "path": "src/cst_parser",
+      "file-types": ["todl"]
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0"
+  }
+}
