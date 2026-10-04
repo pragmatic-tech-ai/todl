@@ -1,0 +1,26 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { MarkedSource } from "./marked-fixture.js";
+import { SignatureHelpProvider } from "../signature-help-provider.js";
+
+test("shows the target and cardinality of a relationship assignment", () =>
+{
+    const { analysis, positions, uri } = MarkedSource.Fixture("d.todl", [
+        "namespace demo {",
+        "  concept person { }",
+        "  concept dog { relationship owner -> person []; }",
+        "  dog rex { owner = &‸ }",
+        "}",
+    ].join("\n"));
+    const help = new SignatureHelpProvider().SignatureHelpAt(analysis, uri, positions[0]!);
+    const label = help?.signatures[0]?.label ?? "";
+    assert.match(label, /owner/);
+    assert.match(label, /person/);
+});
+
+test("null outside an assignment slot", () =>
+{
+    const { analysis, positions, uri } = MarkedSource.Fixture("d.todl",
+        "namespace demo {‸\n  concept a { }\n}");
+    assert.equal(new SignatureHelpProvider().SignatureHelpAt(analysis, uri, positions[0]!), null);
+});
