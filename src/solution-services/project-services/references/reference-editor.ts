@@ -1,7 +1,7 @@
 import { type IStorage } from '@pragmatic-tech-ai/todl-runtime'
 import { ProjectType, parseManifest, type DependencyRef } from '../../package-manager/manifest.js'
 import { PROJECT_MANIFEST_FILENAME } from '../core/project-factory.js'
-import { type SolutionBaseResolver } from '../../solution-manager/engine/solution-base-resolver.js'
+import { type IBaseResolver } from '../../solution-manager/engine/i-base-resolver.js'
 import { ProjectEventKind, type IProjectEvents } from '../generators/project-events.js'
 
 // How a declared reference currently resolves: an open workspace producer (by id),
@@ -48,7 +48,7 @@ export interface IPublishedBaseCatalog
 export class ReferenceEditor
 {
     constructor(
-        private readonly resolver: SolutionBaseResolver,
+        private readonly resolver: IBaseResolver,
         private readonly storage: IStorage,
         private readonly published?: IPublishedBaseCatalog,
         private readonly events?: IProjectEvents,

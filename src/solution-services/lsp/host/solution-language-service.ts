@@ -15,6 +15,7 @@ import type { RenameError } from "../analysis/rename-provider.js";
 import { AnalysisEngineKey, type IAnalysisEngine } from "./i-analysis-engine.js";
 import { ProjectRegistry, PushedSourceProvider, type Project, type OpenDocuments } from "./project-registry.js";
 import { SolutionBaseResolver } from "../../solution-manager/engine/solution-base-resolver.js";
+import type { IBaseResolver } from "../../solution-manager/engine/i-base-resolver.js";
 import { ResolverPackageSource } from "../../solution-manager/engine/resolver-package-source.js";
 import { SolutionSession } from "../../solution-manager/engine/solution-session.js";
 import { SolutionManagerService } from "../../solution-manager/engine/solution-manager-service.js";
@@ -76,7 +77,7 @@ class EmptyPackageSource implements PackageSource
 // project per URI, assembles an AnalyzeContext (sending the warm bases only when
 // the project or base-set token changed), and delegates all CPU work to the
 // AnalysisEngine behind the IAnalysisEngine seam.
-export class SolutionLanguageService extends ServiceBase implements ILanguageService
+export class SolutionLanguageService extends ServiceBase implements ILanguageService, IBaseResolver
 {
     public static readonly Key = new ServiceKey<SolutionLanguageService>("SolutionLanguageService");
 
@@ -169,6 +170,16 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     public ProducedIdOf(consumerStorage: IStorage): Promise<string | undefined>
     {
         return this.resolver.ProducedIdOf(consumerStorage);
+    }
+
+    public ConsumerIdOf(consumerStorage: IStorage): Promise<string | undefined>
+    {
+        return this.resolver.ConsumerIdOf(consumerStorage);
+    }
+
+    public Invalidate(memberId: string): void
+    {
+        this.resolver.Invalidate(memberId);
     }
 
     public get BaseSetToken(): number

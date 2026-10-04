@@ -10,6 +10,7 @@ import { Solution } from "../../../solution-manager/engine/solution.js";
 import { ProjectType, type ProjectManifest } from "../../../package-manager/manifest.js";
 import { PROJECT_MANIFEST_FILENAME } from "../../../project-services/core/project-factory.js";
 import { SolutionBaseResolver } from "../../../solution-manager/engine/solution-base-resolver.js";
+import type { IBaseResolver } from "../../../solution-manager/engine/i-base-resolver.js";
 import { PackageStoreKey } from "../../../todl-build-system/package-store.js";
 import type { SourcedPackage } from "../../../todl-build-system/package-source.js";
 import { ProjectEvents, ProjectEventsKey, ProjectEventKind } from "../../../project-services/generators/project-events.js";
@@ -174,6 +175,19 @@ test("ProducedIdOf returns the producer's id and WorkspaceProducers lists it", a
     assert.equal(await world.Service.ProducedIdOf(world.Producer), BaseWorld.ProducerId);
     assert.deepEqual(await world.Service.WorkspaceProducers(ProjectType.MetaModel), [{ id: BaseWorld.ProducerId, version: BaseWorld.ProducerVersion }]);
     assert.deepEqual([...(await world.Service.ReferencedPublishedRefs(world.Consumer))], [`${BaseWorld.ProducerId}@${BaseWorld.ProducerVersion}`]);
+});
+
+test("typed as IBaseResolver, the service delegates ConsumerIdOf and Invalidate to the owned resolver", async () =>
+{
+    const world = new BaseWorld();
+    await world.Prime();
+    const resolver: IBaseResolver = world.Service;
+
+    assert.equal(await resolver.ConsumerIdOf(world.Producer), BaseWorld.ProducerId);
+
+    resolver.Invalidate(BaseWorld.ProducerId);
+    assert.ok(world.Service.StaleMembers.has(BaseWorld.ProducerId));
+    assert.ok(world.Service.StaleMembers.has(BaseWorld.ConsumerId));
 });
 
 test("StaleMembers raises PropertyChanged on producer edit and holds the dependent consumer id", async () =>

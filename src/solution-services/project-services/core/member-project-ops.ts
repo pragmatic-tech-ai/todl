@@ -8,7 +8,7 @@ import {
 } from './project-factory.js'
 import { SemVer, type VersionPart } from './semver.js'
 import { type IProjectFactoryRegistry } from '../../solution-manager/engine/host-services.js'
-import { type SolutionBaseResolver } from '../../solution-manager/engine/solution-base-resolver.js'
+import { type IBaseResolver } from '../../solution-manager/engine/i-base-resolver.js'
 import { type SolutionMember } from '../../solution-manager/engine/solution-member.js'
 
 // UX-free per-member project operations: version bump/set, agent-scaffold refresh,
@@ -20,7 +20,7 @@ export class MemberProjectOps
 {
     constructor(
         private readonly registry: IProjectFactoryRegistry,
-        private readonly resolver: SolutionBaseResolver,
+        private readonly resolver: IBaseResolver,
     )
     {
     }

@@ -8,6 +8,7 @@ import { type ProjectModel } from '../../project-services/generators/project-con
 import { ProjectType, type ProjectManifest, type DependencyRef, parseManifest } from '../../package-manager/manifest.js'
 import { PROJECT_MANIFEST_FILENAME } from '../../project-services/core/project-factory.js'
 import { WikiLocator, type WikiOrigin } from '../../project-services/core/wiki-origin.js'
+import { type IBaseResolver } from './i-base-resolver.js'
 import { SolutionManagerService } from './solution-manager-service.js'
 
 // A resolved base document paired with the live producer storage that contributed
@@ -38,7 +39,7 @@ interface LiveBase
 // the coarse "clear everything on any Members change" trigger is gone: the only
 // remaining blanket clear is the ActiveSolution switch (opening a different solution
 // swaps the whole member set out, so nothing cached can survive it).
-export class SolutionBaseResolver extends ServiceBase implements IPackageSource
+export class SolutionBaseResolver extends ServiceBase implements IPackageSource, IBaseResolver
 {
     public static readonly Key = new ServiceKey<SolutionBaseResolver>('SolutionBaseResolver')
 

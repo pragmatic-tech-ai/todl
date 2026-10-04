@@ -195,6 +195,7 @@ export {
 export { SemanticTokensProvider } from './solution-services/lsp/analysis/semantic-tokens-provider.js';
 export { SolutionManagerService } from './solution-services/solution-manager/engine/solution-manager-service.js';
 export { SolutionBaseResolver } from './solution-services/solution-manager/engine/solution-base-resolver.js';
+export { type IBaseResolver } from './solution-services/solution-manager/engine/i-base-resolver.js';
 export {
     ProjectFactoryRegistryKey,
     type IStorageProviderRegistry,
