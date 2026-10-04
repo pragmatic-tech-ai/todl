@@ -30,6 +30,14 @@
       },
       "require": "./dist/language-server/index.js"
     },
+    "./solution-services/lsp": {
+      "types": "./dist/solution-services/lsp/index.d.ts",
+      "import": {
+        "development": "./src/solution-services/lsp/index.ts",
+        "default": "./dist/solution-services/lsp/index.js"
+      },
+      "require": "./dist/solution-services/lsp/index.js"
+    },
     "./package-manager": {
       "types": "./dist/solution-services/package-manager/index.d.ts",
       "import": {

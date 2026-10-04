@@ -178,6 +178,21 @@ export { tokenize, TokenKind, type Token } from './compiler-services/parse/lexer
 // The engine composition module is authored in .mu (a plain `module` → a headless
 // Module) and compiled to .mu.js by `npm run compile:mu`.
 export { SolutionServicesEngine } from './solution-services/solution-services-module.mu.js';
+export { LspServicesEngine } from './solution-services/lsp/lsp-module.mu.js';
+export type { ILanguageService } from './solution-services/lsp/host/i-language-service.js';
+export { SolutionLanguageService } from './solution-services/lsp/host/solution-language-service.js';
+export { AnalysisEngineKey, type IAnalysisEngine } from './solution-services/lsp/host/i-analysis-engine.js';
+export { AnalysisEngine } from './solution-services/lsp/analysis/analysis-engine.js';
+export {
+    AnalyzeKind, type AnalyzeContext, type AnalyzeRequest, type AnalyzeResponse,
+} from './solution-services/lsp/analysis/protocol.js';
+export { AnalysisSnapshot } from './solution-services/lsp/analysis/analysis-snapshot.js';
+// `Project` is already the core project model above, so the LSP host's Project is aliased.
+export {
+    ProjectRegistry, PushedSourceProvider,
+    type Project as LspProject, type SourceProvider,
+} from './solution-services/lsp/host/project-registry.js';
+export { SemanticTokensProvider } from './solution-services/lsp/analysis/semantic-tokens-provider.js';
 export { SolutionManagerService } from './solution-services/solution-manager/engine/solution-manager-service.js';
 export { SolutionBaseResolver } from './solution-services/solution-manager/engine/solution-base-resolver.js';
 export {
