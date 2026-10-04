@@ -4,15 +4,24 @@ import { BagScope } from './bag-address.js';
 import { type IBagPersister } from './bag-persister.js';
 import { RecordPropertyBag } from './record-property-bag.js';
 
+// The save seam a SolutionBagPersister flushes through: the manager that owns the active solution.
+// SolutionManagerService satisfies it structurally.
+export interface ISolutionSaver
+{
+    readonly ActiveSolution: Solution | undefined;
+    Save(): Promise<void>;
+}
+
 // Persists property bags at the SOLUTION scope, backed by the active Solution's live bags
 // (serialized into solution.json's `bags` section on save). Writes are in-memory + mark the
-// solution dirty; the actual disk write happens via SolutionManagerService.Save, so Flush is
-// a no-op here.
+// solution dirty; the actual disk write happens via SolutionManagerService.Save. Flush is a no-op
+// unless a saver is supplied, in which case it saves the active solution when it has an on-disk
+// location (an untitled solution is skipped).
 export class SolutionBagPersister implements IBagPersister
 {
     public readonly Scope = BagScope.Solution;
 
-    constructor(private readonly solution: Solution)
+    constructor(private readonly solution: Solution, private readonly saver?: ISolutionSaver)
     {
     }
 
@@ -48,9 +57,8 @@ export class SolutionBagPersister implements IBagPersister
         if (this.solution.InstancesOf(kind).delete(id)) this.solution.MarkBagsDirty();
     }
 
-    // The solution persists through SolutionManagerService.Save; nothing to flush here.
-    public Flush(): Promise<void>
+    public async Flush(): Promise<void>
     {
-        return Promise.resolve();
+        if (this.saver?.ActiveSolution?.HasLocation === true) await this.saver.Save();
     }
 }

@@ -15,6 +15,9 @@ import { SolutionManagerService } from '../solution-manager-service.js';
 import { type IStorageProviderRegistry, type IProjectFactoryRegistry } from '../host-services.js';
 import { type INotificationService } from '../notification-service.js';
 import { FakeProjectFactory } from './fake-project-factory.js';
+import { Solution } from '../solution.js';
+import { SolutionBagPersister } from '../../../property-bags/solution-bag-persister.js';
+import { BagScope } from '../../../property-bags/bag-address.js';
 import { FakeRegistry } from '../../../package-manager/engine/tests/fakes.js';
 
 // A stand-in SessionStore: on Register it applies a preset slice to the bag (as the
@@ -367,4 +370,43 @@ test('PublishRegistry defaults to undefined and is settable/readable', () => {
     const registry = new FakeRegistry();
     svc.PublishRegistry = registry;
     assert.equal(svc.PublishRegistry, registry);
+});
+
+test('BuildVantage is undefined without a global persister', async () => {
+    const { svc } = makeService();
+    assert.equal(await svc.BuildVantage(undefined), undefined);
+});
+
+test('BuildVantage: global + saving solution (+ member project scopes); Solution flush saves only when located', async () => {
+    const { svc, roots } = makeService();
+    const global = new SolutionBagPersister(new Solution('G'));
+    const bare = await svc.BuildVantage(global);
+    assert.equal(bare!.Global, global);
+    assert.equal(bare!.Solution, undefined);               // no active solution
+    assert.equal(bare!.ProjectShared, undefined);
+
+    await svc.NewSolution('/work/v');
+    const member = svc.ActiveSolution!.AddMember('./api', 'architecture');
+    member.Storage = new FakeStorage('/work/v/api');
+    const v = await svc.BuildVantage(global, member);
+    assert.equal(v!.Solution!.Scope, BagScope.Solution);
+    assert.ok(v!.ProjectShared !== undefined && v!.ProjectLocal !== undefined);
+
+    v!.Solution!.Create('k', 'i').SetValue('A', 1);
+    await v!.Solution!.Flush();                              // located -> Save()
+    assert.match(await roots.get('/work/v')!.ReadText('Default Solution.pksln'), /"A": ?1/);
+
+    const override = new FakeStorage('/other');
+    const v2 = await svc.BuildVantage(global, member, override);
+    v2!.ProjectLocal!.Create('k', 'i').SetValue('B', 2);
+    await v2!.ProjectLocal!.Flush();
+    assert.match(await override.ReadText('project.local.json'), /"B": ?2/);
+});
+
+test('BuildVantage Solution flush skips an untitled solution', async () => {
+    const { svc, prompts } = makeService();
+    await svc.NewUntitledSolution();
+    const v = await svc.BuildVantage(new SolutionBagPersister(new Solution('G')));
+    await v!.Solution!.Flush();
+    assert.equal(prompts.foldersPicked, 0);                  // Save() (which would prompt) never ran
 });

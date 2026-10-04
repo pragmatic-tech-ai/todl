@@ -4,6 +4,7 @@ import { Solution } from '../../solution-manager/engine/solution.js'
 import { SolutionManifest } from '../../solution-manager/engine/solution-manifest.js'
 import { SolutionBagPersister } from '../solution-bag-persister.js'
 import { BagScope } from '../bag-address.js'
+import { FakeStorage } from '@pragmatic-tech-ai/todl-runtime'
 
 test('SolutionBagPersister creates, reads, round-trips (CollectBags→LoadBags), and deletes bag instances', () =>
 {
@@ -44,4 +45,18 @@ test('SolutionManifest carries a bags section through stringify/parse (defensive
     // A legacy manifest with no bags section parses to an empty bags map.
     const legacy = SolutionManifest.parse(JSON.stringify({ kind: 'todl-solution', version: 1, name: 'S', members: [], settings: {} }))
     assert.deepEqual(legacy.bags, {})
+})
+
+test('SolutionBagPersister Flush saves via the supplied saver only when the solution has a location', async () =>
+{
+    const located = new Solution('S', new FakeStorage('/s'))
+    let saves = 0
+    const saver = { ActiveSolution: located as Solution | undefined, Save: () => { saves++; return Promise.resolve() } }
+    await new SolutionBagPersister(located, saver).Flush()
+    assert.equal(saves, 1)
+    saver.ActiveSolution = new Solution('Untitled')
+    await new SolutionBagPersister(saver.ActiveSolution, saver).Flush()
+    assert.equal(saves, 1)
+    await new SolutionBagPersister(located).Flush()          // no saver: no-op
+    assert.equal(saves, 1)
 })

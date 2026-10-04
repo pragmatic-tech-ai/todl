@@ -25,6 +25,13 @@ import { type IPackageRegistry } from '../../package-manager/engine/package-regi
 import { parseManifest } from '../../package-manager/manifest.js';
 import { PROJECT_MANIFEST_FILENAME } from '../../project-services/core/project-factory.js';
 import { type SolutionMember } from './solution-member.js';
+import { type BagVantage } from '../../property-bags/bag-catalog.js';
+import { type IBagPersister } from '../../property-bags/bag-persister.js';
+import { SolutionBagPersister } from '../../property-bags/solution-bag-persister.js';
+import {
+    ProjectSharedBagPersister,
+    ProjectLocalBagPersister,
+} from '../../property-bags/project-bag-persisters.js';
 
 // Owns exactly ONE active solution (the Visual Studio .sln model): create a new
 // empty solution, open/save/close one, and keep a recent-solutions list. Opening
@@ -404,6 +411,30 @@ export class SolutionManagerService extends ServiceBase
             if (from !== to && (await storage.Exists(from))) await storage.Rename(from, to);
         }
         s.Name = name;
+    }
+
+    // Build the bag vantage for connection resolution: always the given global persister; the
+    // active solution (a saving persister — Flush saves the manager) when one is open; and, for a
+    // specific member, that project's shared + local scopes. Undefined when no global persister is
+    // wired (a headless host) — callers then fall back to the client inventory alone. `storage`
+    // overrides the member's own storage (a host that projects members onto another root).
+    public async BuildVantage(
+        global: IBagPersister | undefined,
+        member?: SolutionMember,
+        storage?: IStorage,
+    ): Promise<BagVantage | undefined>
+    {
+        if (global === undefined) return undefined;
+        const vantage: BagVantage = { Global: global };
+        const solution = this.ActiveSolution;
+        if (solution !== undefined) vantage.Solution = new SolutionBagPersister(solution, this);
+        const memberStorage = storage ?? member?.Storage;
+        if (memberStorage !== undefined)
+        {
+            vantage.ProjectShared = await ProjectSharedBagPersister.Open(memberStorage);
+            vantage.ProjectLocal = await ProjectLocalBagPersister.Open(memberStorage);
+        }
+        return vantage;
     }
 
     public async CloseSolution(): Promise<void>
