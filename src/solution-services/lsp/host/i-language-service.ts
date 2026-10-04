@@ -2,7 +2,11 @@ import type {
     CodeAction, CompletionItem, Diagnostic, DocumentSymbol, FoldingRange, Hover, Location, Position, Range,
     SemanticTokens, SignatureHelp, TextEdit, WorkspaceEdit, WorkspaceSymbol,
 } from "vscode-languageserver-types";
+import type { IStorage } from "@pragmatic-tech-ai/todl-runtime";
 import type { RenameError } from "../analysis/rename-provider.js";
+import type { TodlDocument } from "../../../compiler-services/emit/json.js";
+import type { ProjectType, DependencyRef } from "../../package-manager/manifest.js";
+import type { WikiOrigin } from "../../project-services/core/wiki-origin.js";
 
 // The single host-facing language-service authority: one promise-returning method
 // per editor feature plus the live-buffer channel (DidChange) and pull-model
@@ -25,4 +29,13 @@ export interface ILanguageService
     FormatDocument(uri: string): Promise<TextEdit[]>;
     DidChange(uri: string, text: string): void;
     DiagnosticsFor(uri: string): Promise<Diagnostic[]>;
+
+    // Base-resolution facade: thin delegation to the solution's live-first base resolver,
+    // so a host never resolves the resolver itself. Signatures mirror the resolver 1:1.
+    ResolveBasesFor(consumerStorage: IStorage): Promise<{ bases: TodlDocument[]; problems: string[]; originOf: ReadonlyMap<string, WikiOrigin> }>;
+    ReferencedPublishedRefs(consumerStorage: IStorage): Promise<Set<string>>;
+    WorkspaceProducers(kind: ProjectType): Promise<readonly DependencyRef[]>;
+    ProducedIdOf(consumerStorage: IStorage): Promise<string | undefined>;
+    // Member ids evicted by the most recent invalidation; raises PropertyChanged("StaleMembers").
+    readonly StaleMembers: ReadonlySet<string>;
 }

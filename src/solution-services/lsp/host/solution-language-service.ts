@@ -24,6 +24,9 @@ import {
     ProjectEventsKey, ProjectEventKind, type IProjectEvents, type ProjectEvent,
 } from "../../project-services/generators/project-events.js";
 import type { ILanguageService } from "./i-language-service.js";
+import type { TodlDocument } from "../../../compiler-services/emit/json.js";
+import type { ProjectType, DependencyRef } from "../../package-manager/manifest.js";
+import type { WikiOrigin } from "../../project-services/core/wiki-origin.js";
 
 // The live-buffer store: the open documents the editor has pushed via DidChange,
 // adapted to the `.all()` surface PushedSourceProvider consumes. A real class (not
@@ -83,6 +86,10 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     // The manager's INPC property whose change means the whole member set was swapped
     // (a different solution opened) — the signal to re-point the Members subscription.
     private static readonly ActiveSolutionPropertyName = "ActiveSolution";
+    // The resolver property mirrored by this service's StaleMembers, and the name this
+    // service raises it under.
+    private static readonly ResolverStaleMemberIdsPropertyName = "StaleMemberIds";
+    private static readonly StaleMembersPropertyName = "StaleMembers";
     // The CollectionChange discriminators this service reacts to. Typed `as const` so a
     // `change.kind === …` comparison still narrows the discriminated union.
     private static readonly InsertedKind = "inserted" as const;
@@ -134,6 +141,35 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
         this.session = new SolutionSession(new ResolverPackageSource(this.resolver, packages));
         this.warmup = this.BuildWarmCache();
         this.SubscribeToLifecycle();
+        this.subscriptions.push(this.resolver.PropertyChanged(SolutionLanguageService.ResolverStaleMemberIdsPropertyName).subscribe((e) =>
+            this.RaisePropertyChanged(SolutionLanguageService.StaleMembersPropertyName, e.oldValue, e.newValue)));
+    }
+
+    // The member ids evicted by the most recent invalidation (the resolver's
+    // StaleMemberIds, re-raised as this service's own StaleMembers change).
+    public get StaleMembers(): ReadonlySet<string>
+    {
+        return this.resolver.StaleMemberIds;
+    }
+
+    public ResolveBasesFor(consumerStorage: IStorage): Promise<{ bases: TodlDocument[]; problems: string[]; originOf: ReadonlyMap<string, WikiOrigin> }>
+    {
+        return this.resolver.ResolveBasesFor(consumerStorage);
+    }
+
+    public ReferencedPublishedRefs(consumerStorage: IStorage): Promise<Set<string>>
+    {
+        return this.resolver.ReferencedPublishedRefs(consumerStorage);
+    }
+
+    public WorkspaceProducers(kind: ProjectType): Promise<readonly DependencyRef[]>
+    {
+        return this.resolver.WorkspaceProducers(kind);
+    }
+
+    public ProducedIdOf(consumerStorage: IStorage): Promise<string | undefined>
+    {
+        return this.resolver.ProducedIdOf(consumerStorage);
     }
 
     public get BaseSetToken(): number
