@@ -18,18 +18,21 @@ class RecordingGuard implements IContentLifecycleGuard
     public OnRemoved(_m: SolutionMember, paths: readonly string[]): void { this.Calls.push('removed:' + paths.join(',')); }
 }
 
-function setup(allow = true)
+class Fixture
 {
-    const storage = new FakeStorage();
-    const member = new SolutionMember({ path: 'p', type: 't' } as never);
-    member.Storage = storage;
-    const guard = new RecordingGuard(allow);
-    return { storage, guard, ops: new MemberContentOps(member, guard) };
+    public static Setup(allow = true, withGuard = true)
+    {
+        const storage = new FakeStorage();
+        const member = new SolutionMember({ path: 'p', type: 't' } as never);
+        member.Storage = storage;
+        const guard = new RecordingGuard(allow);
+        return { storage, guard, ops: new MemberContentOps(member, withGuard ? guard : undefined) };
+    }
 }
 
 test('Rename collision returns Collision and leaves disk untouched', async () =>
 {
-    const { storage, guard, ops } = setup();
+    const { storage, guard, ops } = Fixture.Setup();
     await storage.WriteText('a.txt', 'a'); await storage.WriteText('b.txt', 'b');
     assert.deepEqual(await ops.Rename('a.txt', 'b.txt'), { ok: false, error: RenameError.Collision });
     assert.equal(await storage.ReadText('a.txt'), 'a');
@@ -38,7 +41,7 @@ test('Rename collision returns Collision and leaves disk untouched', async () =>
 
 test('Rename validates empty and invalid names', async () =>
 {
-    const { storage, ops } = setup();
+    const { storage, ops } = Fixture.Setup();
     await storage.WriteText('a.txt', 'a');
     assert.deepEqual(await ops.Rename('a.txt', '  '), { ok: false, error: RenameError.Empty });
     assert.deepEqual(await ops.Rename('a.txt', 'x/y'), { ok: false, error: RenameError.Invalid });
@@ -46,7 +49,7 @@ test('Rename validates empty and invalid names', async () =>
 
 test('Rename ok renames and notifies OnMoved', async () =>
 {
-    const { storage, guard, ops } = setup();
+    const { storage, guard, ops } = Fixture.Setup();
     await storage.CreateDirectory('d');
     await storage.WriteText('d/a.txt', 'a');
     assert.deepEqual(await ops.Rename('d/a.txt', 'c.txt'), { ok: true, to: 'd/c.txt' });
@@ -57,7 +60,7 @@ test('Rename ok renames and notifies OnMoved', async () =>
 
 test('Delete veto skips disk delete', async () =>
 {
-    const { storage, guard, ops } = setup(false);
+    const { storage, guard, ops } = Fixture.Setup(false);
     await storage.WriteText('a.txt', 'a');
     await ops.Delete(['a.txt']);
     assert.equal(await storage.Exists('a.txt'), true);
@@ -66,7 +69,7 @@ test('Delete veto skips disk delete', async () =>
 
 test('Delete accepted deletes roots only and notifies OnRemoved', async () =>
 {
-    const { storage, guard, ops } = setup(true);
+    const { storage, guard, ops } = Fixture.Setup(true);
     await storage.CreateDirectory('d');
     await storage.WriteText('d/a.txt', 'a'); await storage.WriteText('b.txt', 'b');
     await ops.Delete(['d', 'd/a.txt', 'b.txt', '']);
@@ -77,7 +80,7 @@ test('Delete accepted deletes roots only and notifies OnRemoved', async () =>
 
 test('NewFolder honors the passed name and dedupes', async () =>
 {
-    const { storage, ops } = setup();
+    const { storage, ops } = Fixture.Setup();
     assert.equal(await ops.NewFolder('', 'Docs'), 'Docs');
     assert.equal(await ops.NewFolder('', 'Docs'), 'Docs-2');
     assert.equal(await ops.NewFolder('', undefined), 'New Folder');
@@ -86,7 +89,7 @@ test('NewFolder honors the passed name and dedupes', async () =>
 
 test('NewFile writes content at a unique path', async () =>
 {
-    const { storage, ops } = setup();
+    const { storage, ops } = Fixture.Setup();
     assert.equal(await ops.NewFile('', 'n.txt', 'one'), 'n.txt');
     assert.equal(await ops.NewFile('', 'n.txt', 'two'), 'n-2.txt');
     assert.equal(await storage.ReadText('n-2.txt'), 'two');
@@ -94,7 +97,7 @@ test('NewFile writes content at a unique path', async () =>
 
 test('ImportBytes writes under unique names', async () =>
 {
-    const { storage, ops } = setup();
+    const { storage, ops } = Fixture.Setup();
     await storage.WriteText('f.bin', 'x');
     const added = await ops.ImportBytes('', [{ name: 'f.bin', bytes: new Uint8Array([1, 2]) }]);
     assert.deepEqual(added, ['f-2.bin']);
@@ -102,7 +105,7 @@ test('ImportBytes writes under unique names', async () =>
 
 test('Move skips existing destination, reports skipped, notifies OnMoved', async () =>
 {
-    const { storage, guard, ops } = setup();
+    const { storage, guard, ops } = Fixture.Setup();
     await storage.CreateDirectory('dst');
     await storage.WriteText('a.txt', 'a'); await storage.WriteText('b.txt', 'b'); await storage.WriteText('dst/b.txt', 'old');
     const r = await ops.Move(['a.txt', 'b.txt'], 'dst');
@@ -114,9 +117,54 @@ test('Move skips existing destination, reports skipped, notifies OnMoved', async
 
 test('Move rejects a folder into itself', async () =>
 {
-    const { storage, ops } = setup();
+    const { storage, ops } = Fixture.Setup();
     await storage.CreateDirectory('d'); await storage.CreateDirectory('d/e');
     const r = await ops.Move(['d'], 'd/e');
     assert.deepEqual(r.moved, []);
     assert.deepEqual(r.skipped, ['d']);
+});
+
+test('Rename of a folder moves its subtree', async () =>
+{
+    const { storage, ops } = Fixture.Setup();
+    await storage.CreateDirectory('d');
+    await storage.WriteText('d/a.txt', 'a');
+    assert.deepEqual(await ops.Rename('d', 'e'), { ok: true, to: 'e' });
+    assert.equal(await storage.Exists('d'), false);
+    assert.equal(await storage.ReadText('e/a.txt'), 'a');
+});
+
+test('Rename to the same name is a no-op without guard call', async () =>
+{
+    const { storage, guard, ops } = Fixture.Setup();
+    await storage.WriteText('a.txt', 'a');
+    assert.deepEqual(await ops.Rename('a.txt', 'a.txt'), { ok: true, to: 'a.txt' });
+    assert.deepEqual(guard.Calls, []);
+});
+
+test('Rename rejects dot names', async () =>
+{
+    const { storage, ops } = Fixture.Setup();
+    await storage.WriteText('a.txt', 'a');
+    assert.deepEqual(await ops.Rename('a.txt', '..'), { ok: false, error: RenameError.Invalid });
+    assert.deepEqual(await ops.Rename('a.txt', '.'), { ok: false, error: RenameError.Invalid });
+});
+
+test('NewFile, NewFolder and ImportBytes reject escaping names before writing', async () =>
+{
+    const { storage, ops } = Fixture.Setup();
+    await assert.rejects(() => ops.NewFile('d', '..', 'x'));
+    await assert.rejects(() => ops.NewFile('', 'a\b', 'x'));
+    await assert.rejects(() => ops.NewFolder('', 'a/b'));
+    await assert.rejects(() => ops.NewFolder('', '..'));
+    await assert.rejects(() => ops.ImportBytes('', [{ name: 'ok.bin', bytes: new Uint8Array([1]) }, { name: '../x', bytes: new Uint8Array([1]) }]));
+    assert.equal(await storage.Exists('ok.bin'), false);
+});
+
+test('Delete without a guard succeeds', async () =>
+{
+    const { storage, ops } = Fixture.Setup(true, false);
+    await storage.WriteText('a.txt', 'a');
+    await ops.Delete(['a.txt']);
+    assert.equal(await storage.Exists('a.txt'), false);
 });
