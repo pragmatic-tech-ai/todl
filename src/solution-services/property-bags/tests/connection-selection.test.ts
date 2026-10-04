@@ -2,10 +2,11 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { FakeStorage, type IPropertyBag, type IStorage } from '@pragmatic-tech-ai/todl-runtime'
 import { type BagVantage } from '../bag-catalog.js'
-import { BagScope } from '../bag-address.js'
+import { BagAddress, BagScope } from '../bag-address.js'
 import { type IBagPersister } from '../bag-persister.js'
 import { RecordPropertyBag } from '../record-property-bag.js'
 import { ConnectionBag, ConnectionBagKind } from '../connection-bag.js'
+import { ConnectionSelectionKind, ConnectionPurpose } from '../connection-resolution.js'
 import { ConnectionSelection } from '../connection-selection.js'
 import { Solution } from '../../solution-manager/engine/solution.js'
 import { type SolutionMember } from '../../solution-manager/engine/solution-member.js'
@@ -105,5 +106,41 @@ test('SetSolutionDefault adopts a global-only connection at solution scope and f
     assert.equal(adopted.IsDefault, true)
     assert.equal(adopted.DisplayName, 'Global One')
     assert.equal(r.SolutionBags.Flushes, 1)
+    assert.equal(await r.Sel.EffectiveConnectionIdForConsumer('api-id'), 'g1')
+})
+
+test('SetActiveConnectionFor stores the scope-qualified key: project, solution, global', async () =>
+{
+    const r = new Rig()
+    r.Seed(r.Local, 'p1', false)
+    r.Seed(r.SolutionBags, 's1', false)
+    r.Seed(r.Global, 'g1', false)
+    const stored = (): unknown => r.Local.Bag(ConnectionSelectionKind, 'main').GetValue(ConnectionPurpose.ReferenceResolution)
+    await r.Sel.SetActiveConnectionFor(r.Member, 'p1')
+    assert.equal(stored(), BagAddress.Key(new BagAddress(BagScope.Project, ConnectionBagKind, 'p1')))
+    await r.Sel.SetActiveConnectionFor(r.Member, 's1')
+    assert.equal(stored(), BagAddress.Key(new BagAddress(BagScope.Solution, ConnectionBagKind, 's1')))
+    await r.Sel.SetActiveConnectionFor(r.Member, 'g1')
+    assert.equal(stored(), BagAddress.Key(new BagAddress(BagScope.Global, ConnectionBagKind, 'g1')))
+    assert.equal(await r.Sel.EffectiveConnectionIdForConsumer('api-id'), 'g1')
+})
+
+test('a member with no ProjectLocal: set and clear are silent no-ops', async () =>
+{
+    const r = new Rig()
+    r.Seed(r.Global, 'g1', true)
+    await r.Sel.SetActiveConnectionFor(r.Other, 'g1')
+    await r.Sel.ClearActiveFor(r.Other)
+    assert.equal(r.Local.Ids(ConnectionSelectionKind).length, 0)
+    assert.equal(await r.Sel.EffectiveConnectionIdForConsumer('web-id'), 'g1')
+})
+
+test('a dangling selection falls back to the default', async () =>
+{
+    const r = new Rig()
+    r.Seed(r.Global, 'g1', true)
+    r.Seed(r.Global, 'g2', false)
+    await r.Sel.SetActiveConnectionFor(r.Member, 'g2')
+    r.Global.Delete(ConnectionBagKind, 'g2')
     assert.equal(await r.Sel.EffectiveConnectionIdForConsumer('api-id'), 'g1')
 })
