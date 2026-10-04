@@ -3,6 +3,7 @@ import {
     isVersioned,
     supportsScaffold,
     type IProjectFactory,
+    type IVersionedProjectFactory,
     type ProjectFileFormat,
 } from './project-factory.js'
 import { SemVer, type VersionPart } from './semver.js'
@@ -43,9 +44,9 @@ export class MemberProjectOps
     public async UpdateScaffold(member: SolutionMember): Promise<readonly string[]>
     {
         const factory = this.factoryOf(member)
-        const storage = MemberProjectOps.storageOf(member)
-        if (factory === undefined || !supportsScaffold(factory)) throw new Error(MemberProjectOps.NoScaffoldError)
-        return factory.updateScaffold(storage)
+        if (factory === undefined) throw new Error(MemberProjectOps.NoFactoryError)
+        if (!supportsScaffold(factory)) throw new Error(MemberProjectOps.NoScaffoldError)
+        return factory.updateScaffold(MemberProjectOps.storageOf(member))
     }
 
     // Drop cached bases for the member (and its dependents) so a republished base is
@@ -80,10 +81,10 @@ export class MemberProjectOps
         return factory !== undefined && supportsScaffold(factory)
     }
 
-    private static readonly NoFactoryError = 'Member has no project factory.'
-    private static readonly NoVersionError = 'Member project type has no version.'
-    private static readonly NoScaffoldError = 'Member project type has no agent scaffold.'
-    private static readonly NoStorageError = 'Member has no open storage.'
+    public static readonly NoFactoryError = 'Member has no project factory.'
+    public static readonly NoVersionError = 'Member project type has no version.'
+    public static readonly NoScaffoldError = 'Member project type has no agent scaffold.'
+    public static readonly NoStorageError = 'Member has no open storage.'
 
     private factoryOf(member: SolutionMember): IProjectFactory | undefined
     {
@@ -96,7 +97,7 @@ export class MemberProjectOps
         return member.Storage
     }
 
-    private versioned(member: SolutionMember)
+    private versioned(member: SolutionMember): { factory: IProjectFactory & IVersionedProjectFactory; storage: IStorage }
     {
         const factory = this.factoryOf(member)
         if (factory === undefined) throw new Error(MemberProjectOps.NoFactoryError)

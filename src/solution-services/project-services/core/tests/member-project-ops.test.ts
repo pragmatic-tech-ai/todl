@@ -98,13 +98,42 @@ test('capability queries reflect factory flags', () =>
     assert.deepEqual(rich.FormatsFor(unknown), [])
 })
 
-test('operations on unsupported members throw; RefreshBases invalidates by manifest id', async () =>
+test('operations on unsupported members throw for the right reason', async () =>
+{
+    const ops = new MemberProjectOps(Fixtures.Registry(new FakeProjectFactory()), Fixtures.Resolver())
+    const m = Fixtures.Member('fake')
+    await assert.rejects(ops.BumpVersion(m, VersionPart.Patch), { message: MemberProjectOps.NoVersionError })
+    await assert.rejects(ops.SetVersion(m, '1.0.0'), { message: MemberProjectOps.NoVersionError })
+    await assert.rejects(ops.UpdateScaffold(m), { message: MemberProjectOps.NoScaffoldError })
+
+    const orphan = Fixtures.Member('nope')
+    orphan.Storage = undefined
+    await assert.rejects(ops.BumpVersion(orphan, VersionPart.Patch), { message: MemberProjectOps.NoFactoryError })
+    await assert.rejects(ops.UpdateScaffold(orphan), { message: MemberProjectOps.NoFactoryError })
+})
+
+test('member with a factory but no storage throws the storage error', async () =>
+{
+    const ops = new MemberProjectOps(Fixtures.Registry(new VersionedFactory()), Fixtures.Resolver())
+    const m = Fixtures.Member('fake')
+    m.Storage = undefined
+    await assert.rejects(ops.BumpVersion(m, VersionPart.Patch), { message: MemberProjectOps.NoStorageError })
+    await assert.rejects(ops.SetVersion(m, '1.0.0'), { message: MemberProjectOps.NoStorageError })
+    await assert.rejects(ops.UpdateScaffold(m), { message: MemberProjectOps.NoStorageError })
+})
+
+test('RefreshBases invalidates by manifest id; no manifest id or storage is a no-op', async () =>
 {
     const resolver = Fixtures.Resolver()
     const ops = new MemberProjectOps(Fixtures.Registry(new FakeProjectFactory()), resolver)
-    const m = Fixtures.Member('fake')
-    await assert.rejects(ops.BumpVersion(m, VersionPart.Patch))
-    await assert.rejects(ops.UpdateScaffold(m))
+    const before = resolver.StaleMemberIds
+
+    await ops.RefreshBases(Fixtures.Member('fake'))
+    assert.equal(resolver.StaleMemberIds, before)
+    const noStorage = Fixtures.Member('fake')
+    noStorage.Storage = undefined
+    await ops.RefreshBases(noStorage)
+    assert.equal(resolver.StaleMemberIds, before)
 
     const manifest: ProjectManifest = { type: ProjectType.MetaModel, name: 'mm', version: 1, id: 'mm', packageVersion: '1.0.0' }
     await ops.RefreshBases(Fixtures.Member('fake', { [PROJECT_MANIFEST_FILENAME]: JSON.stringify(manifest) }))
