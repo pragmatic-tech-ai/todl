@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, relative } from 'node:path'
 
@@ -24,6 +24,31 @@ test('no solution-services file imports the mural UI framework', () => {
         [],
         `solution-services files importing ${ForbiddenImport}:\n${offenders.join('\n')}`
     )
+})
+
+// Project-explorer-retirement engine files: must exist and must not import
+// ANY mural module (UI-free, depend only on todl-runtime).
+const MemberOpsEngineFiles = [
+    'project-services/content/unique-name.ts',
+    'project-services/content/member-content-ops.ts',
+    'project-services/content/content-lifecycle.ts',
+    'project-services/core/member-project-ops.ts',
+    'project-services/core/semver.ts',
+    'project-services/references/reference-editor.ts',
+    'property-bags/connection-selection.ts',
+    'solution-manager/engine/project-lifecycle.ts'
+]
+const AnyMuralImport = '@pragmatic-tech-ai/mural'
+
+test('member-ops / lifecycle engine files exist and import no mural module', () =>
+{
+    const root = join(dirname(fileURLToPath(import.meta.url)), '../../..')
+    for (const rel of MemberOpsEngineFiles)
+    {
+        const full = join(root, rel)
+        assert.ok(existsSync(full), `missing engine file ${rel}`)
+        assert.ok(!readFileSync(full, 'utf8').includes(AnyMuralImport), `${rel} imports ${AnyMuralImport}`)
+    }
 })
 
 // Recursively collects the relative paths of solution-services .ts files that
