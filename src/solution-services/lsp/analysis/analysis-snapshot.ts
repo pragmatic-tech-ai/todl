@@ -55,12 +55,16 @@ export class AnalysisSnapshot
         }
         const { model, diagnostics } = checkAgainst([...bases], [...sources]);
 
+        // Map each diagnostic exactly once; the flat list and the per-URI buckets reuse
+        // the SAME mapped object (no second MapMany pass over the raw diagnostics).
         const byUri = new Map<string, Diagnostic[]>();
         for (const src of sources) byUri.set(src.uri, []);
+        const flat: Diagnostic[] = [];
         const wholeModel: Diagnostic[] = [];
         for (const d of diagnostics)
         {
             const lsp = DiagnosticsMapper.Map(d);
+            flat.push(lsp);
             const uri = d.span?.uri ?? null;
             if (uri === null) { wholeModel.push(lsp); continue; }
             const list = byUri.get(uri);
@@ -75,7 +79,7 @@ export class AnalysisSnapshot
             model,
             ReferenceIndex.Build(asts),
             DefinitionIndex.Build(asts),
-            DiagnosticsMapper.MapMany(diagnostics),
+            flat,
             byUri,
         );
     }

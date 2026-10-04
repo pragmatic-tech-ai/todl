@@ -16,6 +16,13 @@ export class HoverProvider
     private static readonly DescriptionAttr = "description";
     private static readonly Newline = "\n";
     private static readonly TargetSeparator = " | ";
+    // Markdown fragments for the schema detail lines (reused across field/relationship
+    // rows), kept out of the method bodies so the one home for each is here.
+    private static readonly Backtick = "`";
+    private static readonly ExtendsLabel = "extends";
+    private static readonly Bullet = "- ";
+    private static readonly FieldTypeSeparator = ": ";
+    private static readonly RelationshipArrow = " → ";
 
     public HoverAt(a: AnalysisSnapshot, uri: string, pos: Position): Hover | null
     {
@@ -28,14 +35,20 @@ export class HoverProvider
         if (kind === SymbolKind.Concept)
         {
             const schema = a.Model.schemaOf(symbol);
-            if (schema.extends !== null) lines.push(`extends \`${schema.extends}\``);
-            for (const f of schema.fields) lines.push(`- \`${f.name}\`: ${f.type}`);
-            for (const r of schema.relationships) lines.push(`- \`${r.name}\` → ${r.targets.join(HoverProvider.TargetSeparator)}`);
+            if (schema.extends !== null) lines.push(`${HoverProvider.ExtendsLabel} ${HoverProvider.Code(schema.extends)}`);
+            for (const f of schema.fields) lines.push(`${HoverProvider.Bullet}${HoverProvider.Code(f.name)}${HoverProvider.FieldTypeSeparator}${f.type}`);
+            for (const r of schema.relationships) lines.push(`${HoverProvider.Bullet}${HoverProvider.Code(r.name)}${HoverProvider.RelationshipArrow}${r.targets.join(HoverProvider.TargetSeparator)}`);
         }
         const node = a.Model.resolve(symbol);
         const description = node?.attrs.get(HoverProvider.DescriptionAttr);
         if (typeof description === "string" && description.length > 0) lines.push("", description);
 
         return { contents: { kind: MarkupKind.Markdown, value: lines.join(HoverProvider.Newline) } };
+    }
+
+    // Wrap a symbol name in a Markdown inline-code span.
+    private static Code(text: string): string
+    {
+        return HoverProvider.Backtick + text + HoverProvider.Backtick;
     }
 }

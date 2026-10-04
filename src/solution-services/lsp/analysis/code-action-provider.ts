@@ -10,6 +10,9 @@ export class CodeActionProvider
 {
     private static readonly MissingFieldPattern = /required\s+"[^".]+\.([^"]+)"/;
     private static readonly TitlePrefix = "Add missing field";
+    // The inserted field stub `\n  <field> = ;`, split into its reused prefix/suffix.
+    private static readonly FieldEditPrefix = "\n  ";
+    private static readonly FieldEditSuffix = " = ;";
 
     public CodeActions(a: AnalysisSnapshot, uri: string, _range: Range, diagnostics: Diagnostic[]): CodeAction[]
     {
@@ -31,7 +34,7 @@ export class CodeActionProvider
         if (field === "") return null;
         const at = this.openBracePosition(a, uri, diag.range.start);
         if (at === null) return null;
-        const edit: TextEdit = { range: { start: at, end: at }, newText: `\n  ${field} = ;` };
+        const edit: TextEdit = { range: { start: at, end: at }, newText: `${CodeActionProvider.FieldEditPrefix}${field}${CodeActionProvider.FieldEditSuffix}` };
         return {
             title: `${CodeActionProvider.TitlePrefix} "${field}"`,
             kind: CodeActionKind.QuickFix,

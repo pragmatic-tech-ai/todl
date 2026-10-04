@@ -1,4 +1,3 @@
-import type { TextDocuments } from "vscode-languageserver";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import type { SourceFile } from "../../../compiler-services/diagnostics/span.js";
 import type { TodlDocument } from "../../../compiler-services/emit/json.js";
@@ -52,9 +51,28 @@ export class ProjectRegistry
         if (p !== undefined) p.Dirty = true;
     }
 
-    public DirtyProjects(): Project[] { return [...this.projects.values()].filter((p) => p.Dirty); }
-    public All(): Project[] { return [...this.projects.values()]; }
-    public Remove(rootUri: string): void { this.projects.delete(rootUri); }
+    public DirtyProjects(): Project[]
+    {
+        return [...this.projects.values()].filter((p) => p.Dirty);
+    }
+
+    public All(): Project[]
+    {
+        return [...this.projects.values()];
+    }
+
+    public Remove(rootUri: string): void
+    {
+        this.projects.delete(rootUri);
+    }
+}
+
+// The minimal open-document surface a SourceProvider reads: just `all()`. Both the
+// real vscode-languageserver TextDocuments and the host's LiveBufferDocuments satisfy
+// it directly, so no cast is needed at the call site.
+export interface OpenDocuments
+{
+    all(): TextDocument[];
 }
 
 export interface SourceProvider
@@ -62,15 +80,20 @@ export interface SourceProvider
     // The project roots known at startup (pushed: []).
     InitialRoots(folders: string[]): string[];
     // The SourceFile set to analyze for a project.
-    SourcesFor(project: Project, openDocs: TextDocuments<TextDocument>): SourceFile[];
+    SourcesFor(project: Project, openDocs: OpenDocuments): SourceFile[];
 }
 
 // Pushed mode: sources are the live text of open documents under the project root.
 export class PushedSourceProvider implements SourceProvider
 {
-    public InitialRoots(): string[] { return []; }
+    // Pushed mode learns its roots from DidChange, not startup folders, so the
+    // workspace folders the signature carries are deliberately unused here.
+    public InitialRoots(_folders: string[]): string[]
+    {
+        return [];
+    }
 
-    public SourcesFor(project: Project, openDocs: TextDocuments<TextDocument>): SourceFile[]
+    public SourcesFor(project: Project, openDocs: OpenDocuments): SourceFile[]
     {
         return openDocs.all()
             .filter((d) => d.uri.startsWith(project.RootUri))

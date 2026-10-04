@@ -61,16 +61,9 @@ export class ProjectModelProvider implements IProjectModelProvider
     // Mirrors CompileModelAction, as the granular half a build action delegates to.
     public async CompileWithBases(bases: readonly TodlDocument[]): Promise<ProjectModel>
     {
-        const sources = await this.CollectSources();
         const packageJson = toPackageJson(this.manifest); // throws on an architecture manifest
         const identity: PackageIdentity = { id: packageJson.todl.id, version: packageJson.version, name: this.manifest.name };
-
-        const outcome = compilePackage([...bases], sources, identity, ProjectModelProvider.DependencyRefs(this.manifest));
-        if (!outcome.ok || outcome.package === undefined)
-        {
-            return { errors: outcome.errors.map((e) => e.message) };
-        }
-        return { package: outcome.package, errors: [] };
+        return this.CompileWithIdentity(bases, identity);
     }
 
     // Version-free compile: resolves bases, then compiles with a synthetic identity so an
@@ -85,14 +78,22 @@ export class ProjectModelProvider implements IProjectModelProvider
     // stamps the identity into output metadata, so symbols are identical.
     public async CompileLocalWithBases(bases: readonly TodlDocument[]): Promise<ProjectModel>
     {
-        const sources = await this.CollectSources();
         const identity: PackageIdentity =
         {
             id: this.manifest.id ?? this.manifest.name,
             version: ProjectModelProvider.LocalVersion,
             name: this.manifest.name,
         };
+        return this.CompileWithIdentity(bases, identity);
+    }
 
+    // The compile-and-map step shared by CompileWithBases and CompileLocalWithBases:
+    // collect the project's sources, run the pure compilePackage against the given
+    // bases + identity, and map the outcome to a ProjectModel. The two public callers
+    // differ ONLY in how they build the identity (publishable vs. synthetic-local).
+    private async CompileWithIdentity(bases: readonly TodlDocument[], identity: PackageIdentity): Promise<ProjectModel>
+    {
+        const sources = await this.CollectSources();
         const outcome = compilePackage([...bases], sources, identity, ProjectModelProvider.DependencyRefs(this.manifest));
         if (!outcome.ok || outcome.package === undefined)
         {

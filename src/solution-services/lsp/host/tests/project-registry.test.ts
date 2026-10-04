@@ -1,15 +1,15 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import type { TextDocuments } from "vscode-languageserver";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { PushedSourceProvider, ProjectRegistry } from "../project-registry.js";
+import { PushedSourceProvider, ProjectRegistry, type OpenDocuments } from "../project-registry.js";
 
-// A TextDocuments stub exposing just `all()` (the only method providers use).
+// An OpenDocuments stub exposing just `all()` (the only method providers use) — it
+// implements the narrowed surface directly, so no cast is needed.
 class DocsStub
 {
-    public static With(...docs: TextDocument[]): TextDocuments<TextDocument>
+    public static With(...docs: TextDocument[]): OpenDocuments
     {
-        return { all: () => docs } as unknown as TextDocuments<TextDocument>;
+        return { all: () => docs };
     }
 }
 

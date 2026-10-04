@@ -5,6 +5,10 @@ export class FormattingProvider
 {
     private static readonly Indent = "  ";
     private static readonly Newline = "\n";
+    // Brace/quote tokens the depth scan keys on — reused across FormatText and braceDelta.
+    private static readonly OpenBrace = "{";
+    private static readonly CloseBrace = "}";
+    private static readonly Quote = "\"";
 
     // Re-indent each line by its brace depth, trim trailing whitespace, and collapse
     // runs of blank lines to one. Only `{`/`}` outside strings and comments drive
@@ -15,7 +19,6 @@ export class FormattingProvider
         const hadTrailingNewline = text.endsWith(FormattingProvider.Newline);
         if (hadTrailingNewline) lines.pop();   // drop the empty element after the last newline
 
-        const formatter = new FormattingProvider();
         const out: string[] = [];
         let depth = 0;
         let blankRun = 0;
@@ -29,10 +32,10 @@ export class FormattingProvider
                 continue;
             }
             blankRun = 0;
-            const startsClosing = trimmed.startsWith("}");
+            const startsClosing = trimmed.startsWith(FormattingProvider.CloseBrace);
             const indentDepth = Math.max(0, depth - (startsClosing ? 1 : 0));
             out.push(FormattingProvider.Indent.repeat(indentDepth) + trimmed);
-            depth = Math.max(0, depth + formatter.braceDelta(trimmed));
+            depth = Math.max(0, depth + FormattingProvider.braceDelta(trimmed));
         }
 
         return out.join(FormattingProvider.Newline) + (hadTrailingNewline ? FormattingProvider.Newline : "");
@@ -48,7 +51,7 @@ export class FormattingProvider
     }
 
     // Net `{` minus `}` on a line, ignoring braces inside "…"/`//`/`/* */`.
-    private braceDelta(line: string): number
+    private static braceDelta(line: string): number
     {
         let delta = 0;
         let i = 0;
@@ -58,11 +61,11 @@ export class FormattingProvider
             const ch = line[i]!;
             if (inString)
             {
-                if (ch === '"') inString = false;
+                if (ch === FormattingProvider.Quote) inString = false;
                 i += 1;
                 continue;
             }
-            if (ch === '"')
+            if (ch === FormattingProvider.Quote)
             {
                 inString = true;
                 i += 1;
@@ -76,8 +79,8 @@ export class FormattingProvider
                 i = end + 2;
                 continue;
             }
-            if (ch === "{") delta += 1;
-            else if (ch === "}") delta -= 1;
+            if (ch === FormattingProvider.OpenBrace) delta += 1;
+            else if (ch === FormattingProvider.CloseBrace) delta -= 1;
             i += 1;
         }
         return delta;

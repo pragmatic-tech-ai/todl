@@ -27,4 +27,15 @@ export class Positions
             end: { line: range.end.line + 1, column: range.end.character + 1 },
         };
     }
+
+    // Whether a 0-based LSP position falls within a range, start-inclusive and
+    // end-exclusive. The one hit-test both the reference and definition indexes share.
+    public static Contains(range: Range, pos: Position): boolean
+    {
+        const afterStart = pos.line > range.start.line ||
+            (pos.line === range.start.line && pos.character >= range.start.character);
+        const beforeEnd = pos.line < range.end.line ||
+            (pos.line === range.end.line && pos.character < range.end.character);
+        return afterStart && beforeEnd;
+    }
 }
