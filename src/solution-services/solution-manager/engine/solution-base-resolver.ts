@@ -243,7 +243,7 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource
             let model: ProjectModel | undefined
             try
             {
-                model = await new ProjectModelProvider(producer.storage, producer.manifest, this).CompileWithBases(child.bases.map((b) => b.document))
+                model = await new ProjectModelProvider(producer.storage, producer.manifest, this).CompileLocalWithBases(child.bases.map((b) => b.document))
             }
             catch (err)
             {
@@ -412,7 +412,7 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource
         this.resolving.add(id)
         try
         {
-            const model = await new ProjectModelProvider(storage, manifest, this).Compile()
+            const model = await new ProjectModelProvider(storage, manifest, this).CompileLocal()
             if (model.package === undefined) return undefined // live-compile failed → published fallback
             const compiled: SourcedPackage = { Document: model.package.document, Dependencies: model.package.document.dependencies ?? [] }
             this.cache.set(id, compiled)
