@@ -15,6 +15,7 @@ export enum ProjectEventKind
     Opened,
     ReferencesChanged,
     Saved,
+    MemberRemoved,
 }
 
 export interface ProjectEvent
