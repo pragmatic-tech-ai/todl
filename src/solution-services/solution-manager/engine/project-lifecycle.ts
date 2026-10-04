@@ -23,12 +23,13 @@ export enum CreateError
     FolderHasManifest,
     NoFactory,
     Invalid,
+    Unresolved,
 }
 
 // Structurally the plexus-core CreateOutcome contract (created + folder, or a
 // typed failure) minus UX text.
 export type CreateOutcome =
-    | { created: true; member: SolutionMember; folder: string }
+    | { created: true; member: SolutionMember; folder: string; name: string; type: ProjectType }
     | { created: false; error: CreateError }
 
 export enum OpenError
@@ -110,13 +111,18 @@ export class ProjectLifecycle
                 || (spec.bindings.architectures?.length ?? 0) > 0
             await factory.createProject(storage, name, hasBindings ? spec.bindings : undefined)
             const member = await this.manager.OpenProject(folder)
-            if (!member.IsResolved) return { created: false, error: CreateError.NoFactory }
-            await this.Track(folder, name, spec.type)
-            await this.Raise(ProjectEventKind.Created, member.Storage ?? storage)
-            return { created: true, member, folder }
+            // The member opened but its project did not resolve (load failure or a
+            // registry change) - not necessarily a missing factory.
+            if (!member.IsResolved) return { created: false, error: CreateError.Unresolved }
+            await this.Track(member, folder, name, spec.type)
+            // Created is raised by the project factory's own createProject (it does
+            // not dedupe downstream), so the lifecycle must not raise it again.
+            return { created: true, member, folder, name, type: spec.type }
         }
         catch
         {
+            // Any failure after the folder was made leaves that half-made folder
+            // behind; it is not cleaned up (storage has no delete).
             return { created: false, error: CreateError.Invalid }
         }
     }
@@ -129,7 +135,7 @@ export class ProjectLifecycle
             const member = await this.manager.OpenProject(folder)
             if (!member.IsResolved) return { opened: false, error: OpenError.NoFactory }
             const name = (member.Project as { Name?: string } | undefined)?.Name ?? member.Ref.path
-            await this.Track(folder, name, member.Ref.type)
+            await this.Track(member, folder, name, member.Ref.type)
             if (member.Storage !== undefined) await this.Raise(ProjectEventKind.Opened, member.Storage)
             return { opened: true, member, folder }
         }
@@ -144,12 +150,10 @@ export class ProjectLifecycle
     {
         if (guard !== undefined && !(await guard.CanClose(member))) return false
         const storage = member.Storage
+        const key = ProjectLifecycle.SessionKey(member, member.Ref.path)
         await this.manager.CloseProject(member)
-        if (storage !== undefined)
-        {
-            await this.session?.Remove(storage.Root)
-            await this.Raise(ProjectEventKind.MemberRemoved, storage)
-        }
+        await this.session?.Remove(key)
+        if (storage !== undefined) await this.Raise(ProjectEventKind.MemberRemoved, storage)
         return true
     }
 
@@ -170,7 +174,16 @@ export class ProjectLifecycle
             }
             if (hasManifest)
             {
-                await this.manager.OpenProject(folder)
+                // One corrupt project must not abort restoring the rest.
+                try
+                {
+                    const member = await this.manager.OpenProject(folder)
+                    if (member.Storage !== undefined) await this.Raise(ProjectEventKind.Opened, member.Storage)
+                }
+                catch
+                {
+                    continue
+                }
             }
             else
             {
@@ -188,10 +201,17 @@ export class ProjectLifecycle
             m.Storage !== undefined && ProjectLifecycle.Normalize(m.Storage.Root) === target)
     }
 
-    private async Track(folder: string, name: string, type: string): Promise<void>
+    private async Track(member: SolutionMember, folder: string, name: string, type: string): Promise<void>
     {
         await this.recents?.Add({ name, path: folder, type, openedAt: Date.now() })
-        await this.session?.Add(folder)
+        await this.session?.Add(ProjectLifecycle.SessionKey(member, folder))
+    }
+
+    // The one normalized key a project is stored under in the session, used by both
+    // Track and CloseProject so a slash variant cannot leave a stale entry.
+    private static SessionKey(member: SolutionMember, fallback: string): string
+    {
+        return ProjectLifecycle.Normalize(member.Storage?.Root ?? fallback)
     }
 
     // Announce a lifecycle moment on the ProjectEvents bus; no bus => nothing raised.
