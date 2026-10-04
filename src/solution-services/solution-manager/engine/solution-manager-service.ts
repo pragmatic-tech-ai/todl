@@ -162,16 +162,25 @@ export class SolutionManagerService extends ServiceBase
     // the caller resolved by compiling each member first (so it is registered in
     // the local package store the source reads). A fresh SolutionSession per call
     // keeps composition stateless; the caller surfaces the diagnostics. When the host
-    // registers the live-first SolutionBaseResolver the session composes through it
-    // (the same symbol universe the editor sees, unpublished members included); a
-    // host without one falls back to the injected published-only source.
+    // Composition ALWAYS goes through the live-first SolutionBaseResolver (the same
+    // symbol universe the editor sees, unpublished members included): the host's
+    // registered one, else one owned by this manager. There is deliberately no
+    // published-only fallback.
     public async Compose(members: readonly PackageRef[]): Promise<readonly Diagnostic[]>
     {
-        const resolver = this.Provider.get(SolutionBaseResolver.Key);
-        const source = resolver === undefined ? this.packages : new ResolverPackageSource(resolver);
-        const session = new SolutionSession(source);
+        const resolver = this.Provider.get(SolutionBaseResolver.Key) ?? this.ownedResolver();
+        const session = new SolutionSession(new ResolverPackageSource(resolver, this.packages));
         await session.compose(members);
         return session.Diagnostics;
+    }
+
+    // The resolver this manager owns when the host registered none; created once so
+    // its member subscriptions are not duplicated per Compose.
+    private fallbackResolver: SolutionBaseResolver | undefined;
+    private ownedResolver(): SolutionBaseResolver
+    {
+        this.fallbackResolver ??= new SolutionBaseResolver(this.Provider);
+        return this.fallbackResolver;
     }
 
     public get ActiveSolution(): Solution | undefined

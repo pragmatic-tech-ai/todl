@@ -63,7 +63,7 @@ class UnifiedFixtures
 
     // A real manager + resolver on one provider. `members` are opened with their
     // storage so the resolver sees them as live; `published` backs the fallback.
-    public static async Manager(members: { id: string; storage: IStorage }[], published: IPackageSource): Promise<SolutionManagerService>
+    public static async Manager(members: { id: string; storage: IStorage }[], published: IPackageSource, versions: Record<string, string[]> = {}): Promise<SolutionManagerService>
     {
         const provider = new ServiceProvider()
         provider.registerInstance(SolutionManagerService.StorageRegistryKey, { CreateStorage: () => new FakeStorage() } as never)
@@ -71,6 +71,7 @@ class UnifiedFixtures
         provider.registerInstance(SolutionManagerService.PromptServiceKey, {} as never)
         provider.registerInstance(SolutionManagerService.PackageSourceKey, {
             resolve: () => Promise.reject(new Error(UnifiedFixtures.NoComposeMessage)),
+            versions: (model: string) => Promise.resolve(versions[model] ?? []),
         })
         provider.registerInstance(PackageStoreKey, published as never)
         const manager = new SolutionManagerService(provider)
@@ -121,6 +122,24 @@ test('published-only composition still works through the resolver', async () =>
     const manager = await UnifiedFixtures.Manager([], published)
 
     const diags = await manager.Compose([{ model: 'acme.pub', version: UnifiedFixtures.Version }])
+
+    assert.deepEqual(diags, [])
+})
+
+test('a version-less member pins to the latest published version and resolves', async () =>
+{
+    const compiled = compilePackage(
+        [],
+        [{ uri: UnifiedFixtures.ModelFileName, text: `namespace acme { concept Widget { name : string; } }` }],
+        { id: 'acme.pub', version: UnifiedFixtures.Version },
+    )
+    assert.ok(compiled.ok && compiled.package)
+    const published = UnifiedFixtures.Published(new Map([
+        [`acme.pub@${UnifiedFixtures.Version}`, { Document: compiled.package!.document, Dependencies: compiled.package!.document.dependencies ?? [] }],
+    ]))
+    const manager = await UnifiedFixtures.Manager([], published, { 'acme.pub': ['0.9.0', UnifiedFixtures.Version] })
+
+    const diags = await manager.Compose([{ model: 'acme.pub' }])
 
     assert.deepEqual(diags, [])
 })

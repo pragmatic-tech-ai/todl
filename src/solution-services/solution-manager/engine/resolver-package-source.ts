@@ -12,16 +12,20 @@ export class ResolverPackageSource implements PackageSource
     // Package ids are globally unique and a source does not route on kind, so the
     // adapter asks for a Library; the resolver matches live members by id alone.
     private static readonly RequestKind = PackageKind.Library
-    // A live, unpublished member has no concrete version; the Domain's identity needs
-    // one, so a version-less ref resolves under this placeholder (live-first sources
-    // ignore the version anyway).
-    private static readonly UnversionedPlaceholder = '0.0.0'
+    // `source` supplies packages (live-first); `versionSource` is the published backend
+    // whose versions() lets Domain.pin resolve a version-less ref to its latest
+    // published version, exactly as when it was the Domain's own source.
+    constructor(private readonly source: IPackageSource, private readonly versionSource: PackageSource) {}
 
-    constructor(private readonly source: IPackageSource) {}
+    public async versions(model: string): Promise<readonly string[]>
+    {
+        return this.versionSource.versions === undefined ? [] : this.versionSource.versions(model)
+    }
 
     public async resolve(ref: PackageRef): Promise<ResolvedPackage>
     {
-        const version = ref.version ?? ResolverPackageSource.UnversionedPlaceholder
+        // Domain.pin always supplies a concrete version before resolve.
+        const version = ref.version as string
         const sourced = await this.source.TryGet({ kind: ResolverPackageSource.RequestKind, id: ref.model, version })
         if (sourced === undefined) throw new Error(`package "${ref.model}@${version}" not found`)
         const dependencies = sourced.Dependencies.map((d) => ({ model: d.id, version: d.version }))
