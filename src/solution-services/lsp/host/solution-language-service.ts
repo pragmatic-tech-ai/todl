@@ -22,7 +22,7 @@ import { SolutionManagerService } from "../../solution-manager/engine/solution-m
 import type { Solution } from "../../solution-manager/engine/solution.js";
 import type { SolutionMember } from "../../solution-manager/engine/solution-member.js";
 import {
-    ProjectEventsKey, ProjectEventKind, type IProjectEvents, type ProjectEvent, type ProjectEventHandler,
+    ProjectEventsKey, ProjectEventKind, type IProjectEvents, type ProjectEvent,
 } from "../../project-services/generators/project-events.js";
 import type { ILanguageService } from "./i-language-service.js";
 
@@ -330,14 +330,12 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
         }
     }
 
-    // Subscribe to the project-event bus and react to ReferencesChanged. The bus
-    // (ProjectEvents) exposes Subscribe but no unsubscribe handle, so teardown relies
-    // on the disposed guard in the handler rather than a real detach; resolve it
-    // structurally since the IProjectEvents contract declares only Raise.
+    // Subscribe to the project-event bus and react to ReferencesChanged. Subscribe
+    // returns an IDisposable that truly detaches the handler, stored for dispose() to
+    // tear down (the disposed guard in the handler is belt-and-suspenders).
     private SubscribeToProjectEvents(events: IProjectEvents): void
     {
-        const bus = events as unknown as { Subscribe?: (handler: ProjectEventHandler) => void };
-        bus.Subscribe?.((event) => this.OnProjectEvent(event));
+        this.subscriptions.push(events.Subscribe((event) => this.OnProjectEvent(event)));
     }
 
     private async OnProjectEvent(event: ProjectEvent): Promise<void>

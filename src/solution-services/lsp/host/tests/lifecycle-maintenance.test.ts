@@ -219,6 +219,26 @@ test("dispose() unsubscribes (no eviction after dispose)", async () =>
     assert.equal(world.Service.BaseSetToken, tokenBefore);
 });
 
+test("dispose() truly unsubscribes the ReferencesChanged arm (handler detached, no effect)", async () =>
+{
+    const world = World.Build([
+        { id: "mm", type: "meta-model", storage: Fixtures.Storage("mm", Fixtures.MetaModelFiles("mm", "1.0.0", "Widget")) },
+        { id: "lib", type: "library", storage: Fixtures.Storage("lib", Fixtures.LibraryFiles("lib", "mm", "1.0.0", "Gadget", "Widget")) },
+    ]);
+    await world.Prime("mm", "lib");
+    assert.equal(world.Events.SubscriberCount, 1);   // the service's arm is attached to the bus
+    const tokenBefore = world.Service.BaseSetToken;
+
+    world.Service.dispose();
+
+    // Detached, not merely inert — the handler is gone from the bus.
+    assert.equal(world.Events.SubscriberCount, 0);
+
+    await world.RaiseReferencesChanged("mm");
+    assert.deepEqual([...world.Resolver.StaleMemberIds], []);   // no Invalidate ran
+    assert.equal(world.Service.BaseSetToken, tokenBefore);      // no token bump
+});
+
 // Records whether each request carried Context.Bases, so the base-set gating can be
 // asserted directly (mirrors Task 12's SpyEngine).
 class SpyEngine implements IAnalysisEngine

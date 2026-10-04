@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { ServiceProvider, type IServiceProvider } from '@pragmatic-tech-ai/todl-runtime'
+import { ServiceProvider, Disposable, type IServiceProvider, type IDisposable } from '@pragmatic-tech-ai/todl-runtime'
 import { NodeFsStorage } from '@pragmatic-tech-ai/todl-runtime/node'
 import {
     PROJECT_MANIFEST_FILENAME,
@@ -14,7 +14,7 @@ import {
 import { type ProjectBaseModelBindings } from '../base-binding.js'
 import { ProjectNodeKind } from '../project.js'
 import { TodlProjectFactory, isTodlProject, type ScaffoldFile } from '../todl-project-factory.js'
-import { ProjectEventsKey, ProjectEventKind, type ProjectEvent, type IProjectEvents } from '../../generators/project-events.js'
+import { ProjectEventsKey, ProjectEventKind, type ProjectEvent, type IProjectEvents, type ProjectEventHandler } from '../../generators/project-events.js'
 
 // A real filesystem storage rooted at a throwaway temp dir, torn down after the test.
 async function tempStorage(t: TestContext): Promise<NodeFsStorage>
@@ -53,7 +53,13 @@ function factory(): FakeFactory { return new FakeFactory(new ServiceProvider()) 
 class FakeProjectEvents implements IProjectEvents
 {
     public readonly Raised: ProjectEvent[] = []
+    private readonly handlers: ProjectEventHandler[] = []
     public async Raise(event: ProjectEvent): Promise<void> { this.Raised.push(event) }
+    public Subscribe(handler: ProjectEventHandler): IDisposable
+    {
+        this.handlers.push(handler)
+        return new Disposable(() => { const i = this.handlers.indexOf(handler); if (i !== -1) this.handlers.splice(i, 1) })
+    }
 }
 
 function factoryWithEvents(): { factory: FakeFactory, events: FakeProjectEvents }

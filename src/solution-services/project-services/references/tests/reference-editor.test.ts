@@ -1,10 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { FakeStorage } from '@pragmatic-tech-ai/todl-runtime'
+import { FakeStorage, Disposable, type IDisposable } from '@pragmatic-tech-ai/todl-runtime'
 import { ReferenceEditor, ReferenceResolutionKind, type IPublishedBaseCatalog, type RefChoiceDTO } from '../reference-editor.js'
 import { PROJECT_MANIFEST_FILENAME } from '../../core/project-factory.js'
 import { ProjectType } from '../../../package-manager/manifest.js'
-import { ProjectEventKind, type IProjectEvents, type ProjectEvent } from '../../generators/project-events.js'
+import { ProjectEventKind, type IProjectEvents, type ProjectEvent, type ProjectEventHandler } from '../../generators/project-events.js'
 
 class CallLog
 {
@@ -53,11 +53,17 @@ class FakeCatalog implements IPublishedBaseCatalog
 class RecordingEvents implements IProjectEvents
 {
     public events: ProjectEvent[] = []
+    private readonly handlers: ProjectEventHandler[] = []
     constructor(private readonly log: CallLog) {}
     public async Raise(e: ProjectEvent): Promise<void>
     {
         this.log.entries.push('raise')
         this.events.push(e)
+    }
+    public Subscribe(handler: ProjectEventHandler): IDisposable
+    {
+        this.handlers.push(handler)
+        return new Disposable(() => { const i = this.handlers.indexOf(handler); if (i !== -1) this.handlers.splice(i, 1) })
     }
 }
 
