@@ -33,9 +33,11 @@ interface LiveBase
 // Task 3 layers a per-member compile cache, a dependency graph derived from each
 // member's own metaModels/libraries bindings, and a stale signal on top: Invalidate
 // evicts a member plus its transitive dependents and raises StaleMemberIds so a
-// Wave-3 host can react (re-run diagnostics, re-render). The Members-collection
-// coarse trigger (any add/remove, or opening a different solution) simply clears
-// everything — Wave 1 does not try to patch the graph incrementally.
+// Wave-3 host can react (re-run diagnostics, re-render). Task 13 drives that targeted
+// Invalidate from the SolutionLanguageService on each solution lifecycle event, so
+// the coarse "clear everything on any Members change" trigger is gone: the only
+// remaining blanket clear is the ActiveSolution switch (opening a different solution
+// swaps the whole member set out, so nothing cached can survive it).
 export class SolutionBaseResolver extends ServiceBase implements IPackageSource
 {
     public static readonly Key = new ServiceKey<SolutionBaseResolver>('SolutionBaseResolver')
@@ -56,11 +58,6 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource
     private readonly baseIdsOf = new Map<string, ReadonlySet<string>>()
 
     private _staleMemberIds: ReadonlySet<string> = new Set<string>()
-
-    // The live unsubscribe for the current ActiveSolution's Members collection —
-    // rewired whenever ActiveSolution itself changes (opening a different solution
-    // swaps the Members collection out from under us).
-    private membersUnsubscribe: (() => void) | undefined
 
     constructor(provider: IServiceProvider)
     {
@@ -462,28 +459,20 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource
         return evicted
     }
 
-    // Coarse Wave-1 cache-invalidation trigger: clear the cache + graph whenever
-    // the active solution's Members collection changes (a member added/removed),
-    // and rewire that subscription whenever ActiveSolution itself changes (opening
-    // a different solution swaps the Members collection out from under us). Guards
-    // against a headless run with no SolutionManagerService registered, and against
-    // a lightweight test double that doesn't implement PropertyChanged/Subscribe.
+    // The ONLY remaining blanket cache clear: the ActiveSolution switch. Opening a
+    // different solution swaps the entire member set out, so every cached compile and
+    // every graph edge is stale at once — clear them. Incremental per-member changes
+    // (add/remove/reference edits) are handled by the SolutionLanguageService driving
+    // the targeted Invalidate instead; this class no longer subscribes to the Members
+    // collection for a coarse clear. Guards against a headless run with no
+    // SolutionManagerService registered, and against a lightweight test double that
+    // doesn't implement PropertyChanged.
     private subscribeToManager(): void
     {
         const manager = this.Provider.get(SolutionManagerService.Key)
         if (manager === undefined) return
         const propertyChanged = (manager as unknown as { PropertyChanged?: (name: string) => { subscribe: (handler: () => void) => unknown } }).PropertyChanged
-        propertyChanged?.call(manager, SolutionBaseResolver.ActiveSolutionPropertyName).subscribe(() => this.rewireMembers(manager))
-        this.rewireMembers(manager)
-    }
-
-    private rewireMembers(manager: SolutionManagerService): void
-    {
-        this.membersUnsubscribe?.()
-        this.membersUnsubscribe = undefined
-        this.clearCache()
-        const members = manager.ActiveSolution?.Members as unknown as { Subscribe?: (handler: () => void) => () => void } | undefined
-        this.membersUnsubscribe = members?.Subscribe?.(() => this.clearCache())
+        propertyChanged?.call(manager, SolutionBaseResolver.ActiveSolutionPropertyName).subscribe(() => this.clearCache())
     }
 
     private clearCache(): void

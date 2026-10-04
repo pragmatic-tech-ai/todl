@@ -1,6 +1,7 @@
 import {
-    ServiceBase, ServiceKey, type IServiceProvider, type IStorage, type IDisposable,
+    ServiceBase, ServiceKey, Disposable, type IServiceProvider, type IStorage, type IDisposable,
 } from "@pragmatic-tech-ai/todl-runtime";
+import type { CollectionChange } from "@pragmatic-tech-ai/todl-runtime";
 import type { TextDocuments } from "vscode-languageserver";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import type {
@@ -18,6 +19,11 @@ import { SolutionBaseResolver } from "../../solution-manager/engine/solution-bas
 import { ResolverPackageSource } from "../../solution-manager/engine/resolver-package-source.js";
 import { SolutionSession } from "../../solution-manager/engine/solution-session.js";
 import { SolutionManagerService } from "../../solution-manager/engine/solution-manager-service.js";
+import type { Solution } from "../../solution-manager/engine/solution.js";
+import type { SolutionMember } from "../../solution-manager/engine/solution-member.js";
+import {
+    ProjectEventsKey, ProjectEventKind, type IProjectEvents, type ProjectEvent, type ProjectEventHandler,
+} from "../../project-services/generators/project-events.js";
 import type { ILanguageService } from "./i-language-service.js";
 
 // The live-buffer store: the open documents the editor has pushed via DidChange,
@@ -57,6 +63,14 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     private static readonly NoPackageSourceMessage = "No package source is registered.";
     private static readonly RootSeparator = "/";
 
+    // The manager's INPC property whose change means the whole member set was swapped
+    // (a different solution opened) — the signal to re-point the Members subscription.
+    private static readonly ActiveSolutionPropertyName = "ActiveSolution";
+    // The CollectionChange discriminators this service reacts to. Typed `as const` so a
+    // `change.kind === …` comparison still narrows the discriminated union.
+    private static readonly InsertedKind = "inserted" as const;
+    private static readonly RemovedKind = "removed" as const;
+
     // A published-source backstop so the ResolverPackageSource (and thus the
     // SolutionSession) can be built even when the host registered no package source.
     private static readonly EmptyPackageSource: PackageSource =
@@ -72,11 +86,24 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     private readonly sources = new PushedSourceProvider();
     private readonly liveDocuments = new LiveBufferDocuments();
 
-    // Teardown slots; the member/stale subscriptions that fill these land in T13.
+    // Permanent lifecycle subscriptions (the manager's ActiveSolution channel + the
+    // project-event bus), disposed in dispose().
     private readonly subscriptions: IDisposable[] = [];
+    // The ONE rewirable subscription: the active solution's Members collection. It is
+    // re-pointed whenever ActiveSolution changes (a different solution swaps the
+    // collection out), so it lives in its own slot rather than the permanent list.
+    private membersSubscription: IDisposable | undefined;
+    // Set true the instant dispose() runs so an in-flight async maintenance task (or a
+    // bus event whose source has no unsubscribe) becomes an inert no-op.
+    private disposed = false;
+    // The serialized tail of fire-and-forget maintenance kicked off from the sync
+    // Members listener. WhenIdle awaits it so a test observes the eviction/token bump
+    // deterministically; failures are swallowed so one bad task can't wedge the chain.
+    private pending: Promise<void> = Promise.resolve();
 
-    // Monotonic base-set version. T13 bumps it on a base change; here it is only
-    // initialized + exposed, and drives the context-assembly gating below.
+    // Monotonic base-set version, bumped on every targeted invalidation so the
+    // context-assembly gating re-sends the affected project's warm bases on its next
+    // request (see ContextFor).
     private baseSetToken = 0;
 
     // The context-assembly bookkeeping: the project the last request targeted, and
@@ -97,6 +124,7 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
         const packages = provider.get(SolutionManagerService.PackageSourceKey) ?? SolutionLanguageService.EmptyPackageSource;
         this.session = new SolutionSession(new ResolverPackageSource(this.resolver, packages));
         this.warmup = this.BuildWarmCache();
+        this.SubscribeToLifecycle();
     }
 
     public get BaseSetToken(): number
@@ -239,9 +267,120 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
 
     public override dispose(): void
     {
+        // Flip the guard first so any task already queued (or a bus event with no
+        // unsubscribe handle) short-circuits, then tear down every subscription.
+        this.disposed = true;
+        this.membersSubscription?.dispose();
+        this.membersSubscription = undefined;
         for (const sub of this.subscriptions) sub.dispose();
         this.subscriptions.length = 0;
         super.dispose();
+    }
+
+    // Test seam: await the serialized tail of fire-and-forget maintenance so an
+    // assertion that follows a Members mutation sees its eviction / token bump.
+    public async WhenIdle(): Promise<void>
+    {
+        await this.pending;
+    }
+
+    // Wire the solution lifecycle → targeted cache maintenance. Two permanent arms —
+    // the manager's ActiveSolution channel (re-point the Members subscription on a
+    // solution switch) and the project-event bus (reference changes) — plus the
+    // rewirable Members subscription itself. Guarded for a headless run (no manager /
+    // no bus) and for a lightweight test double whose manager lacks PropertyChanged.
+    private SubscribeToLifecycle(): void
+    {
+        const manager = this.Provider.get(SolutionManagerService.Key);
+        if (manager !== undefined)
+        {
+            const propertyChanged = (manager as unknown as { PropertyChanged?: (name: string) => { subscribe: (handler: () => void) => IDisposable } }).PropertyChanged;
+            const sub = propertyChanged?.call(manager, SolutionLanguageService.ActiveSolutionPropertyName).subscribe(() => this.RewireMembers(manager.ActiveSolution));
+            if (sub !== undefined) this.subscriptions.push(sub);
+            this.RewireMembers(manager.ActiveSolution);
+        }
+        const events = this.Provider.get(ProjectEventsKey);
+        if (events !== undefined) this.SubscribeToProjectEvents(events);
+    }
+
+    // (Re)point the Members subscription at the active solution's collection, tearing
+    // down the previous one — a solution switch swaps the collection out from under us.
+    private RewireMembers(solution: Solution | undefined): void
+    {
+        this.membersSubscription?.dispose();
+        this.membersSubscription = undefined;
+        if (solution === undefined) return;
+        const off = solution.Members.Subscribe((change) => this.OnMembersChanged(change));
+        this.membersSubscription = new Disposable(off);
+    }
+
+    // A member added/removed: enqueue targeted maintenance per touched member. Insert
+    // refreshes the new member's warm bases; remove drops its slice. Other change kinds
+    // (moved/replaced/cleared/reset) don't alter any member's own base closure.
+    private OnMembersChanged(change: CollectionChange<SolutionMember>): void
+    {
+        if (this.disposed) return;
+        if (change.kind === SolutionLanguageService.RemovedKind)
+        {
+            for (const member of change.items) this.Enqueue(() => this.MaintainMember(member, false));
+        }
+        else if (change.kind === SolutionLanguageService.InsertedKind)
+        {
+            for (const member of change.items) this.Enqueue(() => this.MaintainMember(member, true));
+        }
+    }
+
+    // Subscribe to the project-event bus and react to ReferencesChanged. The bus
+    // (ProjectEvents) exposes Subscribe but no unsubscribe handle, so teardown relies
+    // on the disposed guard in the handler rather than a real detach; resolve it
+    // structurally since the IProjectEvents contract declares only Raise.
+    private SubscribeToProjectEvents(events: IProjectEvents): void
+    {
+        const bus = events as unknown as { Subscribe?: (handler: ProjectEventHandler) => void };
+        bus.Subscribe?.((event) => this.OnProjectEvent(event));
+    }
+
+    private async OnProjectEvent(event: ProjectEvent): Promise<void>
+    {
+        if (this.disposed) return;
+        if (event.Kind !== ProjectEventKind.ReferencesChanged) return;
+        await this.InvalidateMember(event.Project, true);
+    }
+
+    // Serialize fire-and-forget maintenance onto one tail so WhenIdle can await it; a
+    // failed task is swallowed so it can't wedge the chain for the next event.
+    private Enqueue(work: () => Promise<void>): void
+    {
+        this.pending = this.pending.then(work).catch(() => undefined);
+    }
+
+    private async MaintainMember(member: SolutionMember, refresh: boolean): Promise<void>
+    {
+        const storage = member.Storage;
+        if (storage === undefined) return;
+        await this.InvalidateMember(storage, refresh);
+    }
+
+    // The single maintenance step every lifecycle event funnels through: map the
+    // storage to its member id, evict that member + its transitive dependents, then
+    // either refresh (an edit) or drop (a removal) its warm-bases slice, and bump the
+    // token so the next request for the project re-sends its bases.
+    private async InvalidateMember(storage: IStorage, refresh: boolean): Promise<void>
+    {
+        if (this.disposed) return;
+        const id = await this.resolver.ConsumerIdOf(storage);
+        if (id === undefined) return;
+        this.resolver.Invalidate(id);
+        if (refresh) await this.RefreshWarmBases(storage);
+        else this.projects.Remove(SolutionLanguageService.RootUriOf(storage));
+        this.BumpToken();
+    }
+
+    // Monotonic increment — a change to any member's base closure invalidates every
+    // consumer's cached copy keyed by the old token.
+    private BumpToken(): void
+    {
+        this.baseSetToken += 1;
     }
 
     // Resolve the owning project for a URI once the warm cache is ready; null when
@@ -287,11 +426,18 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
         {
             const storage = member.Storage;
             if (storage === undefined) continue;
-            const rootUri = SolutionLanguageService.RootUriOf(storage);
-            const { bases } = await this.resolver.ResolveBasesFor(storage);
-            this.projects.Register(rootUri);
-            this.projects.SetBases(rootUri, bases);
+            await this.RefreshWarmBases(storage);
         }
+    }
+
+    // Re-resolve a member's warm base-set and store it under its project root — the
+    // per-member body shared between the construction-time build and a live refresh.
+    private async RefreshWarmBases(storage: IStorage): Promise<void>
+    {
+        const rootUri = SolutionLanguageService.RootUriOf(storage);
+        const { bases } = await this.resolver.ResolveBasesFor(storage);
+        this.projects.Register(rootUri);
+        this.projects.SetBases(rootUri, bases);
     }
 
     // The project-root URI for a member's storage: its root normalized to a trailing
