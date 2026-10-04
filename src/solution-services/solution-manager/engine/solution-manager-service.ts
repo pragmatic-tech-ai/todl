@@ -13,6 +13,8 @@ import {
 import { Solution } from './solution.js';
 import { SolutionManifest } from './solution-manifest.js';
 import { SolutionSession } from './solution-session.js';
+import { SolutionBaseResolver } from './solution-base-resolver.js';
+import { ResolverPackageSource } from './resolver-package-source.js';
 import {
     ProjectFactoryRegistryKey,
     type IStorageProviderRegistry,
@@ -159,10 +161,15 @@ export class SolutionManagerService extends ServiceBase
     // cross-project diagnostics. Members are Domain refs (a package id + version)
     // the caller resolved by compiling each member first (so it is registered in
     // the local package store the source reads). A fresh SolutionSession per call
-    // keeps composition stateless; the caller surfaces the diagnostics.
+    // keeps composition stateless; the caller surfaces the diagnostics. When the host
+    // registers the live-first SolutionBaseResolver the session composes through it
+    // (the same symbol universe the editor sees, unpublished members included); a
+    // host without one falls back to the injected published-only source.
     public async Compose(members: readonly PackageRef[]): Promise<readonly Diagnostic[]>
     {
-        const session = new SolutionSession(this.packages);
+        const resolver = this.Provider.get(SolutionBaseResolver.Key);
+        const source = resolver === undefined ? this.packages : new ResolverPackageSource(resolver);
+        const session = new SolutionSession(source);
         await session.compose(members);
         return session.Diagnostics;
     }
