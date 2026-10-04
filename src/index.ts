@@ -237,6 +237,28 @@ export {
 } from './solution-services/project-services/core/project-factory.js';
 export { SemVer, VersionPart } from './solution-services/project-services/core/semver.js';
 export { MemberProjectOps } from './solution-services/project-services/core/member-project-ops.js';
+export { MemberContentOps, RenameError, type RenameResult, type MoveResult, type ImportFile } from './solution-services/project-services/content/member-content-ops.js';
+export type { IContentLifecycleGuard } from './solution-services/project-services/content/content-lifecycle.js';
+export {
+    ReferenceEditor,
+    ReferenceResolutionKind,
+    type RefChoiceDTO,
+    type ReferenceManifest,
+    type ReferenceBindingsInput,
+    type IPublishedBaseCatalog,
+} from './solution-services/project-services/references/reference-editor.js';
+export {
+    ProjectLifecycle,
+    CreateError,
+    OpenError,
+    type CreateProjectSpec,
+    type CreateOutcome,
+    type OpenOutcome,
+    type ProjectRecentEntry,
+    type IProjectRecents,
+    type IProjectSessionStore,
+    type ICloseGuard,
+} from './solution-services/solution-manager/engine/project-lifecycle.js';
 export { type ProjectFactoryDefinition } from './solution-services/project-services/core/project-factory-definition.js';
 export { type PublishedBaseModelReference, type ProjectBaseModelBindings } from './solution-services/project-services/core/base-binding.js';
 export { WikiOriginKind, WikiLocator, type WikiOrigin } from './solution-services/project-services/core/wiki-origin.js';
