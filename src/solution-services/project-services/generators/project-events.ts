@@ -63,7 +63,9 @@ export class ProjectEvents implements IProjectEvents
 
     public async Raise(event: ProjectEvent): Promise<void>
     {
-        for (const handler of this.handlers)
+        // Iterate a snapshot: a handler may Unsubscribe (splice) itself or a sibling
+        // mid-raise, and mutating the live array under the loop would skip the next one.
+        for (const handler of [...this.handlers])
         {
             await handler(event);
         }

@@ -30,9 +30,10 @@ export class DefinitionIndex
         return new DefinitionIndex(defs);
     }
 
+    // A copy, so a caller can't mutate the index's internal definition list.
     public All(): Definition[]
     {
-        return this.defs;
+        return [...this.defs];
     }
 
     public Get(symbol: string): Definition | null
@@ -42,7 +43,7 @@ export class DefinitionIndex
 
     public DefinitionAt(uri: string, pos: Position): Definition | null
     {
-        return this.defs.find((d) => d.Uri === uri && DefinitionIndex.Contains(d.NameRange, pos)) ?? null;
+        return this.defs.find((d) => d.Uri === uri && Positions.Contains(d.NameRange, pos)) ?? null;
     }
 
     private static Add(defs: Definition[], uri: string, symbol: string, span: SourceSpan | undefined, kind: SymbolKind): void
@@ -80,14 +81,5 @@ export class DefinitionIndex
         // Terms are keyed by bare id — how they are referenced from instances.
         DefinitionIndex.Add(defs, uri, term.id, term.idSpan, SymbolKind.Term);
         for (const child of term.children) DefinitionIndex.AddTerm(defs, uri, child);
-    }
-
-    private static Contains(range: Range, pos: Position): boolean
-    {
-        const afterStart = pos.line > range.start.line ||
-            (pos.line === range.start.line && pos.character >= range.start.character);
-        const beforeEnd = pos.line < range.end.line ||
-            (pos.line === range.end.line && pos.character < range.end.character);
-        return afterStart && beforeEnd;
     }
 }

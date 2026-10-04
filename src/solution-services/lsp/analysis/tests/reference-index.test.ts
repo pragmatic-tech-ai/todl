@@ -30,6 +30,15 @@ test("records extends, field-type, relationship-target and ref occurrences", () 
     assert.equal(idx.Get("dog")[0]!.Role, Role.InstanceConcept);
 });
 
+test("All() hands out a copy, not the index's internal list", () =>
+{
+    const idx = IndexFixture.IndexOf("namespace demo {\n  concept a { }\n  concept b : a { }\n}");
+    const first = idx.All();
+    const original = first.length;
+    first.push(first[0]!);                      // mutate the returned array
+    assert.equal(idx.All().length, original);   // the index is unaffected
+});
+
 test("OccurrenceAt finds the occurrence under a position", () =>
 {
     const idx = IndexFixture.IndexOf("namespace demo {\n  concept a { }\n  concept b : a { }\n}");

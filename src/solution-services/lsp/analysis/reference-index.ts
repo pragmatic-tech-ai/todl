@@ -50,9 +50,10 @@ export class ReferenceIndex
         return new ReferenceIndex(occurrences);
     }
 
+    // A copy, so a caller can't mutate the index's internal occurrence list.
     public All(): Occurrence[]
     {
-        return this.occurrences;
+        return [...this.occurrences];
     }
 
     public Get(symbol: string): Occurrence[]
@@ -62,7 +63,7 @@ export class ReferenceIndex
 
     public OccurrenceAt(uri: string, pos: Position): Occurrence | null
     {
-        return this.occurrences.find((o) => o.Uri === uri && ReferenceIndex.Contains(o.Range, pos)) ?? null;
+        return this.occurrences.find((o) => o.Uri === uri && Positions.Contains(o.Range, pos)) ?? null;
     }
 
     private static RoleOf(r: RefRole): Role
@@ -82,14 +83,5 @@ export class ReferenceIndex
             case RefRole.RefValue: return Role.RefValue;
             case RefRole.AnnotationName: return Role.AnnotationName;
         }
-    }
-
-    private static Contains(range: Range, pos: Position): boolean
-    {
-        const afterStart = pos.line > range.start.line ||
-            (pos.line === range.start.line && pos.character >= range.start.character);
-        const beforeEnd = pos.line < range.end.line ||
-            (pos.line === range.end.line && pos.character < range.end.character);
-        return afterStart && beforeEnd;
     }
 }

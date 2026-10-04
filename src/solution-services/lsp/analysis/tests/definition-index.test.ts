@@ -30,6 +30,15 @@ test("indexes each definition's name range and kind", () =>
     });
 });
 
+test("All() hands out a copy, not the index's internal list", () =>
+{
+    const defs = IndexFixture.DefsOf("namespace demo {\n  concept person { }\n}");
+    const first = defs.All();
+    const original = first.length;
+    first.push(first[0]!);                       // mutate the returned array
+    assert.equal(defs.All().length, original);   // the index is unaffected
+});
+
 test("DefinitionAt resolves a position on a definition name", () =>
 {
     const defs = IndexFixture.DefsOf("namespace demo {\n  concept person { }\n}");

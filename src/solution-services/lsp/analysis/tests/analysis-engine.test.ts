@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { Position, Range } from "vscode-languageserver-types";
-import { AnalysisEngine } from "../analysis-engine.js";
+import { AnalysisEngine, StaleBaseSetError } from "../analysis-engine.js";
 import { AnalyzeKind, type AnalyzeContext, type AnalyzeRequest } from "../protocol.js";
 import type { SourceFile } from "../../../../compiler-services/diagnostics/span.js";
 import { preludeDocument } from "../../../../compiler-services/stdlib/prelude.js";
@@ -70,4 +70,25 @@ test("a stale token without bases is rejected so the host re-sends", async () =>
 test("a first request with no bases and no cache is rejected", async () =>
 {
     await assert.rejects(() => new AnalysisEngine().Analyze(Fixtures.Request(AnalyzeKind.Diagnostics, { BaseSetToken: 0, Documents: Fixtures.Documents })), /StaleBaseSet/);
+});
+
+test("the staleness signal is a typed StaleBaseSetError detectable by type, not message text", async () =>
+{
+    const engine = new AnalysisEngine();
+    await engine.Analyze(Fixtures.Request(AnalyzeKind.Diagnostics, { BaseSetToken: 7, Bases: [preludeDocument()], Documents: Fixtures.Documents }));
+    await assert.rejects(
+        () => engine.Analyze(Fixtures.Request(AnalyzeKind.Diagnostics, { BaseSetToken: 8, Documents: Fixtures.Documents })),
+        (err: unknown) => StaleBaseSetError.Is(err) && err.name === StaleBaseSetError.Code,
+    );
+});
+
+test("an out-of-order older-token request with Bases does not regress the cached token", async () =>
+{
+    const engine = new AnalysisEngine();
+    await engine.Analyze(Fixtures.Request(AnalyzeKind.Diagnostics, { BaseSetToken: 7, Bases: [preludeDocument()], Documents: Fixtures.Documents }));
+    // A late request from an OLDER base-set must not overwrite the token-7 cache.
+    await engine.Analyze(Fixtures.Request(AnalyzeKind.Diagnostics, { BaseSetToken: 5, Bases: [preludeDocument()], Documents: Fixtures.Documents }));
+    // The newer cache survived: a no-bases token-7 request is still served, not rejected.
+    const r = await engine.Analyze(Fixtures.Request(AnalyzeKind.Diagnostics, { BaseSetToken: 7, Documents: Fixtures.Documents }));
+    assert.equal(r.Kind, AnalyzeKind.Diagnostics);
 });

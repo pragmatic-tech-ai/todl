@@ -15,12 +15,30 @@ import { SignatureHelpProvider } from "./signature-help-provider.js";
 import { CodeActionProvider } from "./code-action-provider.js";
 import { FormattingProvider } from "./formatting-provider.js";
 
+// A typed staleness signal: the engine throws this when a request carries no Bases
+// and its token does not match the cached base-set. A caller detects it via the
+// stable Code discriminant / StaleBaseSetError.Is — never by matching message text.
+export class StaleBaseSetError extends Error
+{
+    public static readonly Code = "StaleBaseSet";
+    private static readonly Detail = "base-set token does not match the cached base-set; re-send Bases.";
+
+    constructor()
+    {
+        super(`${StaleBaseSetError.Code}: ${StaleBaseSetError.Detail}`);
+        this.name = StaleBaseSetError.Code;
+    }
+
+    public static Is(error: unknown): error is StaleBaseSetError
+    {
+        return error instanceof StaleBaseSetError;
+    }
+}
+
 // Single dispatcher for all analysis requests. Caches the last base-set by token
 // so plain keystroke requests need not re-send it.
 export class AnalysisEngine implements IAnalysisEngine
 {
-    private static readonly StaleBaseSet = "StaleBaseSet";
-    private static readonly StaleBaseSetDetail = ": base-set token does not match the cached base-set; re-send Bases.";
     private static readonly MissingPosition = "Request requires a Position.";
     private static readonly MissingRange = "Request requires a Range.";
     private static readonly MissingNewName = "Rename request requires a NewName.";
@@ -84,13 +102,18 @@ export class AnalysisEngine implements IAnalysisEngine
         const ctx = request.Context;
         if (ctx.Bases !== undefined)
         {
+            // Out-of-order safety (Wave 2): never let an OLDER base-set overwrite the
+            // cache — a late request carrying a stale token would otherwise answer a
+            // newer request from a regressed base-set. Still serve this request from
+            // its own carried bases, but leave the newer cached copy in place.
+            if (ctx.BaseSetToken < (this.cachedToken ?? Number.NEGATIVE_INFINITY)) return ctx.Bases;
             this.cachedBases = ctx.Bases;
             this.cachedToken = ctx.BaseSetToken;
             return this.cachedBases;
         }
         if (this.cachedToken === null || ctx.BaseSetToken !== this.cachedToken)
         {
-            throw new Error(AnalysisEngine.StaleBaseSet + AnalysisEngine.StaleBaseSetDetail);
+            throw new StaleBaseSetError();
         }
         return this.cachedBases;
     }
