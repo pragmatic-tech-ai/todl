@@ -414,9 +414,9 @@ export class SolutionManagerService extends ServiceBase
     }
 
     // Build the bag vantage for connection resolution: always the given global persister; the
-    // active solution (a saving persister — Flush saves the manager) when one is open; and, for a
+    // active solution (a saving persister - Flush saves the manager) when one is open; and, for a
     // specific member, that project's shared + local scopes. Undefined when no global persister is
-    // wired (a headless host) — callers then fall back to the client inventory alone. `storage`
+    // wired (a headless host) - callers then fall back to the client inventory alone. `storage`
     // overrides the member's own storage (a host that projects members onto another root).
     public async BuildVantage(
         global: IBagPersister | undefined,
