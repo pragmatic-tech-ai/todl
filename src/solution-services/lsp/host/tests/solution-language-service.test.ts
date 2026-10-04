@@ -107,7 +107,8 @@ class BaseWorld
 {
     public static readonly ProducerId = "mm";
     public static readonly ConsumerId = "lib";
-    private static readonly ProducerVersion = "1.0.0";
+    public static readonly ProducerVersion = "1.0.0";
+    public static readonly StaleMembersProperty = "StaleMembers";
     private static readonly RootPrefix = "file:///solution/";
 
     public readonly Producer: IStorage;
@@ -171,8 +172,8 @@ test("ProducedIdOf returns the producer's id and WorkspaceProducers lists it", a
 {
     const world = new BaseWorld();
     assert.equal(await world.Service.ProducedIdOf(world.Producer), BaseWorld.ProducerId);
-    assert.deepEqual(await world.Service.WorkspaceProducers(ProjectType.MetaModel), [{ id: BaseWorld.ProducerId, version: "1.0.0" }]);
-    assert.deepEqual([...(await world.Service.ReferencedPublishedRefs(world.Consumer))], [`${BaseWorld.ProducerId}@1.0.0`]);
+    assert.deepEqual(await world.Service.WorkspaceProducers(ProjectType.MetaModel), [{ id: BaseWorld.ProducerId, version: BaseWorld.ProducerVersion }]);
+    assert.deepEqual([...(await world.Service.ReferencedPublishedRefs(world.Consumer))], [`${BaseWorld.ProducerId}@${BaseWorld.ProducerVersion}`]);
 });
 
 test("StaleMembers raises PropertyChanged on producer edit and holds the dependent consumer id", async () =>
@@ -180,7 +181,7 @@ test("StaleMembers raises PropertyChanged on producer edit and holds the depende
     const world = new BaseWorld();
     await world.Prime();
     let raised = 0;
-    const sub = world.Service.PropertyChanged("StaleMembers").subscribe(() => { raised += 1; });
+    const sub = world.Service.PropertyChanged(BaseWorld.StaleMembersProperty).subscribe(() => { raised += 1; });
 
     await world.Events.Raise({
         Kind: ProjectEventKind.ReferencesChanged,

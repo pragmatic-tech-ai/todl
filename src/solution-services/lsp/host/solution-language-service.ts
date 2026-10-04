@@ -141,8 +141,7 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
         this.session = new SolutionSession(new ResolverPackageSource(this.resolver, packages));
         this.warmup = this.BuildWarmCache();
         this.SubscribeToLifecycle();
-        this.subscriptions.push(this.resolver.PropertyChanged(SolutionLanguageService.ResolverStaleMemberIdsPropertyName).subscribe((e) =>
-            this.RaisePropertyChanged(SolutionLanguageService.StaleMembersPropertyName, e.oldValue, e.newValue)));
+        this.SubscribeToResolverStale();
     }
 
     // The member ids evicted by the most recent invalidation (the resolver's
@@ -327,6 +326,14 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     public async WhenIdle(): Promise<void>
     {
         await this.pending;
+    }
+
+    // Re-raise the resolver's StaleMemberIds change as this service's own StaleMembers.
+    private SubscribeToResolverStale(): void
+    {
+        const signal = this.resolver.PropertyChanged(SolutionLanguageService.ResolverStaleMemberIdsPropertyName);
+        this.subscriptions.push(signal.subscribe((e) =>
+            this.RaisePropertyChanged(SolutionLanguageService.StaleMembersPropertyName, e.oldValue, e.newValue)));
     }
 
     // Wire the solution lifecycle → targeted cache maintenance. Two permanent arms —
