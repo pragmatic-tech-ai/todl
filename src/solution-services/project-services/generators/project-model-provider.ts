@@ -21,6 +21,8 @@ import type { IProjectModelProvider, ProjectModel } from "./project-content-gene
 
 export class ProjectModelProvider implements IProjectModelProvider
 {
+    private static readonly LocalVersion = "0.0.0-local";
+
     private cached?: ProjectModel;
 
     constructor(
@@ -62,6 +64,34 @@ export class ProjectModelProvider implements IProjectModelProvider
         const sources = await this.CollectSources();
         const packageJson = toPackageJson(this.manifest); // throws on an architecture manifest
         const identity: PackageIdentity = { id: packageJson.todl.id, version: packageJson.version, name: this.manifest.name };
+
+        const outcome = compilePackage([...bases], sources, identity, ProjectModelProvider.DependencyRefs(this.manifest));
+        if (!outcome.ok || outcome.package === undefined)
+        {
+            return { errors: outcome.errors.map((e) => e.message) };
+        }
+        return { package: outcome.package, errors: [] };
+    }
+
+    // Version-free compile: resolves bases, then compiles with a synthetic identity so an
+    // unpublished in-solution member (no packageVersion) still yields symbols. Not memoised.
+    public async CompileLocal(): Promise<ProjectModel>
+    {
+        const { bases, problems } = await this.ResolveBases();
+        return problems.length > 0 ? { errors: [...problems] } : this.CompileLocalWithBases(bases);
+    }
+
+    // As CompileWithBases, but never reads the publishable version/id: compilePackage only
+    // stamps the identity into output metadata, so symbols are identical.
+    public async CompileLocalWithBases(bases: readonly TodlDocument[]): Promise<ProjectModel>
+    {
+        const sources = await this.CollectSources();
+        const identity: PackageIdentity =
+        {
+            id: this.manifest.id ?? this.manifest.name,
+            version: ProjectModelProvider.LocalVersion,
+            name: this.manifest.name,
+        };
 
         const outcome = compilePackage([...bases], sources, identity, ProjectModelProvider.DependencyRefs(this.manifest));
         if (!outcome.ok || outcome.package === undefined)
