@@ -226,12 +226,16 @@ export {
     ProducerKind,
     isPublishable,
     isVersioned,
+    supportsScaffold,
+    type IScaffoldProjectFactory,
     type ProjectManifestEnvelope,
     type ProjectFileFormat,
     type PublishResult,
     type IPublishableProjectFactory,
     type IVersionedProjectFactory,
 } from './solution-services/project-services/core/project-factory.js';
+export { SemVer, VersionPart } from './solution-services/project-services/core/semver.js';
+export { MemberProjectOps } from './solution-services/project-services/core/member-project-ops.js';
 export { type ProjectFactoryDefinition } from './solution-services/project-services/core/project-factory-definition.js';
 export { type PublishedBaseModelReference, type ProjectBaseModelBindings } from './solution-services/project-services/core/base-binding.js';
 export { WikiOriginKind, WikiLocator, type WikiOrigin } from './solution-services/project-services/core/wiki-origin.js';

@@ -136,6 +136,21 @@ export function isVersioned(
     return typeof f.getVersion === 'function' && typeof f.setVersion === 'function'
 }
 
+// Optional capability a factory MAY also implement: a refreshable agent scaffold
+// (.claude/**). Duck-typed so callers don't depend on the concrete TodlProjectFactory.
+export interface IScaffoldProjectFactory
+{
+    updateScaffold(storage: IStorage): Promise<readonly string[]>
+}
+
+// Type guard: does this factory ship a refreshable agent scaffold?
+export function supportsScaffold(
+    factory: IProjectFactory,
+): factory is IProjectFactory & IScaffoldProjectFactory
+{
+    return typeof (factory as Partial<IScaffoldProjectFactory>).updateScaffold === 'function'
+}
+
 // The producer kinds — the two user-facing producer project types. Meta-models and
 // libraries are identical internally (both are ProducerProjectFactory); this enum is the
 // user-facing distinction hosts use to present and manage them separately. Values match
