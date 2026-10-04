@@ -154,7 +154,7 @@ test('NewFile, NewFolder and ImportBytes reject escaping names before writing', 
 {
     const { storage, ops } = Fixture.Setup();
     await assert.rejects(() => ops.NewFile('d', '..', 'x'));
-    await assert.rejects(() => ops.NewFile('', 'a\b', 'x'));
+    await assert.rejects(() => ops.NewFile('', 'a\\b', 'x'));
     await assert.rejects(() => ops.NewFolder('', 'a/b'));
     await assert.rejects(() => ops.NewFolder('', '..'));
     await assert.rejects(() => ops.ImportBytes('', [{ name: 'ok.bin', bytes: new Uint8Array([1]) }, { name: '../x', bytes: new Uint8Array([1]) }]));
