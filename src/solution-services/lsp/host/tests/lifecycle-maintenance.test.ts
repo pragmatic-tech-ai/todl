@@ -16,6 +16,7 @@ import { PackageStoreKey } from "../../../todl-build-system/package-store.js";
 import type { IPackageSource, SourcedPackage } from "../../../todl-build-system/package-source.js";
 import { ProjectType, type ProjectManifest } from "../../../package-manager/manifest.js";
 import type { PackageRef } from "../../../../publish/publish.js";
+import type { TodlDocument } from "../../../../compiler-services/emit/json.js";
 import { PROJECT_MANIFEST_FILENAME } from "../../../project-services/core/project-factory.js";
 
 // Fixtures over a real Solution + a real SolutionBaseResolver (the same instance
@@ -268,4 +269,68 @@ test("after a token bump the next request for the same project re-sends Context.
     await world.Service.CompletionsAt(uri, Fixtures.Pos);   // token moved → bases re-sent
 
     assert.deepEqual(spy.BasesSeen, [true, false, true]);
+});
+
+// Captures the last Context.Bases each project URI actually received, so a test can
+// assert WHICH base documents a dependent re-sends (not merely that it sent some).
+class CapturingEngine implements IAnalysisEngine
+{
+    public readonly BasesByUri = new Map<string, readonly TodlDocument[]>();
+
+    public async Analyze(request: AnalyzeRequest): Promise<AnalyzeResponse>
+    {
+        if (request.Context.Bases !== undefined) this.BasesByUri.set(request.Uri, request.Context.Bases);
+        return { Kind: AnalyzeKind.Completion, Items: [] };
+    }
+}
+
+const LibUri = "file:///solution/lib/model.todl";
+
+// A1 — a reference/content change on a base member must refresh its transitive
+// DEPENDENTS' warm bases too, not just the changed member's own. The dependent's
+// re-sent bases must reflect the base member's NEW compiled document.
+test("editing a base member refreshes its dependents' warm bases (dependent re-sends the NEW base document)", async () =>
+{
+    const engine = new CapturingEngine();
+    const world = World.Build([
+        { id: "mm", type: "meta-model", storage: Fixtures.Storage("mm", Fixtures.MetaModelFiles("mm", "1.0.0", "Widget")) },
+        { id: "lib", type: "library", storage: Fixtures.Storage("lib", Fixtures.LibraryFiles("lib", "mm", "1.0.0", "Gadget", "Widget")) },
+    ], engine);
+    await world.Prime("mm", "lib");
+    world.Service.DidChange(LibUri, "concept x { }");
+
+    // Edit mm so its compiled document gains a distinctive new concept.
+    await world.Member("mm").Storage!.WriteText("model.todl",
+        "namespace acme { concept Widget { label : string?; } concept FreshlyAdded { label : string?; } }");
+    await world.RaiseReferencesChanged("mm");
+
+    await world.Service.CompletionsAt(LibUri, Fixtures.Pos);
+    const libBases = engine.BasesByUri.get(LibUri);
+    assert.ok(libBases !== undefined, "lib should re-send its bases after the token bump");
+    assert.ok(JSON.stringify(libBases).includes("FreshlyAdded"),
+        "lib's re-sent bases must reflect mm's NEW compiled document");
+});
+
+// A1 — the producer-removed dependent case: after the base member is removed, its
+// dependent's re-sent bases must no longer carry the removed member's document.
+test("removing a base member refreshes its dependents' warm bases (dependent drops the removed base)", async () =>
+{
+    const engine = new CapturingEngine();
+    const world = World.Build([
+        { id: "mm", type: "meta-model", storage: Fixtures.Storage("mm", Fixtures.MetaModelFiles("mm", "1.0.0", "Widget")) },
+        { id: "lib", type: "library", storage: Fixtures.Storage("lib", Fixtures.LibraryFiles("lib", "mm", "1.0.0", "Gadget", "Widget")) },
+    ], engine);
+    await world.Prime("mm", "lib");
+    world.Service.DidChange(LibUri, "concept x { }");
+
+    await world.Service.CompletionsAt(LibUri, Fixtures.Pos);   // warm send captures mm's document in lib's bases
+    assert.ok(JSON.stringify(engine.BasesByUri.get(LibUri)).includes("Widget"));
+
+    await world.RemoveMember("mm");
+
+    await world.Service.CompletionsAt(LibUri, Fixtures.Pos);
+    const libBases = engine.BasesByUri.get(LibUri);
+    assert.ok(libBases !== undefined, "lib should re-send its bases after the token bump");
+    assert.ok(!JSON.stringify(libBases).includes("Widget"),
+        "after mm is removed, lib's re-sent bases must no longer contain mm's document");
 });

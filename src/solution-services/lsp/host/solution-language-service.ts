@@ -2,7 +2,6 @@ import {
     ServiceBase, ServiceKey, Disposable, type IServiceProvider, type IStorage, type IDisposable,
 } from "@pragmatic-tech-ai/todl-runtime";
 import type { CollectionChange } from "@pragmatic-tech-ai/todl-runtime";
-import type { TextDocuments } from "vscode-languageserver";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import type {
     CodeAction, CompletionItem, Diagnostic, DocumentSymbol, FoldingRange, Hover, Location, Position, Range,
@@ -14,7 +13,7 @@ import { AnalysisEngine } from "../analysis/analysis-engine.js";
 import { AnalyzeKind, type AnalyzeContext, type AnalyzeRequest, type AnalyzeResponse } from "../analysis/protocol.js";
 import type { RenameError } from "../analysis/rename-provider.js";
 import { AnalysisEngineKey, type IAnalysisEngine } from "./i-analysis-engine.js";
-import { ProjectRegistry, PushedSourceProvider, type Project } from "./project-registry.js";
+import { ProjectRegistry, PushedSourceProvider, type Project, type OpenDocuments } from "./project-registry.js";
 import { SolutionBaseResolver } from "../../solution-manager/engine/solution-base-resolver.js";
 import { ResolverPackageSource } from "../../solution-manager/engine/resolver-package-source.js";
 import { SolutionSession } from "../../solution-manager/engine/solution-session.js";
@@ -28,8 +27,8 @@ import type { ILanguageService } from "./i-language-service.js";
 
 // The live-buffer store: the open documents the editor has pushed via DidChange,
 // adapted to the `.all()` surface PushedSourceProvider consumes. A real class (not
-// a lambda seam) so it can be handed to SourcesFor as a TextDocuments stand-in.
-class LiveBufferDocuments
+// a lambda seam) implementing OpenDocuments so it is handed to SourcesFor directly.
+class LiveBufferDocuments implements OpenDocuments
 {
     private static readonly LanguageId = "todl";
     private readonly buffers = new Map<string, string>();
@@ -50,6 +49,25 @@ class LiveBufferDocuments
     }
 }
 
+// A published-source backstop so the ResolverPackageSource (and thus the
+// SolutionSession) can be built even when the host registered no package source.
+// Resolving against it is a programming error (nothing is published), so resolve
+// throws; versions reports the empty set.
+class EmptyPackageSource implements PackageSource
+{
+    private static readonly NoPackageSourceMessage = "No package source is registered.";
+
+    public resolve(): never
+    {
+        throw new Error(EmptyPackageSource.NoPackageSourceMessage);
+    }
+
+    public versions(): Promise<readonly string[]>
+    {
+        return Promise.resolve([]);
+    }
+}
+
 // The keystone host service: the single registered language-service authority. It
 // owns the symbol session + resolver + warm base cache, resolves the owning
 // project per URI, assembles an AnalyzeContext (sending the warm bases only when
@@ -60,7 +78,6 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     public static readonly Key = new ServiceKey<SolutionLanguageService>("SolutionLanguageService");
 
     private static readonly RenameNoProject = "No project owns this document.";
-    private static readonly NoPackageSourceMessage = "No package source is registered.";
     private static readonly RootSeparator = "/";
 
     // The manager's INPC property whose change means the whole member set was swapped
@@ -70,14 +87,6 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     // `change.kind === …` comparison still narrows the discriminated union.
     private static readonly InsertedKind = "inserted" as const;
     private static readonly RemovedKind = "removed" as const;
-
-    // A published-source backstop so the ResolverPackageSource (and thus the
-    // SolutionSession) can be built even when the host registered no package source.
-    private static readonly EmptyPackageSource: PackageSource =
-    {
-        resolve(): never { throw new Error(SolutionLanguageService.NoPackageSourceMessage); },
-        versions(): Promise<readonly string[]> { return Promise.resolve([]); },
-    };
 
     private readonly engine: IAnalysisEngine;
     private readonly resolver: SolutionBaseResolver;
@@ -121,7 +130,7 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
         super(provider);
         this.engine = provider.get(AnalysisEngineKey) ?? new AnalysisEngine();
         this.resolver = provider.get(SolutionBaseResolver.Key) ?? new SolutionBaseResolver(provider);
-        const packages = provider.get(SolutionManagerService.PackageSourceKey) ?? SolutionLanguageService.EmptyPackageSource;
+        const packages = provider.get(SolutionManagerService.PackageSourceKey) ?? new EmptyPackageSource();
         this.session = new SolutionSession(new ResolverPackageSource(this.resolver, packages));
         this.warmup = this.BuildWarmCache();
         this.SubscribeToLifecycle();
@@ -360,18 +369,53 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     }
 
     // The single maintenance step every lifecycle event funnels through: map the
-    // storage to its member id, evict that member + its transitive dependents, then
-    // either refresh (an edit) or drop (a removal) its warm-bases slice, and bump the
-    // token so the next request for the project re-sends its bases.
+    // storage to its member id, evict that member + its transitive dependents, bring
+    // every evicted member's warm bases back in line with the NEW compiled graph, and
+    // bump the token so the next request for each touched project re-sends its bases.
     private async InvalidateMember(storage: IStorage, refresh: boolean): Promise<void>
     {
         if (this.disposed) return;
         const id = await this.resolver.ConsumerIdOf(storage);
         if (id === undefined) return;
         this.resolver.Invalidate(id);
-        if (refresh) await this.RefreshWarmBases(storage);
-        else this.projects.Remove(SolutionLanguageService.RootUriOf(storage));
+        await this.RefreshStaleMembers(storage, id, refresh);
         this.BumpToken();
+    }
+
+    // Invalidate evicts the changed member PLUS its transitive dependents and surfaces
+    // that set as resolver.StaleMemberIds. Every evicted member's warm bases are now
+    // stale: a still-live member is re-resolved so its re-sent bases reflect the edited
+    // member's NEW compiled document (not the copy captured when it was last warmed),
+    // and a member that no longer exists (a removal) has its registry entry dropped.
+    // Without refreshing the DEPENDENTS, the token bump would re-send their stale bases.
+    private async RefreshStaleMembers(changed: IStorage, changedId: string, refresh: boolean): Promise<void>
+    {
+        const liveById = await this.LiveMembersById();
+        for (const staleId of this.resolver.StaleMemberIds)
+        {
+            const liveStorage = liveById.get(staleId);
+            if (liveStorage !== undefined) await this.RefreshWarmBases(liveStorage);
+            else if (!refresh && staleId === changedId) this.projects.Remove(SolutionLanguageService.RootUriOf(changed));
+        }
+    }
+
+    // The active solution's members keyed by their resolver consumer id, so a stale id
+    // the resolver reports can be mapped back to the live storage to re-resolve. A
+    // removed member is absent from this map (it left the collection before maintenance
+    // ran), which is exactly how RefreshStaleMembers tells "refresh" from "drop".
+    private async LiveMembersById(): Promise<Map<string, IStorage>>
+    {
+        const byId = new Map<string, IStorage>();
+        const solution = this.Provider.get(SolutionManagerService.Key)?.ActiveSolution;
+        if (solution === undefined) return byId;
+        for (const member of solution.Members)
+        {
+            const memberStorage = member.Storage;
+            if (memberStorage === undefined) continue;
+            const memberId = await this.resolver.ConsumerIdOf(memberStorage);
+            if (memberId !== undefined) byId.set(memberId, memberStorage);
+        }
+        return byId;
     }
 
     // Monotonic increment — a change to any member's base closure invalidates every
@@ -402,7 +446,7 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     // engine reuses its token-keyed cached copy (the warm path).
     private ContextFor(project: Project): AnalyzeContext
     {
-        const documents: readonly SourceFile[] = this.sources.SourcesFor(project, this.liveDocuments as unknown as TextDocuments<TextDocument>);
+        const documents: readonly SourceFile[] = this.sources.SourcesFor(project, this.liveDocuments);
         const include = project !== this.lastProject || this.sentTokenByProject.get(project.RootUri) !== this.baseSetToken;
         this.lastProject = project;
         if (include)
