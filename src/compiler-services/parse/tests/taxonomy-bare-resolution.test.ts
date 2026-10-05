@@ -64,3 +64,21 @@ test("a bare name defined by two used taxonomies is ambiguous", () => {
      }` }]);
   assert.ok(errs(diagnostics).includes(DiagnosticCode.TaxonomyAmbiguousBareReference));
 });
+
+test("a bare term resolves as the value of a taxonomy-typed field, with no `uses` (#9)", () => {
+  const { diagnostics, model } = check([{ uri: "t.todl", text:
+    `namespace acme {
+       taxonomy ComponentCategory : represents Component {
+         term AiAgent  { label = "AI Agent"; }
+         term Database { label = "Database"; }
+       }
+       concept Component { label : string; category : ComponentCategory; }
+       model Acme : acme {
+         Component a { label = "A"; category = AiAgent; }
+         Component b { label = "B"; category = ComponentCategory.Database; }
+       }
+     }` }]);
+  assert.deepEqual(errs(diagnostics), []);
+  assert.deepEqual(model.refs("a", "category"), ["ComponentCategory.AiAgent"]);
+  assert.deepEqual(model.refs("b", "category"), ["ComponentCategory.Database"]);
+});

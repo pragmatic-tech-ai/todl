@@ -256,6 +256,29 @@ export function loadInto(
     });
   }
 
+  // Type-directed bare-term resolution (#9): the manual promises a concept field
+  // typed by a taxonomy takes one of its terms as a bare-name value. Schemas are
+  // not committed until Pass 1, so read each record's concept and each concept's
+  // field types straight from the AST here; the resolve loop below consults them
+  // to drop a bare `AiAgent` to its `ComponentCategory.AiAgent` term.
+  const recordConcept = new Map<string, string>();
+  const conceptFieldTypes = new Map<string, Map<string, string>>();
+  const indexRecord = (inst: InstanceDecl): void => {
+    recordConcept.set(inst.id, inst.concept);
+    for (const child of inst.children) indexRecord(child);
+  };
+  for (const { decl } of units)
+  {
+    if (decl.kind === DeclKind.Concept)
+    {
+      const fields = new Map<string, string>();
+      for (const f of decl.fields) fields.set(f.name, f.type);
+      conceptFieldTypes.set(decl.name, fields);
+    }
+    else if (decl.kind === DeclKind.Instance) indexRecord(decl);
+    else if (decl.kind === DeclKind.Model) for (const inst of decl.instances) indexRecord(inst);
+  }
+
   // ═══════════════════════ RESOLVE (pre-pass): names → flat node ids ═══════════
   // (design: unified-reference-resolver) The single resolver module is the whole
   // language's name→node law, so namespace visibility lives in exactly one place.
@@ -425,6 +448,27 @@ export function loadInto(
         });
         undefinedIds.add(site.id); // unresolved: drop the edge so commit doesn't dangle
         continue;
+      }
+    }
+    // Type-directed term drop (#9): a bare value on a field whose declared type
+    // is a taxonomy resolves to that taxonomy's `<taxonomy>.<name>` term — no
+    // `uses` needed. Self-gating: the candidate id only exists when the field
+    // type really is a taxonomy (a concept-typed field has no such child node).
+    const conceptRaw = site.node !== null ? recordConcept.get(site.node) : undefined;
+    if (conceptRaw !== undefined && site.path !== null)
+    {
+      const cRes = resolveRef(conceptRaw, site.home);
+      const concept = cRes.kind === "qualified" ? cRes.flat : conceptRaw;
+      const ftRaw = conceptFieldTypes.get(concept)?.get(site.path);
+      if (ftRaw !== undefined)
+      {
+        const ftRes = resolveRef(ftRaw, site.home);
+        const fieldType = ftRes.kind === "qualified" ? ftRes.flat : ftRes.kind === "ok" ? ftRaw : null;
+        if (fieldType !== null)
+        {
+          const term = `${fieldType}.${site.id}`;
+          if (exists(term) && reachable(term, site.home)) { site.rewrite?.(term); continue; }
+        }
       }
     }
     undefinedIds.add(site.id);
