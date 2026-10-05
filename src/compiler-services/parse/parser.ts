@@ -179,19 +179,88 @@ class Parser
         this.advance();
         continue;
       }
-      if (
-        depth === 0 &&
-        (this.checkKeyword("primitive") ||
-          this.checkKeyword("taxonomy") ||
-          this.checkKeyword("concept") ||
-          this.checkKeyword("internal") ||
-          this.checkKeyword("sealed") ||
-          kind === TokenKind.Identifier)
-      )
+      // Resume only at the start of the NEXT declaration, at the namespace level:
+      // a declaration keyword, or a top-level record `Type id …` (two identifiers
+      // in a row). A lone identifier (e.g. the `bad` left over from a malformed
+      // `concept second-bad`, or any token inside a half-parsed body) is NOT a
+      // boundary — skipping it, and any brace block it leads, keeps one malformed
+      // declaration from cascading into several and from swallowing the rest of
+      // the file. (#11)
+      if (depth === 0 && this.startsDeclaration())
       {
         return;
       }
       this.advance();
+    }
+  }
+
+  /** True when the cursor is at the start of a top-level declaration: a leading
+   * declaration keyword (incl. the `internal`/`sealed` modifiers), or a record
+   * `Type id` (an identifier immediately followed by another identifier). Used by
+   * {@link Parser.synchronize} to resume cleanly after a declaration error. */
+  private startsDeclaration(): boolean
+  {
+    if (
+      this.checkKeyword("primitive") || this.checkKeyword("taxonomy") ||
+      this.checkKeyword("viewpoint") || this.checkKeyword("concept") ||
+      this.checkKeyword("model") || this.checkKeyword("annotation") ||
+      this.checkKeyword("package") || this.checkKeyword("operator") ||
+      this.checkKeyword("class") || this.checkKeyword("internal") || this.checkKeyword("sealed")
+    )
+    {
+      return true;
+    }
+    return this.check(TokenKind.Identifier) && this.peekKind(1) === TokenKind.Identifier;
+  }
+
+  /** After a member error, skip to the next member boundary inside the current
+   * brace body: consume through the next `;` at this level, or stop before the
+   * `}` that closes the body (so the caller's loop exits and consumes it).
+   * Balanced nested braces are skipped wholesale, so a malformed member neither
+   * cascades nor aborts the remaining members. (#11) */
+  private recoverInBody(): void
+  {
+    let depth = 0;
+    while (!this.check(TokenKind.EOF))
+    {
+      const kind = this.current().kind;
+      if (kind === TokenKind.LBrace) { depth += 1; this.advance(); continue; }
+      if (kind === TokenKind.RBrace)
+      {
+        if (depth === 0) return;        // closes our body — let the caller's loop handle it
+        depth -= 1; this.advance(); continue;
+      }
+      if (kind === TokenKind.Semicolon)
+      {
+        this.advance();
+        if (depth === 0) return;        // end of this member — the next one follows
+        continue;
+      }
+      this.advance();
+    }
+  }
+
+  /** Run a brace-body member loop with per-member error recovery: parse one
+   * member per iteration via `parseOne`; on a {@link ParseError}, record it, skip
+   * to the next member boundary, and continue. The caller consumes the closing
+   * `}` after this returns. A forward-progress guard prevents an empty-parse loop.
+   * (#11) */
+  private parseBodyMembers(parseOne: () => void): void
+  {
+    while (!this.check(TokenKind.RBrace) && !this.check(TokenKind.EOF))
+    {
+      const before = this.pos;
+      try
+      {
+        parseOne();
+      }
+      catch (err)
+      {
+        if (!(err instanceof ParseError)) throw err;
+        this.diagnostics.push(this.toDiagnostic(err));
+        this.recoverInBody();
+      }
+      if (this.pos === before) this.advance(); // guarantee forward progress
     }
   }
 
@@ -342,14 +411,14 @@ class Parser
     const children: InstanceDecl[] = [];
     const annotations: AnnotationApplication[] = [];
     const edges: EdgeApplication[] = [];
-    while (!this.check(TokenKind.RBrace))
+    this.parseBodyMembers(() =>
     {
       const memberStart = this.startToken();
       // Order matters: `annotate` and edge applications are recognised first,
       // before the generic identifier branch, since both start with tokens the
       // fallback would otherwise swallow.
-      if (this.checkKeyword("annotate")) { annotations.push(this.parseAnnotationApplication(memberStart)); continue; }
-      if (this.edgeApplicationAhead()) { edges.push(this.parseEdgeApplication(memberStart)); continue; }
+      if (this.checkKeyword("annotate")) { annotations.push(this.parseAnnotationApplication(memberStart)); return; }
+      if (this.edgeApplicationAhead()) { edges.push(this.parseEdgeApplication(memberStart)); return; }
       // A leading identifier is either `name = value;` (assignment, disambiguated
       // by the `=`) or `<concept> <id> { … }` (a nested containment record).
       const first = this.expectIdentifier();
@@ -363,7 +432,7 @@ class Parser
       {
         children.push(this.parseInstanceFrom(first, memberStart));
       }
-    }
+    });
     return { assignments, children, annotations, edges };
   }
 
@@ -785,7 +854,7 @@ class Parser
     const terms: Term[] = [];
     const annotations: AnnotationApplication[] = [];
     this.expect(TokenKind.LBrace);
-    while (!this.check(TokenKind.RBrace))
+    this.parseBodyMembers(() =>
     {
       // Checked before tryParseTerm: `annotate` lexes as an identifier, so
       // `annotate icon {` would otherwise match the concept-led-term lookahead
@@ -793,7 +862,7 @@ class Parser
       if (this.checkKeyword("annotate"))
       {
         annotations.push(this.parseAnnotationApplication(this.startToken()));
-        continue;
+        return;
       }
       const term = this.tryParseTerm();
       if (term !== null)
@@ -805,7 +874,7 @@ class Parser
         const [key, value] = this.readStringMember();
         if (key === "description" && value !== null) description = value;
       }
-    }
+    });
     this.expect(TokenKind.RBrace);
     const decl: TaxonomyDecl = { kind: DeclKind.Taxonomy, name, represents, representsSpans, description, terms, annotations, uses, span: this.spanFrom(start) };
     decl.nameSpan = tokenSpan(nameTok, this.uri);
@@ -873,12 +942,12 @@ class Parser
     const children: Term[] = [];
     const annotations: AnnotationApplication[] = [];
     this.expect(TokenKind.LBrace);
-    while (!this.check(TokenKind.RBrace))
+    this.parseBodyMembers(() =>
     {
       if (this.checkKeyword("annotate"))
       {
         annotations.push(this.parseAnnotationApplication(this.startToken()));
-        continue;
+        return;
       }
       const child = this.tryParseTerm();
       if (child !== null)
@@ -894,7 +963,7 @@ class Parser
         this.expect(TokenKind.Semicolon);
         assignments.push({ name, value, span: this.spanFrom(memberStart) });
       }
-    }
+    });
     this.expect(TokenKind.RBrace);
     const term: Term = { id, concept, assignments, children, annotations, span: this.spanFrom(start) };
     term.idSpan = tokenSpan(idTok, this.uri);
@@ -929,7 +998,7 @@ class Parser
     const annotations: AnnotationApplication[] = [];
 
     this.expect(TokenKind.LBrace);
-    while (!this.check(TokenKind.RBrace))
+    this.parseBodyMembers(() =>
     {
       if (this.checkKeyword("relationship"))
       {
@@ -986,7 +1055,7 @@ class Parser
           throw this.error(`expected ":" (field) or "=" (assignment) after "${memberName}"`);
         }
       }
-    }
+    });
     this.expect(TokenKind.RBrace);
     const decl: ConceptDecl = { kind: DeclKind.Concept, name, extends: extendsName, description, fields, relationships, invariants, annotations, span: this.spanFrom(start) };
     if (extendsSpan !== undefined) decl.extendsSpan = extendsSpan;
