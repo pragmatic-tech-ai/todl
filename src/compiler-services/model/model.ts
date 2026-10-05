@@ -31,6 +31,24 @@ import type { SourceSpan } from "../diagnostics/span.js";
 /** The prelude root concept — the virtual base of every parent-less concept (SPEC-02). */
 const ELEMENT_ID = "Element";
 
+/** The built-in scalar roots every primitive ultimately refines (spec §4). A
+ *  field's authored literal is validated against its resolved base. */
+export enum ScalarBase
+{
+  String = "string",
+  Number = "number",
+  Integer = "integer",
+  Boolean = "boolean",
+}
+
+/** A scalar type resolved to its built-in base plus every `regex` collected
+ *  along the primitive refinement chain (outermost first). */
+export interface ScalarConstraint
+{
+  base: ScalarBase;
+  regexes: string[];
+}
+
 export interface FieldSchema
 {
   name: string;
@@ -352,6 +370,46 @@ export class Repository
   attr(id: NodeId, name: string): Scalar | undefined
   {
     return this.effectiveFields(id).get(name);
+  }
+
+  /** Resolve a field type to its built-in scalar base and the regex constraints
+   *  accumulated along the primitive chain. A built-in scalar name resolves to
+   *  itself with no regex; a user primitive (`duration : string { regex }`)
+   *  resolves through its `base` attr to the ultimate built-in, gathering every
+   *  regex en route. Returns null for a reference type (concept/taxonomy) or an
+   *  unresolved/cyclic type — those are not scalar-validated here. */
+  scalarConstraintOf(type: NodeId): ScalarConstraint | null
+  {
+    const regexes: string[] = [];
+    const seen = new Set<string>();
+    let current: string = type;
+    for (;;)
+    {
+      const builtin = Repository.scalarBaseFor(current);
+      if (builtin !== null) return { base: builtin, regexes };
+      if (seen.has(current)) return null; // cyclic primitive chain
+      seen.add(current);
+      const node = this.resolve(current);
+      if (node === undefined || node.metaKind !== MetaKind.Primitive) return null;
+      const regex = node.attrs.get(Builder.PrimitiveRegexAttr);
+      if (typeof regex === "string") regexes.push(regex);
+      const base = node.attrs.get(Builder.PrimitiveBaseAttr);
+      if (typeof base !== "string") return null; // base-less primitive: opaque scalar
+      current = base;
+    }
+  }
+
+  /** The built-in {@link ScalarBase} for a type name, or null if it is not one. */
+  private static scalarBaseFor(type: string): ScalarBase | null
+  {
+    switch (type)
+    {
+      case ScalarBase.String: return ScalarBase.String;
+      case ScalarBase.Number: return ScalarBase.Number;
+      case ScalarBase.Integer: return ScalarBase.Integer;
+      case ScalarBase.Boolean: return ScalarBase.Boolean;
+      default: return null;
+    }
   }
 
   /** The single target of reference member `member` (class-merged), or undefined. */

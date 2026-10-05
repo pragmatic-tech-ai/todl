@@ -12,7 +12,7 @@
 
 import { Tier, EdgeKind, Direction, Cardinality, type NodeId, type Node, type Scalar } from "../model/graph.js";
 import { MetaKind } from "../model/kinds.js";
-import { Repository, type FieldSchema, type RelationshipSchema } from "../model/model.js";
+import { Repository, ScalarBase, type FieldSchema, type RelationshipSchema } from "../model/model.js";
 import { namespaceOf } from "../resolve/resolver.js";
 import { satisfies } from "../predicate/evaluate.js";
 import type { SourceSpan } from "../diagnostics/span.js";
@@ -288,7 +288,7 @@ function validateInstance(out: Diagnostic[], model: Repository, node: Node): voi
     const count = (effAttrs.has(field.name) ? 1 : 0) + targets.length;
     checkCardinality(out, model, node, field.name, field.cardinality, count, partial);
     checkTaxonomyValue(out, model, node, field, targets);
-    checkBooleanValue(out, model, node, field, effAttrs);
+    checkScalarValue(out, model, node, field, effAttrs);
   }
   for (const relationship of schema.relationships)
   {
@@ -296,6 +296,7 @@ function validateInstance(out: Diagnostic[], model: Repository, node: Node): voi
     checkCardinality(out, model, node, relationship.name, relationship.cardinality, targets.length, partial);
     checkTargetTypes(out, model, node, relationship, targets);
   }
+  checkUnknownMembers(out, model, node, schema);
   if (!partial) checkInvariants(out, model, node);
   if (cls !== null)
   {
@@ -451,6 +452,109 @@ function checkBooleanValue(
       spanFor(model, node.id, field.name),
     ),
   );
+}
+
+/** Instance attrs that are machinery, not authored user members, so they are
+ *  never reported as unknown. `conforms` is the per-entity home viewpoint the
+ *  loader stamps on entities inside a `conforms V` block. */
+const RESERVED_INSTANCE_ATTRS: ReadonlySet<string> = new Set(["conforms"]);
+
+/** Validate a scalar field's literal against its resolved base type and any
+ *  `regex` of its primitive chain. Numbers are carried as strings (the parser
+ *  keeps numeric literals as text), so an `integer`/`number` field is checked
+ *  by parsing its literal; a `string`/primitive field is checked for shape and
+ *  regex. A reference/taxonomy-typed field resolves to no scalar base and is
+ *  validated elsewhere. (#3, #4) */
+function checkScalarValue(
+  out: Diagnostic[],
+  model: Repository,
+  node: Node,
+  field: FieldSchema,
+  attrs: ReadonlyMap<string, Scalar>,
+): void
+{
+  const v = attrs.get(field.name);
+  if (v === undefined) return; // absence is a cardinality concern
+  const constraint = model.scalarConstraintOf(field.type);
+  if (constraint === null) return; // reference type or opaque scalar
+
+  const path = `${node.type}.${field.name}`;
+  const span = spanFor(model, node.id, field.name);
+  if (constraint.base === ScalarBase.Boolean)
+  {
+    if (typeof v !== "boolean")
+    {
+      out.push(error(DiagnosticCode.BooleanValueInvalid, node.id, path,
+        `"${path}" expects a boolean (true or false) but got "${String(v)}"`, span));
+    }
+    return;
+  }
+  if (!scalarLiteralMatchesBase(constraint.base, v))
+  {
+    out.push(error(DiagnosticCode.ScalarValueInvalid, node.id, path,
+      `"${path}" expects ${constraint.base} but got "${String(v)}"`, span));
+    return; // a type mismatch subsumes any regex mismatch
+  }
+  for (const regex of constraint.regexes)
+  {
+    let re: RegExp;
+    try { re = new RegExp(regex); }
+    catch { continue; } // a malformed primitive regex is not the instance's fault
+    if (!re.test(String(v)))
+    {
+      out.push(error(DiagnosticCode.RegexMismatch, node.id, path,
+        `"${path}" value "${String(v)}" does not match the regex of ${field.type} (/${regex}/)`, span));
+      break;
+    }
+  }
+}
+
+/** Does scalar literal `v` satisfy a non-boolean base type? Numeric bases parse
+ *  the literal (numbers arrive as text); `string` rejects a boolean literal. */
+function scalarLiteralMatchesBase(base: ScalarBase, v: Scalar): boolean
+{
+  switch (base)
+  {
+    case ScalarBase.Integer:
+      if (typeof v === "number") return Number.isInteger(v);
+      return typeof v === "string" && /^[+-]?\d+$/.test(v.trim());
+    case ScalarBase.Number:
+      if (typeof v === "number") return Number.isFinite(v);
+      return typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v));
+    case ScalarBase.String:
+      return typeof v === "string";
+    default:
+      return true;
+  }
+}
+
+/** Flag every authored attr that the instance's concept (and supertypes) does
+ *  not declare as a field or relationship — a typo or a member on the wrong
+ *  concept. Undeclared reference members are realized as scalar attrs too, so
+ *  this one pass over attrs covers both fields and relationships.
+ *
+ *  Reported as a WARNING, not an error: TODL has long accepted extra "soft"
+ *  members (e.g. a `wiki` doc-link whose canonical form is the `wiki`
+ *  annotation), so established libraries carry them deliberately. The warning
+ *  surfaces the typo/wrong-concept case the issue asks for without rejecting
+ *  those models. (#5) */
+function checkUnknownMembers(out: Diagnostic[], model: Repository, node: Node, schema: ReturnType<Repository["effectiveSchema"]>): void
+{
+  const declared = new Set<string>();
+  for (const f of schema.fields) declared.add(f.name);
+  for (const r of schema.relationships) declared.add(r.name);
+  for (const key of node.attrs.keys())
+  {
+    if (declared.has(key) || RESERVED_INSTANCE_ATTRS.has(key)) continue;
+    out.push({
+      code: DiagnosticCode.MemberUnknown,
+      severity: Severity.Warning,
+      node: node.id,
+      path: `${node.type}.${key}`,
+      message: `"${node.type}" has no member "${key}" (on "${node.id}")`,
+      span: spanFor(model, node.id, key),
+    });
+  }
 }
 
 /** `instanceof X` requires X to exist, be a class, and share the leaf's concept. */

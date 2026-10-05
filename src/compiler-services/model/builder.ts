@@ -53,6 +53,10 @@ interface StagedField
 
 export class Builder
 {
+  /** Reserved primitive-node attr keys: the refined base type and literal regex. */
+  public static readonly PrimitiveBaseAttr = "base";
+  public static readonly PrimitiveRegexAttr = "regex";
+
   private readonly stagedNodes: Node[] = [];
   private readonly stagedAttrs: StagedAttr[] = [];
   private readonly stagedEdges: StagedEdge[] = [];
@@ -143,10 +147,16 @@ export class Builder
 
   // ── Ontology tier ───────────────────────────────────────────────────────
 
-  /** Stage a primitive declaration node. */
-  definePrimitive(id: NodeId): this
+  /** Stage a primitive declaration node. A primitive refines a `base` (another
+   *  primitive or a built-in scalar) and may `regex`-constrain its literal form;
+   *  both are carried as node attrs so they survive emit/round-trip and drive
+   *  value validation (a primitive node has no user attrs of its own). */
+  definePrimitive(id: NodeId, base: string | null = null, regex: string | null = null): this
   {
-    this.stagedNodes.push(this.makeNode(id, Tier.Ontology, { metaKind: MetaKind.Primitive }));
+    const node = this.makeNode(id, Tier.Ontology, { metaKind: MetaKind.Primitive });
+    if (base !== null) node.attrs.set(Builder.PrimitiveBaseAttr, base);
+    if (regex !== null) node.attrs.set(Builder.PrimitiveRegexAttr, regex);
+    this.stagedNodes.push(node);
     return this;
   }
 

@@ -466,7 +466,7 @@ export function loadInto(
     switch (declaration.kind)
     {
       case DeclKind.Primitive:
-        first.definePrimitive(declaration.name);
+        first.definePrimitive(declaration.name, declaration.base, declaration.regex);
         break;
       case DeclKind.Viewpoint:
         first.defineViewpoint(declaration.name, declaration.frames);

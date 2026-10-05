@@ -20,6 +20,13 @@ export enum DiagnosticCode
   EmptyNotAllowed = "cardinality.empty-not-allowed",
   TargetTypeMismatch = "relationship.target-type",
   BooleanValueInvalid = "type.boolean-invalid",
+  // A scalar value whose literal is not valid for the field's resolved base
+  // type (e.g. a non-numeric string on an `integer` field).
+  ScalarValueInvalid = "type.value-invalid",
+  // A scalar value that does not match a `regex` of its primitive type.
+  RegexMismatch = "type.regex-mismatch",
+  // An assignment to a member the instance's concept (and supertypes) does not declare.
+  MemberUnknown = "member.unknown",
   InvariantFailed = "invariant.failed",
   // Class + taxonomy phase.
   ClassOverride = "Class.override",
