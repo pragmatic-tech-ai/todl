@@ -43,8 +43,57 @@ export interface ProjectManifest
   architectures?: DependencyRef[];
 }
 
-/** Parse a `project.plexus` JSON string into a typed manifest. */
+/**
+ * The pre-plural-bindings fields an older `project.plexus` may still carry on disk.
+ * Projects authored before the plural-bindings schema used a singular `metaModel`
+ * and a type-specific version field (`modelVersion` for meta-models, `libVersion`
+ * for libraries); ManifestParser maps them onto the current schema at parse time so
+ * such projects keep loading — and resolving their bases — without a manual migration.
+ */
+interface LegacyManifestFields
+{
+  metaModel?: DependencyRef;
+  modelVersion?: string;
+  libVersion?: string;
+}
+
+/** Parses `project.plexus`, upgrading any legacy shape to the current schema. */
+export class ManifestParser
+{
+  // Parse a `project.plexus` JSON string into a typed manifest. A legacy (pre-plural)
+  // manifest is normalized to the current schema; a current one passes through unchanged.
+  public static Parse(json: string): ProjectManifest
+  {
+    return ManifestParser.Normalize(JSON.parse(json) as ProjectManifest & LegacyManifestFields);
+  }
+
+  // Map the legacy fields onto the current schema in place, then drop them. Current
+  // fields already present win, so a half-migrated manifest keeps its plural bindings:
+  // `metaModel` → `metaModels[]`, and `modelVersion` / `libVersion` → `packageVersion`.
+  private static Normalize(raw: ProjectManifest & LegacyManifestFields): ProjectManifest
+  {
+    if ((raw.metaModels === undefined || raw.metaModels.length === 0) && raw.metaModel !== undefined)
+    {
+      raw.metaModels = [raw.metaModel];
+    }
+    const legacyVersion = raw.modelVersion ?? raw.libVersion;
+    if (raw.packageVersion === undefined && legacyVersion !== undefined)
+    {
+      raw.packageVersion = legacyVersion;
+    }
+    delete raw.metaModel;
+    delete raw.modelVersion;
+    delete raw.libVersion;
+    return raw;
+  }
+}
+
+/**
+ * Parse a `project.plexus` JSON string into a typed manifest. The stable functional
+ * entry point (published API); delegates to {@link ManifestParser.Parse}, so legacy
+ * manifests are upgraded here too.
+ */
 export function parseManifest(json: string): ProjectManifest
 {
-  return JSON.parse(json) as ProjectManifest;
+  return ManifestParser.Parse(json);
 }

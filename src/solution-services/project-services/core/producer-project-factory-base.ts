@@ -8,6 +8,7 @@ import {
     type ProjectManifestEnvelope,
 } from './project-factory.js'
 import { type IBaseProducingProjectFactory } from './producer-project-factory.js'
+import { ManifestParser } from '../../package-manager/manifest.js'
 import { TodlProjectFactory } from './todl-project-factory.js'
 import { type ProjectBaseModelBindings, type PublishedBaseModelReference } from './base-binding.js'
 import { TodlProjectSourceFiles } from './todl-sources.js'
@@ -85,9 +86,12 @@ export abstract class ProducerProjectFactory extends TodlProjectFactory
     // the build pipeline: emit-bundle-action / bake-resources-action / publish-package-action
     // / solution-build tests.
 
+    // Parse through ManifestParser so a legacy producer manifest (libVersion /
+    // modelVersion, singular metaModel) is upgraded before getVersion reads
+    // packageVersion off it.
     private async readManifest(storage: IStorage): Promise<ProducerManifest>
     {
-        return JSON.parse(await storage.ReadText(PROJECT_MANIFEST_FILENAME)) as ProducerManifest
+        return ManifestParser.Parse(await storage.ReadText(PROJECT_MANIFEST_FILENAME)) as ProducerManifest
     }
 
     private static slugify(name: string): string

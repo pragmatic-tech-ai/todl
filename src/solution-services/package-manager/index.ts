@@ -1,7 +1,7 @@
 /** The TODL package manager — wrapping npm/GitHub Packages
  *  (design: docs/superpowers/specs/2026-09-03-todl-package-manager-design.md).
  *  SP1: package format (manifest → package.json). */
-export { ProjectType, type ProjectManifest, type DependencyRef, parseManifest } from "./manifest.js";
+export { ProjectType, type ProjectManifest, type DependencyRef, ManifestParser, parseManifest } from "./manifest.js";
 export {
   toPackageJson,
   DEFAULT_SCOPE,
