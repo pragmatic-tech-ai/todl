@@ -5,6 +5,9 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "bin": {
+    "todl-language-server": "dist/language-server/main.js"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -21,6 +24,14 @@
         "default": "./dist/solution-services/lsp/index.js"
       },
       "require": "./dist/solution-services/lsp/index.js"
+    },
+    "./language-server": {
+      "types": "./dist/language-server/index.d.ts",
+      "import": {
+        "development": "./src/language-server/index.ts",
+        "default": "./dist/language-server/index.js"
+      },
+      "require": "./dist/language-server/index.js"
     },
     "./package-manager": {
       "types": "./dist/solution-services/package-manager/index.d.ts",

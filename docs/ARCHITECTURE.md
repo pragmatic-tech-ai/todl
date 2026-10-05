@@ -120,6 +120,7 @@ are the demo/corpus suite and are **not** published (`files: ["dist", "README.md
 | `src/application/` | Composition/host layer (`ApplicationBootstrapper`, `MuralHost`); the generic model-browser view here is legacy. |
 | `src/runtime/` | An internal handle-based consumption surface (`TODL.ComposeGraph`) — not the npm `todl-runtime` package (see §13). |
 | `src/solution-services/lsp/` | The language surface: the `LspServicesEngine` module plus whole-project analysis (completion, hover, references, semantic tokens, …). |
+| `src/language-server/` | Out-of-process JSON-RPC LSP server — a thin transport proxy over the lsp module (bin `todl-language-server`). |
 | `src/migrate/` | Mechanical rewriter for legacy sources → current surface. |
 | `src/index.ts` | The package's root barrel (public API surface). |
 
@@ -673,8 +674,14 @@ The build output `index.html` is fully self-contained. At runtime:
   warm base-set cache; `analysis/` holds the `AnalysisEngine` / `AnalysisSnapshot`
   (parse/tokenise, run `checkAgainst`, group diagnostics per URI) and the pure
   feature providers (hover, completion, navigation, references, semantic tokens,
-  …). There is no standalone stdio bin: a host embeds the module. (A thin
-  JSON-RPC proxy over it is tracked separately.)
+  …). An in-process host (Plexus/Monaco) embeds the module directly.
+- **JSON-RPC proxy** (`src/language-server/`, export `./language-server`, bin
+  `todl-language-server`) — a thin, out-of-process transport adapter for external
+  editors that cannot host the module in-process (a VS Code extension, …). It owns
+  no resolver and re-implements no analysis: `LspCompositionRoot` applies the
+  `solution-services/lsp` module and `TodlLanguageServer` maps each LSP request
+  1:1 onto that module's `ILanguageService`. The module stays the single symbol
+  authority; the proxy is one more consumer of it.
 - **CLI** (`cli/`, `todl-demo`) — a demo/corpus runner: `list | run <id> |
   test [--update] | docs`. It runs the golden corpus in `examples/` (the golden
   *is* the normalised pipeline output). Not a published bin.
@@ -690,7 +697,7 @@ The build output `index.html` is fully self-contained. At runtime:
 `src/index.ts` is a large root barrel re-exporting across every layer (compiler
 model, model-data, application, codegen, authoring, publish, predicate, validate,
 parse, migrate, and the solution-services surface). Beyond the root, the package
-exposes focused subpath exports: `./solution-services/lsp`,
+exposes focused subpath exports: `./solution-services/lsp`, `./language-server`,
 `./package-manager` (+ `/connections`), `./build-system-core`,
 `./todl-build-system`, `./project-system`, `./domain`, `./graph-api`.
 
