@@ -1082,6 +1082,24 @@ function applyInstance(
       if (parentConcept !== null) bindToField(builder, model, parent, parentConcept, decl, diagnostics);
     }
   }
+  else if (!decl.isClass)
+  {
+    // A concrete record id seen a second time: later fields merge onto the first
+    // node and a nested re-declaration never gets its own `Contains` edge (the
+    // addContains above runs only on first sight), so two same-id records under
+    // different parents silently collapse into one. Report the collision at the
+    // second declaration. Classes still merge silently (partial definitions are
+    // meant to be completed from several places), and model containers merge in
+    // applyModel (multi-file split), which never reaches here. (#6)
+    diagnostics.push({
+      code: DiagnosticCode.InstanceDuplicateId,
+      severity: Severity.Error,
+      message: `record id "${decl.id}" is already declared; a duplicate id merges onto the first and loses its own containment — rename one`,
+      span: decl.conceptSpan ?? decl.span,
+      node: decl.id,
+      path: null,
+    });
+  }
   for (const assignment of decl.assignments)
   {
     realizeValue(builder, model, decl.concept, decl.id, assignment.name, assignment.value, diagnostics, asserted, idGen, ops, rec);

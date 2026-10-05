@@ -40,6 +40,10 @@ export enum DiagnosticCode
   ViewpointFramesNotConcept = "viewpoint.frames-not-concept",
   // Instance-loading phase.
   AmbiguousFieldBinding = "Instance.ambiguous-field-binding",
+  // A concrete record id re-declared a second time: the later fields merge onto
+  // the first node and a nested re-declaration loses its own containment, so the
+  // collision is reported at the second declaration.
+  InstanceDuplicateId = "instance.duplicate-id",
   // A member's value shape does not match its declared type (e.g. a reference
   // member given a quoted string, or a value member given a list).
   MemberValueKind = "member.value-kind",
