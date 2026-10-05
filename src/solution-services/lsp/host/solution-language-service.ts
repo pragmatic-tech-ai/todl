@@ -1,6 +1,7 @@
 import {
-    ServiceBase, ServiceKey, Disposable, type IServiceProvider, type IStorage, type IDisposable,
+    ServiceBase, ServiceKey, Disposable, isWatchableStorage, type IServiceProvider, type IStorage, type IDisposable,
 } from "@pragmatic-tech-ai/todl-runtime";
+import { MemberContentWatcher } from "./member-content-watcher.js";
 import type { CollectionChange } from "@pragmatic-tech-ai/todl-runtime";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import type {
@@ -110,6 +111,10 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     // re-pointed whenever ActiveSolution changes (a different solution swaps the
     // collection out), so it lives in its own slot rather than the permanent list.
     private membersSubscription: IDisposable | undefined;
+    // One on-disk content watcher per member (keyed by its storage), so a `.todl`
+    // added/removed under a member refreshes that member's warm bases — the gap
+    // left when only Members changes and ReferencesChanged drove invalidation (#16).
+    private readonly contentWatchers = new Map<IStorage, MemberContentWatcher>();
     // Set true the instant dispose() runs so an in-flight async maintenance task (or a
     // bus event whose source has no unsubscribe) becomes an inert no-op.
     private disposed = false;
@@ -327,6 +332,8 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
         this.disposed = true;
         this.membersSubscription?.dispose();
         this.membersSubscription = undefined;
+        for (const watcher of this.contentWatchers.values()) watcher.dispose();
+        this.contentWatchers.clear();
         for (const sub of this.subscriptions) sub.dispose();
         this.subscriptions.length = 0;
         super.dispose();
@@ -372,9 +379,34 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     {
         this.membersSubscription?.dispose();
         this.membersSubscription = undefined;
+        // A solution switch swaps the whole member set out — tear down the old
+        // content watchers and start one per member of the new solution.
+        for (const watcher of this.contentWatchers.values()) watcher.dispose();
+        this.contentWatchers.clear();
         if (solution === undefined) return;
         const off = solution.Members.Subscribe((change) => this.OnMembersChanged(change));
         this.membersSubscription = new Disposable(off);
+        for (const member of solution.Members) this.WatchMemberContent(member);
+    }
+
+    // Start (or tear down) the on-disk content watcher for one member. A `.todl`
+    // file added/removed anywhere under the member routes through the existing
+    // InvalidateMember path, exactly like a ReferencesChanged event. (#16)
+    private WatchMemberContent(member: SolutionMember): void
+    {
+        const storage = member.Storage;
+        if (storage === undefined || !isWatchableStorage(storage) || this.contentWatchers.has(storage)) return;
+        const watcher = new MemberContentWatcher(storage, () => this.Enqueue(() => this.InvalidateMember(storage, true)));
+        this.contentWatchers.set(storage, watcher);
+        this.Enqueue(() => watcher.Start());
+    }
+
+    private UnwatchMemberContent(member: SolutionMember): void
+    {
+        const storage = member.Storage;
+        if (storage === undefined) return;
+        this.contentWatchers.get(storage)?.dispose();
+        this.contentWatchers.delete(storage);
     }
 
     // A member added/removed: enqueue targeted maintenance per touched member. Insert
@@ -385,11 +417,19 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
         if (this.disposed) return;
         if (change.kind === SolutionLanguageService.RemovedKind)
         {
-            for (const member of change.items) this.Enqueue(() => this.MaintainMember(member, false));
+            for (const member of change.items)
+            {
+                this.UnwatchMemberContent(member);
+                this.Enqueue(() => this.MaintainMember(member, false));
+            }
         }
         else if (change.kind === SolutionLanguageService.InsertedKind)
         {
-            for (const member of change.items) this.Enqueue(() => this.MaintainMember(member, true));
+            for (const member of change.items)
+            {
+                this.WatchMemberContent(member);
+                this.Enqueue(() => this.MaintainMember(member, true));
+            }
         }
     }
 
