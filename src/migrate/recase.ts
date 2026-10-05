@@ -117,6 +117,40 @@ function analyze(text: string): { toks: Tok[]; roles: Role[] }
     }
   }
 
+  // 1b. A model's meta-model binding `model <id> : <ns>` names a NAMESPACE, not a
+  // type — so its segments must be cased like the `namespace` declaration they
+  // refer to (lowercase / lower-camel), the same as an `import`. Mark the tokens
+  // from the binding `:` up to `{`, `conforms`, or `uses` (both introduce type
+  // references, not the namespace). (#10 defect 2)
+  const inModelNs = new Array<boolean>(n).fill(false);
+  for (let i = 0; i < n; i++)
+  {
+    if (!(toks[i]!.kind === K.Ident && toks[i]!.text === "model")) continue;
+    let j = i + 1;
+    while (j < n && !(toks[j]!.kind === K.Punct && (toks[j]!.text === ":" || toks[j]!.text === "{"))) j++;
+    if (j >= n || toks[j]!.text !== ":") continue;
+    for (let k = j + 1; k < n; k++)
+    {
+      const tk = toks[k]!;
+      if (tk.kind === K.Punct && (tk.text === "{" || tk.text === ";")) break;
+      if (tk.kind === K.Ident && (tk.text === "conforms" || tk.text === "uses")) break;
+      inModelNs[k] = true;
+    }
+  }
+
+  // 1c. Every term declared in this source (`term <name>`), by raw text. A bare
+  // VALUE that names a declared term must be cased like the term (PascalCase),
+  // not like an instance reference (camelCase), or it will not resolve as the
+  // taxonomy-typed field's term value. (#10 defect 3)
+  const declaredTerms = new Set<string>();
+  for (let i = 0; i < n; i++)
+  {
+    if (toks[i]!.kind === K.Ident && toks[i]!.text === "term" && toks[i + 1]?.kind === K.Ident)
+    {
+      declaredTerms.add(toks[i + 1]!.text);
+    }
+  }
+
   // 2. dotted runs `ident ('.' ident)+` — role depends on the head's context.
   for (let i = 0; i < n; i++)
   {
@@ -130,8 +164,10 @@ function analyze(text: string): { toks: Tok[]; roles: Role[] }
     let roleAt: (pos: number, last: boolean) => Role;
     if (head === "this" || head === "This") roleAt = (pos) => (pos === 0 ? Role.Unchanged : Role.MemberCamel); // this.member (even in value position)
     else if (inNs[i]) roleAt = () => Role.NamespaceLower;
+    else if (inModelNs[i]) roleAt = () => Role.NamespaceLower;                                            // model : ns — whole path is a namespace
+    else if (before?.text === "import") roleAt = () => Role.NamespaceLower;                               // import ns.sub — whole path is a namespace
     else if (before !== undefined && VALUE_PREV.has(before.text)) roleAt = () => Role.TypePascal;         // taxonomy.term value
-    else if (before !== undefined && (TYPE_REF_PREV.has(before.text) || before.text === "import")) roleAt = (_p, last) => (last ? Role.TypePascal : Role.NamespaceLower); // ns.Type / import ns.Symbol
+    else if (before !== undefined && TYPE_REF_PREV.has(before.text)) roleAt = (_p, last) => (last ? Role.TypePascal : Role.NamespaceLower); // ns.Type
     else roleAt = () => Role.Unchanged;
     seg.forEach((idx, pos) => { roles[idx] = roleAt(pos, pos === seg.length - 1); handled[idx] = true; });
   }
@@ -151,7 +187,7 @@ function analyze(text: string): { toks: Tok[]; roles: Role[] }
   for (let i = 0; i < n; i++)
   {
     if (toks[i]!.kind !== K.Ident || handled[i]) continue;
-    roles[i] = classifySingle(toks[i]!, toks[i - 1], toks[i + 1], inNs[i] === true, depth[i] === 0);
+    roles[i] = classifySingle(toks[i]!, toks[i - 1], toks[i + 1], inNs[i] === true, depth[i] === 0, inModelNs[i] === true, declaredTerms);
     handled[i] = true;
   }
   return { toks, roles };
@@ -199,18 +235,32 @@ export function collectRenames(text: string, into: Map<string, string>): void
   }
 }
 
-function classifySingle(t: Tok, prev: Tok | undefined, next: Tok | undefined, inNamespace: boolean, atTopLevel: boolean): Role
+function classifySingle(
+  t: Tok,
+  prev: Tok | undefined,
+  next: Tok | undefined,
+  inNamespace: boolean,
+  atTopLevel: boolean,
+  inModelNamespace: boolean,
+  declaredTerms: ReadonlySet<string>,
+): Role
 {
   if (KEYWORDS.has(t.text)) return Role.Unchanged;                                          // reserved word
-  if (inNamespace) return Role.NamespaceLower;
+  if (inNamespace || inModelNamespace) return Role.NamespaceLower;                           // namespace header or `model : ns` binding
   if (prev?.kind === K.Ident && MEMBER_DECL_KW.has(prev.text)) return Role.MemberCamel;      // `relationship <name>`
   if (prev?.kind === K.Ident && TYPE_DECL_KW.has(prev.text)) return Role.TypePascal;         // decl name
   if (prev !== undefined && TYPE_REF_PREV.has(prev.text)) return Role.TypePascal;            // type reference
   if (prev?.text === "," && atTopLevel) return Role.TypePascal;                              // `represents A, B` — type list
   if (isStmtBoundary(prev) && next?.kind === K.Ident) return Role.TypePascal;                // `Type id {` — the TYPE
-  if (prev?.kind === K.Ident && next?.text === "{") return Role.InstanceCamel;               // `Type id {` — the ID
+  // `Type id {` — the ID; also `Type id instanceof Class {` (the id precedes `instanceof`).
+  if (prev?.kind === K.Ident && (next?.text === "{" || next?.text === "instanceof")) return Role.InstanceCamel;
   if (next !== undefined && (next.text === ":" || next.text === "=")) return Role.MemberCamel; // member/attr key
-  if (prev !== undefined && VALUE_PREV.has(prev.text)) return Role.InstanceCamel;            // bare reference value ( = / [ / , inside [] )
+  if (prev !== undefined && VALUE_PREV.has(prev.text))                                       // bare reference value ( = / [ / , inside [] )
+  {
+    // A value that names a declared term is the term (PascalCase), so it resolves
+    // as the taxonomy-typed field's bare term value; otherwise an instance ref.
+    return declaredTerms.has(t.text) ? Role.TypePascal : Role.InstanceCamel;
+  }
   return Role.Unchanged;
 }
 

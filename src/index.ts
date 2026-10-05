@@ -169,6 +169,7 @@ export {
 export { toMetaModule, type MetaModuleOptions } from './compiler-services/emit/js-module.js';
 
 export { rewrite } from './migrate/rewriter.js';
+export { recaseSource, collectRenames, toPascal, toCamel } from './migrate/recase.js';
 
 export { load, type LoadResult } from './compiler-services/parse/loader.js';
 export { parse, type ParseResult } from './compiler-services/parse/parser.js';
