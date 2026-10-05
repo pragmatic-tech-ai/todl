@@ -6,7 +6,8 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "todl-language-server": "dist/language-server/main.js"
+    "todl-language-server": "dist/language-server/main.js",
+    "todl-syntax-checker": "dist/syntax-checker/main.js"
   },
   "exports": {
     ".": {

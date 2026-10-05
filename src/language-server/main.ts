@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { createConnection, ProposedFeatures } from "vscode-languageserver/node.js";
 import { LspCompositionRoot } from "./lsp-composition-root.js";
 import { TodlLanguageServer } from "./todl-language-server.js";
