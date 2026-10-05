@@ -25,9 +25,4 @@ export class DiagnosticsMapper
             range: d.span === null ? DiagnosticsMapper.DocStart : Positions.SpanToRange(d.span),
         };
     }
-
-    public static MapMany(ds: readonly TodlDiagnostic[]): Diagnostic[]
-    {
-        return ds.map(d => DiagnosticsMapper.Map(d));
-    }
 }

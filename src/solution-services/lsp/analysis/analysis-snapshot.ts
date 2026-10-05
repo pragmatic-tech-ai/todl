@@ -56,7 +56,7 @@ export class AnalysisSnapshot
         const { model, diagnostics } = checkAgainst([...bases], [...sources]);
 
         // Map each diagnostic exactly once; the flat list and the per-URI buckets reuse
-        // the SAME mapped object (no second MapMany pass over the raw diagnostics).
+        // the SAME mapped object (no second pass over the raw diagnostics).
         const byUri = new Map<string, Diagnostic[]>();
         for (const src of sources) byUri.set(src.uri, []);
         const flat: Diagnostic[] = [];

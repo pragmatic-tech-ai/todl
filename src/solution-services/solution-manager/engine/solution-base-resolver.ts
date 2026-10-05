@@ -1,4 +1,4 @@
-import { ServiceBase, ServiceKey, type IServiceProvider, type IStorage } from '@pragmatic-tech-ai/todl-runtime'
+import { ServiceBase, ServiceKey, type IServiceProvider, type IStorage, type IDisposable } from '@pragmatic-tech-ai/todl-runtime'
 import { type IPackageSource, type SourcedPackage, type PackageResolutionContext } from '../../todl-build-system/package-source.js'
 import { PackageStoreKey } from '../../todl-build-system/package-store.js'
 import { PackageKind, type PackageRef } from '../../../publish/publish.js'
@@ -60,10 +60,22 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource,
 
     private _staleMemberIds: ReadonlySet<string> = new Set<string>()
 
+    // The ActiveSolution subscription on the manager, released on dispose so this
+    // resolver (e.g. a transitional manager-owned fallback) does not outlive the
+    // manager via a dangling listener. (#18)
+    private managerSubscription: IDisposable | undefined
+
     constructor(provider: IServiceProvider)
     {
         super(provider)
         this.subscribeToManager()
+    }
+
+    public override dispose(): void
+    {
+        this.managerSubscription?.dispose()
+        this.managerSubscription = undefined
+        super.dispose()
     }
 
     // The id set evicted by the most recent Invalidate call (empty until the first
@@ -472,8 +484,8 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource,
     {
         const manager = this.Provider.get(SolutionManagerService.Key)
         if (manager === undefined) return
-        const propertyChanged = (manager as unknown as { PropertyChanged?: (name: string) => { subscribe: (handler: () => void) => unknown } }).PropertyChanged
-        propertyChanged?.call(manager, SolutionBaseResolver.ActiveSolutionPropertyName).subscribe(() => this.clearCache())
+        const propertyChanged = (manager as unknown as { PropertyChanged?: (name: string) => { subscribe: (handler: () => void) => IDisposable } }).PropertyChanged
+        this.managerSubscription = propertyChanged?.call(manager, SolutionBaseResolver.ActiveSolutionPropertyName).subscribe(() => this.clearCache())
     }
 
     private clearCache(): void

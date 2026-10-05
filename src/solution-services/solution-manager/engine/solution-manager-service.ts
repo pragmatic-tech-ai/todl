@@ -183,6 +183,16 @@ export class SolutionManagerService extends ServiceBase
         return this.fallbackResolver;
     }
 
+    // Dispose the manager-owned fallback resolver with the manager, so its manager
+    // subscription does not outlive it. The host-registered resolver (when present)
+    // is owned by the host, not here. (#18)
+    public override dispose(): void
+    {
+        this.fallbackResolver?.dispose();
+        this.fallbackResolver = undefined;
+        super.dispose();
+    }
+
     public get ActiveSolution(): Solution | undefined
     {
         return this.activeSolution;
