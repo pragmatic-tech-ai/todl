@@ -19,7 +19,14 @@ export class ResolverPackageSource implements PackageSource
 
     public async versions(model: string): Promise<readonly string[]>
     {
-        return this.versionSource.versions === undefined ? [] : this.versionSource.versions(model)
+        const published = this.versionSource.versions === undefined ? [] : await this.versionSource.versions(model)
+        // Merge the live in-solution member's version (if any) so a version-less
+        // ref to an unpublished member pins to the open member, not just published
+        // releases. The live version goes LAST so Domain.pin (latest = last) prefers
+        // it — the live-first model. (#17)
+        const live = this.source.VersionsOf === undefined ? [] : await this.source.VersionsOf(model)
+        const merged = published.filter((v) => !live.includes(v))
+        return [...merged, ...live]
     }
 
     public async resolve(ref: PackageRef): Promise<ResolvedPackage>

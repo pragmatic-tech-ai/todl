@@ -28,4 +28,9 @@ export interface PackageResolutionContext
 export interface IPackageSource
 {
     TryGet(ref: PackageRef, context?: PackageResolutionContext): Promise<SourcedPackage | undefined>;
+    // Versions this source can produce for `id`, if it can enumerate them. A
+    // live-first resolver reports the open in-solution member's version here so a
+    // version-less reference to an as-yet-unpublished member can still pin (#17).
+    // Optional + additive: a source that cannot enumerate omits it.
+    VersionsOf?(id: string): Promise<readonly string[]>;
 }

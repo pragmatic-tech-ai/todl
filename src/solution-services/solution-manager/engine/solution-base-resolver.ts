@@ -109,6 +109,17 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource,
         return this.inner().TryGet(ref)
     }
 
+    // The live version an open in-solution member produces for `id`, so a
+    // version-less reference to an unpublished member can still pin to it (#17).
+    // Empty when no open member produces `id` or it has no version yet; the
+    // published backend's versions are merged in by the caller.
+    public async VersionsOf(id: string): Promise<readonly string[]>
+    {
+        const member = await this.liveProducerFor(id)
+        const version = member?.manifest.packageVersion
+        return version === undefined ? [] : [version]
+    }
+
     // Resolve a consumer's declared bases local-first (open solution members compiled
     // live, preferred over published), tagging each base node with where its declaring
     // artifact lives. The editor-facing counterpart of TryGet: it merges the full base
