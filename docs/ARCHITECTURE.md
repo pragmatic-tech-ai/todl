@@ -119,8 +119,7 @@ are the demo/corpus suite and are **not** published (`files: ["dist", "README.md
 | `src/solution-services/` | The build systems, package sources/registries, project types, and multi-project solution builder. |
 | `src/application/` | Composition/host layer (`ApplicationBootstrapper`, `MuralHost`); the generic model-browser view here is legacy. |
 | `src/runtime/` | An internal handle-based consumption surface (`TODL.ComposeGraph`) — not the npm `todl-runtime` package (see §13). |
-| `src/language-server/` | The LSP (stdio entry `todl-language-server`). |
-| `src/language-service/` | Pure whole-project analysis behind the LSP (completion, hover, references, …). |
+| `src/solution-services/lsp/` | The language surface: the `LspServicesEngine` module plus whole-project analysis (completion, hover, references, semantic tokens, …). |
 | `src/migrate/` | Mechanical rewriter for legacy sources → current surface. |
 | `src/index.ts` | The package's root barrel (public API surface). |
 
@@ -667,17 +666,15 @@ The build output `index.html` is fully self-contained. At runtime:
 
 ## 12. Tooling
 
-- **Language server** (`src/language-server/`) — a browser-safe LSP core
-  (`server.ts` `createServer`) wired to a stdio transport (`stdio.ts`, the
-  `todl-language-server` bin). It maintains a project registry, debounces
-  revalidation, and delegates every request to the language service. Capabilities:
-  diagnostics, completion, hover, definition, references, rename, document/workspace
-  symbols, folding, formatting, code actions, signature help, semantic tokens.
-- **Language service** (`src/language-service/`) — pure, cache-free analysis.
-  `analyze(sources, bases)` parses/tokenises, runs `checkAgainst`, and groups
-  diagnostics per URI; feature modules (`hover`, `completion`, `navigation`,
-  `reference-index`, `semantic-tokens`, …) are pure functions over the resulting
-  `Analysis`. The server owns caching and transport.
+- **Language surface** (`src/solution-services/lsp/`, export
+  `./solution-services/lsp`) — the `LspServicesEngine` module (`lsp-module.mu`)
+  wires the whole-project language services into a host. `host/` owns the
+  project registry (`ProjectRegistry`), the `SolutionLanguageService`, and the
+  warm base-set cache; `analysis/` holds the `AnalysisEngine` / `AnalysisSnapshot`
+  (parse/tokenise, run `checkAgainst`, group diagnostics per URI) and the pure
+  feature providers (hover, completion, navigation, references, semantic tokens,
+  …). There is no standalone stdio bin: a host embeds the module. (A thin
+  JSON-RPC proxy over it is tracked separately.)
 - **CLI** (`cli/`, `todl-demo`) — a demo/corpus runner: `list | run <id> |
   test [--update] | docs`. It runs the golden corpus in `examples/` (the golden
   *is* the normalised pipeline output). Not a published bin.
@@ -693,9 +690,9 @@ The build output `index.html` is fully self-contained. At runtime:
 `src/index.ts` is a large root barrel re-exporting across every layer (compiler
 model, model-data, application, codegen, authoring, publish, predicate, validate,
 parse, migrate, and the solution-services surface). Beyond the root, the package
-exposes focused subpath exports: `./language-service`, `./language-server`,
+exposes focused subpath exports: `./solution-services/lsp`,
 `./package-manager` (+ `/connections`), `./build-system-core`,
-`./todl-build-system`, `./domain`, `./graph-api`.
+`./todl-build-system`, `./project-system`, `./domain`, `./graph-api`.
 
 Every subpath's `import` has two conditions: **`development`** → raw `./src/**/*.ts`
 and **`default`** → compiled `./dist/**/*.js`. In-repo tooling and tests run with

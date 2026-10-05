@@ -40,10 +40,13 @@ One `namespace` per file. Everything is declared inside it:
 - **Identifiers**: `[A-Za-z_] [A-Za-z0-9_]*` — C-like. No hyphens; `_` is
   allowed; no leading digit. By convention:
   - **Types** — `concept`, `primitive`, `taxonomy`, `annotation`, `enum`,
-    `term`, and `class` names — are **PascalCase**: `AppComponent`,
-    `ComponentCategory`, `Sku`. The **built-in** primitives shipped in the
-    prelude are the exception: like `string`, they are **lowercase** —
-    `identifier`, `slug`, `resourceKey`.
+    `term`, and `class` names. The compiler accepts any C-like identifier for a
+    type; **PascalCase** (`AppComponent`, `ComponentCategory`, `Sku`) is the
+    recommended default, but — as with members — **the casing already used in
+    the surrounding files takes precedence**: match a package that names its
+    types `lower_snake` rather than mixing styles. The **built-in** primitives
+    shipped in the prelude are lowercase — like `string`: `identifier`, `slug`,
+    `resourceKey`.
   - **Members** — field names, relationship names, and annotation parameters —
     use a consistent lower-case identifier convention: `lowerCamelCase`
     (`implementedBy`) or `lower_snake_case` (`implemented_by`) — both are valid
@@ -172,7 +175,8 @@ Problems panel.
 
 - `primitive <Name> : <base>` optionally names a base primitive (`string`,
   `integer`, …). The body carries a `description` and, for string primitives, a
-  `regex` constraint. User-declared primitive names are PascalCase (`Sku`).
+  `regex` constraint. User-declared primitive names are PascalCase by convention
+  (`Sku`), but follow the surrounding files' casing where it differs.
 - Built-in primitives usable as a bare type without declaring them: `string`,
   `integer`, `boolean`, plus the prelude's **lowercase** `identifier`, `slug`,
   and `resourceKey`. (There is no `Label` primitive — a label is just a

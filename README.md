@@ -12,7 +12,7 @@ emit). ESM, strict TypeScript.
 ```bash
 npm ci
 npm run build         # gen prelude + compile shippable source (tsconfig.build.json)
-npm test              # compiler + language-server suite
+npm test              # compiler + lsp (solution-services/lsp) suite
 npm run test:corpus   # demos shared/ + examples/ + cli/ (golden snapshots)
 ```
 

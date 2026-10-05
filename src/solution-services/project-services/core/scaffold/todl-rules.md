@@ -7,13 +7,17 @@ meta-model, library). Full reference: `.claude/todl-manual.md`.
   `namespace a.b.c {`, closed by a matching `}` at the end.
 - **Every statement ends with `;`** — fields, assignments, relationships,
   imports. A missing `;` is the most common syntax error.
-- **Identifiers are C-like** (`[A-Za-z_][A-Za-z0-9_]*`, no hyphens): **types**
-  (concepts, primitives, taxonomies, annotations, enums, terms, classes) are
-  **PascalCase** (`AppComponent`, never `app-component`) — except the prelude's
-  **built-in primitives**, which are lowercase like `string` (`identifier`,
-  `slug`, `resourceKey`); **members** (field names, relationship names,
-  annotation params) match the surrounding files' casing (lowerCamel or
-  lower_snake); **keywords** and **namespace** segments are lowercase.
+- **Identifiers are C-like** (`[A-Za-z_][A-Za-z0-9_]*`, no hyphens). Casing is a
+  **project convention, not a language rule** — the compiler accepts any C-like
+  identifier for a type. The recommended default for **types** (concepts,
+  primitives, taxonomies, annotations, enums, terms, classes) is **PascalCase**
+  (`AppComponent`), but **the casing already used in the surrounding files takes
+  precedence**: match a package that names its types `lower_snake` rather than
+  mixing styles. The prelude's **built-in primitives** are lowercase like
+  `string` (`identifier`, `slug`, `resourceKey`). **Members** (field names,
+  relationship names, annotation params) match the surrounding files' casing
+  (lowerCamel or lower_snake); **keywords** and **namespace** segments are
+  lowercase.
 - **References are bare names — no sigil**: `location`, `subnet.default`. Whether
   a value is a reference or a scalar is decided by the member's declared type
   (concept/taxonomy → reference, primitive → scalar). The characters `@` and
