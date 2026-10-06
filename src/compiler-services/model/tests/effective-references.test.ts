@@ -18,7 +18,7 @@ const SRC = `namespace d {
 
 test("effectiveFields holds primitives only; concept fields live in effectiveRelationships", () => {
   const m = model(SRC);
-  assert.equal(m.effectiveFields("c").get("label"), "C");
-  assert.equal(m.effectiveFields("c").has("implementedBy"), false);
-  assert.deepEqual(m.effectiveRelationships("c").get("implementedBy"), ["t"]);
+  assert.equal(m.effectiveFields("d.c").get("label"), "C");
+  assert.equal(m.effectiveFields("d.c").has("implementedBy"), false);
+  assert.deepEqual(m.effectiveRelationships("d.c").get("implementedBy"), ["d.t"]);
 });

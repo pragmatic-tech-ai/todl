@@ -14,7 +14,7 @@ test("a boolean annotation param stages as a boolean scalar", () => {
     }
   }` }]);
   assert.deepEqual(diagnostics, [], "clean load — visible=true is not an undefined reference");
-  const app = model.resolve("Actors@Toolbox");
+  const app = model.resolve("tech.Actors@tech.Toolbox");
   assert.equal(app!.attrs.get("visible"), true);
   assert.equal(typeof app!.attrs.get("visible"), "boolean");
 });
@@ -26,5 +26,5 @@ test("a boolean field on a term stages as a boolean scalar", () => {
       Flag offByDefault { on = false; }
     }
   }` }]);
-  assert.equal(model.resolve("Flags.offByDefault")!.attrs.get("on"), false);
+  assert.equal(model.resolve("tech.Flags.offByDefault")!.attrs.get("on"), false);
 });

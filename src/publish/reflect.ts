@@ -10,6 +10,10 @@ import type { TodlDocument } from "../compiler-services/emit/json.js";
 const ANNOTATED = "Annotated";
 const EXTENDS = "Extends";
 const NAMESPACE_ATTR = "namespace";
+// The prelude `icon` annotation's canonical id after the namespace-qualified-id flip.
+// `projectAnnotations` keys the bag by the application's (qualified) annotation id, so
+// the icon is read under this key, not a bare `icon`.
+const ICON_ANNOTATION = "todl.icon";
 
 /** One instantiable class a package provides — a palette item. */
 export interface PublishedClass
@@ -93,7 +97,7 @@ export function deriveClasses(model: TodlDocument, annotationsFrom?: TodlDocumen
     if (n.localId !== null) cls.localId = n.localId;
     else if (typeof attrs.id === "string") cls.localId = attrs.id;
     if (typeof attrs.label === "string") cls.label = attrs.label;
-    const iconAnn = projectAnnotations(annModel, n.id).icon;
+    const iconAnn = projectAnnotations(annModel, n.id)[ICON_ANNOTATION];
     const iconPath = iconAnn === undefined ? undefined : iconAnn.path;
     if (typeof iconPath === "string") cls.icon = iconPath;
     out.push(cls);

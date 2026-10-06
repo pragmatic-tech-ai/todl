@@ -111,19 +111,19 @@ test('an unpublished in-solution member contributes its symbols to a consumer', 
 
     const { bases, problems } = await resolver.ResolveBasesFor(consumer)
 
-    assert.ok(bases.some((d) => d.nodes.some((n) => n.id === 'tenant')), 'microsoft symbols resolved')
+    assert.ok(bases.some((d) => d.nodes.some((n) => n.id === 'ms.tenant')), 'microsoft symbols resolved')
     assert.equal(problems.filter((p) => LocalFixtures.NoVersionProblem.test(p)).length, 0, problems.join('; '))
 })
 
 test('published fallback still works when no live producer exists', async () =>
 {
     const consumer = LocalFixtures.Storage(LocalFixtures.ConsumerFiles('landscape', 'microsoft', '1.0.0'))
-    const provider = LocalFixtures.Provider([], LocalFixtures.Published({ 'microsoft@1.0.0': LocalFixtures.PublishedDoc(['tenant']) }))
+    const provider = LocalFixtures.Provider([], LocalFixtures.Published({ 'microsoft@1.0.0': LocalFixtures.PublishedDoc(['ms.tenant']) }))
     const resolver = new SolutionBaseResolver(provider)
 
     const { bases, problems } = await resolver.ResolveBasesFor(consumer)
 
-    assert.ok(bases.some((d) => d.nodes.some((n) => n.id === 'tenant')))
+    assert.ok(bases.some((d) => d.nodes.some((n) => n.id === 'ms.tenant')))
     assert.deepEqual(problems, [])
 })
 
@@ -139,7 +139,7 @@ test('versionMismatch still warns when the live producer declares a real package
     const { bases, problems } = await resolver.ResolveBasesFor(consumer)
 
     assert.ok(problems.some((p) => /binding requests @1\.0\.0, project is @2\.0\.0/.test(p)), problems.join('; '))
-    assert.ok(bases.some((d) => d.nodes.some((n) => n.id === 'tenant')))
+    assert.ok(bases.some((d) => d.nodes.some((n) => n.id === 'ms.tenant')))
 })
 
 test('cyclic in-solution references do not hang and fall through with a cyclic problem', async () =>

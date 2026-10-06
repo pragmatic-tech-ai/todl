@@ -17,15 +17,15 @@ function repo(text: string)
 test("a viewpoint loads as an ontology node with Frames edges", () => {
   const m = repo(`concept Component {} concept Interface {}
     viewpoint ComponentView : frames Component, Interface`);
-  assert.equal(m.resolve("ComponentView")?.metaKind, MetaKind.Viewpoint);
-  assert.deepEqual(m.related("ComponentView", EdgeKind.Frames, Direction.Out).sort(), ["Component", "Interface"]);
-  assert.deepEqual(m.frames("ComponentView").sort(), ["Component", "Interface"]);
+  assert.equal(m.resolve("n.ComponentView")?.metaKind, MetaKind.Viewpoint);
+  assert.deepEqual(m.related("n.ComponentView", EdgeKind.Frames, Direction.Out).sort(), ["n.Component", "n.Interface"]);
+  assert.deepEqual(m.frames("n.ComponentView").sort(), ["n.Component", "n.Interface"]);
 });
 
 test("an unknown framed concept is reported undefined and drops the edge", () => {
   const { model, diagnostics } = loadResult(`viewpoint V : frames Missing`);
   assert.ok(diagnostics.some((d) => d.code === DiagnosticCode.ReferenceUndefined));
-  assert.deepEqual(model.frames("V"), []); // no dangling Frames edge
+  assert.deepEqual(model.frames("n.V"), []); // no dangling Frames edge
 });
 
 test("a qualified framed concept rewrites to its flat id", () => {
@@ -33,5 +33,5 @@ test("a qualified framed concept rewrites to its flat id", () => {
   const { model, diagnostics } = loadResult(`concept Component {}
     viewpoint V : frames n.Component`);
   assert.equal(diagnostics.length, 0);
-  assert.deepEqual(model.frames("V"), ["Component"]);
+  assert.deepEqual(model.frames("n.V"), ["n.Component"]);
 });

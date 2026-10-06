@@ -18,15 +18,15 @@ const SRC = `namespace t {
 test("collectOperators reverse-maps a concept to its first operator", () => {
   const { model } = check([{ uri: "t.todl", text: SRC }], new FakeIdGenerator());
   const ops = collectOperators(model);
-  assert.equal(ops.get("connector")?.glyph, "~>");
-  assert.equal(ops.get("connector")?.from, "from");
-  assert.equal(ops.get("connector")?.to, "to");
+  assert.equal(ops.get("t.connector")?.glyph, "~>");
+  assert.equal(ops.get("t.connector")?.from, "from");
+  assert.equal(ops.get("t.connector")?.to, "to");
 });
 
 test("a reified edge materializes as a connector binding a->b", () => {
   const { model } = check([{ uri: "t.todl", text: SRC }], new FakeIdGenerator());
-  assert.deepEqual(model.related("id-0", EdgeKind.Relationship, Direction.Out, "from"), ["a"]);
-  assert.deepEqual(model.related("id-0", EdgeKind.Relationship, Direction.Out, "to"), ["b"]);
+  assert.deepEqual(model.related("t.id-0", EdgeKind.Relationship, Direction.Out, "from"), ["t.a"]);
+  assert.deepEqual(model.related("t.id-0", EdgeKind.Relationship, Direction.Out, "to"), ["t.b"]);
 });
 
 // A meta-model base with a `~>` operator over a reified `connector` concept.

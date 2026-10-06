@@ -5,14 +5,14 @@ import { check } from "../../api.js";
 import { DiagnosticCode, Severity } from "../../diagnostics/diagnostic.js";
 
 test("redeclaring a prelude primitive warns but still compiles", () => {
-  const { diagnostics } = check([{ uri: "a.todl", text: `namespace a { primitive identifier : string { } }` }]);
+  const { diagnostics } = check([{ uri: "a.todl", text: `namespace todl { primitive identifier : string { } }` }]);
   const d = diagnostics.find((x) => x.code === DiagnosticCode.PreludeNameRedeclared);
   assert.ok(d, "expected a prelude.name-redeclared diagnostic");
   assert.equal(d!.severity, Severity.Warning);
 });
 
 test("redeclaring the root concept `element` warns", () => {
-  const { diagnostics } = check([{ uri: "a.todl", text: `namespace a { concept Element { } }` }]);
+  const { diagnostics } = check([{ uri: "a.todl", text: `namespace todl { concept Element { } }` }]);
   assert.ok(diagnostics.some((x) => x.code === DiagnosticCode.PreludeNameRedeclared));
 });
 

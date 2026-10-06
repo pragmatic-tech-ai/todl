@@ -191,7 +191,7 @@ test('a live open producer member resolves as a base, preferred over a published
     assert.ok(got !== undefined)
     // The live compile's document contains the live concept 'Widget', not the stale
     // published node (Fixtures.SomeSourced() has no nodes at all).
-    assert.ok(got!.Document.nodes.some((n) => n.id === 'Widget'))
+    assert.ok(got!.Document.nodes.some((n) => n.id === 'acme.Widget'))
 })
 
 test('no matching member → delegates to the inner published source', async () =>
@@ -346,12 +346,12 @@ test('ResolveBasesFor prefers an open producer and tags its nodes with an OpenPr
         Fixtures.Manager([
             { id: 'mm', type: 'meta-model', storage: Fixtures.Storage(Fixtures.MetaModelFiles('mm', '1.0.0', 'Widget')) },
         ]),
-        Fixtures.Published({ 'mm@1.0.0': Fixtures.PublishedDoc([{ id: 'StaleWidget' }]) }),
+        Fixtures.Published({ 'mm@1.0.0': Fixtures.PublishedDoc([{ id: 'acme.StaleWidget' }]) }),
     )
     const resolver = new SolutionBaseResolver(provider)
     const { bases, problems, originOf } = await resolver.ResolveBasesFor(consumer)
-    assert.ok(bases.some((b) => b.nodes.some((n) => n.id === 'Widget')))   // live, not StaleWidget
-    assert.equal(originOf.get('Widget')!.kind, WikiOriginKind.OpenProject)
+    assert.ok(bases.some((b) => b.nodes.some((n) => n.id === 'acme.Widget')))   // live, not acme.StaleWidget
+    assert.equal(originOf.get('acme.Widget')!.kind, WikiOriginKind.OpenProject)
     assert.deepEqual(problems, [])
 })
 
@@ -360,14 +360,14 @@ test('ResolveBasesFor falls back to published and tags Package origin, recursing
     const consumer = Fixtures.Storage(Fixtures.LibraryFiles('lib', 'mm', '1.0.0', 'Gadget', 'Widget'))
     const provider = Fixtures.Provider(
         Fixtures.Manager([]),   // no open producer
-        Fixtures.Published({ 'mm@1.0.0': Fixtures.PublishedDoc([{ id: 'Widget' }], [{ kind: 'meta-model', id: 'core', version: '2.0.0' }]),
-                             'core@2.0.0': Fixtures.PublishedDoc([{ id: 'Base' }]) }),
+        Fixtures.Published({ 'mm@1.0.0': Fixtures.PublishedDoc([{ id: 'acme.Widget' }], [{ kind: 'meta-model', id: 'core', version: '2.0.0' }]),
+                             'core@2.0.0': Fixtures.PublishedDoc([{ id: 'acme.Base' }]) }),
     )
     const resolver = new SolutionBaseResolver(provider)
     const { bases, originOf } = await resolver.ResolveBasesFor(consumer)
-    assert.ok(bases.some((b) => b.nodes.some((n) => n.id === 'Widget')))
-    assert.ok(bases.some((b) => b.nodes.some((n) => n.id === 'Base')))     // transitive dep
-    assert.equal(originOf.get('Widget')!.kind, WikiOriginKind.Package)
+    assert.ok(bases.some((b) => b.nodes.some((n) => n.id === 'acme.Widget')))
+    assert.ok(bases.some((b) => b.nodes.some((n) => n.id === 'acme.Base')))     // transitive dep
+    assert.equal(originOf.get('acme.Widget')!.kind, WikiOriginKind.Package)
 })
 
 test('ResolveBasesFor emits a not-published problem for an absent base', async () =>
@@ -417,12 +417,12 @@ test('ResolveBasesFor surfaces live compile errors but still falls back to the p
         Fixtures.Manager([
             { id: 'mm', type: 'meta-model', storage: Fixtures.Storage(Fixtures.BrokenMetaModelFiles('mm', '1.0.0')) },
         ]),
-        Fixtures.Published({ 'mm@1.0.0': Fixtures.PublishedDoc([{ id: 'Widget' }]) }),
+        Fixtures.Published({ 'mm@1.0.0': Fixtures.PublishedDoc([{ id: 'acme.Widget' }]) }),
     )
     const resolver = new SolutionBaseResolver(provider)
     const { bases, problems } = await resolver.ResolveBasesFor(consumer)
     assert.ok(problems.length > 0)
-    assert.ok(bases.some((b) => b.nodes.some((n) => n.id === 'Widget')))
+    assert.ok(bases.some((b) => b.nodes.some((n) => n.id === 'acme.Widget')))
 })
 
 test('ResolveBasesFor catches a live compile that throws and still falls back to the published base', async () =>
@@ -431,13 +431,13 @@ test('ResolveBasesFor catches a live compile that throws and still falls back to
     const provider = Fixtures.Provider(
         Fixtures.Manager([
             // 'mm' binds published-only 'core' as its own base, and declares an OWN
-            // concept "Widget" — the same bare name as 'core's node — so mm's live
+            // concept "Widget" — the same qualified id (acme.Widget) as 'core's node — so mm's live
             // compile throws when checked against the resolved base closure.
             { id: 'mm', type: 'meta-model', storage: Fixtures.Storage(Fixtures.CollidingMetaModelFiles('mm', '1.0.0', 'core', '1.0.0', 'Widget')) },
         ]),
         Fixtures.Published({
-            'core@1.0.0': Fixtures.PublishedDoc([{ id: 'Widget' }]),
-            'mm@1.0.0': Fixtures.PublishedDoc([{ id: 'Widget' }]),
+            'core@1.0.0': Fixtures.PublishedDoc([{ id: 'acme.Widget' }]),
+            'mm@1.0.0': Fixtures.PublishedDoc([{ id: 'acme.Widget' }]),
         }),
     )
     const resolver = new SolutionBaseResolver(provider)
@@ -445,7 +445,7 @@ test('ResolveBasesFor catches a live compile that throws and still falls back to
     await assert.doesNotReject(result)
     const { bases, problems } = await result
     assert.ok(problems.length > 0)
-    assert.ok(bases.some((b) => b.nodes.some((n) => n.id === 'Widget')))
+    assert.ok(bases.some((b) => b.nodes.some((n) => n.id === 'acme.Widget')))
 })
 
 test('ReferencedPublishedRefs returns the transitive published id@version closure', async () => {
@@ -505,9 +505,9 @@ test('ResolveBasesFor surfaces an open producer\'s transitive live bases (two-le
     )
     const resolver = new SolutionBaseResolver(provider)
     const { bases, originOf } = await resolver.ResolveBasesFor(consumer)
-    assert.ok(bases.some((b) => b.nodes.some((n) => n.id === 'Gadget')))  // L (direct)
-    assert.ok(bases.some((b) => b.nodes.some((n) => n.id === 'Widget')))  // M (transitive live)
-    assert.equal(originOf.get('Widget')!.kind, WikiOriginKind.OpenProject)
+    assert.ok(bases.some((b) => b.nodes.some((n) => n.id === 'lib_L.Gadget')))  // L (direct)
+    assert.ok(bases.some((b) => b.nodes.some((n) => n.id === 'acme.Widget')))  // M (transitive live)
+    assert.equal(originOf.get('acme.Widget')!.kind, WikiOriginKind.OpenProject)
 })
 
 test('ResolveBasesFor resolves a live diamond once (no duplicate, no cyclic problem)', async () =>
@@ -534,7 +534,7 @@ test('ResolveBasesFor resolves a live diamond once (no duplicate, no cyclic prob
     // unresolved/undefined-symbol diagnostic — both A and B compiled cleanly
     // against a complete view of D.
     assert.equal(problems.filter((p) => /not published|undefined symbol/.test(p)).length, 0)
-    assert.equal(bases.filter((b) => b.nodes.some((n) => n.id === 'Dnode')).length, 1)  // deduped
-    assert.ok(bases.some((b) => b.nodes.some((n) => n.id === 'Anode')))  // A's own compile succeeded
-    assert.ok(bases.some((b) => b.nodes.some((n) => n.id === 'Bnode')))  // B's own compile succeeded too
+    assert.equal(bases.filter((b) => b.nodes.some((n) => n.id === 'acme.Dnode')).length, 1)  // deduped
+    assert.ok(bases.some((b) => b.nodes.some((n) => n.id === 'lib_A.Anode')))  // A's own compile succeeded
+    assert.ok(bases.some((b) => b.nodes.some((n) => n.id === 'lib_B.Bnode')))  // B's own compile succeeded too
 })

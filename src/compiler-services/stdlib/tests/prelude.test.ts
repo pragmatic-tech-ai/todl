@@ -13,15 +13,15 @@ test("prelude.generated.ts is in sync with prelude.todl (run `npm run gen:prelud
 test("prelude compiles with no diagnostics and carries the standard nodes", () => {
   const doc = preludeDocument();
   const ids = new Set(doc.nodes.map((n) => n.id));
-  for (const id of ["identifier", "slug", "resourceKey", "MuralResource", "icon", "label", "toolbox", "instance", "Element"])
+  for (const id of ["todl.identifier", "todl.slug", "todl.resourceKey", "todl.MuralResource", "todl.icon", "todl.label", "todl.toolbox", "todl.instance", "todl.Element"])
   {
     assert.ok(ids.has(id), `prelude is missing "${id}"`);
   }
 });
 
-test("preludeNames lists exactly the prelude-defined bare ids", () => {
+test("preludeNames lists exactly the prelude-defined qualified ids", () => {
   const names = preludeNames();
-  for (const id of ["identifier", "slug", "resourceKey", "MuralResource", "icon", "label", "toolbox", "instance", "Element"])
+  for (const id of ["todl.identifier", "todl.slug", "todl.resourceKey", "todl.MuralResource", "todl.icon", "todl.label", "todl.toolbox", "todl.instance", "todl.Element"])
   {
     assert.ok(names.has(id), `preludeNames missing "${id}"`);
   }

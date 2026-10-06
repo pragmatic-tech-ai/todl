@@ -17,28 +17,28 @@ const SRC = `namespace acme {
 
 test("an annotation loads as an Ontology-tier node whose params are declared fields", () => {
   const { model } = load([{ uri: "a.todl", text: SRC }]);
-  const n = model.resolve("Icon");
+  const n = model.resolve("acme.Icon");
   assert.equal(n!.tier, Tier.Ontology);
   assert.equal(n!.metaKind, MetaKind.Annotation);
   // Params are declared fields on the annotation node (SPEC-01 #4), not `Icon.path` member nodes.
-  assert.equal(model.resolve("Icon.path"), undefined);
-  assert.deepEqual(model.schemaOf("Icon").fields.map((f) => f.name), ["path"]);
+  assert.equal(model.resolve("acme.Icon.path"), undefined);
+  assert.deepEqual(model.schemaOf("acme.Icon").fields.map((f) => f.name), ["path"]);
 });
 
 test("an application loads as an Annotated node typed by the annotation", () => {
   const { model } = load([{ uri: "a.todl", text: SRC }]);
-  const app = model.resolve("Actor@Icon");
+  const app = model.resolve("acme.Actor@acme.Icon");
   assert.equal(app!.tier, Tier.Ontology);
-  assert.equal(app!.type, "Icon");
+  assert.equal(app!.type, "acme.Icon");
   assert.equal(app!.attrs.get("path"), "icons/actor.svg");
   assert.equal(app!.namespace, "acme");
-  assert.deepEqual(model.related("Actor", EdgeKind.Annotated, Direction.Out), ["Actor@Icon"]);
+  assert.deepEqual(model.related("acme.Actor", EdgeKind.Annotated, Direction.Out), ["acme.Actor@acme.Icon"]);
 });
 
 test("package annotations attach to the singleton package node", () => {
   const { model } = load([{ uri: "a.todl", text: SRC }]);
   assert.equal(model.resolve(PACKAGE_NODE_ID)!.metaKind, MetaKind.Package);
-  assert.deepEqual(model.related(PACKAGE_NODE_ID, EdgeKind.Annotated, Direction.Out), ["package@Author"]);
+  assert.deepEqual(model.related(PACKAGE_NODE_ID, EdgeKind.Annotated, Direction.Out), ["package@acme.Author"]);
 });
 
 test("a duplicate application on one target is annotation.duplicate", () => {

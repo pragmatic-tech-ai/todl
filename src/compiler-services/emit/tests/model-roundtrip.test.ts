@@ -13,12 +13,12 @@ test("a model node and namespace provenance survive toJSON/fromJSON", () => {
     }` }]);
   const restored = fromJSON(toJSON(model));
 
-  const node = restored.resolve("prod");
+  const node = restored.resolve("acme.prod");
   assert.ok(node);
   assert.equal(node!.tier, Tier.Instance);
   assert.equal(node!.metaKind, MetaKind.Model);
   assert.equal(node!.attrs.get("MetaModel"), "acme");
   assert.equal(node!.attrs.get("uses.0"), "lib");
   assert.equal(node!.namespace, "acme");
-  assert.equal(restored.resolve("checkout")!.namespace, "acme");
+  assert.equal(restored.resolve("acme.checkout")!.namespace, "acme");
 });

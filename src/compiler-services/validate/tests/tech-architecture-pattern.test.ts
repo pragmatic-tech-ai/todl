@@ -35,5 +35,5 @@ test("a connector endpoint outside the union is a TargetTypeMismatch naming the 
     connector c1 { from = react; }`);
   const mismatch = diags.filter((d) => d.code === DiagnosticCode.TargetTypeMismatch);
   assert.equal(mismatch.length, 1);
-  assert.match(mismatch[0]!.message, /actor \| block \| location \| component \| application/);
+  assert.match(mismatch[0]!.message, /ta\.actor \| ta\.block \| ta\.location \| ta\.component \| ta\.application/);
 });

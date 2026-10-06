@@ -51,6 +51,6 @@ test("save writes .todl; load reparses the model", async () => {
 
   const { model, diagnostics } = await store.load();
   assert.deepEqual(diagnostics, []);
-  assert.equal(model.entity("gw")!.field("label"), "Gateway");
-  assert.equal(model.entity("gw")!.ref("implementedBy")!.id, "copilot");
+  assert.equal(model.entity("acme.app.gw")!.field("label"), "Gateway");
+  assert.equal(model.entity("acme.app.gw")!.ref("implementedBy")!.id, "copilot");
 });

@@ -33,9 +33,9 @@ function corpus()
 test("emits Observable subclasses for each concept", () => {
   const js = toMetaModule(corpus(), { slug: "bpmn" });
   assert.match(js, /import \{ Observable \} from "@pragmatic-tech-ai\/todl-runtime";/);
-  assert.match(js, /export class Task extends Observable \{/);
-  assert.match(js, /export class Event extends Observable \{/);
-  assert.match(js, /kind: "Task",/);
+  assert.match(js, /export class adl_metaModels_bpmn_concepts_Task extends Observable \{/);
+  assert.match(js, /export class adl_metaModels_bpmn_concepts_Event extends Observable \{/);
+  assert.match(js, /kind: "adl\.metaModels\.bpmn\.concepts\.Task",/);
 });
 
 test("emits a private field, getter, guarded setter, and hydrating constructor per member", () => {
@@ -59,8 +59,8 @@ test("emits a taxonomy table (terms with parent) and a taxonomies registry key",
     `namespace n { concept Thing {} taxonomy Cc : represents Thing { term Surface { label = "Surface"; term ApiService { label = "API"; } } } }`,
   ]);
   const js = toMetaModule(model, { slug: "n" });
-  assert.match(js, /export const Cc = \{/);
-  assert.match(js, /represents: \["Thing"\],/);
+  assert.match(js, /export const n_Cc = \{/);
+  assert.match(js, /represents: \["n\.Thing"\],/);
   assert.match(js, /terms: \{/);
   assert.match(js, /ApiService: \{[^}]*parent: "Surface"/);
   assert.match(js, /taxonomies: \{/);
@@ -74,7 +74,7 @@ test("emits a multi-representation taxonomy's represents as a list", () => {
       } }`,
   ]);
   const js = toMetaModule(model, { slug: "n" });
-  assert.match(js, /represents: \["Location", "Technology"\],/);
+  assert.match(js, /represents: \["n\.Location", "n\.Technology"\],/);
 });
 
 test("emits field schema with cardinality text, omitting required-single", () => {
@@ -94,14 +94,14 @@ test("emits relationship schema with targets and cardinality", () => {
       concept Task { relationship livesIn -> Lane; relationship incoming -> SequenceFlow[]; } }`,
   ]);
   const js = toMetaModule(model, { slug: "n" });
-  assert.match(js, /livesIn: \{ targets: \["Lane"\], cardinality: "1\.\.1" \},/);
-  assert.match(js, /incoming: \{ targets: \["SequenceFlow"\], cardinality: "\*" \},/);
+  assert.match(js, /livesIn: \{ targets: \["n\.Lane"\], cardinality: "1\.\.1" \},/);
+  assert.match(js, /incoming: \{ targets: \["n\.SequenceFlow"\], cardinality: "\*" \},/);
 });
 
 test("emits taxonomy tables with labels and a has() helper", () => {
   const js = toMetaModule(corpus(), { slug: "bpmn" });
-  assert.match(js, /export const TaskType = \{/);
-  assert.match(js, /slug: "TaskType",/);
+  assert.match(js, /export const adl_metaModels_bpmn_enums_TaskType = \{/);
+  assert.match(js, /slug: "adl\.metaModels\.bpmn\.enums\.TaskType",/);
   assert.match(js, /Service: \{ id: "Service", label: "Service Task", parent: null, children: \[\] \},/);
   assert.match(js, /has\(value, member\) \{/);
 });
@@ -111,13 +111,19 @@ test("emits the registry aggregating concepts, constructors, and enums", () => {
   assert.match(js, /export const bpmn = \{/);
   assert.match(js, /slug: "bpmn",/);
   assert.match(js, /rootConcept: "process",/);
-  assert.match(js, /Task: Task\.schema,/);
-  assert.match(js, /Task: data => new Task\(data \?\? \{\}\),/);
-  assert.match(js, /TaskType: TaskType,/);
+  assert.match(js, /"adl\.metaModels\.bpmn\.concepts\.Task": adl_metaModels_bpmn_concepts_Task\.schema,/);
+  assert.match(js, /"adl\.metaModels\.bpmn\.concepts\.Task": data => new adl_metaModels_bpmn_concepts_Task\(data \?\? \{\}\),/);
+  assert.match(js, /"adl\.metaModels\.bpmn\.enums\.TaskType": adl_metaModels_bpmn_enums_TaskType,/);
 });
 
 test("concepts and enums are emitted in a deterministic (sorted) order", () => {
   const js = toMetaModule(corpus(), { slug: "bpmn" });
-  assert.ok(js.indexOf("class Event") < js.indexOf("class Task"), "Event before Task");
-  assert.ok(js.indexOf("const EventType") < js.indexOf("const TaskType"), "EventType before TaskType");
+  assert.ok(
+    js.indexOf("class adl_metaModels_bpmn_concepts_Event") < js.indexOf("class adl_metaModels_bpmn_concepts_Task"),
+    "Event before Task",
+  );
+  assert.ok(
+    js.indexOf("const adl_metaModels_bpmn_enums_EventType") < js.indexOf("const adl_metaModels_bpmn_enums_TaskType"),
+    "EventType before TaskType",
+  );
 });

@@ -249,7 +249,7 @@ export class ModelDraft
   {
     const own = this.toJSON();
     const bindings = deriveBindings(this.model, this.baseIds, this.namespace, own);
-    return emitModelTodl(own, this.namespace, bindings, this.conformsOf(own), collectOperators(this.model));
+    return emitModelTodl(own, this.namespace, bindings, this.conformsOf(own), collectOperators(this.model), this.model);
   }
 
   /** Serialize the overlay as one `.todl` per home file (Option B multi-file):
@@ -272,7 +272,7 @@ export class ModelDraft
     for (const [uri, doc] of files)
     {
       const bindings = deriveBindings(this.model, this.baseIds, this.namespace, doc);
-      result.set(uri, emitModelTodl(doc, this.namespace, bindings, this.conformsOf(doc), collectOperators(this.model)));
+      result.set(uri, emitModelTodl(doc, this.namespace, bindings, this.conformsOf(doc), collectOperators(this.model), this.model));
     }
     return result;
   }

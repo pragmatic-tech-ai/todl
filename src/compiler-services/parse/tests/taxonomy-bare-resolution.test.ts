@@ -79,6 +79,6 @@ test("a bare term resolves as the value of a taxonomy-typed field, with no `uses
        }
      }` }]);
   assert.deepEqual(errs(diagnostics), []);
-  assert.deepEqual(model.refs("a", "category"), ["ComponentCategory.AiAgent"]);
-  assert.deepEqual(model.refs("b", "category"), ["ComponentCategory.Database"]);
+  assert.deepEqual(model.refs("acme.a", "category"), ["acme.ComponentCategory.AiAgent"]);
+  assert.deepEqual(model.refs("acme.b", "category"), ["acme.ComponentCategory.Database"]);
 });

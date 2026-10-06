@@ -22,7 +22,7 @@ test("a field-type slot offers concepts and primitives", () =>
     ].join("\n"));
     const got = Labels.Sorted(new CompletionProvider().CompletionsAt(analysis, uri, positions[0]!));
     assert.ok(got.includes("string"));
-    assert.ok(got.includes("person"));
+    assert.ok(got.includes("demo.person"));
 });
 
 test("a ref-value slot offers instances of the field's target concept", () =>
@@ -37,7 +37,7 @@ test("a ref-value slot offers instances of the field's target concept", () =>
         "}",
     ].join("\n"));
     const got = Labels.Sorted(new CompletionProvider().CompletionsAt(analysis, uri, positions[0]!));
-    assert.deepEqual(got, ["alice", "bob"]);
+    assert.deepEqual(got, ["demo.alice", "demo.bob"]);
 });
 
 test("a ref-value slot narrows to the target concept's instances (and subtypes), not others", () =>
@@ -56,7 +56,7 @@ test("a ref-value slot narrows to the target concept's instances (and subtypes),
     ].join("\n"));
     const got = Labels.Sorted(new CompletionProvider().CompletionsAt(analysis, uri, positions[0]!));
     // animal + its subtype dog's instances — NOT the unrelated person `alice`.
-    assert.deepEqual(got, ["generic", "rex"]);
+    assert.deepEqual(got, ["demo.generic", "demo.rex"]);
 });
 
 test("top-level offers declaration keywords", () =>

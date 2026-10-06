@@ -17,12 +17,12 @@ function appDoc(): TodlDocument
     b.definePrimitive("string");
     b.defineConcept("technology");
     b.addField("technology", "label", "string");
-    b.defineAnnotation("entrypoint");
+    b.defineAnnotation("todl.entrypoint");
     b.assertModel("app");
     b.assertInstance("technology", "x");
     b.setField("x", "label", "X");
     b.addContains("app", "x");
-    b.annotate("app", "entrypoint");
+    b.annotate("app", "todl.entrypoint");
     b.commit();
     return toJSON(r);
 }
@@ -67,8 +67,8 @@ test("Resolve throws on a malformed document with more than one marked model", (
     const doc = appDoc();
     // Fabricate a second marked model: a model node + an entrypoint app node + Annotated edge.
     doc.nodes.push({ id: "app2", tier: "Instance", type: null, metaKind: MetaKind.Model, namespace: null, localId: "app2", isClass: false, class: null, storageId: null, fields: [], attrs: {} });
-    doc.nodes.push({ id: "app2@entrypoint", tier: "Ontology", type: "entrypoint", metaKind: null, namespace: null, localId: null, isClass: false, class: null, storageId: null, fields: [], attrs: {} });
-    doc.edges.push({ kind: "Annotated", via: null, from: "app2", to: "app2@entrypoint" });
+    doc.nodes.push({ id: "app2@todl.entrypoint", tier: "Ontology", type: "todl.entrypoint", metaKind: null, namespace: null, localId: null, isClass: false, class: null, storageId: null, fields: [], attrs: {} });
+    doc.edges.push({ kind: "Annotated", via: null, from: "app2", to: "app2@todl.entrypoint" });
     assert.throws(() => ApplicationRootResolver.Resolve(doc), /more than one entrypoint-marked model/);
 });
 

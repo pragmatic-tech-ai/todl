@@ -18,9 +18,9 @@ const flow = { uri: "flow.todl", text: `namespace t {
 
 test("load records the origin file of every own node — named and minted", () => {
   const { provenance } = load([structure, flow], new FakeIdGenerator());
-  assert.equal(provenance.get("a"), "structure.todl");   // named instance
-  assert.equal(provenance.get("b"), "structure.todl");
-  assert.equal(provenance.get("id-0"), "flow.todl");     // minted connector homed to flow.todl, NOT structure
+  assert.equal(provenance.get("t.a"), "structure.todl");   // named instance
+  assert.equal(provenance.get("t.b"), "structure.todl");
+  assert.equal(provenance.get("t.id-0"), "flow.todl");     // minted connector homed to flow.todl, NOT structure
 });
 
 test("a single-file load homes named and minted ids to that file", () => {
@@ -31,6 +31,6 @@ test("a single-file load homes named and minted ids to that file", () => {
     model M : t { endpoint a {} endpoint b {} a ~> b; }
   }` };
   const { provenance } = load([src], new FakeIdGenerator());
-  assert.equal(provenance.get("a"), "one.todl");
-  assert.equal(provenance.get("id-0"), "one.todl");
+  assert.equal(provenance.get("t.a"), "one.todl");
+  assert.equal(provenance.get("t.id-0"), "one.todl");
 });

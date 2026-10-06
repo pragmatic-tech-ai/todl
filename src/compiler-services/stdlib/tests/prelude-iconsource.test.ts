@@ -14,8 +14,8 @@ const SRC = `namespace t {
 test("iconSource is a built-in annotation usable on a member with no local declaration", () => {
   const { model, diagnostics } = check([{ uri: "t.todl", text: SRC }]);
   assert.deepEqual(diagnostics.filter((d) => d.severity === Severity.Error), []);
-  const node = model.resolve("component.implementedBy@iconSource");
-  assert.ok(node, "expected component.implementedBy@iconSource to exist");
+  const node = model.resolve("t.component.implementedBy@todl.iconSource");
+  assert.ok(node, "expected t.component.implementedBy@todl.iconSource to exist");
   // Numeric values store as strings (TODL has no Number value kind).
   assert.equal(node?.attrs.get("order"), "1");
 });

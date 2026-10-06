@@ -20,20 +20,20 @@ function loadModel(instances: string, gen = new FakeIdGenerator())
 test("a minted inline object is a contained, field-bound node", () => {
   const { model, diagnostics } = loadModel(`component c1 { primary = slot { environment = "prod"; }; }`);
   assert.deepEqual(diagnostics.filter((d) => d.severity === Severity.Error), []);
-  assert.ok(model.resolve("id-0"), "inline node id-0 exists");
-  assert.equal(model.resolve("id-0")?.attrs.get("environment"), "prod");
-  assert.ok(model.related("c1", EdgeKind.Contains, Direction.Out).includes("id-0"));
-  assert.deepEqual(model.refs("c1", "primary"), ["id-0"]);
+  assert.ok(model.resolve("t.id-0"), "inline node id-0 exists");
+  assert.equal(model.resolve("t.id-0")?.attrs.get("environment"), "prod");
+  assert.ok(model.related("t.c1", EdgeKind.Contains, Direction.Out).includes("t.id-0"));
+  assert.deepEqual(model.refs("t.c1", "primary"), ["t.id-0"]);
 });
 
 test("an author-supplied id is reused (not minted)", () => {
   const { model } = loadModel(`component c1 { primary = slot { id = keep_me; environment = "dev"; }; }`);
-  assert.ok(model.resolve("keep_me"), "author id reused");
-  assert.deepEqual(model.refs("c1", "primary"), ["keep_me"]);
+  assert.ok(model.resolve("t.keep_me"), "author id reused");
+  assert.deepEqual(model.refs("t.c1", "primary"), ["t.keep_me"]);
 });
 
 test("a list of inline objects binds each, in order", () => {
   const { model } = loadModel(`component c1 { slots = [ slot { environment = "a"; }, slot { environment = "b"; } ]; }`);
-  assert.deepEqual(model.refs("c1", "slots"), ["id-0", "id-1"]);
-  assert.equal(model.resolve("id-1")?.attrs.get("environment"), "b");
+  assert.deepEqual(model.refs("t.c1", "slots"), ["t.id-0", "t.id-1"]);
+  assert.equal(model.resolve("t.id-1")?.attrs.get("environment"), "b");
 });

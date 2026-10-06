@@ -22,7 +22,7 @@ test("two nested records with the same id under different parents is a duplicate
   assert.ok(diagnostics.some((d) => d.code === DiagnosticCode.InstanceDuplicateId),
     "expected an instance.duplicate-id diagnostic");
   // The collision is still reported (no longer silent), which was the bug.
-  assert.ok(model.resolve("yes") !== undefined);
+  assert.ok(model.resolve("demo.yes") !== undefined);
 });
 
 test("distinct nested ids compile clean", () => {

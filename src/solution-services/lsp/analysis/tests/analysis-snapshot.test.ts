@@ -12,7 +12,7 @@ test("AnalysisSnapshot exposes per-file AST + tokens, the model, refs, and diagn
     ].join("\n") }]);
     assert.ok(a.Sources.get("d.todl")!.ast.declarations.length === 2);
     assert.ok(a.Sources.get("d.todl")!.tokens.length > 0);
-    assert.ok(a.Model.has("dog"));
+    assert.ok(a.Model.has("demo.dog"));
     assert.equal(a.Refs.Get("animal").length, 1);
     assert.equal(a.Diagnostics.length, 0);
 });

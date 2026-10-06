@@ -50,32 +50,15 @@ export class Graph
       .map((node) => new Model(this.repository, node.id));
   }
 
-  /** Resolve a concept definition by flat id (`Location`) or qualified name
-   *  (`tech_architecture.Location`). Returns undefined when no such concept exists. */
-  GetDefinition(name: string): TodlDefinition | undefined
+  /** Resolve a concept definition by its qualified node id (`tech_architecture.Location`).
+   *  Node ids are namespace-qualified, so this is a direct lookup. Returns undefined
+   *  when no such concept exists. */
+  GetDefinition(qualifiedId: string): TodlDefinition | undefined
   {
-    const asConcept = (id: NodeId): TodlDefinition | undefined =>
-      this.repository.resolve(id)?.metaKind === MetaKind.Concept ? new TodlDefinition(this.repository, id) : undefined;
-
-    if (this.repository.has(name))
-    {
-      const direct = asConcept(name);
-      if (direct !== undefined) return direct;
-    }
-    const dot = name.lastIndexOf(".");
-    if (dot > 0)
-    {
-      const namespace = name.slice(0, dot);
-      const local = name.slice(dot + 1);
-      for (const node of this.repository.allNodes())
-      {
-        if (node.id === local && node.metaKind === MetaKind.Concept && node.namespace === namespace)
-        {
-          return new TodlDefinition(this.repository, node.id);
-        }
-      }
-    }
-    return undefined;
+    if (!this.repository.has(qualifiedId)) return undefined;
+    return this.repository.resolve(qualifiedId)?.metaKind === MetaKind.Concept
+      ? new TodlDefinition(this.repository, qualifiedId)
+      : undefined;
   }
 }
 

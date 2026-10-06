@@ -34,13 +34,13 @@ test("generateModelPackage reproduces the golden fixture byte-for-byte", () =>
 test("the generated registry factory wires models, root, and model-scoped data", async () =>
 {
   const registry = AppRegistry.Create();
-  assert.deepEqual([...registry.Models()].sort(), ["core", "ops"]);
-  assert.equal(registry.RootModel(), "core");
+  assert.deepEqual([...registry.Models()].sort(), ["a.core", "a.ops"]);
+  assert.equal(registry.RootModel(), "a.core");
 
   await registry.PrepareAll(new ServiceProvider());
 
   const root = registry.Root() as DemoApp;
-  assert.deepEqual(root.services.map((s) => s.name), ["API"]);          // root sees only its own instance
-  const ops = registry.GetRequired("ops") as DemoApp;
-  assert.deepEqual(ops.services.map((s) => s.name), ["Worker"]);        // sibling model is scoped to its own
+  assert.deepEqual(root.aServices.map((s) => s.name), ["API"]);         // root sees only its own instance
+  const ops = registry.GetRequired("a.ops") as DemoApp;
+  assert.deepEqual(ops.aServices.map((s) => s.name), ["Worker"]);       // sibling model is scoped to its own
 });

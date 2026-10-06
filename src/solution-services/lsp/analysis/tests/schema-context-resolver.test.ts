@@ -15,7 +15,7 @@ test("resolves the target concept of a relationship assignment", () =>
     const ctx = SchemaContextResolver.AssignmentContextAt(analysis, uri, positions[0]!);
     assert.equal(ctx?.Concept, "dog");
     assert.equal(ctx?.Member, "owner");
-    assert.deepEqual(ctx?.TargetConcepts, ["person"]);
+    assert.deepEqual(ctx?.TargetConcepts, ["demo.person"]);
     assert.equal(ctx?.IsRelationship, true);
 });
 

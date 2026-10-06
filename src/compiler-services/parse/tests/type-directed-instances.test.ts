@@ -21,20 +21,20 @@ const BASE = `namespace d {
 
 test("concept-typed field becomes a shared reference edge, not an attr", () => {
   const m = loaded(BASE).model;
-  assert.deepEqual(m.related("a", EdgeKind.Relationship, Direction.Out, "implementedBy"), ["m365Copilot"]);
-  assert.deepEqual(m.related("b", EdgeKind.Relationship, Direction.Out, "implementedBy"), ["m365Copilot"]);
+  assert.deepEqual(m.related("d.a", EdgeKind.Relationship, Direction.Out, "implementedBy"), ["d.m365Copilot"]);
+  assert.deepEqual(m.related("d.b", EdgeKind.Relationship, Direction.Out, "implementedBy"), ["d.m365Copilot"]);
   assert.deepEqual(
-    m.related("m365Copilot", EdgeKind.Relationship, Direction.In, "implementedBy").sort(),
-    ["a", "b"],
+    m.related("d.m365Copilot", EdgeKind.Relationship, Direction.In, "implementedBy").sort(),
+    ["d.a", "d.b"],
   );
-  assert.equal(m.resolve("a")?.attrs.has("implementedBy"), false);
+  assert.equal(m.resolve("d.a")?.attrs.has("implementedBy"), false);
 });
 
 test("primitive-typed field given a bare name stays a scalar attr, not an edge", () => {
   const m = loaded(BASE).model;
-  assert.equal(m.resolve("a")?.attrs.get("category"), "draft");
-  assert.deepEqual(m.related("a", EdgeKind.Relationship, Direction.Out, "category"), []);
-  assert.equal(m.resolve("a")?.attrs.get("label"), "A");
+  assert.equal(m.resolve("d.a")?.attrs.get("category"), "draft");
+  assert.deepEqual(m.related("d.a", EdgeKind.Relationship, Direction.Out, "category"), []);
+  assert.equal(m.resolve("d.a")?.attrs.get("label"), "A");
 });
 
 test("a concept-typed field given a quoted string is a value-kind error", () => {

@@ -75,17 +75,21 @@ export class Builder
   // ── Instance tier ───────────────────────────────────────────────────────
 
   /** Stage a new instance node typed by `type`; `asClass` marks it a class. The
-   *  flat node id is also its `localId` (record identity — was the `id` attr). */
-  assertInstance(type: NodeId, id: NodeId, asClass = false): this
+   *  `localId` is the record's BARE written identity (for display + `.todl`
+   *  round-trip); it defaults to `id` for callers that stage already-bare ids, but
+   *  the loader passes the namespace-qualified node `id` with the bare local name as
+   *  `localId` so emit never re-qualifies it. */
+  assertInstance(type: NodeId, id: NodeId, asClass = false, localId: string = id): this
   {
-    this.stagedNodes.push(this.makeNode(id, Tier.Instance, { type, isClass: asClass, localId: id }));
+    this.stagedNodes.push(this.makeNode(id, Tier.Instance, { type, isClass: asClass, localId }));
     return this;
   }
 
-  /** Stage a model container node (Instance-tier, the Model language construct). */
-  assertModel(id: NodeId): this
+  /** Stage a model container node (Instance-tier, the Model language construct).
+   *  `localId` defaults to `id`; the loader passes the bare model name. */
+  assertModel(id: NodeId, localId: string = id): this
   {
-    this.stagedNodes.push(this.makeNode(id, Tier.Instance, { metaKind: MetaKind.Model, localId: id }));
+    this.stagedNodes.push(this.makeNode(id, Tier.Instance, { metaKind: MetaKind.Model, localId }));
     return this;
   }
 

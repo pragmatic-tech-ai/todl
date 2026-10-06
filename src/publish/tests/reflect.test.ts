@@ -4,22 +4,24 @@ import type { TodlDocument } from "../../compiler-services/emit/json.js";
 import { MetaKind } from "../../compiler-services/model/kinds.js";
 import { deriveClasses, projectAnnotations } from "../reflect.js";
 
-// A compiled doc with one clabject `az` (class=true) carrying a label and an
-// `icon` annotation application `az@icon { path = "resources/az.svg" }`.
+// A compiled doc with one clabject `az` (class=true) carrying a label and a
+// prelude `icon` annotation application `az@todl.icon { path = "resources/az.svg" }`.
+// The application's `type` is the QUALIFIED annotation id, matching the real graph
+// after the namespace-qualified-id flip.
 function doc(): TodlDocument
 {
   return {
     nodes: [
       { id: "ms.az", tier: "Instance", type: "location", metaKind: null, namespace: null, localId: "az", isClass: true, class: null, storageId: null, fields: [], attrs: { label: "Azure" } },
-      { id: "ms.az@icon", tier: "Instance", type: "icon", metaKind: null, namespace: "ms", localId: null, isClass: false, class: null, storageId: null, fields: [], attrs: { path: "resources/az.svg" } },
+      { id: "ms.az@todl.icon", tier: "Instance", type: "todl.icon", metaKind: null, namespace: "ms", localId: null, isClass: false, class: null, storageId: null, fields: [], attrs: { path: "resources/az.svg" } },
       { id: "ms.Other", tier: "Ontology", type: null, metaKind: MetaKind.Concept, namespace: null, localId: "other", isClass: false, class: null, storageId: null, fields: [], attrs: {} },
     ],
-    edges: [{ kind: "Annotated", via: null, from: "ms.az", to: "ms.az@icon" }],
+    edges: [{ kind: "Annotated", via: null, from: "ms.az", to: "ms.az@todl.icon" }],
   };
 }
 
 test("projectAnnotations keys applications by annotation name, strips namespace", () => {
-  assert.deepEqual(projectAnnotations(doc(), "ms.az"), { icon: { path: "resources/az.svg" } });
+  assert.deepEqual(projectAnnotations(doc(), "ms.az"), { "todl.icon": { path: "resources/az.svg" } });
   assert.deepEqual(projectAnnotations(doc(), "ms.Missing"), {});
 });
 
@@ -90,9 +92,9 @@ test("deriveClasses resolves inherited icons from an optional annotationsFrom do
       ...ownDoc.nodes,
       { id: "widget", tier: "Ontology", type: null, metaKind: MetaKind.Concept, namespace: null, localId: null, isClass: false, class: null, storageId: null, fields: [], attrs: {} },
       { id: "special", tier: "Ontology", type: null, metaKind: MetaKind.Annotation, namespace: null, localId: null, isClass: false, class: null, storageId: null, fields: [], attrs: {} },
-      { id: "icon", tier: "Ontology", type: null, metaKind: MetaKind.Annotation, namespace: null, localId: null, isClass: false, class: null, storageId: null, fields: [], attrs: {} },
+      { id: "todl.icon", tier: "Ontology", type: null, metaKind: MetaKind.Annotation, namespace: "todl", localId: null, isClass: false, class: null, storageId: null, fields: [], attrs: {} },
     ],
-    edges: [...ownDoc.edges, { kind: "Extends", via: null, from: "special", to: "icon" }],
+    edges: [...ownDoc.edges, { kind: "Extends", via: null, from: "special", to: "todl.icon" }],
   };
 
   // Own-only: class found, inherited icon lost.

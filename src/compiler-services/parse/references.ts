@@ -47,6 +47,7 @@ import {
 } from "./ast.js";
 import type { SourceSpan } from "../diagnostics/span.js";
 import { PACKAGE_NODE_ID } from "../model/kinds.js";
+import { NodeIdQualifier } from "./node-id-qualifier.js";
 
 /**
  * Which syntactic spot a reference occupies. The role lets a consumer react to a
@@ -141,6 +142,11 @@ export function visitReferences(decl: Declaration, visit: Visit): void
       // Walk the term hierarchy, emitting value refs in each term's assignments. A
       // term's id is namespaced as `<taxonomy>.<term>` for diagnostics.
       const walkTerm = (t: Term): void => {
+        // NB a term's `concept` names which REPRESENTED concept it classifies; it is
+        // matched against the taxonomy's `represents` list by the loader (by local
+        // name / qualified id), NOT through the global name resolver — so it is
+        // deliberately not emitted here as a reference to resolve.
+        annotationRefs(t.annotations, `${decl.name}.${t.id}`);
         for (const a of t.assignments) visitValueRefs(a.value, `${decl.name}.${t.id}`, a.name, a.span, scope, visit);
         t.children.forEach(walkTerm);
       };
@@ -187,6 +193,13 @@ export function visitReferences(decl: Declaration, visit: Visit): void
       break;
     }
     case DeclKind.Annotation:
+      // The base annotation this one extends (`annotation Sub : Base`), if any —
+      // resolved like a concept's `extends` so a qualified base flattens in place.
+      if (decl.extends !== null)
+      {
+        visit({ name: decl.extends, span: decl.extendsSpan ?? decl.span, role: RefRole.Extends,
+          ownerNode: decl.name, memberPath: null, rewrite: (r) => { (decl as { extends: string | null }).extends = r; } });
+      }
       // Annotation parameters are typed like fields; only their types are references.
       for (const p of decl.params)
       {
@@ -210,6 +223,8 @@ export function visitReferences(decl: Declaration, visit: Visit): void
       // Every contained instance and body edge inherits the model's term-drop scope.
       for (const inst of decl.instances) visitInstanceRefs(inst, visit, scope);
       for (const edge of decl.edges) visitEdgeRefs(edge, visit, scope);
+      // The model's own annotation applications (e.g. `annotate entrypoint`).
+      annotationRefs(decl.annotations, decl.id);
       break;
     }
     case DeclKind.Package:
@@ -268,7 +283,7 @@ function visitInstanceRefs(
   // Concept and `instanceof` are constructor references — resolved by namespace
   // reachability, never term-dropped — so they carry no scope. Only value
   // assignments (and nested records) inherit the model's term-drop scope.
-  if (!WRAPPER_CONCEPTS.has(decl.concept))
+  if (!WRAPPER_CONCEPTS.has(NodeIdQualifier.LocalId(decl.concept)))
   {
     visit({ name: decl.concept, span: decl.conceptSpan ?? decl.span, role: RefRole.RecordConcept,
       ownerNode: decl.id, memberPath: null, rewrite: (r) => { (decl as { concept: string }).concept = r; } });
@@ -277,6 +292,13 @@ function visitInstanceRefs(
   {
     visit({ name: decl.instanceOf, span: decl.instanceOfSpan ?? decl.span, role: RefRole.InstanceOf,
       ownerNode: decl.id, memberPath: null, rewrite: (r) => { (decl as { instanceOf: string | null }).instanceOf = r; } });
+  }
+  // Only class instances legally carry annotations; a concrete instance keeps its
+  // single `annotation.invalid-target` error with the authored name, so skip it.
+  for (const app of decl.isClass ? decl.annotations : [])
+  {
+    visit({ name: app.name, span: app.nameSpan ?? app.span, role: RefRole.AnnotationName,
+      ownerNode: `${decl.id}@${app.name}`, memberPath: null, rewrite: (r) => { app.name = r; } });
   }
   for (const a of decl.assignments) visitValueRefs(a.value, decl.id, a.name, a.span, scope, visit);
   for (const child of decl.children) visitInstanceRefs(child, visit, scope);
@@ -352,7 +374,8 @@ export function collectDefinitions(
   sourceNs: Map<string, string>,
 ): void
 {
-  // Register one id: mark it defined AND remember which namespace declared it.
+  // Register one id: mark it defined AND remember which namespace declared it. The
+  // id is the declared name qualified by its home namespace — the canonical node id.
   const define = (id: string): void => { defined.add(id); sourceNs.set(id, ns); };
   switch (decl.kind)
   {
@@ -360,19 +383,20 @@ export function collectDefinitions(
     case DeclKind.Concept:
     case DeclKind.Annotation:
       // A single named type: it defines just its own name.
-      define(decl.name);
+      define(NodeIdQualifier.Qualify(ns, decl.name));
       break;
     case DeclKind.Taxonomy:
     {
-      // The taxonomy node, plus every term as a flat `<taxonomy>.<term>` id (this is
-      // the flat form bare-term references rewrite to during resolution).
-      define(decl.name);
-      const add = (t: Term): void => { define(`${decl.name}.${t.id}`); t.children.forEach(add); };
+      // The taxonomy node, plus every term as a `<namespace>.<taxonomy>.<term>` id
+      // (the qualified form bare-term references rewrite to during resolution).
+      const taxonomyId = NodeIdQualifier.Qualify(ns, decl.name);
+      define(taxonomyId);
+      const add = (t: Term): void => { define(`${taxonomyId}.${t.id}`); t.children.forEach(add); };
       decl.terms.forEach(add);
       break;
     }
     case DeclKind.Viewpoint:
-      define(decl.name);
+      define(NodeIdQualifier.Qualify(ns, decl.name));
       break;
     case DeclKind.Instance:
       // A top-level instance + all its nested records.
@@ -380,7 +404,7 @@ export function collectDefinitions(
       break;
     case DeclKind.Model:
       // The model container node, plus each contained instance subtree.
-      define(decl.id);
+      define(NodeIdQualifier.Qualify(ns, decl.id));
       for (const inst of decl.instances) defineInstance(inst, ns, defined, sourceNs);
       break;
     case DeclKind.Package:
@@ -399,7 +423,8 @@ export function collectDefinitions(
  * inline objects are NOT defined here — their ids are minted later by the loader. */
 function defineInstance(decl: InstanceDecl, ns: string, defined: Set<string>, sourceNs: Map<string, string>): void
 {
-  defined.add(decl.id);
-  sourceNs.set(decl.id, ns);
+  const id = NodeIdQualifier.Qualify(ns, decl.id);
+  defined.add(id);
+  sourceNs.set(id, ns);
   for (const child of decl.children) defineInstance(child, ns, defined, sourceNs);
 }

@@ -5,11 +5,12 @@
 import { MetaKind, PACKAGE_NODE_ID } from "../model/kinds.js";
 import type { NodeId } from "../model/graph.js";
 import type { Repository } from "../model/model.js";
+import { NodeIdQualifier } from "./node-id-qualifier.js";
 import { type Diagnostic, DiagnosticCode, Severity } from "../diagnostics/diagnostic.js";
 
 export class ApplicationRootPass
 {
-    private static readonly AnnotationName = "entrypoint";
+    private static readonly AnnotationName = "todl.entrypoint";
     private static readonly RootParam = "root";
 
     /** Resolve/mark the application root on a committed graph. No-op for libraries. */
@@ -34,15 +35,18 @@ export class ApplicationRootPass
         const rootValue = packageApp?.attrs.get(ApplicationRootPass.RootParam);
         if (rootValue !== undefined)
         {
+            // The authored `root` is a bare (or qualified) model name; match it against
+            // the now-qualified model ids by exact id or local name.
             const rootId = String(rootValue);
-            if (!models.includes(rootId))
+            const rootModel = models.find((m) => m === rootId || NodeIdQualifier.LocalId(m) === rootId);
+            if (rootModel === undefined)
             {
                 ApplicationRootPass.report(model, diagnostics, DiagnosticCode.ApplicationRootNotAModel,
                     ApplicationRootPass.appId(PACKAGE_NODE_ID),
                     `application root "${rootId}" is not a model in this package`);
                 return;
             }
-            ApplicationRootPass.mark(model, rootId);
+            ApplicationRootPass.mark(model, rootModel);
             return;
         }
         if (models.length === 1)

@@ -20,9 +20,9 @@ const SRC = `namespace mm {
 test("prelude ships has_children + containment annotations a meta-model can apply", () => {
   const { model, diagnostics } = check([{ uri: "mm.todl", text: SRC }]);
   assert.deepEqual(diagnostics.filter((d) => d.severity === Severity.Error), []);
-  assert.ok(model.resolve("location@has_children"), "has_children applied to a concept");
+  assert.ok(model.resolve("mm.location@todl.has_children"), "has_children applied to a concept");
   assert.ok(
-    model.resolve("component.in@containment"),
+    model.resolve("mm.component.in@todl.containment"),
     "containment applied to a relationship member",
   );
 });

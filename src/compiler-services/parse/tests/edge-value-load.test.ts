@@ -22,20 +22,20 @@ function loadSrc(body: string, gen = new FakeIdGenerator())
 test("an edge value in a list mints a step and binds it to the field", () => {
   const { model, diagnostics } = loadSrc(`endpoint a {} endpoint b {} sequence sq { steps = [ a ==> b ]; }`);
   assert.deepEqual(diagnostics.filter((d) => d.severity === Severity.Error), []);
-  assert.deepEqual(model.refs("sq", "steps"), ["id-0"]);
-  assert.deepEqual(model.refs("id-0", "src"), ["a"]);
-  assert.deepEqual(model.refs("id-0", "dst"), ["b"]);
+  assert.deepEqual(model.refs("t.sq", "steps"), ["t.id-0"]);
+  assert.deepEqual(model.refs("t.id-0", "src"), ["t.a"]);
+  assert.deepEqual(model.refs("t.id-0", "dst"), ["t.b"]);
 });
 
 test("multiple edge values bind in order", () => {
   const { model } = loadSrc(`endpoint a {} endpoint b {} endpoint c {} sequence sq { steps = [ a ==> b, b ==> c ]; }`);
-  assert.deepEqual(model.refs("sq", "steps"), ["id-0", "id-1"]);
-  assert.deepEqual(model.refs("id-1", "dst"), ["c"]);
+  assert.deepEqual(model.refs("t.sq", "steps"), ["t.id-0", "t.id-1"]);
+  assert.deepEqual(model.refs("t.id-1", "dst"), ["t.c"]);
 });
 
 test("an explicit id in an edge value body is reused", () => {
   const { model } = loadSrc(`endpoint a {} endpoint b {} sequence sq { steps = [ a ==> b { id = s1; } ]; }`);
-  assert.deepEqual(model.refs("sq", "steps"), ["s1"]);
+  assert.deepEqual(model.refs("t.sq", "steps"), ["t.s1"]);
 });
 
 test("a relationship-form operator as a value is operator.not-a-value", () => {

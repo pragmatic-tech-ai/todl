@@ -10,6 +10,8 @@
  * constructor scope) so namespace reachability lives in exactly one place.
  */
 import type { Repository } from "../model/model.js";
+import { NodeIdQualifier } from "../parse/node-id-qualifier.js";
+import { PRELUDE_NAMESPACE } from "../stdlib/prelude.js";
 
 // The foundational scalar TYPE keywords (`Scalar = string | number | boolean`).
 // They are valid field/param types but are NOT declared nodes, so the resolver
@@ -70,17 +72,59 @@ export function makeResolver(
     const ns = nsOf(id);
     return ns === null || ns === home.ns || home.imports.includes(ns);
   };
-  const resolveRef = (id: string, home: Home): Resolved => {
-    if (exists(id)) return reachable(id, home) ? { kind: "ok" } : { kind: "unreachable", ns: nsOf(id)! };
-    // Strip leading namespace segment(s): `ea.categories` → flat `categories`
-    // in ns `ea`; `ns.tax.term` → flat `tax.term` in ns `ns`. Flat-id match
-    // (above) wins first, so `categories.platform-api` stays the term node.
-    const segs = id.split(".");
-    for (let k = 1; k < segs.length; k++)
+  // The namespace a bare `name` lives in but which the caller did not import, or
+  // null when importing nothing would expose it. Scans source-declared ids then base
+  // nodes for a DIRECT namespace member — `<ns>.<name>`, i.e. a node an `import <ns>`
+  // would make reachable (first wins). Deliberately NOT a loose local-name match: a
+  // nested term `<ns>.<tax>.<name>` is not reachable via a namespace import (it needs
+  // `uses`/a qualifier), so it must stay `undefined`, not a misleading "add import".
+  const directMemberNs = (id: string, ns: string | null, name: string): string | null =>
+    ns !== null && NodeIdQualifier.Qualify(ns, name) === id ? ns : null;
+  const resolveRefUnreachableNs = (name: string): string | null => {
+    for (const id of defined)
     {
-      const rest = segs.slice(k).join(".");
-      if (exists(rest) && nsOf(rest) === segs.slice(0, k).join(".")) return { kind: "qualified", flat: rest };
+      const ns = directMemberNs(id, nsOf(id), name);
+      if (ns !== null) return ns;
     }
+    for (const node of model.allNodes())
+    {
+      const ns = directMemberNs(node.id, node.namespace, name);
+      if (ns !== null) return ns;
+    }
+    return null;
+  };
+  const resolveRef = (id: string, home: Home): Resolved => {
+    // Builtins are global scalar TYPE keywords — never nodes, reachable everywhere,
+    // and left exactly as written.
+    if (NodeIdQualifier.IsBuiltin(id)) return { kind: "ok" };
+    // Written as a CANONICAL id already — an explicit qualifier (`ea.Location`), a
+    // prelude/reserved id (`todl.icon`), or a namespace-less base node. An explicit
+    // qualifier names its namespace outright, so it needs no import: resolve as
+    // written. (Bare names never satisfy `exists` now — every declared id carries
+    // its namespace — so this arm only fires for already-qualified / global ids.)
+    if (exists(id)) return { kind: "ok" };
+    // A BARE name: its canonical id is the name qualified by the home namespace, or
+    // by one of that file's imports (first match wins). This is the only place a
+    // name→node id is assembled, so the `flat` the caller writes back is qualified.
+    const homeQualified = NodeIdQualifier.Qualify(home.ns, id);
+    if (exists(homeQualified)) return { kind: "qualified", flat: homeQualified };
+    for (const imp of home.imports)
+    {
+      const imported = NodeIdQualifier.Qualify(imp, id);
+      if (exists(imported)) return { kind: "qualified", flat: imported };
+    }
+    // The prelude (default library, namespace `todl`) is implicitly imported
+    // everywhere, like java.lang — a bare `icon` / `identifier` resolves to its
+    // `todl.*` node. Tried last so a home-namespace or imported name shadows it.
+    const preludeId = NodeIdQualifier.Qualify(PRELUDE_NAMESPACE, id);
+    if (exists(preludeId)) return { kind: "qualified", flat: preludeId };
+    // The bare name matches no reachable namespace, but it may EXIST in a namespace
+    // this file did not import — report `unreachable` (with the namespace to import)
+    // rather than `undefined`. Scan the known ids (source-declared + base nodes) for
+    // one whose local name matches and that carries a (non-null) namespace. Only runs
+    // on the miss path, so the scan cost is paid solely for a failing reference.
+    const unreachableNs = resolveRefUnreachableNs(id);
+    if (unreachableNs !== null) return { kind: "unreachable", ns: unreachableNs };
     return { kind: "undefined" };
   };
   return { nsOf, exists, reachable, resolveRef };

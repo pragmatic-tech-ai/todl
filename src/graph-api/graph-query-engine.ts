@@ -12,7 +12,7 @@ interface ReverseRef { from: string; member: string; }
 
 export class GraphQuery implements IGraphQuery
 {
-    private static readonly IconAnnotation = "icon";
+    private static readonly IconAnnotation = "todl.icon";
     private static readonly IconPathArg = "path";
 
     private reverse?: Map<string, ReverseRef[]>;

@@ -19,7 +19,7 @@ test("undefined instanceOf target → ReferenceUndefined, node kept, no stub", (
   assert.ok(ref);
   assert.equal(ref.severity, Severity.Error);
   assert.match(ref.message, /ghost/);
-  assert.ok(model.resolve("a") !== undefined, "referencing node survives");
+  assert.ok(model.resolve("n.a") !== undefined, "referencing node survives");
   assert.equal(model.resolve("ghost"), undefined, "no UNRESOLVED stub");
 });
 
@@ -74,6 +74,6 @@ test("undefined bare Name value → ReferenceUndefined, referencing node kept", 
   const ref = refs[0];
   assert.ok(ref);
   assert.match(ref.message, /ghostname/);
-  assert.ok(model.resolve("a") !== undefined, "referencing node survives");
+  assert.ok(model.resolve("n.a") !== undefined, "referencing node survives");
   assert.equal(model.resolve("ghostname"), undefined, "no stub for undefined Name target");
 });

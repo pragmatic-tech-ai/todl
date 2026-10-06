@@ -63,8 +63,8 @@ test("toTodl emits .todl that round-trips through checkAgainst", () => {
   const todl = draft.toTodl();
   const { model, diagnostics } = checkAgainst([toJSON(base)], [{ uri: "app.todl", text: todl }]);
   assert.deepEqual(diagnostics, []); // valid, no new diagnostics
-  assert.equal(model.entity("gw")!.field("label"), "Gateway");
-  assert.equal(model.entity("gw")!.ref("implementedBy")!.id, "copilot");
+  assert.equal(model.entity("app.gw")!.field("label"), "Gateway");
+  assert.equal(model.entity("app.gw")!.ref("implementedBy")!.id, "copilot");
 });
 
 // InstanceDescriptor is usable as a type from the package root.

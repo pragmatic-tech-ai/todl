@@ -36,8 +36,8 @@ test("BundledContributor composes the inlined set; Query sees all packages", asy
     ]);
     assert.deepEqual(host.Diagnostics, []);
     const query = host.Query();
-    assert.ok(query.Concepts().some((t) => t.name === "Widget"));
-    assert.deepEqual(query.InstancesOf("Widget").map((m) => m.node.id).sort(), ["awsWidget", "msWidget"]);
+    assert.ok(query.Concepts().some((t) => t.name === "acme.Widget"));
+    assert.deepEqual(query.InstancesOf("acme.Widget").map((m) => m.node.id).sort(), ["acme.awsWidget", "acme.msWidget"]);
 });
 
 test("inlined base64 resources resolve through the composed host", async () =>

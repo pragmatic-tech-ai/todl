@@ -162,7 +162,7 @@ class TestPresentationBaker implements IPresentationBaker
         const paths: string[] = [];
         for (const node of doc.nodes)
         {
-            if (node.type !== "icon") continue;
+            if (node.type !== "todl.icon") continue;
             const path = (node.attrs as Record<string, unknown>)["path"];
             if (typeof path === "string" && path.length > 0) paths.push(path);
         }
@@ -313,7 +313,7 @@ describe("build lifecycle (build → presentation → publish → resolve)", () 
 
         // The stamped resource key reached model.json (an icon application carries a key).
         const model = JSON.parse(readFileSync(join(output.Result.OutputPath!, "model.json"), "utf8")) as TodlDocument;
-        const stamped = model.nodes.some((n) => n.type === "icon" && typeof (n.attrs as Record<string, unknown>)["key"] === "string");
+        const stamped = model.nodes.some((n) => n.type === "todl.icon" && typeof (n.attrs as Record<string, unknown>)["key"] === "string");
         assert.ok(stamped, "an icon node in model.json carries a stamped resource key");
 
         // The library records its meta-model as a pinned dependency.

@@ -2,6 +2,7 @@ import { MarkupKind, type Hover, type Position } from "vscode-languageserver-typ
 import type { AnalysisSnapshot } from "./analysis-snapshot.js";
 import { ContextKind, CursorClassifier } from "./cursor-classifier.js";
 import { SymbolKind, SymbolKinds } from "./symbol-kinds.js";
+import { WrittenSymbolResolver } from "./written-symbol-resolver.js";
 
 export class HoverProvider
 {
@@ -28,7 +29,7 @@ export class HoverProvider
     {
         const ctx = CursorClassifier.ClassifyPosition(a, uri, pos);
         if (ctx.Kind !== ContextKind.Identifier || ctx.Symbol === undefined) return null;
-        const symbol = ctx.Symbol;
+        const symbol = WrittenSymbolResolver.ResolveIn(a, uri, ctx.Symbol) ?? ctx.Symbol;
         const kind = SymbolKinds.Of(a.Model, symbol);
         const lines = [HoverProvider.CodeFenceOpen, `${HoverProvider.KindLabel[kind]} ${symbol}`, HoverProvider.CodeFence];
 

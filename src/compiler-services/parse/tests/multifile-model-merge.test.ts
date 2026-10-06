@@ -17,15 +17,15 @@ const fileB = { uri: "b.todl", text: `namespace acme {
 test("two same-id model blocks across files compose into one model (no crash)", () => {
   const { model } = checkAgainst([], [fileA, fileB]);
   // One merged model node containing both files' entities.
-  assert.equal(model.resolve("Arch")?.metaKind, "model");
-  assert.equal(model.resolve("web")?.type, "Component");
-  assert.equal(model.resolve("host")?.type, "Node");
+  assert.equal(model.resolve("acme.Arch")?.metaKind, "model");
+  assert.equal(model.resolve("acme.web")?.type, "acme.Component");
+  assert.equal(model.resolve("acme.host")?.type, "acme.Node");
 });
 
 test("each entity carries its own file's conforms viewpoint", () => {
   const { model } = checkAgainst([], [fileA, fileB]);
-  assert.equal(model.resolve("web")?.attrs.get("conforms"), "ComponentView");
-  assert.equal(model.resolve("host")?.attrs.get("conforms"), "DeploymentView");
+  assert.equal(model.resolve("acme.web")?.attrs.get("conforms"), "acme.ComponentView");
+  assert.equal(model.resolve("acme.host")?.attrs.get("conforms"), "acme.DeploymentView");
 });
 
 test("conforms is required once a model is split across files", () => {

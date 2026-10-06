@@ -9,9 +9,9 @@ test("a generated application package boots headlessly and reads model-scoped da
 {
     const entry = await ApplicationBootstrapper.BootRegistry(AppRegistry.Create());
 
-    // Root (model "core") sees only its own instance...
-    assert.deepEqual((entry.Root() as DemoApp).services.map((s) => s.name), ["API"]);
-    // ...and a sibling model ("ops") is scoped to its own.
-    const ops = entry.Registry().GetRequired("ops") as DemoApp;
-    assert.deepEqual(ops.services.map((s) => s.name), ["Worker"]);
+    // Root (model "a.core") sees only its own instance...
+    assert.deepEqual((entry.Root() as DemoApp).aServices.map((s) => s.name), ["API"]);
+    // ...and a sibling model ("a.ops") is scoped to its own.
+    const ops = entry.Registry().GetRequired("a.ops") as DemoApp;
+    assert.deepEqual(ops.aServices.map((s) => s.name), ["Worker"]);
 });

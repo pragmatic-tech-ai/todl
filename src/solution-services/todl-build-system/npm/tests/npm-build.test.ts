@@ -164,7 +164,7 @@ describe("NpmPackageBuildSystem", () =>
 
         // (b) model.json carries the stamped key.
         const model = JSON.parse(await provider.Output.ReadText("model.json")) as { nodes: Array<{ type: string | null; attrs: Record<string, unknown> }> };
-        const stamped = model.nodes.some((n) => n.type === "icon" && typeof n.attrs["key"] === "string");
+        const stamped = model.nodes.some((n) => n.type === "todl.icon" && typeof n.attrs["key"] === "string");
         assert.ok(stamped, "an icon node in model.json carries a stamped resource key");
 
         // (c) the .mu view compiled.
