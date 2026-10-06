@@ -17,241 +17,230 @@ export class TodlTestArch extends ModelDataSource {
 
   protected override createEntity(reader: EntityReader): ReflectedEntity {
     switch (reader.concept) {
-      case "Element": return new Element(this, reader);
-      case "actor": return new Actor(this, reader);
-      case "app_component": return new AppComponent(this, reader);
-      case "application": return new Application(this, reader);
-      case "application_kind": return new ApplicationKind(this, reader);
-      case "application_lifecycle_stage": return new ApplicationLifecycleStage(this, reader);
-      case "billing": return new Billing(this, reader);
-      case "billing_model": return new BillingModel(this, reader);
-      case "block": return new Block(this, reader);
-      case "category": return new Category(this, reader);
-      case "component": return new Component(this, reader);
-      case "connectivity_kind": return new ConnectivityKind(this, reader);
-      case "connector": return new Connector(this, reader);
-      case "container": return new Container(this, reader);
-      case "container_role": return new ContainerRole(this, reader);
-      case "environment": return new Environment(this, reader);
-      case "ingress": return new Ingress(this, reader);
-      case "lifecycle_stage": return new LifecycleStage(this, reader);
-      case "location": return new Location(this, reader);
-      case "meta": return new Meta(this, reader);
-      case "network": return new Network(this, reader);
-      case "network_peer": return new NetworkPeer(this, reader);
-      case "resource_group": return new ResourceGroup(this, reader);
-      case "scenario": return new Scenario(this, reader);
-      case "sequence": return new Sequence(this, reader);
-      case "slot": return new Slot(this, reader);
-      case "step": return new Step(this, reader);
-      case "subnet": return new Subnet(this, reader);
-      case "subscription": return new Subscription(this, reader);
-      case "technology": return new Technology(this, reader);
-      case "tenant": return new Tenant(this, reader);
+      case "tech_architecture.actor": return new TechArchitectureActor(this, reader);
+      case "tech_architecture.app_component": return new TechArchitectureAppComponent(this, reader);
+      case "tech_architecture.application": return new TechArchitectureApplication(this, reader);
+      case "tech_architecture.application_kind": return new TechArchitectureApplicationKind(this, reader);
+      case "tech_architecture.application_lifecycle_stage": return new TechArchitectureApplicationLifecycleStage(this, reader);
+      case "tech_architecture.billing": return new TechArchitectureBilling(this, reader);
+      case "tech_architecture.billing_model": return new TechArchitectureBillingModel(this, reader);
+      case "tech_architecture.block": return new TechArchitectureBlock(this, reader);
+      case "tech_architecture.category": return new TechArchitectureCategory(this, reader);
+      case "tech_architecture.component": return new TechArchitectureComponent(this, reader);
+      case "tech_architecture.connectivity_kind": return new TechArchitectureConnectivityKind(this, reader);
+      case "tech_architecture.connector": return new TechArchitectureConnector(this, reader);
+      case "tech_architecture.container": return new TechArchitectureContainer(this, reader);
+      case "tech_architecture.container_role": return new TechArchitectureContainerRole(this, reader);
+      case "tech_architecture.environment": return new TechArchitectureEnvironment(this, reader);
+      case "tech_architecture.ingress": return new TechArchitectureIngress(this, reader);
+      case "tech_architecture.lifecycle_stage": return new TechArchitectureLifecycleStage(this, reader);
+      case "tech_architecture.location": return new TechArchitectureLocation(this, reader);
+      case "tech_architecture.meta": return new TechArchitectureMeta(this, reader);
+      case "tech_architecture.network": return new TechArchitectureNetwork(this, reader);
+      case "tech_architecture.network_peer": return new TechArchitectureNetworkPeer(this, reader);
+      case "tech_architecture.resource_group": return new TechArchitectureResourceGroup(this, reader);
+      case "tech_architecture.scenario": return new TechArchitectureScenario(this, reader);
+      case "tech_architecture.sequence": return new TechArchitectureSequence(this, reader);
+      case "tech_architecture.slot": return new TechArchitectureSlot(this, reader);
+      case "tech_architecture.step": return new TechArchitectureStep(this, reader);
+      case "tech_architecture.subnet": return new TechArchitectureSubnet(this, reader);
+      case "tech_architecture.subscription": return new TechArchitectureSubscription(this, reader);
+      case "tech_architecture.technology": return new TechArchitectureTechnology(this, reader);
+      case "tech_architecture.tenant": return new TechArchitectureTenant(this, reader);
+      case "todl.Element": return new TodlElement(this, reader);
       default: return super.createEntity(reader);
     }
   }
 
-  get elements(): readonly Element[] {
-    return this.instancesOf("Element") as readonly Element[];
+  get techArchitectureActors(): readonly TechArchitectureActor[] {
+    return this.instancesOf("tech_architecture.actor") as readonly TechArchitectureActor[];
   }
 
-  get actors(): readonly Actor[] {
-    return this.instancesOf("actor") as readonly Actor[];
+  get techArchitectureAppComponents(): readonly TechArchitectureAppComponent[] {
+    return this.instancesOf("tech_architecture.app_component") as readonly TechArchitectureAppComponent[];
   }
 
-  get appComponents(): readonly AppComponent[] {
-    return this.instancesOf("app_component") as readonly AppComponent[];
+  get techArchitectureApplications(): readonly TechArchitectureApplication[] {
+    return this.instancesOf("tech_architecture.application") as readonly TechArchitectureApplication[];
   }
 
-  get applications(): readonly Application[] {
-    return this.instancesOf("application") as readonly Application[];
+  get techArchitectureApplicationKinds(): readonly TechArchitectureApplicationKind[] {
+    return this.instancesOf("tech_architecture.application_kind") as readonly TechArchitectureApplicationKind[];
   }
 
-  get applicationKinds(): readonly ApplicationKind[] {
-    return this.instancesOf("application_kind") as readonly ApplicationKind[];
+  get techArchitectureApplicationLifecycleStages(): readonly TechArchitectureApplicationLifecycleStage[] {
+    return this.instancesOf("tech_architecture.application_lifecycle_stage") as readonly TechArchitectureApplicationLifecycleStage[];
   }
 
-  get applicationLifecycleStages(): readonly ApplicationLifecycleStage[] {
-    return this.instancesOf("application_lifecycle_stage") as readonly ApplicationLifecycleStage[];
+  get techArchitectureBillings(): readonly TechArchitectureBilling[] {
+    return this.instancesOf("tech_architecture.billing") as readonly TechArchitectureBilling[];
   }
 
-  get billings(): readonly Billing[] {
-    return this.instancesOf("billing") as readonly Billing[];
+  get techArchitectureBillingModels(): readonly TechArchitectureBillingModel[] {
+    return this.instancesOf("tech_architecture.billing_model") as readonly TechArchitectureBillingModel[];
   }
 
-  get billingModels(): readonly BillingModel[] {
-    return this.instancesOf("billing_model") as readonly BillingModel[];
+  get techArchitectureBlocks(): readonly TechArchitectureBlock[] {
+    return this.instancesOf("tech_architecture.block") as readonly TechArchitectureBlock[];
   }
 
-  get blocks(): readonly Block[] {
-    return this.instancesOf("block") as readonly Block[];
+  get techArchitectureCategories(): readonly TechArchitectureCategory[] {
+    return this.instancesOf("tech_architecture.category") as readonly TechArchitectureCategory[];
   }
 
-  get categories(): readonly Category[] {
-    return this.instancesOf("category") as readonly Category[];
+  get techArchitectureComponents(): readonly TechArchitectureComponent[] {
+    return this.instancesOf("tech_architecture.component") as readonly TechArchitectureComponent[];
   }
 
-  get components(): readonly Component[] {
-    return this.instancesOf("component") as readonly Component[];
+  get techArchitectureConnectivityKinds(): readonly TechArchitectureConnectivityKind[] {
+    return this.instancesOf("tech_architecture.connectivity_kind") as readonly TechArchitectureConnectivityKind[];
   }
 
-  get connectivityKinds(): readonly ConnectivityKind[] {
-    return this.instancesOf("connectivity_kind") as readonly ConnectivityKind[];
+  get techArchitectureConnectors(): readonly TechArchitectureConnector[] {
+    return this.instancesOf("tech_architecture.connector") as readonly TechArchitectureConnector[];
   }
 
-  get connectors(): readonly Connector[] {
-    return this.instancesOf("connector") as readonly Connector[];
+  get techArchitectureContainers(): readonly TechArchitectureContainer[] {
+    return this.instancesOf("tech_architecture.container") as readonly TechArchitectureContainer[];
   }
 
-  get containers(): readonly Container[] {
-    return this.instancesOf("container") as readonly Container[];
+  get techArchitectureContainerRoles(): readonly TechArchitectureContainerRole[] {
+    return this.instancesOf("tech_architecture.container_role") as readonly TechArchitectureContainerRole[];
   }
 
-  get containerRoles(): readonly ContainerRole[] {
-    return this.instancesOf("container_role") as readonly ContainerRole[];
+  get techArchitectureEnvironments(): readonly TechArchitectureEnvironment[] {
+    return this.instancesOf("tech_architecture.environment") as readonly TechArchitectureEnvironment[];
   }
 
-  get environments(): readonly Environment[] {
-    return this.instancesOf("environment") as readonly Environment[];
+  get techArchitectureIngresses(): readonly TechArchitectureIngress[] {
+    return this.instancesOf("tech_architecture.ingress") as readonly TechArchitectureIngress[];
   }
 
-  get ingresses(): readonly Ingress[] {
-    return this.instancesOf("ingress") as readonly Ingress[];
+  get techArchitectureLifecycleStages(): readonly TechArchitectureLifecycleStage[] {
+    return this.instancesOf("tech_architecture.lifecycle_stage") as readonly TechArchitectureLifecycleStage[];
   }
 
-  get lifecycleStages(): readonly LifecycleStage[] {
-    return this.instancesOf("lifecycle_stage") as readonly LifecycleStage[];
+  get techArchitectureLocations(): readonly TechArchitectureLocation[] {
+    return this.instancesOf("tech_architecture.location") as readonly TechArchitectureLocation[];
   }
 
-  get locations(): readonly Location[] {
-    return this.instancesOf("location") as readonly Location[];
+  get techArchitectureMetas(): readonly TechArchitectureMeta[] {
+    return this.instancesOf("tech_architecture.meta") as readonly TechArchitectureMeta[];
   }
 
-  get metas(): readonly Meta[] {
-    return this.instancesOf("meta") as readonly Meta[];
+  get techArchitectureNetworks(): readonly TechArchitectureNetwork[] {
+    return this.instancesOf("tech_architecture.network") as readonly TechArchitectureNetwork[];
   }
 
-  get networks(): readonly Network[] {
-    return this.instancesOf("network") as readonly Network[];
+  get techArchitectureNetworkPeers(): readonly TechArchitectureNetworkPeer[] {
+    return this.instancesOf("tech_architecture.network_peer") as readonly TechArchitectureNetworkPeer[];
   }
 
-  get networkPeers(): readonly NetworkPeer[] {
-    return this.instancesOf("network_peer") as readonly NetworkPeer[];
+  get techArchitectureResourceGroups(): readonly TechArchitectureResourceGroup[] {
+    return this.instancesOf("tech_architecture.resource_group") as readonly TechArchitectureResourceGroup[];
   }
 
-  get resourceGroups(): readonly ResourceGroup[] {
-    return this.instancesOf("resource_group") as readonly ResourceGroup[];
+  get techArchitectureScenarios(): readonly TechArchitectureScenario[] {
+    return this.instancesOf("tech_architecture.scenario") as readonly TechArchitectureScenario[];
   }
 
-  get scenarios(): readonly Scenario[] {
-    return this.instancesOf("scenario") as readonly Scenario[];
+  get techArchitectureSequences(): readonly TechArchitectureSequence[] {
+    return this.instancesOf("tech_architecture.sequence") as readonly TechArchitectureSequence[];
   }
 
-  get sequences(): readonly Sequence[] {
-    return this.instancesOf("sequence") as readonly Sequence[];
+  get techArchitectureSlots(): readonly TechArchitectureSlot[] {
+    return this.instancesOf("tech_architecture.slot") as readonly TechArchitectureSlot[];
   }
 
-  get slots(): readonly Slot[] {
-    return this.instancesOf("slot") as readonly Slot[];
+  get techArchitectureSteps(): readonly TechArchitectureStep[] {
+    return this.instancesOf("tech_architecture.step") as readonly TechArchitectureStep[];
   }
 
-  get steps(): readonly Step[] {
-    return this.instancesOf("step") as readonly Step[];
+  get techArchitectureSubnets(): readonly TechArchitectureSubnet[] {
+    return this.instancesOf("tech_architecture.subnet") as readonly TechArchitectureSubnet[];
   }
 
-  get subnets(): readonly Subnet[] {
-    return this.instancesOf("subnet") as readonly Subnet[];
+  get techArchitectureSubscriptions(): readonly TechArchitectureSubscription[] {
+    return this.instancesOf("tech_architecture.subscription") as readonly TechArchitectureSubscription[];
   }
 
-  get subscriptions(): readonly Subscription[] {
-    return this.instancesOf("subscription") as readonly Subscription[];
+  get techArchitectureTechnologies(): readonly TechArchitectureTechnology[] {
+    return this.instancesOf("tech_architecture.technology") as readonly TechArchitectureTechnology[];
   }
 
-  get technologies(): readonly Technology[] {
-    return this.instancesOf("technology") as readonly Technology[];
+  get techArchitectureTenants(): readonly TechArchitectureTenant[] {
+    return this.instancesOf("tech_architecture.tenant") as readonly TechArchitectureTenant[];
   }
 
-  get tenants(): readonly Tenant[] {
-    return this.instancesOf("tenant") as readonly Tenant[];
+  get todlElements(): readonly TodlElement[] {
+    return this.instancesOf("todl.Element") as readonly TodlElement[];
   }
 
-  get actors(): readonly Actor[] {
-    return this.termsOf("actors") as readonly Actor[];
+  get librariesAwsAwsTech(): readonly TechArchitectureLocation[] {
+    return this.termsOf("libraries.aws.aws_tech") as readonly TechArchitectureLocation[];
   }
 
-  get appComponents(): readonly AppComponent[] {
-    return this.termsOf("app_components") as readonly AppComponent[];
+  get librariesMicrosoftMicrosoftTech(): readonly TechArchitectureLocation[] {
+    return this.termsOf("libraries.microsoft.microsoft_tech") as readonly TechArchitectureLocation[];
   }
 
-  get applicationKinds(): readonly ApplicationKind[] {
-    return this.termsOf("application_kinds") as readonly ApplicationKind[];
+  get techArchitectureActors(): readonly TechArchitectureActor[] {
+    return this.termsOf("tech_architecture.actors") as readonly TechArchitectureActor[];
   }
 
-  get applicationLifecycleStages(): readonly ApplicationLifecycleStage[] {
-    return this.termsOf("application_lifecycle_stages") as readonly ApplicationLifecycleStage[];
+  get techArchitectureAppComponents(): readonly TechArchitectureAppComponent[] {
+    return this.termsOf("tech_architecture.app_components") as readonly TechArchitectureAppComponent[];
   }
 
-  get awsTech(): readonly Location[] {
-    return this.termsOf("aws_tech") as readonly Location[];
+  get techArchitectureApplicationKinds(): readonly TechArchitectureApplicationKind[] {
+    return this.termsOf("tech_architecture.application_kinds") as readonly TechArchitectureApplicationKind[];
   }
 
-  get billingModels(): readonly BillingModel[] {
-    return this.termsOf("billing_models") as readonly BillingModel[];
+  get techArchitectureApplicationLifecycleStages(): readonly TechArchitectureApplicationLifecycleStage[] {
+    return this.termsOf("tech_architecture.application_lifecycle_stages") as readonly TechArchitectureApplicationLifecycleStage[];
   }
 
-  get categories(): readonly Category[] {
-    return this.termsOf("categories") as readonly Category[];
+  get techArchitectureBillingModels(): readonly TechArchitectureBillingModel[] {
+    return this.termsOf("tech_architecture.billing_models") as readonly TechArchitectureBillingModel[];
   }
 
-  get connectivityKinds(): readonly ConnectivityKind[] {
-    return this.termsOf("connectivity_kinds") as readonly ConnectivityKind[];
+  get techArchitectureCategories(): readonly TechArchitectureCategory[] {
+    return this.termsOf("tech_architecture.categories") as readonly TechArchitectureCategory[];
   }
 
-  get connectors(): readonly Connector[] {
-    return this.termsOf("connectors") as readonly Connector[];
+  get techArchitectureConnectivityKinds(): readonly TechArchitectureConnectivityKind[] {
+    return this.termsOf("tech_architecture.connectivity_kinds") as readonly TechArchitectureConnectivityKind[];
   }
 
-  get containerRoles(): readonly ContainerRole[] {
-    return this.termsOf("container_roles") as readonly ContainerRole[];
+  get techArchitectureConnectors(): readonly TechArchitectureConnector[] {
+    return this.termsOf("tech_architecture.connectors") as readonly TechArchitectureConnector[];
   }
 
-  get environments(): readonly Environment[] {
-    return this.termsOf("environments") as readonly Environment[];
+  get techArchitectureContainerRoles(): readonly TechArchitectureContainerRole[] {
+    return this.termsOf("tech_architecture.container_roles") as readonly TechArchitectureContainerRole[];
   }
 
-  get ingresses(): readonly Ingress[] {
-    return this.termsOf("ingresses") as readonly Ingress[];
+  get techArchitectureEnvironments(): readonly TechArchitectureEnvironment[] {
+    return this.termsOf("tech_architecture.environments") as readonly TechArchitectureEnvironment[];
   }
 
-  get lifecycleStages(): readonly LifecycleStage[] {
-    return this.termsOf("lifecycle_stages") as readonly LifecycleStage[];
+  get techArchitectureIngresses(): readonly TechArchitectureIngress[] {
+    return this.termsOf("tech_architecture.ingresses") as readonly TechArchitectureIngress[];
   }
 
-  get locations(): readonly Location[] {
-    return this.termsOf("locations") as readonly Location[];
+  get techArchitectureLifecycleStages(): readonly TechArchitectureLifecycleStage[] {
+    return this.termsOf("tech_architecture.lifecycle_stages") as readonly TechArchitectureLifecycleStage[];
   }
 
-  get microsoftTech(): readonly Location[] {
-    return this.termsOf("microsoft_tech") as readonly Location[];
+  get techArchitectureLocations(): readonly TechArchitectureLocation[] {
+    return this.termsOf("tech_architecture.locations") as readonly TechArchitectureLocation[];
   }
 
-  get networks(): readonly Network[] {
-    return this.termsOf("networks") as readonly Network[];
+  get techArchitectureNetworks(): readonly TechArchitectureNetwork[] {
+    return this.termsOf("tech_architecture.networks") as readonly TechArchitectureNetwork[];
   }
 
-  element(id: string, fields: {
-    description?: string;
-    label?: string;
-  }): InstanceDescriptor {
-    const scalars = new Map<string, Scalar>();
-    const refs = new Map<string, readonly NodeId[]>();
-    if (fields.description !== undefined) scalars.set("description", fields.description);
-    if (fields.label !== undefined) scalars.set("label", fields.label);
-    return { concept: "Element", id, scalars, refs };
-  }
-
-  actor(id: string, fields: {
+  techArchitectureActor(id: string, fields: {
     description?: string;
     label: string;
   }): InstanceDescriptor {
@@ -259,10 +248,10 @@ export class TodlTestArch extends ModelDataSource {
     const refs = new Map<string, readonly NodeId[]>();
     if (fields.description !== undefined) scalars.set("description", fields.description);
     scalars.set("label", fields.label);
-    return { concept: "actor", id, scalars, refs };
+    return { concept: "tech_architecture.actor", id, scalars, refs };
   }
 
-  appComponent(id: string, fields: {
+  techArchitectureAppComponent(id: string, fields: {
     description?: string;
     label: string;
   }): InstanceDescriptor {
@@ -270,17 +259,17 @@ export class TodlTestArch extends ModelDataSource {
     const refs = new Map<string, readonly NodeId[]>();
     if (fields.description !== undefined) scalars.set("description", fields.description);
     scalars.set("label", fields.label);
-    return { concept: "app_component", id, scalars, refs };
+    return { concept: "tech_architecture.app_component", id, scalars, refs };
   }
 
-  application(id: string, fields: {
+  techArchitectureApplication(id: string, fields: {
     description?: string;
     label: string;
-    consumes?: readonly Component[];
-    containers?: readonly Container[];
-    contains?: readonly Application[];
-    owner?: Actor;
-    provides?: readonly Component[];
+    consumes?: readonly TechArchitectureComponent[];
+    containers?: readonly TechArchitectureContainer[];
+    contains?: readonly TechArchitectureApplication[];
+    owner?: TechArchitectureActor;
+    provides?: readonly TechArchitectureComponent[];
   }): InstanceDescriptor {
     const scalars = new Map<string, Scalar>();
     const refs = new Map<string, readonly NodeId[]>();
@@ -291,10 +280,10 @@ export class TodlTestArch extends ModelDataSource {
     if (fields.contains !== undefined) refs.set("contains", fields.contains.map((e) => e.id));
     if (fields.owner !== undefined) refs.set("owner", [fields.owner.id]);
     if (fields.provides !== undefined) refs.set("provides", fields.provides.map((e) => e.id));
-    return { concept: "application", id, scalars, refs };
+    return { concept: "tech_architecture.application", id, scalars, refs };
   }
 
-  applicationKind(id: string, fields: {
+  techArchitectureApplicationKind(id: string, fields: {
     description?: string;
     label?: string;
   }): InstanceDescriptor {
@@ -302,10 +291,10 @@ export class TodlTestArch extends ModelDataSource {
     const refs = new Map<string, readonly NodeId[]>();
     if (fields.description !== undefined) scalars.set("description", fields.description);
     if (fields.label !== undefined) scalars.set("label", fields.label);
-    return { concept: "application_kind", id, scalars, refs };
+    return { concept: "tech_architecture.application_kind", id, scalars, refs };
   }
 
-  applicationLifecycleStage(id: string, fields: {
+  techArchitectureApplicationLifecycleStage(id: string, fields: {
     description?: string;
     label?: string;
     swatch: string;
@@ -315,16 +304,16 @@ export class TodlTestArch extends ModelDataSource {
     if (fields.description !== undefined) scalars.set("description", fields.description);
     if (fields.label !== undefined) scalars.set("label", fields.label);
     scalars.set("swatch", fields.swatch);
-    return { concept: "application_lifecycle_stage", id, scalars, refs };
+    return { concept: "tech_architecture.application_lifecycle_stage", id, scalars, refs };
   }
 
-  billing(id: string, fields: {
+  techArchitectureBilling(id: string, fields: {
     description?: string;
     label?: string;
-    capacity?: BillingModel;
-    hosting?: BillingModel;
-    perCall?: BillingModel;
-    perSeat?: BillingModel;
+    capacity?: TechArchitectureBillingModel;
+    hosting?: TechArchitectureBillingModel;
+    perCall?: TechArchitectureBillingModel;
+    perSeat?: TechArchitectureBillingModel;
   }): InstanceDescriptor {
     const scalars = new Map<string, Scalar>();
     const refs = new Map<string, readonly NodeId[]>();
@@ -334,10 +323,10 @@ export class TodlTestArch extends ModelDataSource {
     if (fields.hosting !== undefined) refs.set("hosting", [fields.hosting.id]);
     if (fields.perCall !== undefined) refs.set("per_call", [fields.perCall.id]);
     if (fields.perSeat !== undefined) refs.set("per_seat", [fields.perSeat.id]);
-    return { concept: "billing", id, scalars, refs };
+    return { concept: "tech_architecture.billing", id, scalars, refs };
   }
 
-  billingModel(id: string, fields: {
+  techArchitectureBillingModel(id: string, fields: {
     description?: string;
     label?: string;
     unitLabel?: string;
@@ -347,14 +336,14 @@ export class TodlTestArch extends ModelDataSource {
     if (fields.description !== undefined) scalars.set("description", fields.description);
     if (fields.label !== undefined) scalars.set("label", fields.label);
     if (fields.unitLabel !== undefined) scalars.set("unit_label", fields.unitLabel);
-    return { concept: "billing_model", id, scalars, refs };
+    return { concept: "tech_architecture.billing_model", id, scalars, refs };
   }
 
-  block(id: string, fields: {
+  techArchitectureBlock(id: string, fields: {
     description?: string;
     label: string;
-    components?: readonly Component[];
-    in: Location;
+    components?: readonly TechArchitectureComponent[];
+    in: TechArchitectureLocation;
   }): InstanceDescriptor {
     const scalars = new Map<string, Scalar>();
     const refs = new Map<string, readonly NodeId[]>();
@@ -362,10 +351,10 @@ export class TodlTestArch extends ModelDataSource {
     scalars.set("label", fields.label);
     if (fields.components !== undefined) refs.set("components", fields.components.map((e) => e.id));
     refs.set("in", [fields.in.id]);
-    return { concept: "block", id, scalars, refs };
+    return { concept: "tech_architecture.block", id, scalars, refs };
   }
 
-  category(id: string, fields: {
+  techArchitectureCategory(id: string, fields: {
     description?: string;
     label?: string;
   }): InstanceDescriptor {
@@ -373,17 +362,17 @@ export class TodlTestArch extends ModelDataSource {
     const refs = new Map<string, readonly NodeId[]>();
     if (fields.description !== undefined) scalars.set("description", fields.description);
     if (fields.label !== undefined) scalars.set("label", fields.label);
-    return { concept: "category", id, scalars, refs };
+    return { concept: "tech_architecture.category", id, scalars, refs };
   }
 
-  component(id: string, fields: {
+  techArchitectureComponent(id: string, fields: {
     description?: string;
     label: string;
-    category?: Category;
-    implementedBy?: Technology;
-    in?: Location;
-    inBlock?: Block;
-    slots?: readonly Slot[];
+    category?: TechArchitectureCategory;
+    implementedBy?: TechArchitectureTechnology;
+    in?: TechArchitectureLocation;
+    inBlock?: TechArchitectureBlock;
+    slots?: readonly TechArchitectureSlot[];
   }): InstanceDescriptor {
     const scalars = new Map<string, Scalar>();
     const refs = new Map<string, readonly NodeId[]>();
@@ -394,10 +383,10 @@ export class TodlTestArch extends ModelDataSource {
     if (fields.in !== undefined) refs.set("in", [fields.in.id]);
     if (fields.inBlock !== undefined) refs.set("in_block", [fields.inBlock.id]);
     if (fields.slots !== undefined) refs.set("slots", fields.slots.map((e) => e.id));
-    return { concept: "component", id, scalars, refs };
+    return { concept: "tech_architecture.component", id, scalars, refs };
   }
 
-  connectivityKind(id: string, fields: {
+  techArchitectureConnectivityKind(id: string, fields: {
     description?: string;
     edgeStyle: string;
     label?: string;
@@ -407,18 +396,18 @@ export class TodlTestArch extends ModelDataSource {
     if (fields.description !== undefined) scalars.set("description", fields.description);
     scalars.set("edge_style", fields.edgeStyle);
     if (fields.label !== undefined) scalars.set("label", fields.label);
-    return { concept: "connectivity_kind", id, scalars, refs };
+    return { concept: "tech_architecture.connectivity_kind", id, scalars, refs };
   }
 
-  connector(id: string, fields: {
+  techArchitectureConnector(id: string, fields: {
     description?: string;
     label?: string;
     natural?: string;
     sequence?: string;
     step?: number;
-    from: Actor;
-    scenario?: Scenario;
-    to: Actor;
+    from: TechArchitectureActor;
+    scenario?: TechArchitectureScenario;
+    to: TechArchitectureActor;
   }): InstanceDescriptor {
     const scalars = new Map<string, Scalar>();
     const refs = new Map<string, readonly NodeId[]>();
@@ -430,14 +419,14 @@ export class TodlTestArch extends ModelDataSource {
     refs.set("from", [fields.from.id]);
     if (fields.scenario !== undefined) refs.set("scenario", [fields.scenario.id]);
     refs.set("to", [fields.to.id]);
-    return { concept: "connector", id, scalars, refs };
+    return { concept: "tech_architecture.connector", id, scalars, refs };
   }
 
-  container(id: string, fields: {
+  techArchitectureContainer(id: string, fields: {
     description?: string;
     label: string;
-    appComponents?: readonly AppComponent[];
-    deliveredBy?: Component;
+    appComponents?: readonly TechArchitectureAppComponent[];
+    deliveredBy?: TechArchitectureComponent;
   }): InstanceDescriptor {
     const scalars = new Map<string, Scalar>();
     const refs = new Map<string, readonly NodeId[]>();
@@ -445,10 +434,10 @@ export class TodlTestArch extends ModelDataSource {
     scalars.set("label", fields.label);
     if (fields.appComponents !== undefined) refs.set("app_components", fields.appComponents.map((e) => e.id));
     if (fields.deliveredBy !== undefined) refs.set("delivered_by", [fields.deliveredBy.id]);
-    return { concept: "container", id, scalars, refs };
+    return { concept: "tech_architecture.container", id, scalars, refs };
   }
 
-  containerRole(id: string, fields: {
+  techArchitectureContainerRole(id: string, fields: {
     description?: string;
     label?: string;
     swatch?: string;
@@ -458,18 +447,18 @@ export class TodlTestArch extends ModelDataSource {
     if (fields.description !== undefined) scalars.set("description", fields.description);
     if (fields.label !== undefined) scalars.set("label", fields.label);
     if (fields.swatch !== undefined) scalars.set("swatch", fields.swatch);
-    return { concept: "container_role", id, scalars, refs };
+    return { concept: "tech_architecture.container_role", id, scalars, refs };
   }
 
-  environment(id: string, fields: {
+  techArchitectureEnvironment(id: string, fields: {
     description?: string;
     label: string;
     region?: string;
-    inSubnet?: Subnet;
-    inSubscription?: Subscription;
-    inTenant: Tenant;
-    publicIngress?: readonly Ingress[];
-    resourceGroups?: readonly ResourceGroup[];
+    inSubnet?: TechArchitectureSubnet;
+    inSubscription?: TechArchitectureSubscription;
+    inTenant: TechArchitectureTenant;
+    publicIngress?: readonly TechArchitectureIngress[];
+    resourceGroups?: readonly TechArchitectureResourceGroup[];
   }): InstanceDescriptor {
     const scalars = new Map<string, Scalar>();
     const refs = new Map<string, readonly NodeId[]>();
@@ -481,10 +470,10 @@ export class TodlTestArch extends ModelDataSource {
     refs.set("in_tenant", [fields.inTenant.id]);
     if (fields.publicIngress !== undefined) refs.set("public_ingress", fields.publicIngress.map((e) => e.id));
     if (fields.resourceGroups !== undefined) refs.set("resource_groups", fields.resourceGroups.map((e) => e.id));
-    return { concept: "environment", id, scalars, refs };
+    return { concept: "tech_architecture.environment", id, scalars, refs };
   }
 
-  ingress(id: string, fields: {
+  techArchitectureIngress(id: string, fields: {
     description?: string;
     edgeDecoration?: string;
     label?: string;
@@ -494,10 +483,10 @@ export class TodlTestArch extends ModelDataSource {
     if (fields.description !== undefined) scalars.set("description", fields.description);
     if (fields.edgeDecoration !== undefined) scalars.set("edge_decoration", fields.edgeDecoration);
     if (fields.label !== undefined) scalars.set("label", fields.label);
-    return { concept: "ingress", id, scalars, refs };
+    return { concept: "tech_architecture.ingress", id, scalars, refs };
   }
 
-  lifecycleStage(id: string, fields: {
+  techArchitectureLifecycleStage(id: string, fields: {
     description?: string;
     label?: string;
     swatch: string;
@@ -507,23 +496,23 @@ export class TodlTestArch extends ModelDataSource {
     if (fields.description !== undefined) scalars.set("description", fields.description);
     if (fields.label !== undefined) scalars.set("label", fields.label);
     scalars.set("swatch", fields.swatch);
-    return { concept: "lifecycle_stage", id, scalars, refs };
+    return { concept: "tech_architecture.lifecycle_stage", id, scalars, refs };
   }
 
-  location(id: string, fields: {
+  techArchitectureLocation(id: string, fields: {
     description?: string;
     label: string;
-    parent?: Location;
+    parent?: TechArchitectureLocation;
   }): InstanceDescriptor {
     const scalars = new Map<string, Scalar>();
     const refs = new Map<string, readonly NodeId[]>();
     if (fields.description !== undefined) scalars.set("description", fields.description);
     scalars.set("label", fields.label);
     if (fields.parent !== undefined) refs.set("parent", [fields.parent.id]);
-    return { concept: "location", id, scalars, refs };
+    return { concept: "tech_architecture.location", id, scalars, refs };
   }
 
-  meta(id: string, fields: {
+  techArchitectureMeta(id: string, fields: {
     description?: string;
     label?: string;
     metaModel: string;
@@ -535,17 +524,17 @@ export class TodlTestArch extends ModelDataSource {
     if (fields.label !== undefined) scalars.set("label", fields.label);
     scalars.set("meta_model", fields.metaModel);
     scalars.set("title", fields.title);
-    return { concept: "meta", id, scalars, refs };
+    return { concept: "tech_architecture.meta", id, scalars, refs };
   }
 
-  network(id: string, fields: {
+  techArchitectureNetwork(id: string, fields: {
     cidr?: string;
     description?: string;
     label: string;
     region: string;
-    in: Location;
-    inSubscription: Subscription;
-    peers?: readonly NetworkPeer[];
+    in: TechArchitectureLocation;
+    inSubscription: TechArchitectureSubscription;
+    peers?: readonly TechArchitectureNetworkPeer[];
   }): InstanceDescriptor {
     const scalars = new Map<string, Scalar>();
     const refs = new Map<string, readonly NodeId[]>();
@@ -556,27 +545,27 @@ export class TodlTestArch extends ModelDataSource {
     refs.set("in", [fields.in.id]);
     refs.set("in_subscription", [fields.inSubscription.id]);
     if (fields.peers !== undefined) refs.set("peers", fields.peers.map((e) => e.id));
-    return { concept: "network", id, scalars, refs };
+    return { concept: "tech_architecture.network", id, scalars, refs };
   }
 
-  networkPeer(id: string, fields: {
+  techArchitectureNetworkPeer(id: string, fields: {
     description?: string;
     label?: string;
-    network: Network;
+    network: TechArchitectureNetwork;
   }): InstanceDescriptor {
     const scalars = new Map<string, Scalar>();
     const refs = new Map<string, readonly NodeId[]>();
     if (fields.description !== undefined) scalars.set("description", fields.description);
     if (fields.label !== undefined) scalars.set("label", fields.label);
     refs.set("network", [fields.network.id]);
-    return { concept: "network_peer", id, scalars, refs };
+    return { concept: "tech_architecture.network_peer", id, scalars, refs };
   }
 
-  resourceGroup(id: string, fields: {
+  techArchitectureResourceGroup(id: string, fields: {
     description?: string;
     label: string;
     region?: string;
-    inSubscription: Subscription;
+    inSubscription: TechArchitectureSubscription;
   }): InstanceDescriptor {
     const scalars = new Map<string, Scalar>();
     const refs = new Map<string, readonly NodeId[]>();
@@ -584,14 +573,14 @@ export class TodlTestArch extends ModelDataSource {
     scalars.set("label", fields.label);
     if (fields.region !== undefined) scalars.set("region", fields.region);
     refs.set("in_subscription", [fields.inSubscription.id]);
-    return { concept: "resource_group", id, scalars, refs };
+    return { concept: "tech_architecture.resource_group", id, scalars, refs };
   }
 
-  scenario(id: string, fields: {
+  techArchitectureScenario(id: string, fields: {
     description?: string;
     label: string;
     outcome: string;
-    sequences?: readonly Sequence[];
+    sequences?: readonly TechArchitectureSequence[];
   }): InstanceDescriptor {
     const scalars = new Map<string, Scalar>();
     const refs = new Map<string, readonly NodeId[]>();
@@ -599,14 +588,14 @@ export class TodlTestArch extends ModelDataSource {
     scalars.set("label", fields.label);
     scalars.set("outcome", fields.outcome);
     if (fields.sequences !== undefined) refs.set("sequences", fields.sequences.map((e) => e.id));
-    return { concept: "scenario", id, scalars, refs };
+    return { concept: "tech_architecture.scenario", id, scalars, refs };
   }
 
-  sequence(id: string, fields: {
+  techArchitectureSequence(id: string, fields: {
     description?: string;
     label?: string;
-    entryPoint: Actor;
-    steps?: readonly Step[];
+    entryPoint: TechArchitectureActor;
+    steps?: readonly TechArchitectureStep[];
   }): InstanceDescriptor {
     const scalars = new Map<string, Scalar>();
     const refs = new Map<string, readonly NodeId[]>();
@@ -614,16 +603,16 @@ export class TodlTestArch extends ModelDataSource {
     if (fields.label !== undefined) scalars.set("label", fields.label);
     refs.set("entry_point", [fields.entryPoint.id]);
     if (fields.steps !== undefined) refs.set("steps", fields.steps.map((e) => e.id));
-    return { concept: "sequence", id, scalars, refs };
+    return { concept: "tech_architecture.sequence", id, scalars, refs };
   }
 
-  slot(id: string, fields: {
+  techArchitectureSlot(id: string, fields: {
     description?: string;
     label: string;
-    environment: Environment;
-    inResourceGroup?: ResourceGroup;
-    inSubnet?: Subnet;
-    publicIngress?: readonly Ingress[];
+    environment: TechArchitectureEnvironment;
+    inResourceGroup?: TechArchitectureResourceGroup;
+    inSubnet?: TechArchitectureSubnet;
+    publicIngress?: readonly TechArchitectureIngress[];
   }): InstanceDescriptor {
     const scalars = new Map<string, Scalar>();
     const refs = new Map<string, readonly NodeId[]>();
@@ -633,14 +622,14 @@ export class TodlTestArch extends ModelDataSource {
     if (fields.inResourceGroup !== undefined) refs.set("in_resource_group", [fields.inResourceGroup.id]);
     if (fields.inSubnet !== undefined) refs.set("in_subnet", [fields.inSubnet.id]);
     if (fields.publicIngress !== undefined) refs.set("public_ingress", fields.publicIngress.map((e) => e.id));
-    return { concept: "slot", id, scalars, refs };
+    return { concept: "tech_architecture.slot", id, scalars, refs };
   }
 
-  step(id: string, fields: {
+  techArchitectureStep(id: string, fields: {
     description?: string;
     label?: string;
-    dst: Actor;
-    src: Actor;
+    dst: TechArchitectureActor;
+    src: TechArchitectureActor;
   }): InstanceDescriptor {
     const scalars = new Map<string, Scalar>();
     const refs = new Map<string, readonly NodeId[]>();
@@ -648,15 +637,15 @@ export class TodlTestArch extends ModelDataSource {
     if (fields.label !== undefined) scalars.set("label", fields.label);
     refs.set("dst", [fields.dst.id]);
     refs.set("src", [fields.src.id]);
-    return { concept: "step", id, scalars, refs };
+    return { concept: "tech_architecture.step", id, scalars, refs };
   }
 
-  subnet(id: string, fields: {
+  techArchitectureSubnet(id: string, fields: {
     cidr?: string;
     delegation?: string;
     description?: string;
     label: string;
-    parent: Network;
+    parent: TechArchitectureNetwork;
   }): InstanceDescriptor {
     const scalars = new Map<string, Scalar>();
     const refs = new Map<string, readonly NodeId[]>();
@@ -665,15 +654,15 @@ export class TodlTestArch extends ModelDataSource {
     if (fields.description !== undefined) scalars.set("description", fields.description);
     scalars.set("label", fields.label);
     refs.set("parent", [fields.parent.id]);
-    return { concept: "subnet", id, scalars, refs };
+    return { concept: "tech_architecture.subnet", id, scalars, refs };
   }
 
-  subscription(id: string, fields: {
+  techArchitectureSubscription(id: string, fields: {
     description?: string;
     label: string;
     region?: string;
-    in: Location;
-    inTenant?: Tenant;
+    in: TechArchitectureLocation;
+    inTenant?: TechArchitectureTenant;
   }): InstanceDescriptor {
     const scalars = new Map<string, Scalar>();
     const refs = new Map<string, readonly NodeId[]>();
@@ -682,15 +671,15 @@ export class TodlTestArch extends ModelDataSource {
     if (fields.region !== undefined) scalars.set("region", fields.region);
     refs.set("in", [fields.in.id]);
     if (fields.inTenant !== undefined) refs.set("in_tenant", [fields.inTenant.id]);
-    return { concept: "subscription", id, scalars, refs };
+    return { concept: "tech_architecture.subscription", id, scalars, refs };
   }
 
-  technology(id: string, fields: {
+  techArchitectureTechnology(id: string, fields: {
     description?: string;
     label: string;
-    applicableTo?: readonly Category[];
-    availableIn?: readonly Location[];
-    billing?: Billing;
+    applicableTo?: readonly TechArchitectureCategory[];
+    availableIn?: readonly TechArchitectureLocation[];
+    billing?: TechArchitectureBilling;
   }): InstanceDescriptor {
     const scalars = new Map<string, Scalar>();
     const refs = new Map<string, readonly NodeId[]>();
@@ -699,14 +688,14 @@ export class TodlTestArch extends ModelDataSource {
     if (fields.applicableTo !== undefined) refs.set("applicable_to", fields.applicableTo.map((e) => e.id));
     if (fields.availableIn !== undefined) refs.set("available_in", fields.availableIn.map((e) => e.id));
     if (fields.billing !== undefined) refs.set("billing", [fields.billing.id]);
-    return { concept: "technology", id, scalars, refs };
+    return { concept: "tech_architecture.technology", id, scalars, refs };
   }
 
-  tenant(id: string, fields: {
+  techArchitectureTenant(id: string, fields: {
     description?: string;
     label: string;
     region?: string;
-    in: Location;
+    in: TechArchitectureLocation;
   }): InstanceDescriptor {
     const scalars = new Map<string, Scalar>();
     const refs = new Map<string, readonly NodeId[]>();
@@ -714,229 +703,240 @@ export class TodlTestArch extends ModelDataSource {
     scalars.set("label", fields.label);
     if (fields.region !== undefined) scalars.set("region", fields.region);
     refs.set("in", [fields.in.id]);
-    return { concept: "tenant", id, scalars, refs };
+    return { concept: "tech_architecture.tenant", id, scalars, refs };
+  }
+
+  todlElement(id: string, fields: {
+    description?: string;
+    label?: string;
+  }): InstanceDescriptor {
+    const scalars = new Map<string, Scalar>();
+    const refs = new Map<string, readonly NodeId[]>();
+    if (fields.description !== undefined) scalars.set("description", fields.description);
+    if (fields.label !== undefined) scalars.set("label", fields.label);
+    return { concept: "todl.Element", id, scalars, refs };
   }
 }
 
-export class Element extends ReflectedEntity {
+export class TechArchitectureActor extends ReflectedEntity {
   get description(): string { return this.field("description") as string; }
   get label(): string { return this.field("label") as string; }
 }
 
-export class Actor extends ReflectedEntity {
+export class TechArchitectureAppComponent extends ReflectedEntity {
   get description(): string { return this.field("description") as string; }
   get label(): string { return this.field("label") as string; }
 }
 
-export class AppComponent extends ReflectedEntity {
+export class TechArchitectureApplication extends ReflectedEntity {
+  get description(): string { return this.field("description") as string; }
+  get label(): string { return this.field("label") as string; }
+  get consumes(): readonly TechArchitectureComponent[] { return this.refs("consumes") as readonly TechArchitectureComponent[]; }
+  get containers(): readonly TechArchitectureContainer[] { return this.refs("containers") as readonly TechArchitectureContainer[]; }
+  get contains(): readonly TechArchitectureApplication[] { return this.refs("contains") as readonly TechArchitectureApplication[]; }
+  get owner(): TechArchitectureActor | undefined { return this.ref("owner") as TechArchitectureActor | undefined; }
+  get provides(): readonly TechArchitectureComponent[] { return this.refs("provides") as readonly TechArchitectureComponent[]; }
+}
+
+export class TechArchitectureApplicationKind extends ReflectedEntity {
   get description(): string { return this.field("description") as string; }
   get label(): string { return this.field("label") as string; }
 }
 
-export class Application extends ReflectedEntity {
-  get description(): string { return this.field("description") as string; }
-  get label(): string { return this.field("label") as string; }
-  get consumes(): readonly Component[] { return this.refs("consumes") as readonly Component[]; }
-  get containers(): readonly Container[] { return this.refs("containers") as readonly Container[]; }
-  get contains(): readonly Application[] { return this.refs("contains") as readonly Application[]; }
-  get owner(): Actor | undefined { return this.ref("owner") as Actor | undefined; }
-  get provides(): readonly Component[] { return this.refs("provides") as readonly Component[]; }
-}
-
-export class ApplicationKind extends ReflectedEntity {
-  get description(): string { return this.field("description") as string; }
-  get label(): string { return this.field("label") as string; }
-}
-
-export class ApplicationLifecycleStage extends ReflectedEntity {
+export class TechArchitectureApplicationLifecycleStage extends ReflectedEntity {
   get description(): string { return this.field("description") as string; }
   get label(): string { return this.field("label") as string; }
   get swatch(): string { return this.field("swatch") as string; }
 }
 
-export class Billing extends ReflectedEntity {
+export class TechArchitectureBilling extends ReflectedEntity {
   get description(): string { return this.field("description") as string; }
   get label(): string { return this.field("label") as string; }
-  get capacity(): BillingModel | undefined { return this.ref("capacity") as BillingModel | undefined; }
-  get hosting(): BillingModel | undefined { return this.ref("hosting") as BillingModel | undefined; }
-  get perCall(): BillingModel | undefined { return this.ref("per_call") as BillingModel | undefined; }
-  get perSeat(): BillingModel | undefined { return this.ref("per_seat") as BillingModel | undefined; }
+  get capacity(): TechArchitectureBillingModel | undefined { return this.ref("capacity") as TechArchitectureBillingModel | undefined; }
+  get hosting(): TechArchitectureBillingModel | undefined { return this.ref("hosting") as TechArchitectureBillingModel | undefined; }
+  get perCall(): TechArchitectureBillingModel | undefined { return this.ref("per_call") as TechArchitectureBillingModel | undefined; }
+  get perSeat(): TechArchitectureBillingModel | undefined { return this.ref("per_seat") as TechArchitectureBillingModel | undefined; }
 }
 
-export class BillingModel extends ReflectedEntity {
+export class TechArchitectureBillingModel extends ReflectedEntity {
   get description(): string { return this.field("description") as string; }
   get label(): string { return this.field("label") as string; }
   get unitLabel(): string { return this.field("unit_label") as string; }
 }
 
-export class Block extends ReflectedEntity {
+export class TechArchitectureBlock extends ReflectedEntity {
   get description(): string { return this.field("description") as string; }
   get label(): string { return this.field("label") as string; }
-  get components(): readonly Component[] { return this.refs("components") as readonly Component[]; }
-  get in(): Location | undefined { return this.ref("in") as Location | undefined; }
+  get components(): readonly TechArchitectureComponent[] { return this.refs("components") as readonly TechArchitectureComponent[]; }
+  get in(): TechArchitectureLocation | undefined { return this.ref("in") as TechArchitectureLocation | undefined; }
 }
 
-export class Category extends ReflectedEntity {
+export class TechArchitectureCategory extends ReflectedEntity {
   get description(): string { return this.field("description") as string; }
   get label(): string { return this.field("label") as string; }
 }
 
-export class Component extends ReflectedEntity {
+export class TechArchitectureComponent extends ReflectedEntity {
   get description(): string { return this.field("description") as string; }
   get label(): string { return this.field("label") as string; }
-  get category(): Category | undefined { return this.ref("category") as Category | undefined; }
-  get implementedBy(): Technology | undefined { return this.ref("implemented_by") as Technology | undefined; }
-  get in(): Location | undefined { return this.ref("in") as Location | undefined; }
-  get inBlock(): Block | undefined { return this.ref("in_block") as Block | undefined; }
-  get slots(): readonly Slot[] { return this.refs("slots") as readonly Slot[]; }
+  get category(): TechArchitectureCategory | undefined { return this.ref("category") as TechArchitectureCategory | undefined; }
+  get implementedBy(): TechArchitectureTechnology | undefined { return this.ref("implemented_by") as TechArchitectureTechnology | undefined; }
+  get in(): TechArchitectureLocation | undefined { return this.ref("in") as TechArchitectureLocation | undefined; }
+  get inBlock(): TechArchitectureBlock | undefined { return this.ref("in_block") as TechArchitectureBlock | undefined; }
+  get slots(): readonly TechArchitectureSlot[] { return this.refs("slots") as readonly TechArchitectureSlot[]; }
 }
 
-export class ConnectivityKind extends ReflectedEntity {
+export class TechArchitectureConnectivityKind extends ReflectedEntity {
   get description(): string { return this.field("description") as string; }
   get edgeStyle(): string { return this.field("edge_style") as string; }
   get label(): string { return this.field("label") as string; }
 }
 
-export class Connector extends ReflectedEntity {
+export class TechArchitectureConnector extends ReflectedEntity {
   get description(): string { return this.field("description") as string; }
   get label(): string { return this.field("label") as string; }
   get natural(): string { return this.field("natural") as string; }
   get sequence(): string { return this.field("sequence") as string; }
   get step(): number { return this.field("step") as number; }
-  get from(): Actor | undefined { return this.ref("from") as Actor | undefined; }
-  get scenario(): Scenario | undefined { return this.ref("scenario") as Scenario | undefined; }
-  get to(): Actor | undefined { return this.ref("to") as Actor | undefined; }
+  get from(): TechArchitectureActor | undefined { return this.ref("from") as TechArchitectureActor | undefined; }
+  get scenario(): TechArchitectureScenario | undefined { return this.ref("scenario") as TechArchitectureScenario | undefined; }
+  get to(): TechArchitectureActor | undefined { return this.ref("to") as TechArchitectureActor | undefined; }
 }
 
-export class Container extends ReflectedEntity {
+export class TechArchitectureContainer extends ReflectedEntity {
   get description(): string { return this.field("description") as string; }
   get label(): string { return this.field("label") as string; }
-  get appComponents(): readonly AppComponent[] { return this.refs("app_components") as readonly AppComponent[]; }
-  get deliveredBy(): Component | undefined { return this.ref("delivered_by") as Component | undefined; }
+  get appComponents(): readonly TechArchitectureAppComponent[] { return this.refs("app_components") as readonly TechArchitectureAppComponent[]; }
+  get deliveredBy(): TechArchitectureComponent | undefined { return this.ref("delivered_by") as TechArchitectureComponent | undefined; }
 }
 
-export class ContainerRole extends ReflectedEntity {
+export class TechArchitectureContainerRole extends ReflectedEntity {
   get description(): string { return this.field("description") as string; }
   get label(): string { return this.field("label") as string; }
   get swatch(): string { return this.field("swatch") as string; }
 }
 
-export class Environment extends ReflectedEntity {
+export class TechArchitectureEnvironment extends ReflectedEntity {
   get description(): string { return this.field("description") as string; }
   get label(): string { return this.field("label") as string; }
   get region(): string { return this.field("region") as string; }
-  get inSubnet(): Subnet | undefined { return this.ref("in_subnet") as Subnet | undefined; }
-  get inSubscription(): Subscription | undefined { return this.ref("in_subscription") as Subscription | undefined; }
-  get inTenant(): Tenant | undefined { return this.ref("in_tenant") as Tenant | undefined; }
-  get publicIngress(): readonly Ingress[] { return this.refs("public_ingress") as readonly Ingress[]; }
-  get resourceGroups(): readonly ResourceGroup[] { return this.refs("resource_groups") as readonly ResourceGroup[]; }
+  get inSubnet(): TechArchitectureSubnet | undefined { return this.ref("in_subnet") as TechArchitectureSubnet | undefined; }
+  get inSubscription(): TechArchitectureSubscription | undefined { return this.ref("in_subscription") as TechArchitectureSubscription | undefined; }
+  get inTenant(): TechArchitectureTenant | undefined { return this.ref("in_tenant") as TechArchitectureTenant | undefined; }
+  get publicIngress(): readonly TechArchitectureIngress[] { return this.refs("public_ingress") as readonly TechArchitectureIngress[]; }
+  get resourceGroups(): readonly TechArchitectureResourceGroup[] { return this.refs("resource_groups") as readonly TechArchitectureResourceGroup[]; }
 }
 
-export class Ingress extends ReflectedEntity {
+export class TechArchitectureIngress extends ReflectedEntity {
   get description(): string { return this.field("description") as string; }
   get edgeDecoration(): string { return this.field("edge_decoration") as string; }
   get label(): string { return this.field("label") as string; }
 }
 
-export class LifecycleStage extends ReflectedEntity {
+export class TechArchitectureLifecycleStage extends ReflectedEntity {
   get description(): string { return this.field("description") as string; }
   get label(): string { return this.field("label") as string; }
   get swatch(): string { return this.field("swatch") as string; }
 }
 
-export class Location extends ReflectedEntity {
+export class TechArchitectureLocation extends ReflectedEntity {
   get description(): string { return this.field("description") as string; }
   get label(): string { return this.field("label") as string; }
-  get parent(): Location | undefined { return this.ref("parent") as Location | undefined; }
+  get parent(): TechArchitectureLocation | undefined { return this.ref("parent") as TechArchitectureLocation | undefined; }
 }
 
-export class Meta extends ReflectedEntity {
+export class TechArchitectureMeta extends ReflectedEntity {
   get description(): string { return this.field("description") as string; }
   get label(): string { return this.field("label") as string; }
   get metaModel(): string { return this.field("meta_model") as string; }
   get title(): string { return this.field("title") as string; }
 }
 
-export class Network extends ReflectedEntity {
+export class TechArchitectureNetwork extends ReflectedEntity {
   get cidr(): string { return this.field("cidr") as string; }
   get description(): string { return this.field("description") as string; }
   get label(): string { return this.field("label") as string; }
   get region(): string { return this.field("region") as string; }
-  get in(): Location | undefined { return this.ref("in") as Location | undefined; }
-  get inSubscription(): Subscription | undefined { return this.ref("in_subscription") as Subscription | undefined; }
-  get peers(): readonly NetworkPeer[] { return this.refs("peers") as readonly NetworkPeer[]; }
+  get in(): TechArchitectureLocation | undefined { return this.ref("in") as TechArchitectureLocation | undefined; }
+  get inSubscription(): TechArchitectureSubscription | undefined { return this.ref("in_subscription") as TechArchitectureSubscription | undefined; }
+  get peers(): readonly TechArchitectureNetworkPeer[] { return this.refs("peers") as readonly TechArchitectureNetworkPeer[]; }
 }
 
-export class NetworkPeer extends ReflectedEntity {
+export class TechArchitectureNetworkPeer extends ReflectedEntity {
   get description(): string { return this.field("description") as string; }
   get label(): string { return this.field("label") as string; }
-  get network(): Network | undefined { return this.ref("network") as Network | undefined; }
+  get network(): TechArchitectureNetwork | undefined { return this.ref("network") as TechArchitectureNetwork | undefined; }
 }
 
-export class ResourceGroup extends ReflectedEntity {
+export class TechArchitectureResourceGroup extends ReflectedEntity {
   get description(): string { return this.field("description") as string; }
   get label(): string { return this.field("label") as string; }
   get region(): string { return this.field("region") as string; }
-  get inSubscription(): Subscription | undefined { return this.ref("in_subscription") as Subscription | undefined; }
+  get inSubscription(): TechArchitectureSubscription | undefined { return this.ref("in_subscription") as TechArchitectureSubscription | undefined; }
 }
 
-export class Scenario extends ReflectedEntity {
+export class TechArchitectureScenario extends ReflectedEntity {
   get description(): string { return this.field("description") as string; }
   get label(): string { return this.field("label") as string; }
   get outcome(): string { return this.field("outcome") as string; }
-  get sequences(): readonly Sequence[] { return this.refs("sequences") as readonly Sequence[]; }
+  get sequences(): readonly TechArchitectureSequence[] { return this.refs("sequences") as readonly TechArchitectureSequence[]; }
 }
 
-export class Sequence extends ReflectedEntity {
+export class TechArchitectureSequence extends ReflectedEntity {
   get description(): string { return this.field("description") as string; }
   get label(): string { return this.field("label") as string; }
-  get entryPoint(): Actor | undefined { return this.ref("entry_point") as Actor | undefined; }
-  get steps(): readonly Step[] { return this.refs("steps") as readonly Step[]; }
+  get entryPoint(): TechArchitectureActor | undefined { return this.ref("entry_point") as TechArchitectureActor | undefined; }
+  get steps(): readonly TechArchitectureStep[] { return this.refs("steps") as readonly TechArchitectureStep[]; }
 }
 
-export class Slot extends ReflectedEntity {
+export class TechArchitectureSlot extends ReflectedEntity {
   get description(): string { return this.field("description") as string; }
   get label(): string { return this.field("label") as string; }
-  get environment(): Environment | undefined { return this.ref("environment") as Environment | undefined; }
-  get inResourceGroup(): ResourceGroup | undefined { return this.ref("in_resource_group") as ResourceGroup | undefined; }
-  get inSubnet(): Subnet | undefined { return this.ref("in_subnet") as Subnet | undefined; }
-  get publicIngress(): readonly Ingress[] { return this.refs("public_ingress") as readonly Ingress[]; }
+  get environment(): TechArchitectureEnvironment | undefined { return this.ref("environment") as TechArchitectureEnvironment | undefined; }
+  get inResourceGroup(): TechArchitectureResourceGroup | undefined { return this.ref("in_resource_group") as TechArchitectureResourceGroup | undefined; }
+  get inSubnet(): TechArchitectureSubnet | undefined { return this.ref("in_subnet") as TechArchitectureSubnet | undefined; }
+  get publicIngress(): readonly TechArchitectureIngress[] { return this.refs("public_ingress") as readonly TechArchitectureIngress[]; }
 }
 
-export class Step extends ReflectedEntity {
+export class TechArchitectureStep extends ReflectedEntity {
   get description(): string { return this.field("description") as string; }
   get label(): string { return this.field("label") as string; }
-  get dst(): Actor | undefined { return this.ref("dst") as Actor | undefined; }
-  get src(): Actor | undefined { return this.ref("src") as Actor | undefined; }
+  get dst(): TechArchitectureActor | undefined { return this.ref("dst") as TechArchitectureActor | undefined; }
+  get src(): TechArchitectureActor | undefined { return this.ref("src") as TechArchitectureActor | undefined; }
 }
 
-export class Subnet extends ReflectedEntity {
+export class TechArchitectureSubnet extends ReflectedEntity {
   get cidr(): string { return this.field("cidr") as string; }
   get delegation(): string { return this.field("delegation") as string; }
   get description(): string { return this.field("description") as string; }
   get label(): string { return this.field("label") as string; }
-  get parent(): Network | undefined { return this.ref("parent") as Network | undefined; }
+  get parent(): TechArchitectureNetwork | undefined { return this.ref("parent") as TechArchitectureNetwork | undefined; }
 }
 
-export class Subscription extends ReflectedEntity {
+export class TechArchitectureSubscription extends ReflectedEntity {
   get description(): string { return this.field("description") as string; }
   get label(): string { return this.field("label") as string; }
   get region(): string { return this.field("region") as string; }
-  get in(): Location | undefined { return this.ref("in") as Location | undefined; }
-  get inTenant(): Tenant | undefined { return this.ref("in_tenant") as Tenant | undefined; }
+  get in(): TechArchitectureLocation | undefined { return this.ref("in") as TechArchitectureLocation | undefined; }
+  get inTenant(): TechArchitectureTenant | undefined { return this.ref("in_tenant") as TechArchitectureTenant | undefined; }
 }
 
-export class Technology extends ReflectedEntity {
+export class TechArchitectureTechnology extends ReflectedEntity {
   get description(): string { return this.field("description") as string; }
   get label(): string { return this.field("label") as string; }
-  get applicableTo(): readonly Category[] { return this.refs("applicable_to") as readonly Category[]; }
-  get availableIn(): readonly Location[] { return this.refs("available_in") as readonly Location[]; }
-  get billing(): Billing | undefined { return this.ref("billing") as Billing | undefined; }
+  get applicableTo(): readonly TechArchitectureCategory[] { return this.refs("applicable_to") as readonly TechArchitectureCategory[]; }
+  get availableIn(): readonly TechArchitectureLocation[] { return this.refs("available_in") as readonly TechArchitectureLocation[]; }
+  get billing(): TechArchitectureBilling | undefined { return this.ref("billing") as TechArchitectureBilling | undefined; }
 }
 
-export class Tenant extends ReflectedEntity {
+export class TechArchitectureTenant extends ReflectedEntity {
   get description(): string { return this.field("description") as string; }
   get label(): string { return this.field("label") as string; }
   get region(): string { return this.field("region") as string; }
-  get in(): Location | undefined { return this.ref("in") as Location | undefined; }
+  get in(): TechArchitectureLocation | undefined { return this.ref("in") as TechArchitectureLocation | undefined; }
+}
+
+export class TodlElement extends ReflectedEntity {
+  get description(): string { return this.field("description") as string; }
+  get label(): string { return this.field("label") as string; }
 }
