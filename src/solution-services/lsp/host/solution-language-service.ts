@@ -489,8 +489,10 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
         // Re-assemble the shared graph for the (possibly swapped or cleared) member set —
         // a solution switch raises no per-member Inserted events, so nothing else would.
         // The first (construction-time) call leaves the initial build to the warmup
-        // promise that Ready awaits; every later switch enqueues its own rebuild.
-        if (this.graphBootstrapped) this.Enqueue(() => this.RebuildGraphSafely());
+        // promise that Ready awaits; every later switch enqueues its own rebuild, awaiting
+        // warmup first so a switch landing before the initial Build cannot race it (and let
+        // a stale assembly finish last).
+        if (this.graphBootstrapped) this.Enqueue(async () => { await this.warmup; await this.RebuildGraphSafely(); });
         this.graphBootstrapped = true;
     }
 

@@ -24,6 +24,22 @@ export interface SolutionGraphChange
     memberIds: readonly string[];
 }
 
+// The mutable state a built graph holds — the composed model plus the per-node and
+// per-member bookkeeping — in one bag, so a full Build can assemble a FRESH bag locally
+// and swap it in atomically only after it fully succeeds. A throw mid-build then leaves
+// the PRIOR bag intact. ReplaceMember mutates the live bag in place.
+interface GraphState
+{
+    model: Repository;
+    provenance: Map<string, string>;
+    memberOf: Map<string, string>;
+    originOf: Map<string, WikiOrigin>;
+    sourcesOf: Map<string, SourceFile[]>;
+    diagnosticsByUri: Map<string, Diagnostic[]>;
+    membersById: Map<string, SolutionGraphMember>;
+    loadDiagsByMember: Map<string, Diagnostic[]>;
+}
+
 /**
  * One Repository for the whole open solution: prelude + published bases merged once,
  * every source member loaded in, bases shared (no per-member copy).
@@ -37,62 +53,65 @@ export class SolutionGraph
     private static readonly UnknownMemberMessage = 'Unknown solution member id';
 
     private readonly idGen: IdGenerator = new SnowflakeIdGenerator();
-    private model: Repository = new Repository(mergeBases([preludeDocument()]));
-    private provenance: Map<string, string> = new Map();
-    private memberOf: Map<string, string> = new Map();
-    private originOf: Map<string, WikiOrigin> = new Map();
-    private sourcesOf: Map<string, SourceFile[]> = new Map();
-    private diagnosticsByUri: Map<string, Diagnostic[]> = new Map();
-    private membersById: Map<string, SolutionGraphMember> = new Map();
-    private loadDiagsByMember: Map<string, Diagnostic[]> = new Map();
+    private state: GraphState = SolutionGraph.FreshState();
 
     public readonly Changed: Signal<SolutionGraphChange> = new Signal<SolutionGraphChange>();
 
+    // A fresh, empty state whose model is prelude + the given published bases merged once.
+    private static FreshState(bases: readonly TodlDocument[] = []): GraphState
+    {
+        return {
+            model: new Repository(mergeBases([preludeDocument(), ...bases])),
+            provenance: new Map(),
+            memberOf: new Map(),
+            originOf: new Map(),
+            sourcesOf: new Map(),
+            diagnosticsByUri: new Map(),
+            membersById: new Map(),
+            loadDiagsByMember: new Map(),
+        };
+    }
+
     public get Model(): Repository
     {
-        return this.model;
+        return this.state.model;
     }
 
     public get OriginOf(): ReadonlyMap<string, WikiOrigin>
     {
-        return this.originOf;
+        return this.state.originOf;
     }
 
     /** True once `memberId` has been built into the graph (so ReplaceMember is safe). */
     public Has(memberId: string): boolean
     {
-        return this.membersById.has(memberId);
+        return this.state.membersById.has(memberId);
     }
 
     public DiagnosticsByUri(): ReadonlyMap<string, Diagnostic[]>
     {
-        return this.diagnosticsByUri;
+        return this.state.diagnosticsByUri;
     }
 
     public async Build(members: readonly SolutionGraphMember[]): Promise<void>
     {
-        this.provenance = new Map();
-        this.memberOf = new Map();
-        this.originOf = new Map();
-        this.sourcesOf = new Map();
-        this.diagnosticsByUri = new Map();
-        this.membersById = new Map();
-        this.loadDiagsByMember = new Map();
-
-        const bases = this.DistinctBases(members);
-        this.model = new Repository(mergeBases([preludeDocument(), ...bases]));
-
-        for (const member of this.TopoOrder(members))
+        // Order FIRST: a duplicate id / cycle throws here, before any state is assembled,
+        // so the prior graph stays intact. The rest builds into a LOCAL bag and is swapped
+        // in only after every loadInto + validate succeeds, so a throw anywhere mid-build
+        // likewise leaves the prior graph untouched.
+        const ordered = this.TopoOrder(members);
+        const state = SolutionGraph.FreshState(this.DistinctBases(members));
+        for (const member of ordered)
         {
-            this.membersById.set(member.id, member);
-            this.sourcesOf.set(member.id, [...member.sources]);
-            this.LoadMember(member, member.sources);
+            state.membersById.set(member.id, member);
+            state.sourcesOf.set(member.id, [...member.sources]);
+            this.LoadMember(state, member, member.sources);
         }
-        this.RebuildDiagnostics();
-        // A full build swaps `model`/`originOf` for fresh instances, so a subscriber
-        // holding the old Repository must be told its view changed — emit with every
-        // member id built (empty when the solution was cleared).
-        this.Changed.emit({ memberIds: [...this.membersById.keys()] });
+        this.RebuildDiagnostics(state);
+        // Commit atomically only after the whole build succeeded, then notify: a subscriber
+        // holding the old Repository must learn its view was swapped (empty id list clears).
+        this.state = state;
+        this.Changed.emit({ memberIds: [...state.membersById.keys()] });
     }
 
     /** Members whose baseIds include `memberId`, transitively. */
@@ -103,7 +122,7 @@ export class SolutionGraph
         while (queue.length > 0)
         {
             const current = queue.shift() as string;
-            for (const m of this.membersById.values())
+            for (const m of this.state.membersById.values())
             {
                 if (m.baseIds.includes(current) && !found.has(m.id))
                 {
@@ -117,82 +136,83 @@ export class SolutionGraph
 
     public ReplaceMember(memberId: string, sources: readonly SourceFile[]): void
     {
-        if (!this.membersById.has(memberId))
+        const state = this.state;
+        if (!state.membersById.has(memberId))
         {
             throw new Error(`${SolutionGraph.UnknownMemberMessage}: ${memberId}`);
         }
         const affectedSet = new Set<string>([memberId, ...this.DependentsOf(memberId)]);
-        const affected = this.TopoOrder([...this.membersById.values()])
+        const affected = this.TopoOrder([...state.membersById.values()])
             .filter(m => affectedSet.has(m.id));
 
         for (const member of affected)
         {
-            this.RemoveOwnedNodes(member.id);
+            this.RemoveOwnedNodes(state, member.id);
         }
-        this.sourcesOf.set(memberId, [...sources]);
+        state.sourcesOf.set(memberId, [...sources]);
         for (const member of affected)
         {
-            this.LoadMember(member, this.sourcesOf.get(member.id) ?? []);
+            this.LoadMember(state, member, state.sourcesOf.get(member.id) ?? []);
         }
-        this.RebuildDiagnostics();
+        this.RebuildDiagnostics(state);
         this.Changed.emit({ memberIds: affected.map(m => m.id) });
     }
 
-    private LoadMember(member: SolutionGraphMember, sources: readonly SourceFile[]): void
+    private LoadMember(state: GraphState, member: SolutionGraphMember, sources: readonly SourceFile[]): void
     {
-        const before = new Set(this.model.allNodes().map(n => n.id));
-        const loadDiags = loadInto(this.model, [...sources], preludeNames(), this.idGen, this.provenance);
-        this.loadDiagsByMember.set(member.id, loadDiags);
+        const before = new Set(state.model.allNodes().map(n => n.id));
+        const loadDiags = loadInto(state.model, [...sources], preludeNames(), this.idGen, state.provenance);
+        state.loadDiagsByMember.set(member.id, loadDiags);
         const origin = WikiLocator.OpenProjectOrigin(member.storage);
-        for (const node of this.model.allNodes())
+        for (const node of state.model.allNodes())
         {
             if (before.has(node.id))
             {
                 continue;
             }
-            this.memberOf.set(node.id, member.id);
-            if (!this.originOf.has(node.id))
+            state.memberOf.set(node.id, member.id);
+            if (!state.originOf.has(node.id))
             {
-                this.originOf.set(node.id, origin);
+                state.originOf.set(node.id, origin);
             }
         }
     }
 
-    private RemoveOwnedNodes(memberId: string): void
+    private RemoveOwnedNodes(state: GraphState, memberId: string): void
     {
-        const owned = [...this.memberOf].filter(([, m]) => m === memberId).map(([id]) => id);
+        const owned = [...state.memberOf].filter(([, m]) => m === memberId).map(([id]) => id);
         for (const id of owned)
         {
-            this.model.remove(id);
-            this.provenance.delete(id);
-            this.originOf.delete(id);
-            this.memberOf.delete(id);
+            state.model.remove(id);
+            state.provenance.delete(id);
+            state.originOf.delete(id);
+            state.memberOf.delete(id);
         }
     }
 
-    private RebuildDiagnostics(): void
+    private RebuildDiagnostics(state: GraphState): void
     {
-        this.diagnosticsByUri = new Map();
-        for (const diags of this.loadDiagsByMember.values())
+        state.diagnosticsByUri = new Map();
+        for (const diags of state.loadDiagsByMember.values())
         {
-            this.AddDiagnostics(diags);
+            this.AddDiagnostics(state, diags);
         }
-        this.AddDiagnostics(validate(this.model));
+        this.AddDiagnostics(state, validate(state.model));
     }
 
-    private AddDiagnostics(diags: readonly Diagnostic[]): void
+    private AddDiagnostics(state: GraphState, diags: readonly Diagnostic[]): void
     {
         for (const d of diags)
         {
             const key = d.span?.uri ?? SolutionGraph.ModelScopeUri;
-            const list = this.diagnosticsByUri.get(key);
+            const list = state.diagnosticsByUri.get(key);
             if (list)
             {
                 list.push(d);
             }
             else
             {
-                this.diagnosticsByUri.set(key, [d]);
+                state.diagnosticsByUri.set(key, [d]);
             }
         }
     }

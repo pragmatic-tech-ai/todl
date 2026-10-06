@@ -96,4 +96,29 @@ describe('SolutionGraph.Build', () =>
             assert.equal(diags.filter(d => d.severity === Severity.Error).length, 0, `errors in ${uri}`);
         }
     });
+
+    test('a failed Build (duplicate id) leaves the previously built graph intact', async () =>
+    {
+        const g = new SolutionGraph();
+        await g.Build([
+            MemberFixture.Make('tech-architecture', [META], []),
+            MemberFixture.Make('microsoft', [LIB], ['tech-architecture']),
+            MemberFixture.Make('arch', [ARCH], ['microsoft']),
+        ]);
+        const modelBefore = g.Model;
+        const countBefore = g.Model.allNodes().length;
+        assert.ok(g.Model.has('app.M'));
+
+        await assert.rejects(
+            g.Build([
+                MemberFixture.Make('dup', [META], []),
+                MemberFixture.Make('dup', [LIB], []),
+            ]),
+            /Duplicate solution member id: dup/);
+
+        // The failed build is swapped in only on success, so the prior graph is untouched.
+        assert.equal(g.Model, modelBefore, 'Model instance unchanged after a failed build');
+        assert.ok(g.Model.has('app.M'), 'prior node still present');
+        assert.equal(g.Model.allNodes().length, countBefore, 'node set unchanged');
+    });
 });
