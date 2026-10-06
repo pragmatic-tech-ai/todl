@@ -11,6 +11,7 @@
  */
 import type { Repository } from "../model/model.js";
 import { NodeIdQualifier } from "../parse/node-id-qualifier.js";
+import { PRELUDE_NAMESPACE } from "../stdlib/prelude.js";
 
 // The foundational scalar TYPE keywords (`Scalar = string | number | boolean`).
 // They are valid field/param types but are NOT declared nodes, so the resolver
@@ -91,6 +92,11 @@ export function makeResolver(
       const imported = NodeIdQualifier.Qualify(imp, id);
       if (exists(imported)) return { kind: "qualified", flat: imported };
     }
+    // The prelude (default library, namespace `todl`) is implicitly imported
+    // everywhere, like java.lang — a bare `icon` / `identifier` resolves to its
+    // `todl.*` node. Tried last so a home-namespace or imported name shadows it.
+    const preludeId = NodeIdQualifier.Qualify(PRELUDE_NAMESPACE, id);
+    if (exists(preludeId)) return { kind: "qualified", flat: preludeId };
     return { kind: "undefined" };
   };
   return { nsOf, exists, reachable, resolveRef };

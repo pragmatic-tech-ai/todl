@@ -64,4 +64,26 @@ describe('qualified ids', () =>
         const r = checkAgainst([metaDoc], [LIB]);
         assert.equal(r.model.attr('lib.MS.azure', 'label'), 'Azure', 'string literal untouched');
     });
+
+    test('bare prelude references resolve', () =>
+    {
+        const metaDoc = toJSON(check([META]).model);
+
+        // A bare prelude primitive used as a field type resolves to `todl.identifier`.
+        const FIELD = { uri: 'v/v.todl', text: 'namespace v { import ea; concept Thing { ref : identifier; } }' };
+        const rf = checkAgainst([metaDoc], [FIELD]);
+        assert.deepEqual(rf.diagnostics.filter(d => d.severity === 'error'), []);
+        const ref = rf.model.effectiveSchema('v.Thing').fields.find(f => f.name === 'ref');
+        assert.equal(ref?.type, 'todl.identifier', 'bare prelude primitive qualifies to todl.identifier');
+
+        // A bare prelude annotation applied to a concept mints `<target>@todl.label`.
+        const ANN = { uri: 'u/u.todl', text: 'namespace u { import ea; concept Loc : Location { annotate label { text = "x"; } } }' };
+        const ra = checkAgainst([metaDoc], [ANN]);
+        assert.ok(ra.model.has('u.Loc@todl.label'), 'bare prelude annotation application exists');
+
+        // Control: a same-named LOCAL annotation still wins over the prelude fallback.
+        const LOCAL = { uri: 'c/c.todl', text: 'namespace c { annotation Mark { } concept Loc { annotate Mark { } } }' };
+        const rc = check([LOCAL]);
+        assert.ok(rc.model.has('c.Loc@c.Mark'), 'local annotation resolves to the home namespace');
+    });
 });
