@@ -9,7 +9,7 @@ import { type Diagnostic, DiagnosticCode, Severity } from "../diagnostics/diagno
 
 export class ApplicationRootPass
 {
-    private static readonly AnnotationName = "entrypoint";
+    private static readonly AnnotationName = "todl.entrypoint";
     private static readonly RootParam = "root";
 
     /** Resolve/mark the application root on a committed graph. No-op for libraries. */

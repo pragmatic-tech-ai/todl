@@ -85,7 +85,7 @@ export class ManifestEmitter
             format: "todl-manifest/1",
             model: this.model,
             version: this.version,
-            root: "Element",
+            root: "todl.Element",
             concepts: this.emitConcepts(),
             classes: this.emitClasses(),
             taxonomies: this.emitTaxonomies(),

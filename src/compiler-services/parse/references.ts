@@ -226,6 +226,8 @@ export function visitReferences(decl: Declaration, visit: Visit): void
       // Every contained instance and body edge inherits the model's term-drop scope.
       for (const inst of decl.instances) visitInstanceRefs(inst, visit, scope);
       for (const edge of decl.edges) visitEdgeRefs(edge, visit, scope);
+      // The model's own annotation applications (e.g. `annotate entrypoint`).
+      annotationRefs(decl.annotations, decl.id);
       break;
     }
     case DeclKind.Package:
@@ -284,7 +286,7 @@ function visitInstanceRefs(
   // Concept and `instanceof` are constructor references — resolved by namespace
   // reachability, never term-dropped — so they carry no scope. Only value
   // assignments (and nested records) inherit the model's term-drop scope.
-  if (!WRAPPER_CONCEPTS.has(decl.concept))
+  if (!WRAPPER_CONCEPTS.has(NodeIdQualifier.LocalId(decl.concept)))
   {
     visit({ name: decl.concept, span: decl.conceptSpan ?? decl.span, role: RefRole.RecordConcept,
       ownerNode: decl.id, memberPath: null, rewrite: (r) => { (decl as { concept: string }).concept = r; } });

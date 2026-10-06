@@ -305,7 +305,7 @@ function relationshipCardinalityText(card: Cardinality): string
 /** Coarse resolver classification for name-ref-typed fields. */
 function resolvesHint(type: string, card: Cardinality): string | null
 {
-  if (type !== "identifier" && type !== "slug") return null;
+  if (type !== "todl.identifier" && type !== "todl.slug") return null;
   return card === Cardinality.Many || card === Cardinality.OneOrMore ? "list-of-name-ref" : "name-ref";
 }
 

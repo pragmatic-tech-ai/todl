@@ -968,7 +968,7 @@ function detectOrphans(declarations: Declaration[], diagnostics: Diagnostic[]): 
 
 function flagOrphans(decl: InstanceDecl, diagnostics: Diagnostic[]): void
 {
-  if (WRAPPER_CONCEPTS.has(decl.concept))
+  if (WRAPPER_CONCEPTS.has(NodeIdQualifier.LocalId(decl.concept)))
   {
     for (const child of decl.children) flagOrphans(child, diagnostics);
     return;
@@ -1109,7 +1109,7 @@ function applyModel(
     // `conforms` is a per-FILE (per-block) home viewpoint: stamp each concrete
     // top-level entity so a model split across files keeps each entity's own
     // viewpoint after the model nodes merge.
-    if (decl.conforms !== null && !child.isClass && !WRAPPER_CONCEPTS.has(child.concept))
+    if (decl.conforms !== null && !child.isClass && !WRAPPER_CONCEPTS.has(NodeIdQualifier.LocalId(child.concept)))
     {
       builder.setField(NodeIdQualifier.Qualify(home.ns, child.id), "conforms", decl.conforms);
     }
@@ -1138,7 +1138,7 @@ function applyInstance(
   // its members are top-level records. Skipping the container node also avoids
   // a legacy id collision (the aws library names both its container and its
   // root location `aws`).
-  if (WRAPPER_CONCEPTS.has(decl.concept))
+  if (WRAPPER_CONCEPTS.has(NodeIdQualifier.LocalId(decl.concept)))
   {
     for (const child of decl.children) applyInstance(builder, model, child, null, null, asserted, diagnostics, idGen, ops, home, resolveRef, rec);
     return;

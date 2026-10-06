@@ -9,7 +9,7 @@ import type { TodlDocument } from "../compiler-services/emit/json.js";
 
 export class ApplicationRootResolver
 {
-    private static readonly AnnotationName = "entrypoint";
+    private static readonly AnnotationName = "todl.entrypoint";
     private static readonly AnnotatedKind = "Annotated";
     private static readonly OntologyTier = "Ontology";
     private static readonly MultipleRootsMessage =
