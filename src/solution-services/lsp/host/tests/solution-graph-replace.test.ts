@@ -1,18 +1,27 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { FakeStorage } from '@pragmatic-tech-ai/todl-runtime';
-import { SolutionGraph, type SolutionGraphMember } from '../solution-graph.js';
+import { Severity } from '../../../../compiler-services/diagnostics/diagnostic.js';
+import { SolutionGraph, type SolutionGraphChange, type SolutionGraphMember } from '../solution-graph.js';
 
-const META = { uri: 'mm/meta.todl', text: 'namespace ea { concept Location { label : string; } }' };
+const META = { uri: 'mm/meta.todl', text: 'namespace ea { concept Location { label : string; } concept Place { at : Location?; } }' };
 const LIB = { uri: 'lib/lib.todl', text: 'namespace lib { import ea; taxonomy MS : represents Location { term azure { } } }' };
 const LIB_EDITED = { uri: 'lib/lib.todl', text: 'namespace lib { import ea; taxonomy MS : represents Location { term azure { } term m365 { } } }' };
-const ARCH = { uri: 'arch/a.todl', text: 'namespace app { import lib; model M : ea { } }' };
+const ARCH = { uri: 'arch/a.todl', text: 'namespace app { import ea; import lib; model M : ea { Place p { at = lib.MS.azure; } } }' };
+const ARCH_BAD = { uri: 'arch/a.todl', text: 'namespace app { import ea; import lib; model M : ea { Place p { at = lib.MS.nowhere; } } }' };
+const LIB_BAD = { uri: 'lib/lib.todl', text: 'namespace lib { import ea; taxonomy MS : represents Location { term azure { } } Place q { at = lib.MS.missing; } }' };
+const OTHER = { uri: 'other/o.todl', text: 'namespace other { import ea; model O : ea { } }' };
 
 class ReplaceFixture
 {
     public static Member(id: string, srcs: { uri: string; text: string }[], baseIds: string[]): SolutionGraphMember
     {
         return { id, storage: new FakeStorage(), sources: srcs, baseIds, publishedBases: [] };
+    }
+
+    public static ErrorCount(g: SolutionGraph, uri: string): number
+    {
+        return (g.DiagnosticsByUri().get(uri) ?? []).filter(d => d.severity === Severity.Error).length;
     }
 
     public static async Built(arch: { uri: string; text: string } = ARCH): Promise<SolutionGraph>
@@ -45,9 +54,15 @@ describe('SolutionGraph.ReplaceMember', () =>
     test('editing a base member cascades to dependents', async () =>
     {
         const g = await ReplaceFixture.Built();
-        let fired: string[] = [];
-        g.Changed.subscribe(c => { fired = [...c.memberIds]; });
+        const emits: SolutionGraphChange[] = [];
+        g.Changed.subscribe(c => { emits.push(c); });
         g.ReplaceMember('microsoft', [LIB_EDITED]);
+        assert.equal(emits.length, 1, 'emitted exactly once');
+        assert.deepEqual([...emits[0].memberIds].sort(), ['arch', 'microsoft']);
+        const fired = [...emits[0].memberIds];
+        assert.ok(g.Model.has('app.p'), 'dependent node reloaded');
+        const targets = g.Model.outEdges('app.p' as never).map(e => String(e.to));
+        assert.ok(targets.includes('lib.MS.azure'), 'arch->lib reference resolves');
         assert.ok(g.Model.has('lib.MS.m365'), 'new base node present');
         assert.ok(fired.includes('microsoft') && fired.includes('arch'), 'cascade reloaded dependents');
         assert.ok(!fired.includes('tech-architecture'));
@@ -69,5 +84,42 @@ describe('SolutionGraph.ReplaceMember', () =>
         assert.deepEqual([...g.DependentsOf('microsoft')], ['arch']);
         assert.deepEqual([...g.DependentsOf('tech-architecture')].sort(), ['arch', 'microsoft']);
         assert.deepEqual([...g.DependentsOf('arch')], []);
+    });
+
+    test('no stale OriginOf entries after replace', async () =>
+    {
+        const g = await ReplaceFixture.Built();
+        g.ReplaceMember('microsoft', [LIB_EDITED]);
+        for (const key of g.OriginOf.keys())
+        {
+            assert.ok(g.Model.has(key), `stale OriginOf entry ${key}`);
+        }
+    });
+
+    test('replace drops the replaced member stale diagnostics', async () =>
+    {
+        const g = new SolutionGraph();
+        await g.Build([
+            ReplaceFixture.Member('tech-architecture', [META], []),
+            ReplaceFixture.Member('microsoft', [LIB], ['tech-architecture']),
+            ReplaceFixture.Member('arch', [ARCH_BAD], ['microsoft']),
+        ]);
+        assert.ok(ReplaceFixture.ErrorCount(g, 'arch/a.todl') > 0, 'bad source reports an error');
+        g.ReplaceMember('arch', [ARCH]);
+        assert.equal(ReplaceFixture.ErrorCount(g, 'arch/a.todl'), 0, 'old diagnostic gone');
+    });
+
+    test('replace keeps diagnostics of unaffected members', async () =>
+    {
+        const g = new SolutionGraph();
+        await g.Build([
+            ReplaceFixture.Member('tech-architecture', [META], []),
+            ReplaceFixture.Member('microsoft', [LIB_BAD], ['tech-architecture']),
+            ReplaceFixture.Member('other', [OTHER], ['tech-architecture']),
+        ]);
+        const before = ReplaceFixture.ErrorCount(g, 'lib/lib.todl');
+        assert.ok(before > 0, 'base source reports an error');
+        g.ReplaceMember('other', [OTHER]);
+        assert.equal(ReplaceFixture.ErrorCount(g, 'lib/lib.todl'), before, 'unaffected diagnostics retained');
     });
 });
