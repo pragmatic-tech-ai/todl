@@ -77,8 +77,8 @@ test("MuralHost.Run builds a ModelBrowserVM over the root model's instances", as
     const { app } = await MuralHost.Run(AppRegistry.Create(), Fixtures.Theme);
     const vm = app.Resources.Root!.DataContext as ModelBrowserVM;
     const labels = Fixtures.Labels(vm);
-    assert.ok(labels.includes("service"), `expected concept "service" in ${JSON.stringify(labels)}`);
-    assert.ok(labels.includes("api"), 'expected instance id "api"');
+    assert.ok(labels.includes("a.service"), `expected concept "a.service" in ${JSON.stringify(labels)}`);
+    assert.ok(labels.includes("a.api"), 'expected instance id "a.api"');
 });
 
 test("the mounted view paints headlessly without throwing", async () =>

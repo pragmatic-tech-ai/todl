@@ -47,8 +47,8 @@ test("the model-browser ItemsControl stamps a TextBlock per row after layout", a
 
     const texts = Fixtures.TextBlockTexts(app.Resources.Root!);
     assert.ok(texts.length >= 2, `expected stamped row TextBlocks, got ${texts.length}: ${JSON.stringify(texts)}`);
-    assert.ok(texts.includes("service"), `expected concept header "service" in ${JSON.stringify(texts)}`);
-    assert.ok(texts.includes("api"), `expected instance row "api" in ${JSON.stringify(texts)}`);
+    assert.ok(texts.includes("a.service"), `expected concept header "a.service" in ${JSON.stringify(texts)}`);
+    assert.ok(texts.includes("a.api"), `expected instance row "a.api" in ${JSON.stringify(texts)}`);
 });
 
 // Pins the .mu token migration to Pragmatic. Under Pragmatic the old M3 tokens

@@ -48,11 +48,11 @@ test("Generate emits one accessor class, a shard per model, registers each, and 
 {
     const out = ModelPackageGenerator.Generate(repoFrom(TWO_MODEL), { name: "demo-app", importSpecifier: "../../../index.js" });
     assert.match(out, /export class DemoApp extends ModelDataSource/);
-    assert.match(out, /const SHARD_CORE: TodlDocument =/);
-    assert.match(out, /const SHARD_OPS: TodlDocument =/);
-    assert.match(out, /registry\.Register\("core", new DemoApp\(new BundledModelDataConnector\(SHARD_CORE\)\)\)/);
-    assert.match(out, /registry\.Register\("ops", new DemoApp\(new BundledModelDataConnector\(SHARD_OPS\)\)\)/);
-    assert.match(out, /registry\.SetRoot\("core"\)/);
+    assert.match(out, /const SHARD_A_CORE: TodlDocument =/);
+    assert.match(out, /const SHARD_A_OPS: TodlDocument =/);
+    assert.match(out, /registry\.Register\("a\.core", new DemoApp\(new BundledModelDataConnector\(SHARD_A_CORE\)\)\)/);
+    assert.match(out, /registry\.Register\("a\.ops", new DemoApp\(new BundledModelDataConnector\(SHARD_A_OPS\)\)\)/);
+    assert.match(out, /registry\.SetRoot\("a\.core"\)/);
     assert.match(out, /export class AppRegistry/);
     // one merged header, no duplicate ModelDataSource import from the read-client body
     assert.equal(out.match(/import \{ ModelDataSource/g)?.length, 1);
@@ -61,7 +61,7 @@ test("Generate emits one accessor class, a shard per model, registers each, and 
 test("Generate bakes the implicit sole-model root (package declares app-ness)", () =>
 {
     const out = ModelPackageGenerator.Generate(repoFrom(SINGLE_MODEL), { name: "solo-app" });
-    assert.match(out, /registry\.SetRoot\("solo"\)/);
+    assert.match(out, /registry\.SetRoot\("a\.solo"\)/);
 });
 
 test("Generate throws when there is no application root", () =>

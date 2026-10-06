@@ -2,6 +2,7 @@ import type { Position } from "vscode-languageserver-types";
 import { TokenKind, type Token } from "../../../compiler-services/parse/lexer.js";
 import type { AnalysisSnapshot } from "./analysis-snapshot.js";
 import { Positions } from "./positions.js";
+import { WrittenSymbolResolver } from "./written-symbol-resolver.js";
 
 export interface AssignmentContext
 {
@@ -36,21 +37,26 @@ export class SchemaContextResolver
 
         const member = SchemaContextResolver.memberBeforeCursor(file.tokens, tp);
         if (member === null) return null;
-        const concept = SchemaContextResolver.enclosingConcept(file.tokens, tp);
-        if (concept === null) return null;
+        const writtenConcept = SchemaContextResolver.enclosingConcept(file.tokens, tp);
+        if (writtenConcept === null) return null;
 
-        const schema = a.Model.effectiveSchema(concept);
+        // The record header names the concept AS WRITTEN (bare / qualified); the
+        // Model is keyed by canonical namespace-qualified ids, so resolve it to that
+        // id for the schema lookup (else `effectiveSchema` sees nothing and the slot
+        // loses its target concept). The `Concept` field keeps the written token.
+        const resolvedConcept = WrittenSymbolResolver.ResolveIn(a, uri, writtenConcept) ?? writtenConcept;
+        const schema = a.Model.effectiveSchema(resolvedConcept);
         const rel = schema.relationships.find((r) => r.name === member);
         if (rel !== undefined)
         {
-            return { Concept: concept, Member: member, TargetConcepts: rel.targets, Cardinality: rel.cardinality, IsRelationship: true };
+            return { Concept: writtenConcept, Member: member, TargetConcepts: rel.targets, Cardinality: rel.cardinality, IsRelationship: true };
         }
         const field = schema.fields.find((f) => f.name === member);
         if (field !== undefined)
         {
-            return { Concept: concept, Member: member, TargetConcepts: [field.type], Cardinality: field.cardinality, IsRelationship: false };
+            return { Concept: writtenConcept, Member: member, TargetConcepts: [field.type], Cardinality: field.cardinality, IsRelationship: false };
         }
-        return { Concept: concept, Member: member, TargetConcepts: [], Cardinality: 0, IsRelationship: false };
+        return { Concept: writtenConcept, Member: member, TargetConcepts: [], Cardinality: 0, IsRelationship: false };
     }
 
     // Index of the first token starting at/after the cursor (else the end).

@@ -2,12 +2,16 @@
 
 function segments(id: string): string[]
 {
-  // Split on -, _, and case boundaries so pascalCase/camelCase are idempotent on
-  // the C-like identifiers (and still handle kebab during migration).
+  // Split on -, _, the `.` namespace separator, and case boundaries so
+  // pascalCase/camelCase are idempotent on the C-like identifiers (and still
+  // handle kebab during migration). Folding `.` in means a namespace-qualified
+  // node id (`a.service`, `todl.Element`) yields a VALID identifier binding
+  // (`AService`, `TodlElement`) — the qualified id is kept verbatim only where it
+  // is DATA (registry keys, `concept:` discriminators), never as a TS binding.
   return id
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
-    .split(/[-_\s]+/)
+    .split(/[-_.\s]+/)
     .filter((s) => s.length > 0)
     .map((s) => s.toLowerCase());
 }
