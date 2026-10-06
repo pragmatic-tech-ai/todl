@@ -72,6 +72,27 @@ export function makeResolver(
     const ns = nsOf(id);
     return ns === null || ns === home.ns || home.imports.includes(ns);
   };
+  // The namespace a bare `name` lives in but which the caller did not import, or
+  // null when importing nothing would expose it. Scans source-declared ids then base
+  // nodes for a DIRECT namespace member — `<ns>.<name>`, i.e. a node an `import <ns>`
+  // would make reachable (first wins). Deliberately NOT a loose local-name match: a
+  // nested term `<ns>.<tax>.<name>` is not reachable via a namespace import (it needs
+  // `uses`/a qualifier), so it must stay `undefined`, not a misleading "add import".
+  const directMemberNs = (id: string, ns: string | null, name: string): string | null =>
+    ns !== null && NodeIdQualifier.Qualify(ns, name) === id ? ns : null;
+  const resolveRefUnreachableNs = (name: string): string | null => {
+    for (const id of defined)
+    {
+      const ns = directMemberNs(id, nsOf(id), name);
+      if (ns !== null) return ns;
+    }
+    for (const node of model.allNodes())
+    {
+      const ns = directMemberNs(node.id, node.namespace, name);
+      if (ns !== null) return ns;
+    }
+    return null;
+  };
   const resolveRef = (id: string, home: Home): Resolved => {
     // Builtins are global scalar TYPE keywords — never nodes, reachable everywhere,
     // and left exactly as written.
@@ -97,6 +118,13 @@ export function makeResolver(
     // `todl.*` node. Tried last so a home-namespace or imported name shadows it.
     const preludeId = NodeIdQualifier.Qualify(PRELUDE_NAMESPACE, id);
     if (exists(preludeId)) return { kind: "qualified", flat: preludeId };
+    // The bare name matches no reachable namespace, but it may EXIST in a namespace
+    // this file did not import — report `unreachable` (with the namespace to import)
+    // rather than `undefined`. Scan the known ids (source-declared + base nodes) for
+    // one whose local name matches and that carries a (non-null) namespace. Only runs
+    // on the miss path, so the scan cost is paid solely for a failing reference.
+    const unreachableNs = resolveRefUnreachableNs(id);
+    if (unreachableNs !== null) return { kind: "unreachable", ns: unreachableNs };
     return { kind: "undefined" };
   };
   return { nsOf, exists, reachable, resolveRef };

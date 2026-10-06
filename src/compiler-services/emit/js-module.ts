@@ -89,7 +89,7 @@ export function toMetaModule(model: Repository, options: MetaModuleOptions): str
 function emitConcept(model: Repository, concept: string): string
 {
   const schema = model.schemaOf(concept);
-  const cls = pascalCase(concept);
+  const cls = jsIdentifier(concept);
   const i = "    ";
   const lines: string[] = [];
   lines.push(`export class ${cls} extends Observable {`);
@@ -197,7 +197,7 @@ function relationshipEntries(rel: RelationshipSchema): string[]
 
 function emitTaxonomy(model: Repository, taxonomyId: string): string
 {
-  const name = pascalCase(taxonomyId);
+  const name = jsIdentifier(taxonomyId);
   const i = "    ";
   const bare = (qualified: string): string => {
     const node = model.resolve(qualified);
@@ -255,14 +255,14 @@ function emitRegistry(
   lines.push(`${i}concepts: {`);
   for (const concept of concepts)
   {
-    lines.push(`${i}${i}${jsKey(concept)}: ${pascalCase(concept)}.schema,`);
+    lines.push(`${i}${i}${jsKey(concept)}: ${jsIdentifier(concept)}.schema,`);
   }
   lines.push(`${i}},`);
 
   lines.push(`${i}constructors: {`);
   for (const concept of concepts)
   {
-    const cls = pascalCase(concept);
+    const cls = jsIdentifier(concept);
     lines.push(`${i}${i}${jsKey(concept)}: data => new ${cls}(data ?? {}),`);
   }
   lines.push(`${i}},`);
@@ -270,7 +270,7 @@ function emitRegistry(
   lines.push(`${i}taxonomies: {`);
   for (const taxonomyId of taxonomies)
   {
-    lines.push(`${i}${i}${jsKey(taxonomyId)}: ${pascalCase(taxonomyId)},`);
+    lines.push(`${i}${i}${jsKey(taxonomyId)}: ${jsIdentifier(taxonomyId)},`);
   }
   lines.push(`${i}},`);
 
@@ -310,6 +310,16 @@ function resolvesHint(type: string, card: Cardinality): string | null
 }
 
 // ── String helpers ────────────────────────────────────────────────────
+
+/** A valid, collision-safe JS identifier for a (namespace-qualified) node id used
+ *  as an export binding: every run of non-identifier chars — notably the `.`
+ *  namespace separator and `-` — collapses to `_` (`ea.MS.azure` → `ea_MS_azure`).
+ *  Applied to both the declaration name and every reference to it so the emitted
+ *  module is self-consistent. */
+function jsIdentifier(id: string): string
+{
+  return id.replace(/[^A-Za-z0-9_$]+/g, "_");
+}
 
 /** `component-category` → `ComponentCategory`. */
 function pascalCase(slug: string): string

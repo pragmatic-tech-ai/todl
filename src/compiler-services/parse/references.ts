@@ -142,14 +142,10 @@ export function visitReferences(decl: Declaration, visit: Visit): void
       // Walk the term hierarchy, emitting value refs in each term's assignments. A
       // term's id is namespaced as `<taxonomy>.<term>` for diagnostics.
       const walkTerm = (t: Term): void => {
-        // A multi-concept term names which represented concept it classifies; that
-        // name is an ordinary concept reference (qualified → flat), so it joins the
-        // unified walk and is rewritten in place like any other.
-        if (t.concept !== null)
-        {
-          visit({ name: t.concept, span: t.span, role: RefRole.RecordConcept,
-            ownerNode: `${decl.name}.${t.id}`, memberPath: null, rewrite: (r) => { (t as { concept: string | null }).concept = r; } });
-        }
+        // NB a term's `concept` names which REPRESENTED concept it classifies; it is
+        // matched against the taxonomy's `represents` list by the loader (by local
+        // name / qualified id), NOT through the global name resolver — so it is
+        // deliberately not emitted here as a reference to resolve.
         annotationRefs(t.annotations, `${decl.name}.${t.id}`);
         for (const a of t.assignments) visitValueRefs(a.value, `${decl.name}.${t.id}`, a.name, a.span, scope, visit);
         t.children.forEach(walkTerm);

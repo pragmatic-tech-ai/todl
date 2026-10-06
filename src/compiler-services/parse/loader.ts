@@ -540,6 +540,13 @@ export function loadInto(
         const represented = new Set(decl.represents);
         const multi = decl.represents.length > 1;
         const primary = decl.represents[0] ?? "";
+        // A term's authored `concept` names one of the REPRESENTED concepts — matched
+        // against the (now-qualified) represents list by exact id or local name, so a
+        // bare `Technology` inside `represents ea.Technology` normalizes to the
+        // qualified `ea.Technology` without needing a namespace import. A name that
+        // matches nothing is left as written so the not-represented error still fires.
+        const normConcept = (name: string | null): string | null =>
+          name === null ? null : (decl.represents.find((c) => c === name || NodeIdQualifier.LocalId(c) === name) ?? name);
 
         // Build a term, partitioning its nested blocks: a same-concept child is
         // a sub-term (hierarchy); a different but represented concept is a
@@ -560,7 +567,7 @@ export function loadInto(
           const hierarchy: TermInput[] = [];
           for (const child of t.children)
           {
-            const childConcept = child.concept;
+            const childConcept = normConcept(child.concept);
             if (childConcept === null || childConcept === ownConcept)
             {
               hierarchy.push(buildTerm(child, childConcept ?? ownConcept));
@@ -576,7 +583,7 @@ export function loadInto(
                 // The bare taxonomy name — applyInstance qualifies the synthesized
                 // `<taxonomy>.<term>` id by the home namespace, giving the same
                 // canonical `<ns>.<taxonomy>.<term>` the term nodes carry.
-                decl: termToInstanceDecl(decl.name, child),
+                decl: termToInstanceDecl(decl.name, child, normConcept),
               });
             }
             else
@@ -604,14 +611,14 @@ export function loadInto(
           }
           return {
             id: t.id,
-            ...(t.concept !== null ? { concept: t.concept } : {}),
+            ...(t.concept !== null ? { concept: ownConcept } : {}),
             attrs: termLiteralAttrs(t.assignments),
             relationships: [],
             children: hierarchy,
           };
         };
 
-        first.defineTaxonomy(taxonomyId, decl.represents, decl.terms.map((t) => buildTerm(t, t.concept ?? primary)));
+        first.defineTaxonomy(taxonomyId, decl.represents, decl.terms.map((t) => buildTerm(t, normConcept(t.concept) ?? primary)));
         break;
       }
       case DeclKind.Concept:
@@ -935,17 +942,19 @@ function termLiteralAttrs(assignments: AssignmentNode[]): Map<string, Scalar>
  * concept, e.g. a `billing` inside a `technology` term) into an instance
  * declaration — a class-level record applied through the instance machinery so
  * it binds to the parent term's field. Its own children are nested records. */
-function termToInstanceDecl(taxonomy: string, t: Term): InstanceDecl
+function termToInstanceDecl(taxonomy: string, t: Term, normalize: (name: string | null) => string | null): InstanceDecl
 {
   return {
     kind: DeclKind.Instance,
-    concept: t.concept ?? "",
+    // The composition's concept is one of the taxonomy's represented concepts;
+    // normalize it to the qualified id so its type edge + field binding resolve.
+    concept: normalize(t.concept) ?? "",
     id: `${taxonomy}.${t.id}`,
     binds: null,
     isClass: true,
     instanceOf: null,
     assignments: t.assignments,
-    children: t.children.map((c) => termToInstanceDecl(taxonomy, c)),
+    children: t.children.map((c) => termToInstanceDecl(taxonomy, c, normalize)),
     annotations: [],
     edges: [],
     span: t.span,
