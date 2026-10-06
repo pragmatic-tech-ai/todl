@@ -114,7 +114,7 @@ export {
     type PackageStore,
     type PackageSink,
 } from './publish/stores.js';
-export { deriveClasses, projectAnnotations } from './publish/reflect.js';
+export { deriveClasses, projectAnnotations, AnnotationProjector } from './publish/reflect.js';
 export { StoragePackageSource } from './solution-services/package-manager/storage-package-source.js';
 export {
     ProjectType,

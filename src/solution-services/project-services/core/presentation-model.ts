@@ -3,7 +3,7 @@
 // share. No I/O, no mural import; deterministic text only. Static methods on one type
 // rather than free functions — the OOP counterpart of the former functional module.
 
-import { projectAnnotations } from '../../../publish/reflect.js'
+import { AnnotationProjector } from '../../../publish/reflect.js'
 import { type TodlDocument, type JsonNode } from '../../../compiler-services/emit/json.js'
 
 // The ontology-tier typeOf values presented as first-class entities. `field` (concept
@@ -41,7 +41,8 @@ export class PresentationResourceEmitter
     // both are optional on the prelude base) still counts as a declared resource.
     public static DeclaresResources(document: TodlDocument, closure: TodlDocument): boolean
     {
-        return document.nodes.some((n) => PresentationResourceEmitter.ProjectedMuralResource(n, closure) !== undefined)
+        const projector = new AnnotationProjector(closure)
+        return document.nodes.some((n) => PresentationResourceEmitter.ProjectedMuralResource(n, projector) !== undefined)
     }
 
     // Distinct resource paths declared by own nodes, sorted — the SVGs the generated
@@ -51,28 +52,35 @@ export class PresentationResourceEmitter
     // required here — there is nothing to `include` without one.
     public static DistinctIcons(document: TodlDocument, closure: TodlDocument): readonly string[]
     {
+        return PresentationResourceEmitter.DistinctIconsWith(document, new AnnotationProjector(closure))
+    }
+
+    // DistinctIcons against a pre-built projector — the shared inner loop so a bake
+    // that also assigns keys / builds the icon index projects the closure only once.
+    private static DistinctIconsWith(document: TodlDocument, projector: AnnotationProjector): readonly string[]
+    {
         const set = new Set<string>()
         for (const n of document.nodes)
         {
-            const path = PresentationResourceEmitter.MuralResourcePath(n, closure)
+            const path = PresentationResourceEmitter.MuralResourcePath(n, projector)
             if (path !== undefined) set.add(path)
         }
         return [...set].sort()
     }
 
-    // The projected MuralResource-inherited params bag for one node (own or closure),
-    // or undefined if none of its annotations inherit MuralResource. The bridge
-    // between an own node and the closure it must be projected against.
-    private static ProjectedMuralResource(node: JsonNode, closure: TodlDocument): Record<string, unknown> | undefined
+    // The projected MuralResource-inherited params bag for one node, or undefined if
+    // none of its annotations inherit MuralResource. The bridge between an own node and
+    // the closure projector it must be projected against.
+    private static ProjectedMuralResource(node: JsonNode, projector: AnnotationProjector): Record<string, unknown> | undefined
     {
-        return projectAnnotations(closure, node.id)[PresentationResourceEmitter.MuralResourceAnnotation]
+        return projector.Project(node.id)[PresentationResourceEmitter.MuralResourceAnnotation]
     }
 
     // The MuralResource-inherited resource path for one node, or undefined if none of
     // its annotations inherit MuralResource or the inherited application sets no path.
-    private static MuralResourcePath(node: JsonNode, closure: TodlDocument): string | undefined
+    private static MuralResourcePath(node: JsonNode, projector: AnnotationProjector): string | undefined
     {
-        const path = PresentationResourceEmitter.ProjectedMuralResource(node, closure)?.[PresentationResourceEmitter.PathAttr]
+        const path = PresentationResourceEmitter.ProjectedMuralResource(node, projector)?.[PresentationResourceEmitter.PathAttr]
         return (typeof path === 'string' && path.length > 0) ? path : undefined
     }
 
@@ -122,9 +130,16 @@ export class PresentationResourceEmitter
     // follows DistinctIcons.
     public static AssignResourceKeys(document: TodlDocument, closure: TodlDocument): Map<string, string>
     {
+        return PresentationResourceEmitter.AssignResourceKeysWith(document, new AnnotationProjector(closure))
+    }
+
+    // AssignResourceKeys against a pre-built projector — lets a bake assign keys and
+    // build the icon index from one shared projection of the closure.
+    private static AssignResourceKeysWith(document: TodlDocument, projector: AnnotationProjector): Map<string, string>
+    {
         const out = new Map<string, string>()
         const used = new Map<string, number>()
-        for (const path of PresentationResourceEmitter.DistinctIcons(document, closure))
+        for (const path of PresentationResourceEmitter.DistinctIconsWith(document, projector))
         {
             const base = PresentationResourceEmitter.IconKey(path)
             const n = used.get(base) ?? 0
@@ -152,15 +167,16 @@ export class PresentationResourceEmitter
     // stamped key reaches model.json.
     public static StampResourceKeys(document: TodlDocument, closure: TodlDocument): void
     {
-        const keys = PresentationResourceEmitter.AssignResourceKeys(document, closure)
+        const projector = new AnnotationProjector(closure)
+        const keys = PresentationResourceEmitter.AssignResourceKeysWith(document, projector)
         if (keys.size === 0) return
         const ownNodeById = new Map(document.nodes.map((n) => [n.id, n]))
         for (const target of document.nodes)
         {
-            // One call, reused below for the alias check — `projectAnnotations` builds a
-            // fresh params object per call, so a second call would never be
+            // One projection, reused below for the alias check — `Project` builds a fresh
+            // params object per call, so a second projection would never be
             // reference-equal to `muralResource` even for the same application.
-            const annotations = projectAnnotations(closure, target.id)
+            const annotations = projector.Project(target.id)
             const muralResource = annotations[PresentationResourceEmitter.MuralResourceAnnotation]
             if (muralResource === undefined) continue
             const path = muralResource[PresentationResourceEmitter.PathAttr]
@@ -201,12 +217,17 @@ export class PresentationResourceEmitter
     // way DeclaresResources/DistinctIcons do.
     public static BuildIconIndex(document: TodlDocument, closure: TodlDocument, prefix: string): Map<string, string>
     {
+        // One projector over the closure, one key assignment — both reused across every
+        // entity. Resolving the key per entity via ResourceKeyFor (re-projecting the
+        // whole closure each time) made this cubic in the closure size on large bakes.
+        const projector = new AnnotationProjector(closure)
+        const keys = PresentationResourceEmitter.AssignResourceKeysWith(document, projector)
         const out = new Map<string, string>()
         for (const n of [...PresentationResourceEmitter.OntologyEntities(document), ...PresentationResourceEmitter.ClassEntities(document)])
         {
-            const { icon } = PresentationResourceEmitter.ResolveFacets(n, projectAnnotations(closure, n.id))
+            const { icon } = PresentationResourceEmitter.ResolveFacets(n, projector.Project(n.id))
             if (icon === undefined) continue
-            out.set(prefix + n.id, PresentationResourceEmitter.ResourceKeyFor(document, closure, icon))
+            out.set(prefix + n.id, keys.get(icon) ?? PresentationResourceEmitter.IconKey(icon))
         }
         return out
     }

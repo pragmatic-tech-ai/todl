@@ -5,7 +5,7 @@
  */
 
 import { MetaKind } from "../compiler-services/model/kinds.js";
-import type { TodlDocument } from "../compiler-services/emit/json.js";
+import type { TodlDocument, JsonNode, JsonEdge } from "../compiler-services/emit/json.js";
 
 const ANNOTATED = "Annotated";
 const EXTENDS = "Extends";
@@ -26,53 +26,97 @@ export interface PublishedClass
 }
 
 /**
- * Project a target node's annotations from a compiled document: walk the
- * `Annotated` edges out of `targetId` to its application nodes, key each by the
- * application's `typeOf` (the annotation name), value = the application's scalar
- * attrs with the `namespace` provenance stamp removed. No annotations → `{}`.
+ * Projects node annotations from one compiled document, built once and reused
+ * across many target nodes. The constructor indexes the model — the annotation
+ * is-a chain (`Extends`), a node-by-id map, and `Annotated` edges grouped by
+ * their source node — so each `Project` is O(the target's own annotations)
+ * rather than a full O(nodes + edges) scan with a linear `nodes.find` per edge.
  *
- * Polymorphic (annotation inheritance): an application of a sub-annotation IS-A
- * its base, so it is also indexed under every ancestor annotation name up the
- * `Extends` chain — a consumer reading the base name finds specialized
- * applications. Two sub-annotations of one base on a target: last-wins.
+ * Callers that project many targets against one closure (presentation baking's
+ * per-entity icon index, `deriveClasses` over every class) MUST share a single
+ * projector; constructing one per target reintroduces the quadratic cost this
+ * class exists to remove. The free `projectAnnotations` below is the one-shot
+ * convenience for a single target.
  */
-export function projectAnnotations(model: TodlDocument, targetId: string): Record<string, Record<string, unknown>>
+export class AnnotationProjector
 {
-  // Annotation-declaration nodes and their direct base, to walk the is-a chain.
-  const annIds = new Set(model.nodes.filter((n) => n.metaKind === MetaKind.Annotation).map((n) => n.id));
-  const baseOf = new Map<string, string>();
-  for (const e of model.edges)
+  // Direct `Extends` base of each annotation-declaration node, for the is-a walk.
+  private readonly baseOf = new Map<string, string>();
+  private readonly nodeById = new Map<string, JsonNode>();
+  // `Annotated` edges keyed by their `from` (the annotated target node).
+  private readonly annotatedByTarget = new Map<string, JsonEdge[]>();
+
+  public constructor(model: TodlDocument)
   {
-    if (e.kind === EXTENDS && annIds.has(String(e.from))) baseOf.set(String(e.from), String(e.to));
+    const annIds = new Set(model.nodes.filter((n) => n.metaKind === MetaKind.Annotation).map((n) => n.id));
+    for (const n of model.nodes) this.nodeById.set(n.id, n);
+    for (const e of model.edges)
+    {
+      if (e.kind === EXTENDS && annIds.has(e.from)) this.baseOf.set(e.from, e.to);
+      else if (e.kind === ANNOTATED)
+      {
+        const list = this.annotatedByTarget.get(e.from);
+        if (list === undefined) this.annotatedByTarget.set(e.from, [e]);
+        else list.push(e);
+      }
+    }
   }
-  const chain = (name: string): string[] => {
+
+  // The annotation name plus every ancestor up the `Extends` chain (cycle-safe).
+  private Chain(name: string): string[]
+  {
     const names = [name];
     const seen = new Set([name]);
-    let cur = baseOf.get(name);
+    let cur = this.baseOf.get(name);
     while (cur !== undefined && !seen.has(cur))
     {
       names.push(cur);
       seen.add(cur);
-      cur = baseOf.get(cur);
+      cur = this.baseOf.get(cur);
     }
     return names;
-  };
-
-  const out: Record<string, Record<string, unknown>> = {};
-  for (const edge of model.edges)
-  {
-    if (edge.kind !== ANNOTATED || edge.from !== targetId) continue;
-    const appNode = model.nodes.find((n) => n.id === edge.to);
-    if (appNode === undefined) continue;
-    const params: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(appNode.attrs as Record<string, unknown>))
-    {
-      if (k === NAMESPACE_ATTR) continue;
-      params[k] = v;
-    }
-    for (const name of chain(appNode.type ?? "")) out[name] = params;
   }
-  return out;
+
+  /**
+   * The projected annotation bag for one target: `Annotated` edges out of
+   * `targetId` keyed by the application's annotation name, value = its scalar
+   * attrs minus the `namespace` provenance stamp. No annotations → `{}`.
+   *
+   * Polymorphic: an application of a sub-annotation IS-A its base, so it is also
+   * indexed under every ancestor name up the `Extends` chain. The same params
+   * object is aliased under each ancestor name of one application (reference
+   * identity consumers rely on). Two sub-annotations of one base: last-wins.
+   */
+  public Project(targetId: string): Record<string, Record<string, unknown>>
+  {
+    const out: Record<string, Record<string, unknown>> = {};
+    const edges = this.annotatedByTarget.get(targetId);
+    if (edges === undefined) return out;
+    for (const edge of edges)
+    {
+      const appNode = this.nodeById.get(edge.to);
+      if (appNode === undefined) continue;
+      const params: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(appNode.attrs as Record<string, unknown>))
+      {
+        if (k === NAMESPACE_ATTR) continue;
+        params[k] = v;
+      }
+      for (const name of this.Chain(appNode.type ?? "")) out[name] = params;
+    }
+    return out;
+  }
+}
+
+/**
+ * Project a single target node's annotations from a compiled document — the
+ * one-shot convenience over {@link AnnotationProjector}. Callers that project
+ * many targets against one document must build an `AnnotationProjector` once and
+ * reuse it instead of calling this in a loop (see that class's note).
+ */
+export function projectAnnotations(model: TodlDocument, targetId: string): Record<string, Record<string, unknown>>
+{
+  return new AnnotationProjector(model).Project(targetId);
 }
 
 /**
@@ -88,6 +132,7 @@ export function deriveClasses(model: TodlDocument, annotationsFrom?: TodlDocumen
   // while still resolving icons that inherit from base annotation declarations in
   // the full closure (the special→icon chain).
   const annModel = annotationsFrom ?? model;
+  const projector = new AnnotationProjector(annModel);
   const out: PublishedClass[] = [];
   for (const n of model.nodes)
   {
@@ -97,7 +142,7 @@ export function deriveClasses(model: TodlDocument, annotationsFrom?: TodlDocumen
     if (n.localId !== null) cls.localId = n.localId;
     else if (typeof attrs.id === "string") cls.localId = attrs.id;
     if (typeof attrs.label === "string") cls.label = attrs.label;
-    const iconAnn = projectAnnotations(annModel, n.id)[ICON_ANNOTATION];
+    const iconAnn = projector.Project(n.id)[ICON_ANNOTATION];
     const iconPath = iconAnn === undefined ? undefined : iconAnn.path;
     if (typeof iconPath === "string") cls.icon = iconPath;
     out.push(cls);
