@@ -24,6 +24,21 @@ class ReplaceFixture
         return (g.DiagnosticsByUri().get(uri) ?? []).filter(d => d.severity === Severity.Error).length;
     }
 
+    // The full edge set of a graph, keyed by endpoints + kind + realising member node, so
+    // an edge regression (same node COUNT, different edges) bites — not just node presence.
+    public static EdgeKeys(g: SolutionGraph): string[]
+    {
+        const keys: string[] = [];
+        for (const n of g.Model.allNodes())
+        {
+            for (const e of g.Model.outEdges(n.id))
+            {
+                keys.push(`${String(e.from)}|${e.kind}|${String(e.via ?? '')}|${String(e.to)}`);
+            }
+        }
+        return keys.sort();
+    }
+
     public static async Built(arch: { uri: string; text: string } = ARCH): Promise<SolutionGraph>
     {
         const g = new SolutionGraph();
@@ -49,6 +64,8 @@ describe('SolutionGraph.ReplaceMember', () =>
             assert.ok(g.Model.has(n.id), `missing ${n.id}`);
         }
         assert.equal(g.Model.allNodes().length, rebuilt.Model.allNodes().length);
+        // Edge-set parity too, so a regressed edge set with the same node count is caught.
+        assert.deepEqual(ReplaceFixture.EdgeKeys(g), ReplaceFixture.EdgeKeys(rebuilt));
     });
 
     test('editing a base member cascades to dependents', async () =>
@@ -121,5 +138,24 @@ describe('SolutionGraph.ReplaceMember', () =>
         assert.ok(before > 0, 'base source reports an error');
         g.ReplaceMember('other', [OTHER]);
         assert.equal(ReplaceFixture.ErrorCount(g, 'lib/lib.todl'), before, 'unaffected diagnostics retained');
+    });
+
+    test('a replace whose source throws mid-load repairs to a consistent graph and still emits', async () =>
+    {
+        const g = await ReplaceFixture.Built();
+        const before = g.Model.allNodes().length;
+        assert.ok(g.Model.has('app.p'));
+        const emits: SolutionGraphChange[] = [];
+        g.Changed.subscribe(c => { emits.push(c); });
+
+        // Two `concept Dup` in one member's sources — builder.commit throws mid-reload, the
+        // routine transient while a user is typing a second declaration.
+        const dup = { uri: 'arch/a.todl', text: 'namespace app { import ea; concept Dup { } concept Dup { } }' };
+        assert.doesNotThrow(() => g.ReplaceMember('arch', [dup]));
+
+        assert.ok(emits.length >= 1, 'a Changed event fired despite the failed edit');
+        assert.ok(g.Model.has('app.p'), 'prior arch node restored, not silently stripped');
+        assert.equal(g.Model.allNodes().length, before, 'node set restored to last-good');
+        assert.deepEqual(g.Model.danglingRefs(), [], 'graph left consistent');
     });
 });

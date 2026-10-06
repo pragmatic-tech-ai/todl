@@ -164,7 +164,7 @@ test("Resources through the service resolves an icon annotation to its source me
     const world = new World();
     await world.Service.Ready();
 
-    const res = world.Service.Resources("lib.MS.azure");
+    const res = await world.Service.Resources("lib.MS.azure");
     assert.equal(res.length, 1);
     assert.equal(res[0]!.path, "resources/azure.svg");
     assert.equal(res[0]!.storage, world.Lib);

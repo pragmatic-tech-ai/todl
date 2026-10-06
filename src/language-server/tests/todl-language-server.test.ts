@@ -37,7 +37,7 @@ class FakeService implements ILanguageService
     async ProducedIdOf(): Promise<undefined> { return undefined; }
     get StaleMembers(): ReadonlySet<string> { return new Set(); }
     async ModelView(): Promise<undefined> { return undefined; }
-    Resources(): ResolvedResource[] { return []; }
+    async Resources(): Promise<ResolvedResource[]> { return []; }
     readonly GraphChanged = new Signal<SolutionGraphChange>();
 }
 

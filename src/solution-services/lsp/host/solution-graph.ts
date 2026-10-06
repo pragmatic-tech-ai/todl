@@ -95,10 +95,16 @@ export class SolutionGraph
 
     public async Build(members: readonly SolutionGraphMember[]): Promise<void>
     {
-        // Order FIRST: a duplicate id / cycle throws here, before any state is assembled,
-        // so the prior graph stays intact. The rest builds into a LOCAL bag and is swapped
-        // in only after every loadInto + validate succeeds, so a throw anywhere mid-build
-        // likewise leaves the prior graph untouched.
+        this.BuildInternal(members);
+    }
+
+    // The transactional build core shared by Build and the ReplaceMember repair path:
+    // order FIRST (a duplicate id / cycle throws here, before any state is assembled, so
+    // the prior graph stays intact), assemble into a LOCAL bag, and swap it in only after
+    // every loadInto + validate succeeds — a throw anywhere mid-build likewise leaves the
+    // prior graph untouched. On success, emit with every member id built (empty clears).
+    private BuildInternal(members: readonly SolutionGraphMember[]): void
+    {
         const ordered = this.TopoOrder(members);
         const state = SolutionGraph.FreshState(this.DistinctBases(members));
         for (const member of ordered)
@@ -108,10 +114,19 @@ export class SolutionGraph
             this.LoadMember(state, member, member.sources);
         }
         this.RebuildDiagnostics(state);
-        // Commit atomically only after the whole build succeeded, then notify: a subscriber
-        // holding the old Repository must learn its view was swapped (empty id list clears).
         this.state = state;
         this.Changed.emit({ memberIds: [...state.membersById.keys()] });
+    }
+
+    // A transactional full rebuild from the CURRENT member set, each member's sources
+    // taken from the live sourcesOf map (so in-flight edits are honored). Reuses
+    // BuildInternal, so a throw leaves the prior graph intact. The repair path for a
+    // failed incremental ReplaceMember.
+    private RebuildFromState(): void
+    {
+        const members = [...this.state.membersById.values()].map(
+            (m) => ({ ...m, sources: this.state.sourcesOf.get(m.id) ?? m.sources }));
+        this.BuildInternal(members);
     }
 
     /** Members whose baseIds include `memberId`, transitively. */
@@ -141,21 +156,54 @@ export class SolutionGraph
         {
             throw new Error(`${SolutionGraph.UnknownMemberMessage}: ${memberId}`);
         }
+        // Capture the member's last-good sources, then record the edit up front so BOTH the
+        // incremental path below and any repair rebuild honor it.
+        const priorSources = [...(state.sourcesOf.get(memberId) ?? [])];
+        state.sourcesOf.set(memberId, [...sources]);
         const affectedSet = new Set<string>([memberId, ...this.DependentsOf(memberId)]);
         const affected = this.TopoOrder([...state.membersById.values()])
             .filter(m => affectedSet.has(m.id));
 
-        for (const member of affected)
+        try
         {
-            this.RemoveOwnedNodes(state, member.id);
+            // Incremental happy path: strip + reload only the affected members in place.
+            for (const member of affected)
+            {
+                this.RemoveOwnedNodes(state, member.id);
+            }
+            for (const member of affected)
+            {
+                this.LoadMember(state, member, state.sourcesOf.get(member.id) ?? []);
+            }
+            this.RebuildDiagnostics(state);
+            this.Changed.emit({ memberIds: affected.map(m => m.id) });
         }
-        state.sourcesOf.set(memberId, [...sources]);
-        for (const member of affected)
+        catch
         {
-            this.LoadMember(state, member, state.sourcesOf.get(member.id) ?? []);
+            // loadInto can throw mid-reload (e.g. builder.commit "node already exists" on a
+            // duplicate declaration while typing), leaving `state` half-stripped. Repair to
+            // a consistent graph via a transactional rebuild so no nodes silently vanish and
+            // a Changed event still fires.
+            this.RepairFailedReplace(memberId, priorSources);
         }
-        this.RebuildDiagnostics(state);
-        this.Changed.emit({ memberIds: affected.map(m => m.id) });
+    }
+
+    // Repair the graph after a failed incremental ReplaceMember. First try a transactional
+    // rebuild honoring the edit (sources already in sourcesOf); if the edit itself is
+    // uncompilable that rebuild throws too, so fall back to rebuilding from the member's
+    // last-good sources, which is known to compile. Either way `this.state` ends consistent
+    // and a Changed event has fired.
+    private RepairFailedReplace(memberId: string, priorSources: readonly SourceFile[]): void
+    {
+        try
+        {
+            this.RebuildFromState();
+        }
+        catch
+        {
+            this.state.sourcesOf.set(memberId, [...priorSources]);
+            this.RebuildFromState();
+        }
     }
 
     private LoadMember(state: GraphState, member: SolutionGraphMember, sources: readonly SourceFile[]): void

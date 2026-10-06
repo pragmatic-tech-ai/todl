@@ -283,8 +283,9 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     // The resources a node declares (icon / MuralResource annotations carrying a path),
     // resolved to a concrete storage via the shared graph's origin map. A local member's
     // resource lands on its own storage; a published one on the packages backend.
-    public Resources(nodeId: string): ResolvedResource[]
+    public async Resources(nodeId: string): Promise<ResolvedResource[]>
     {
+        await this.warmup;
         return new ResourceLocator(this.solutionGraph.Model, this.solutionGraph.OriginOf, this.PackagesStorage()).Resources(nodeId);
     }
 
@@ -713,7 +714,11 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
         if (this.disposed) return;
         try
         {
-            await this.solutionGraph.Build(await this.AssembleMembers());
+            const members = await this.AssembleMembers();
+            // Re-check after the await: dispose() may have run while assembling, and a Build
+            // here would emit GraphChanged to subscribers after teardown.
+            if (this.disposed) return;
+            await this.solutionGraph.Build(members);
             this.lastGraphBuildError = undefined;
         }
         catch (error)
@@ -825,7 +830,11 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
         if (!this.solutionGraph.Has(id)) return;
         try
         {
-            this.solutionGraph.ReplaceMember(id, await this.SourcesForMember(owner.storage, owner.manifest.type));
+            const sources = await this.SourcesForMember(owner.storage, owner.manifest.type);
+            // Re-check after the await: dispose() may have run, and ReplaceMember would emit
+            // GraphChanged to subscribers after teardown.
+            if (this.disposed) return;
+            this.solutionGraph.ReplaceMember(id, sources);
         }
         catch
         {
