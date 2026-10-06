@@ -26,4 +26,20 @@ describe('.todl round-trip under qualified ids', () =>
         assert.ok(again.model.outEdges('app.a').some(e => e.to === 'lib.MS.azure'));
         assert.match(text, /uses lib\.MS\b/);
     });
+
+    test('same-namespace reference is written namespace-stripped and re-resolves qualified', () =>
+    {
+        const metaRepo = check([META]).model;
+        const libRepo = checkAgainst([toJSON(metaRepo)], [LIB]).model;
+        const bases = [metaRepo, libRepo];
+
+        const draft = ModelDraft.fromSource(bases, 'namespace lib { import ea; model m : ea uses MS { App a { loc = MS.azure; } } }', { namespace: 'lib' });
+        const text = draft.toTodl();
+        assert.match(text, /loc = MS\.azure;/);
+        assert.doesNotMatch(text, /lib\.MS\.azure/);
+
+        const again = ModelDraft.fromSource(bases, text, { namespace: 'lib' });
+        assert.deepEqual(again.model.danglingRefs(), []);
+        assert.ok(again.model.outEdges('lib.a').some(e => e.to === 'lib.MS.azure'));
+    });
 });
