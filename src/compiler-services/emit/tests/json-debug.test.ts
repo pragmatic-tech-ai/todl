@@ -41,12 +41,13 @@ test("debug on: concept/model/instance carry readable kind + name + type + names
   assert.deepEqual(model.resolve("app.Component")!.fields, [
     { name: "label", type: "string", cardinality: 0 },
   ]);
+  // `name` is the BARE localId (the readable written id), while `id` stays qualified.
   assert.deepEqual(byId("app.M")?.debug, {
-    kind: "model", name: "app.M", type: "model", namespace: "app",
+    kind: "model", name: "M", type: "model", namespace: "app",
   });
   // The interesting one: an instance names the concept it instantiates.
   assert.deepEqual(byId("app.c")?.debug, {
-    kind: "instance", name: "app.c", type: "app.Component", namespace: "app",
+    kind: "instance", name: "c", type: "app.Component", namespace: "app",
   });
 });
 
@@ -54,7 +55,7 @@ test("debug on: edges carry readable from/to (behind the opaque endpoint ids)", 
   const { model } = compile();
   const doc = toJSON(model, { debug: true });
   const contains = doc.edges.find((e) => e.kind === "Contains" && e.from === "app.M");
-  assert.deepEqual(contains?.debug, { from: "app.M", to: "app.c" });
+  assert.deepEqual(contains?.debug, { from: "M", to: "c" });
   // No `HasField` edge exists — scalar field schema lives on the concept node now.
   assert.equal(doc.edges.some((e) => e.kind === "HasField"), false);
 });

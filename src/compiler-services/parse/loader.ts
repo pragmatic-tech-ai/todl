@@ -1109,7 +1109,7 @@ function applyModel(
   // same-id blocks merge their instances into it.
   if (!asserted.has(modelId))
   {
-    builder.assertModel(modelId);
+    builder.assertModel(modelId, NodeIdQualifier.LocalId(decl.id));
     recordHome(rec, modelId);
     builder.setField(modelId, "MetaModel", decl.metaModel);
     builder.setField(modelId, "uses.count", decl.libraries.length);
@@ -1168,7 +1168,10 @@ function applyInstance(
   if (first)
   {
     asserted.add(nodeId);
-    builder.assertInstance(decl.concept, nodeId, decl.isClass);
+    // The qualified node id is the identity, but `localId` keeps the BARE written id
+    // (the last segment) so `.todl` emit re-emits `id = <localId>` without the
+    // namespace, and a reload does not re-qualify it into `<ns>.<ns>.<id>`.
+    builder.assertInstance(decl.concept, nodeId, decl.isClass, NodeIdQualifier.LocalId(decl.id));
     recordHome(rec, nodeId);
     // The record name is its identity — carried as the root `localId` (set by
     // assertInstance), no longer surfaced as an `id` attr (SPEC-01: attrs are user-only).

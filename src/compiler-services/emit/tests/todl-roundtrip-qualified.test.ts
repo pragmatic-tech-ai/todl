@@ -42,4 +42,23 @@ describe('.todl round-trip under qualified ids', () =>
         assert.deepEqual(again.model.danglingRefs(), []);
         assert.ok(again.model.outEdges('lib.a').some(e => e.to === 'lib.MS.azure'));
     });
+
+    test('an inline object keeps a BARE localId and round-trips without double-qualifying', () =>
+    {
+        const BOX = { uri: 'mm/box.todl', text: 'namespace ea { concept Box { child : Widget?; } concept Widget { name : string?; } }' };
+        const bases = [check([BOX]).model];
+        const src = 'namespace app { import ea; model m : ea { Box b { child = Widget { id = widget; name = "W"; }; } } }';
+
+        const draft = ModelDraft.fromSource(bases, src, { namespace: 'app' });
+        assert.ok(draft.has('app.widget'), 'inline node is namespace-qualified');
+        assert.equal(draft.model.resolve('app.widget')?.localId, 'widget', 'localId is the BARE written id');
+
+        // Emit then re-load: the inline child is re-emitted as `id = <localId>`, so a
+        // qualified localId would re-qualify to `app.app.widget` and grow each cycle.
+        const text = draft.toTodl();
+        const again = ModelDraft.fromSource(bases, text, { namespace: 'app' });
+        assert.ok(again.has('app.widget'), 'still app.widget after round-trip');
+        assert.ok(!again.has('app.app.widget'), 'no double-qualification');
+        assert.equal(again.model.resolve('app.widget')?.localId, 'widget', 'localId stays bare across round-trip');
+    });
 });
