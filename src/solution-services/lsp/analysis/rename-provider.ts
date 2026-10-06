@@ -1,5 +1,7 @@
 import type { Range, Position, WorkspaceEdit, TextEdit } from "vscode-languageserver-types";
 import type { AnalysisSnapshot } from "./analysis-snapshot.js";
+import { WrittenSymbolResolver } from "./written-symbol-resolver.js";
+import { NodeIdQualifier } from "../../../compiler-services/parse/node-id-qualifier.js";
 
 export interface RenameError { Error: string }
 
@@ -18,13 +20,22 @@ export class RenameProvider
         const target = this.resolve(a, uri, pos);
         if (target === null) return { Error: RenameProvider.NothingToRename };
         if (!RenameProvider.Kebab.test(newName)) return { Error: `"${newName}" is not a valid kebab-case name.` };
-        if (a.Model.has(newName)) return { Error: `"${newName}" already exists.` };
+        const ast = a.Sources.get(uri)?.ast;
+        if (a.Model.has(NodeIdQualifier.Qualify(ast === undefined || ast.path === "" ? null : ast.path, newName))) return { Error: `"${newName}" already exists.` };
 
         const symbol = target.symbol;
         const edits: { uri: string; edit: TextEdit }[] = [];
-        const def = a.Defs.Get(symbol);
-        if (def !== null) edits.push({ uri: def.Uri, edit: { range: def.NameRange, newText: newName } });
-        for (const occ of a.Refs.Get(symbol)) edits.push({ uri: occ.Uri, edit: { range: occ.Range, newText: newName } });
+        // Indexes are keyed by written text: translate each to its qualified id at query time.
+        const qid = WrittenSymbolResolver.ResolveIn(a, uri, symbol);
+        const same = (u: string, w: string): boolean => qid === undefined ? w === symbol : WrittenSymbolResolver.ResolveIn(a, u, w) === qid;
+        for (const def of a.Defs.All())
+        {
+            if (same(def.Uri, def.Symbol)) edits.push({ uri: def.Uri, edit: { range: def.NameRange, newText: newName } });
+        }
+        for (const occ of a.Refs.All())
+        {
+            if (occ.Symbol !== "" && same(occ.Uri, occ.Symbol)) edits.push({ uri: occ.Uri, edit: { range: occ.Range, newText: newName } });
+        }
 
         const changes: Record<string, TextEdit[]> = {};
         for (const { uri: u, edit } of edits) (changes[u] ??= []).push(edit);

@@ -808,7 +808,7 @@ export function loadInto(
 
   // Stamp every declaration/instance/assignment with its source span, so downstream
   // diagnostics (validate, the language server) can point back at the exact text.
-  recordSpans(model, declarations);
+  recordSpans(model, units);
   return diagnostics;
 }
 
@@ -826,47 +826,48 @@ export function loadInto(
 // ══════════════════════════════════════════════════════════════════════════════
 
 /** Record each declaration's, instance's, and assignment's source span on the model. */
-function recordSpans(model: Repository, declarations: Declaration[]): void
+function recordSpans(model: Repository, units: readonly { ns: string; decl: Declaration }[]): void
 {
-  for (const declaration of declarations)
+  for (const { ns, decl: declaration } of units)
   {
     switch (declaration.kind)
     {
       case DeclKind.Primitive:
       case DeclKind.Concept:
       case DeclKind.Viewpoint:
-        model.recordSpan(declaration.name, declaration.span);
+        model.recordSpan(NodeIdQualifier.Qualify(ns, declaration.name), declaration.span);
         break;
       case DeclKind.Taxonomy:
       {
-        model.recordSpan(declaration.name, declaration.span);
+        model.recordSpan(NodeIdQualifier.Qualify(ns, declaration.name), declaration.span);
         const record = (t: Term): void => {
-          model.recordSpan(`${declaration.name}.${t.id}`, t.span);
+          model.recordSpan(`${NodeIdQualifier.Qualify(ns, declaration.name)}.${t.id}`, t.span);
           t.children.forEach(record);
         };
         declaration.terms.forEach(record);
         break;
       }
       case DeclKind.Instance:
-        recordInstanceSpans(model, declaration);
+        recordInstanceSpans(model, declaration, ns);
         break;
       case DeclKind.Model:
-        model.recordSpan(declaration.id, declaration.span);
+        const modelId = NodeIdQualifier.Qualify(ns, declaration.id);
+        model.recordSpan(modelId, declaration.span);
         if (declaration.metaModelSpan !== undefined)
         {
-          model.recordSpan(Repository.memberKey(declaration.id, "meta-model"), declaration.metaModelSpan);
+          model.recordSpan(Repository.memberKey(modelId, "meta-model"), declaration.metaModelSpan);
         }
         declaration.librarySpans?.forEach((s, i) =>
-          model.recordSpan(Repository.memberKey(declaration.id, `uses.${i}`), s),
+          model.recordSpan(Repository.memberKey(modelId, `uses.${i}`), s),
         );
         if (declaration.conformsSpan !== undefined)
         {
-          model.recordSpan(Repository.memberKey(declaration.id, "conforms"), declaration.conformsSpan);
+          model.recordSpan(Repository.memberKey(modelId, "conforms"), declaration.conformsSpan);
         }
-        for (const inst of declaration.instances) recordInstanceSpans(model, inst);
+        for (const inst of declaration.instances) recordInstanceSpans(model, inst, ns);
         break;
       case DeclKind.Annotation:
-        model.recordSpan(declaration.name, declaration.span);
+        model.recordSpan(NodeIdQualifier.Qualify(ns, declaration.name), declaration.span);
         break;
       case DeclKind.Package:
         break; // application spans are recorded during the applications pass
@@ -874,17 +875,18 @@ function recordSpans(model: Repository, declarations: Declaration[]): void
   }
 }
 
-function recordInstanceSpans(model: Repository, decl: InstanceDecl): void
+function recordInstanceSpans(model: Repository, decl: InstanceDecl, ns: string): void
 {
-  model.recordSpan(decl.id, decl.span);
+  const id = NodeIdQualifier.Qualify(ns, decl.id);
+  model.recordSpan(id, decl.span);
   for (const assignment of decl.assignments)
   {
     if (assignment.span !== undefined)
     {
-      model.recordSpan(Repository.memberKey(decl.id, assignment.name), assignment.span);
+      model.recordSpan(Repository.memberKey(id, assignment.name), assignment.span);
     }
   }
-  for (const child of decl.children) recordInstanceSpans(model, child);
+  for (const child of decl.children) recordInstanceSpans(model, child, ns);
 }
 
 

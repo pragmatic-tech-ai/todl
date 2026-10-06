@@ -34,9 +34,9 @@ test("DefinitionAt jumps from a taxonomy `represents` target to the concept (cro
 {
     const concepts = "namespace demo.concepts {\n  concept actor { }\n}";
     // `taxonomy Actors : represents Actor` — the reference `actor` starts at col 31.
-    const enums = "namespace demo.enums {\n  taxonomy actors : represents actor { }\n}";
+    const enums = "namespace demo.enums {\n  import demo.concepts;\n  taxonomy actors : represents actor { }\n}";
     const analysis = AnalysisSnapshot.Build([{ uri: "concepts.todl", text: concepts }, { uri: "enums.todl", text: enums }]);
-    const loc = new NavigationProvider().DefinitionAt(analysis, "enums.todl", { line: 1, character: 33 });
+    const loc = new NavigationProvider().DefinitionAt(analysis, "enums.todl", { line: 2, character: 33 });
     assert.equal(loc?.uri, "concepts.todl");
     assert.equal(loc?.range.start.line, 1);   // the `concept Actor` line (0-based)
 });
