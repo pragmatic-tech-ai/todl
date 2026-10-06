@@ -26,6 +26,9 @@ export interface SolutionGraphMember
 export class SolutionGraph
 {
     private static readonly ModelScopeUri = '<model>';
+    private static readonly DuplicateIdMessage = 'Duplicate solution member id';
+    private static readonly CycleMessage = 'Solution member dependency cycle';
+    private static readonly CycleSeparator = ' -> ';
 
     private readonly idGen: IdGenerator = new SnowflakeIdGenerator();
     private model: Repository = new Repository(mergeBases([preludeDocument()]));
@@ -117,16 +120,32 @@ export class SolutionGraph
 
     private TopoOrder(members: readonly SolutionGraphMember[]): SolutionGraphMember[]
     {
-        const byId = new Map(members.map(m => [m.id, m] as const));
+        const byId = new Map<string, SolutionGraphMember>();
+        for (const m of members)
+        {
+            if (byId.has(m.id))
+            {
+                throw new Error(`${SolutionGraph.DuplicateIdMessage}: ${m.id}`);
+            }
+            byId.set(m.id, m);
+        }
         const visited = new Set<string>();
+        const stack: string[] = [];
         const order: SolutionGraphMember[] = [];
         const visit = (m: SolutionGraphMember): void =>
         {
+            const at = stack.indexOf(m.id);
+            if (at >= 0)
+            {
+                const cycle = [...stack.slice(at), m.id].join(SolutionGraph.CycleSeparator);
+                throw new Error(`${SolutionGraph.CycleMessage}: ${cycle}`);
+            }
             if (visited.has(m.id))
             {
                 return;
             }
             visited.add(m.id);
+            stack.push(m.id);
             for (const baseId of m.baseIds)
             {
                 const base = byId.get(baseId);
@@ -135,6 +154,7 @@ export class SolutionGraph
                     visit(base);
                 }
             }
+            stack.pop();
             order.push(m);
         };
         for (const m of members)
