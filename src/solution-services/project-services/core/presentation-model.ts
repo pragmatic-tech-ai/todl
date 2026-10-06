@@ -27,7 +27,8 @@ export class PresentationResourceEmitter
     // extends (`annotation MuralResource { key : resourceKey?; }`), and the two
     // well-known params on such an application: the resource path and its assigned
     // mural resource key.
-    private static readonly MuralResourceAnnotation = 'MuralResource'
+    private static readonly MuralResourceAnnotation = 'todl.MuralResource'
+    private static readonly LabelAnnotation = 'todl.label'
     private static readonly PathAttr = 'path'
     private static readonly KeyAttr = 'key'
     private static readonly AnnotatedEdgeKind = 'Annotated'
@@ -186,7 +187,8 @@ export class PresentationResourceEmitter
     // word. Used as the fallback label when an entity declares no attrs.label.
     public static Humanize(id: string): string
     {
-        return id.split(/[-._]/).filter(Boolean)
+        const local = id.slice(id.lastIndexOf('.') + 1)
+        return local.split(/[-_]/).filter(Boolean)
             .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
             .join(' ')
     }
@@ -220,7 +222,7 @@ export class PresentationResourceEmitter
         const icon = (typeof annIcon === 'string' && annIcon.length > 0) ? annIcon : undefined
 
         const attrLabel = node.attrs['label']
-        const annLabel = annotations['label']?.['text']
+        const annLabel = annotations[PresentationResourceEmitter.LabelAnnotation]?.['text']
         const label = typeof attrLabel === 'string' ? attrLabel
             : typeof annLabel === 'string' ? annLabel
                 : PresentationResourceEmitter.Humanize(node.id)
