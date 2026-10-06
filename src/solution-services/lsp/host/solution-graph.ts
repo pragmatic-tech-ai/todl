@@ -89,6 +89,10 @@ export class SolutionGraph
             this.LoadMember(member, member.sources);
         }
         this.RebuildDiagnostics();
+        // A full build swaps `model`/`originOf` for fresh instances, so a subscriber
+        // holding the old Repository must be told its view changed — emit with every
+        // member id built (empty when the solution was cleared).
+        this.Changed.emit({ memberIds: [...this.membersById.keys()] });
     }
 
     /** Members whose baseIds include `memberId`, transitively. */

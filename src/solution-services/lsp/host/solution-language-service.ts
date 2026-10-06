@@ -104,6 +104,13 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     // `change.kind === …` comparison still narrows the discriminated union.
     private static readonly InsertedKind = "inserted" as const;
     private static readonly RemovedKind = "removed" as const;
+    // The source-file predicate the live-buffer overlay mirrors so a live buffer is
+    // admitted only where the on-disk collect would admit the file: a `.todl` whose
+    // top-level folder is neither the always-excluded build output nor (for a producer)
+    // the samples folder.
+    private static readonly TodlExtension = ".todl";
+    private static readonly BuildOutputDir = "dist";
+    private static readonly SamplesDir = "samples";
 
     private readonly engine: IAnalysisEngine;
     private readonly resolver: SolutionBaseResolver;
@@ -120,6 +127,17 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     // is registered (a headless / test host). A local member's resources resolve to
     // its own OpenProject storage, so this is consulted only for published origins.
     private readonly emptyPackages: IStorage = new FakeStorage();
+    // Per-member-root generation counter coalescing live-edit replaces: DidChange bumps
+    // the root's generation and captures it; the dequeued replace runs only if it is
+    // still the latest (an older keystroke superseded by a newer one is skipped).
+    private readonly replaceGeneration = new Map<string, number>();
+    // False until the first RewireMembers (the construction-time call) has run, so that
+    // initial wiring leaves the graph build to the warmup promise (which Ready awaits);
+    // every SUBSEQUENT RewireMembers (a solution switch) enqueues its own rebuild.
+    private graphBootstrapped = false;
+    // The message of the most recent graph build failure (duplicate member id, cycle),
+    // else undefined — a readable flag that the shared graph is stale.
+    private lastGraphBuildError: string | undefined;
 
     // Permanent lifecycle subscriptions (the manager's ActiveSolution channel + the
     // project-event bus), disposed in dispose().
@@ -209,6 +227,14 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
         return this.baseSetToken;
     }
 
+    // The message of the most recent shared-graph build failure (duplicate member id,
+    // dependency cycle), or undefined when the last build succeeded. A readable flag so
+    // a consumer can tell the graph is stale rather than silently up to date.
+    public get LastGraphBuildError(): string | undefined
+    {
+        return this.lastGraphBuildError;
+    }
+
     // The composition session, held over the live-first resolver (Task-3 wiring).
     // Wave-1 keeps it for the headless composition path; the editor features read
     // the warm per-project base cache directly.
@@ -220,10 +246,16 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     public DidChange(uri: string, text: string): void
     {
         this.liveDocuments.Set(uri, text);
-        // The resolver base-cache is deliberately NOT invalidated on a keystroke (an
-        // edit does not change the base closure); only the shared graph's owning slice
-        // is re-loaded, debounced onto the same pending tail WhenIdle/Flush await.
-        this.Enqueue(() => this.ReplaceOwningMember(uri));
+        // The resolver base-cache is deliberately NOT invalidated on a keystroke (an edit
+        // does not change the base closure); only the shared graph's owning slice is
+        // re-loaded, debounced onto the same pending tail WhenIdle/Flush await. Bump the
+        // owning member's generation and capture it so a burst of keystrokes coalesces —
+        // only the latest enqueued replace for that member actually runs (see below).
+        const root = this.MemberRootForUri(uri);
+        if (root === undefined) return;
+        const generation = (this.replaceGeneration.get(root) ?? 0) + 1;
+        this.replaceGeneration.set(root, generation);
+        this.Enqueue(() => this.ReplaceOwningMember(uri, root, generation));
     }
 
     // The shared graph's Changed signal, re-exposed: it fires with the affected member
@@ -448,10 +480,18 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
         // content watchers and start one per member of the new solution.
         for (const watcher of this.contentWatchers.values()) watcher.dispose();
         this.contentWatchers.clear();
-        if (solution === undefined) return;
-        const off = solution.Members.Subscribe((change) => this.OnMembersChanged(change));
-        this.membersSubscription = new Disposable(off);
-        for (const member of solution.Members) this.WatchMemberContent(member);
+        if (solution !== undefined)
+        {
+            const off = solution.Members.Subscribe((change) => this.OnMembersChanged(change));
+            this.membersSubscription = new Disposable(off);
+            for (const member of solution.Members) this.WatchMemberContent(member);
+        }
+        // Re-assemble the shared graph for the (possibly swapped or cleared) member set —
+        // a solution switch raises no per-member Inserted events, so nothing else would.
+        // The first (construction-time) call leaves the initial build to the warmup
+        // promise that Ready awaits; every later switch enqueues its own rebuild.
+        if (this.graphBootstrapped) this.Enqueue(() => this.RebuildGraphSafely());
+        this.graphBootstrapped = true;
     }
 
     // Start (or tear down) the on-disk content watcher for one member. A `.todl`
@@ -534,16 +574,27 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     private async InvalidateMember(storage: IStorage, refresh: boolean): Promise<void>
     {
         if (this.disposed) return;
-        const id = await this.resolver.ConsumerIdOf(storage);
-        if (id === undefined) return;
-        this.resolver.Invalidate(id);
-        await this.RefreshStaleMembers(storage, id, refresh);
-        this.BumpToken();
-        // Keep the shared graph in step with the NEW member set / closure. A structural
-        // or reference change can alter topology, so the simplest correct Phase-1 move is
-        // a full rebuild from the current members (the fast incremental ReplaceMember is
-        // reserved for live keystroke edits, which cannot change the base closure).
-        await this.RebuildGraphSafely();
+        // Await warmup so an early lifecycle event cannot race (and lose to) the warmup
+        // graph build with a stale assembly.
+        await this.warmup;
+        try
+        {
+            const id = await this.resolver.ConsumerIdOf(storage);
+            if (id === undefined) return;
+            this.resolver.Invalidate(id);
+            await this.RefreshStaleMembers(storage, id, refresh);
+            this.BumpToken();
+        }
+        finally
+        {
+            // Keep the shared graph in step with the NEW member set / closure, even on the
+            // early-return path (a removed member whose manifest is gone must still drop out
+            // of the graph). A structural / reference change can alter topology, so the
+            // simplest correct Phase-1 move is a full rebuild from the current members (the
+            // fast incremental ReplaceMember is reserved for live keystroke edits, which
+            // cannot change the base closure).
+            await this.RebuildGraphSafely();
+        }
     }
 
     // Invalidate evicts the changed member PLUS its transitive dependents and surfaces
@@ -627,13 +678,17 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     private async BuildWarmCache(): Promise<void>
     {
         const solution = this.Provider.get(SolutionManagerService.Key)?.ActiveSolution;
-        if (solution === undefined) return;
-        for (const member of solution.Members)
+        if (solution !== undefined)
         {
-            const storage = member.Storage;
-            if (storage === undefined) continue;
-            await this.RefreshWarmBases(storage);
+            for (const member of solution.Members)
+            {
+                const storage = member.Storage;
+                if (storage === undefined) continue;
+                await this.RefreshWarmBases(storage);
+            }
         }
+        // Always build the graph — even with no active solution, AssembleMembers yields []
+        // and Build([]) leaves (clears) the graph, so Ready/ModelView have a defined state.
         await this.RebuildGraphSafely();
     }
 
@@ -657,10 +712,14 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
         try
         {
             await this.solutionGraph.Build(await this.AssembleMembers());
+            this.lastGraphBuildError = undefined;
         }
-        catch
+        catch (error)
         {
-            // ignore: a graph build failure must not regress the editor-feature path
+            // A build failure (duplicate member id / dependency cycle) must not regress the
+            // editor-feature path — the shared graph keeps its last good state; record the
+            // error so a consumer can tell the graph is stale (see LastGraphBuildError).
+            this.lastGraphBuildError = error instanceof Error ? error.message : String(error);
         }
     }
 
@@ -725,19 +784,39 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
         for (const file of onDisk) byUri.set(root + file.uri, file.text);
         for (const doc of this.liveDocuments.all())
         {
-            if (doc.uri.startsWith(root)) byUri.set(doc.uri, doc.getText());
+            if (!doc.uri.startsWith(root)) continue;
+            // Admit a live buffer only where the disk collect would admit the file, so an
+            // open samples/** or non-.todl buffer does not leak into the member's compile.
+            if (!SolutionLanguageService.IncludesLivePath(doc.uri.slice(root.length), type)) continue;
+            byUri.set(doc.uri, doc.getText());
         }
         return [...byUri].map(([uri, text]) => ({ uri, text }));
+    }
+
+    // Mirror of TodlProjectSourceFiles' collect predicate for a member-relative path: a
+    // `.todl` whose top-level folder is neither the build-output folder nor (for a
+    // producer) the samples folder. Nested folders of those names are not special.
+    private static IncludesLivePath(relPath: string, type: ProjectType): boolean
+    {
+        if (!relPath.toLowerCase().endsWith(SolutionLanguageService.TodlExtension)) return false;
+        const slash = relPath.indexOf(SolutionLanguageService.RootSeparator);
+        const topDir = slash >= 0 ? relPath.slice(0, slash) : "";
+        if (topDir === SolutionLanguageService.BuildOutputDir) return false;
+        if (topDir === SolutionLanguageService.SamplesDir && SolutionLanguageService.IsProducerType(type)) return false;
+        return true;
     }
 
     // The live-edit path: re-load just the member that owns the changed URI from its
     // current (live-overlaid) sources, so the shared graph reflects the keystroke and
     // GraphChanged fires. Awaits warmup so the graph exists; a member not yet built (or
     // removed concurrently) is a no-op rather than a throw.
-    private async ReplaceOwningMember(uri: string): Promise<void>
+    private async ReplaceOwningMember(uri: string, root: string, generation: number): Promise<void>
     {
         if (this.disposed) return;
         await this.warmup;
+        // Latest-wins: a newer keystroke for the same member has already bumped the
+        // generation, so this superseded replace skips its re-read + reload.
+        if (this.replaceGeneration.get(root) !== generation) return;
         const owner = await this.MemberForUri(uri);
         if (owner === undefined) return;
         const id = SolutionLanguageService.MemberIdOf(owner.manifest);
@@ -750,6 +829,29 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
         {
             // ignore: a replace race (e.g. the member was removed concurrently) is non-fatal
         }
+    }
+
+    // The longest member root that is a prefix of `uri` (no manifest read — a synchronous
+    // sibling of MemberForUri used to key live-edit coalescing); undefined when no member
+    // owns the URI.
+    private MemberRootForUri(uri: string): string | undefined
+    {
+        const solution = this.Provider.get(SolutionManagerService.Key)?.ActiveSolution;
+        if (solution === undefined) return undefined;
+        let best: string | undefined;
+        let bestLength = -1;
+        for (const member of solution.Members)
+        {
+            const storage = member.Storage;
+            if (storage === undefined) continue;
+            const root = SolutionLanguageService.RootUriOf(storage);
+            if (uri.startsWith(root) && root.length > bestLength)
+            {
+                best = root;
+                bestLength = root.length;
+            }
+        }
+        return best;
     }
 
     // The solution member whose root is the longest prefix of `uri`, with its parsed
