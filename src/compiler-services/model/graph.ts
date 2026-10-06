@@ -225,6 +225,25 @@ export class Graph
     this.changed.emit({ kind: GraphChangeKind.AttrSet, node: id, property: name, target: null });
   }
 
+  /**
+   * Remove a node and every incident edge, emitting one
+   * {@link GraphChangeKind.EdgeRemoved} per stripped edge and then one
+   * {@link GraphChangeKind.NodeRemoved}. No-op when the node is absent.
+   */
+  remove(id: NodeId): void
+  {
+    if (!this.store.hasNode(id)) return;
+    const incident = new Set<Edge>([...this.store.outEdges(id), ...this.store.inEdges(id)]);
+    this.store.remove(id);
+    for (const edge of incident)
+    {
+      const property =
+        edge.kind === EdgeKind.Relationship || edge.kind === EdgeKind.Derived ? edge.via : null;
+      this.changed.emit({ kind: GraphChangeKind.EdgeRemoved, node: edge.from, property, target: edge.to });
+    }
+    this.changed.emit({ kind: GraphChangeKind.NodeRemoved, node: id, property: null, target: null });
+  }
+
   /** All edges leaving `id` (forward adjacency). */
   outEdges(id: NodeId): Edge[]
   {

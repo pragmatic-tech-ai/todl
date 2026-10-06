@@ -4,9 +4,12 @@ import { PassThrough } from "node:stream";
 import { createConnection } from "vscode-languageserver/node.js";
 import { StreamMessageReader, StreamMessageWriter, createMessageConnection } from "vscode-jsonrpc/node.js";
 import type { Hover, Location, CompletionItem, WorkspaceEdit } from "vscode-languageserver-types";
+import { Signal } from "@pragmatic-tech-ai/todl-runtime";
 import { TodlLanguageServer } from "../todl-language-server.js";
 import type { ILanguageService } from "../../solution-services/lsp/host/i-language-service.js";
 import type { RenameError } from "../../solution-services/lsp/analysis/rename-provider.js";
+import type { SolutionGraphChange } from "../../solution-services/lsp/host/solution-graph.js";
+import type { ResolvedResource } from "../../solution-services/lsp/host/resource-locator.js";
 
 // A fake language service recording the calls the proxy delegates, with canned results.
 class FakeService implements ILanguageService
@@ -33,6 +36,9 @@ class FakeService implements ILanguageService
     async WorkspaceProducers(): Promise<[]> { return []; }
     async ProducedIdOf(): Promise<undefined> { return undefined; }
     get StaleMembers(): ReadonlySet<string> { return new Set(); }
+    async ModelView(): Promise<undefined> { return undefined; }
+    async Resources(): Promise<ResolvedResource[]> { return []; }
+    readonly GraphChanged = new Signal<SolutionGraphChange>();
 }
 
 function wire(service: ILanguageService)
