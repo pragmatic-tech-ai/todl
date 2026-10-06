@@ -58,6 +58,12 @@ export class SolutionGraph
         return this.originOf;
     }
 
+    /** True once `memberId` has been built into the graph (so ReplaceMember is safe). */
+    public Has(memberId: string): boolean
+    {
+        return this.membersById.has(memberId);
+    }
+
     public DiagnosticsByUri(): ReadonlyMap<string, Diagnostic[]>
     {
         return this.diagnosticsByUri;
