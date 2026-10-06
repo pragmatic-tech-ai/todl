@@ -851,6 +851,7 @@ function recordSpans(model: Repository, units: readonly { ns: string; decl: Decl
         recordInstanceSpans(model, declaration, ns);
         break;
       case DeclKind.Model:
+      {
         const modelId = NodeIdQualifier.Qualify(ns, declaration.id);
         model.recordSpan(modelId, declaration.span);
         if (declaration.metaModelSpan !== undefined)
@@ -866,6 +867,7 @@ function recordSpans(model: Repository, units: readonly { ns: string; decl: Decl
         }
         for (const inst of declaration.instances) recordInstanceSpans(model, inst, ns);
         break;
+      }
       case DeclKind.Annotation:
         model.recordSpan(NodeIdQualifier.Qualify(ns, declaration.name), declaration.span);
         break;

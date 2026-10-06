@@ -25,6 +25,37 @@ describe('WrittenSymbolResolver', () =>
     });
 });
 
+describe('WrittenSymbolResolver precedence', () =>
+{
+    test('prelude fallback when neither home nor imports declare the name', () =>
+    {
+        const r = check([{ uri: 's.todl', text: 'namespace ea { concept Location { } }' }]);
+        assert.equal(WrittenSymbolResolver.ResolveFor('icon', 'ea', [], r.model), 'todl.icon');
+        assert.equal(WrittenSymbolResolver.ResolveFor('label', 'ea', ['ea'], r.model), 'todl.label');
+    });
+    test('home namespace shadows the prelude', () =>
+    {
+        const r = check([{ uri: 's.todl', text: 'namespace ea { concept icon { } }' }]);
+        assert.equal(WrittenSymbolResolver.ResolveFor('icon', 'ea', [], r.model), 'ea.icon');
+    });
+    test('import shadows the prelude', () =>
+    {
+        const r = check([{ uri: 's.todl', text: 'namespace ea { concept icon { } }' }]);
+        assert.equal(WrittenSymbolResolver.ResolveFor('icon', 'other', ['ea'], r.model), 'ea.icon');
+    });
+    test('home namespace wins over an import; first matching import wins', () =>
+    {
+        const r = check([
+            { uri: 'a.todl', text: 'namespace ea { concept Thing { } }' },
+            { uri: 'b.todl', text: 'namespace eb { concept Thing { } }' },
+            { uri: 'c.todl', text: 'namespace ec { concept Thing { } }' },
+        ]);
+        assert.equal(WrittenSymbolResolver.ResolveFor('Thing', 'ec', ['ea', 'eb'], r.model), 'ec.Thing');
+        assert.equal(WrittenSymbolResolver.ResolveFor('Thing', 'other', ['eb', 'ea'], r.model), 'eb.Thing');
+        assert.equal(WrittenSymbolResolver.ResolveFor('Thing', 'other', ['ea', 'eb'], r.model), 'ea.Thing');
+    });
+});
+
 describe('bare-name navigation after qualification', () =>
 {
     const text = 'namespace ea {\n  concept Location { }\n  concept Site : Location { }\n}\n';
