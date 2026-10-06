@@ -86,4 +86,24 @@ describe('qualified ids', () =>
         const rc = check([LOCAL]);
         assert.ok(rc.model.has('c.Loc@c.Mark'), 'local annotation resolves to the home namespace');
     });
+
+    test('a term-level annotation application is typed by the qualified annotation', () =>
+    {
+        const LIB = { uri: 'lib/lib.todl', text: 'namespace lib { import ea; taxonomy MS : represents Location { term azure { annotate icon { path = "resources/azure.svg"; } } } }' };
+        const metaDoc = toJSON(check([META]).model);
+        const r = checkAgainst([metaDoc], [LIB]);
+        assert.deepEqual(r.diagnostics.filter(d => d.severity === 'error'), []);
+        assert.ok(r.model.has('lib.MS.azure@todl.icon'), 'term application id qualified');
+        assert.equal(r.model.resolve('lib.MS.azure@todl.icon')?.type, 'todl.icon');
+    });
+
+    test('an instance-level annotation application is typed by the qualified annotation', () =>
+    {
+        const INST = { uri: 'i/i.todl', text: 'namespace i { import ea; concept Thing : Location { } class Thing t { annotate icon { path = "x"; } } }' };
+        const metaDoc = toJSON(check([META]).model);
+        const r = checkAgainst([metaDoc], [INST]);
+        assert.deepEqual(r.diagnostics.filter(d => d.severity === 'error'), []);
+        assert.ok(r.model.has('i.t@todl.icon'), 'instance application id qualified');
+        assert.equal(r.model.resolve('i.t@todl.icon')?.type, 'todl.icon');
+    });
 });

@@ -150,6 +150,7 @@ export function visitReferences(decl: Declaration, visit: Visit): void
           visit({ name: t.concept, span: t.span, role: RefRole.RecordConcept,
             ownerNode: `${decl.name}.${t.id}`, memberPath: null, rewrite: (r) => { (t as { concept: string | null }).concept = r; } });
         }
+        annotationRefs(t.annotations, `${decl.name}.${t.id}`);
         for (const a of t.assignments) visitValueRefs(a.value, `${decl.name}.${t.id}`, a.name, a.span, scope, visit);
         t.children.forEach(walkTerm);
       };
@@ -295,6 +296,12 @@ function visitInstanceRefs(
   {
     visit({ name: decl.instanceOf, span: decl.instanceOfSpan ?? decl.span, role: RefRole.InstanceOf,
       ownerNode: decl.id, memberPath: null, rewrite: (r) => { (decl as { instanceOf: string | null }).instanceOf = r; } });
+  }
+  // The instance's own annotation applications (`annotate icon { … }`).
+  for (const app of decl.annotations)
+  {
+    visit({ name: app.name, span: app.nameSpan ?? app.span, role: RefRole.AnnotationName,
+      ownerNode: `${decl.id}@${app.name}`, memberPath: null, rewrite: (r) => { app.name = r; } });
   }
   for (const a of decl.assignments) visitValueRefs(a.value, decl.id, a.name, a.span, scope, visit);
   for (const child of decl.children) visitInstanceRefs(child, visit, scope);
