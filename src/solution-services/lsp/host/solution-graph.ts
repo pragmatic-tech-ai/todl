@@ -1,4 +1,4 @@
-import type { IStorage } from '@pragmatic-tech-ai/todl-runtime';
+import { Signal, type IStorage } from '@pragmatic-tech-ai/todl-runtime';
 import { mergeBases } from '../../../compiler-services/api.js';
 import { loadInto } from '../../../compiler-services/parse/loader.js';
 import { preludeDocument, preludeNames } from '../../../compiler-services/stdlib/prelude.js';
@@ -19,6 +19,11 @@ export interface SolutionGraphMember
     publishedBases: readonly TodlDocument[];
 }
 
+export interface SolutionGraphChange
+{
+    memberIds: readonly string[];
+}
+
 /**
  * One Repository for the whole open solution: prelude + published bases merged once,
  * every source member loaded in, bases shared (no per-member copy).
@@ -29,6 +34,7 @@ export class SolutionGraph
     private static readonly DuplicateIdMessage = 'Duplicate solution member id';
     private static readonly CycleMessage = 'Solution member dependency cycle';
     private static readonly CycleSeparator = ' -> ';
+    private static readonly UnknownMemberMessage = 'Unknown solution member id';
 
     private readonly idGen: IdGenerator = new SnowflakeIdGenerator();
     private model: Repository = new Repository(mergeBases([preludeDocument()]));
@@ -37,6 +43,10 @@ export class SolutionGraph
     private originOf: Map<string, WikiOrigin> = new Map();
     private sourcesOf: Map<string, SourceFile[]> = new Map();
     private diagnosticsByUri: Map<string, Diagnostic[]> = new Map();
+    private membersById: Map<string, SolutionGraphMember> = new Map();
+    private loadDiagsByMember: Map<string, Diagnostic[]> = new Map();
+
+    public readonly Changed: Signal<SolutionGraphChange> = new Signal<SolutionGraphChange>();
 
     public get Model(): Repository
     {
@@ -60,30 +70,102 @@ export class SolutionGraph
         this.originOf = new Map();
         this.sourcesOf = new Map();
         this.diagnosticsByUri = new Map();
+        this.membersById = new Map();
+        this.loadDiagsByMember = new Map();
 
         const bases = this.DistinctBases(members);
         this.model = new Repository(mergeBases([preludeDocument(), ...bases]));
 
-        const reserved = preludeNames();
         for (const member of this.TopoOrder(members))
         {
-            const before = new Set(this.model.allNodes().map(n => n.id));
-            const loadDiags = loadInto(this.model, [...member.sources], reserved, this.idGen, this.provenance);
+            this.membersById.set(member.id, member);
             this.sourcesOf.set(member.id, [...member.sources]);
-            const origin = WikiLocator.OpenProjectOrigin(member.storage);
-            for (const node of this.model.allNodes())
+            this.LoadMember(member, member.sources);
+        }
+        this.RebuildDiagnostics();
+    }
+
+    /** Members whose baseIds include `memberId`, transitively. */
+    public DependentsOf(memberId: string): readonly string[]
+    {
+        const found = new Set<string>();
+        const queue: string[] = [memberId];
+        while (queue.length > 0)
+        {
+            const current = queue.shift() as string;
+            for (const m of this.membersById.values())
             {
-                if (before.has(node.id))
+                if (m.baseIds.includes(current) && !found.has(m.id))
                 {
-                    continue;
-                }
-                this.memberOf.set(node.id, member.id);
-                if (!this.originOf.has(node.id))
-                {
-                    this.originOf.set(node.id, origin);
+                    found.add(m.id);
+                    queue.push(m.id);
                 }
             }
-            this.AddDiagnostics(loadDiags);
+        }
+        return [...found];
+    }
+
+    public ReplaceMember(memberId: string, sources: readonly SourceFile[]): void
+    {
+        if (!this.membersById.has(memberId))
+        {
+            throw new Error(`${SolutionGraph.UnknownMemberMessage}: ${memberId}`);
+        }
+        const affectedSet = new Set<string>([memberId, ...this.DependentsOf(memberId)]);
+        const affected = this.TopoOrder([...this.membersById.values()])
+            .filter(m => affectedSet.has(m.id));
+
+        for (const member of affected)
+        {
+            this.RemoveOwnedNodes(member.id);
+        }
+        this.sourcesOf.set(memberId, [...sources]);
+        for (const member of affected)
+        {
+            this.LoadMember(member, this.sourcesOf.get(member.id) ?? []);
+        }
+        this.RebuildDiagnostics();
+        this.Changed.emit({ memberIds: affected.map(m => m.id) });
+    }
+
+    private LoadMember(member: SolutionGraphMember, sources: readonly SourceFile[]): void
+    {
+        const before = new Set(this.model.allNodes().map(n => n.id));
+        const loadDiags = loadInto(this.model, [...sources], preludeNames(), this.idGen, this.provenance);
+        this.loadDiagsByMember.set(member.id, loadDiags);
+        const origin = WikiLocator.OpenProjectOrigin(member.storage);
+        for (const node of this.model.allNodes())
+        {
+            if (before.has(node.id))
+            {
+                continue;
+            }
+            this.memberOf.set(node.id, member.id);
+            if (!this.originOf.has(node.id))
+            {
+                this.originOf.set(node.id, origin);
+            }
+        }
+    }
+
+    private RemoveOwnedNodes(memberId: string): void
+    {
+        const owned = [...this.memberOf].filter(([, m]) => m === memberId).map(([id]) => id);
+        for (const id of owned)
+        {
+            this.model.remove(id);
+            this.provenance.delete(id);
+            this.originOf.delete(id);
+            this.memberOf.delete(id);
+        }
+    }
+
+    private RebuildDiagnostics(): void
+    {
+        this.diagnosticsByUri = new Map();
+        for (const diags of this.loadDiagsByMember.values())
+        {
+            this.AddDiagnostics(diags);
         }
         this.AddDiagnostics(validate(this.model));
     }

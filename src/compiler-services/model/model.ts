@@ -180,6 +180,12 @@ export class Repository
     return this.graph.allNodes();
   }
 
+  /** Remove node `id` (and its edges) from the model. */
+  remove(id: NodeId): void
+  {
+    this.graph.remove(id);
+  }
+
   /** All edges leaving `id` (forward adjacency). */
   outEdges(id: NodeId): Edge[]
   {
