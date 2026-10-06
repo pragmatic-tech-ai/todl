@@ -61,7 +61,7 @@ export function deriveBindings(
     if (node.metaKind === MetaKind.Taxonomy) taxIds.add(node.id);
   }
   const taxonomyOf = (id: string): string | undefined => {
-    const dot = id.indexOf(".");
+    const dot = id.lastIndexOf(".");
     if (dot < 0) return undefined;
     const tax = id.slice(0, dot);
     return taxIds.has(tax) ? tax : undefined;
@@ -85,6 +85,25 @@ function localName(id: string): string
   return i >= 0 ? id.slice(i + 1) : id;
 }
 
+/** Renders reference targets in the form resolvable from the emitting file. */
+class ReferenceWriter
+{
+  /** Same-namespace target → id minus the file's namespace prefix (bare for a
+   * concept/instance, `Tax.term` for a term); other namespace → full qualified id. */
+  private static WriteableReference(targetId: string, fileNamespace: string, model: Repository | undefined): string
+  {
+    const prefix = `${fileNamespace}.`;
+    const ns = model?.resolve(targetId)?.namespace ?? null;
+    const same = ns !== null ? ns === fileNamespace : targetId.startsWith(prefix);
+    return same && targetId.startsWith(prefix) ? targetId.slice(prefix.length) : targetId;
+  }
+
+  static Write(targetId: string, ctx: EmitCtx): string
+  {
+    return ReferenceWriter.WriteableReference(targetId, ctx.namespace, ctx.model);
+  }
+}
+
 function literal(v: Scalar): string
 {
   return typeof v === "string" ? JSON.stringify(v) : String(v);
@@ -100,6 +119,9 @@ interface EmitCtx
   inline: Set<string>;
   /** concept id → reified-edge operator, for shorthand emit (design §6). */
   operators: Map<string, EmitOperator>;
+  /** The emitting file's namespace + the model, to render reference targets. */
+  namespace: string;
+  model: Repository | undefined;
 }
 
 function isClassNode(n: JsonNode): boolean
@@ -107,7 +129,7 @@ function isClassNode(n: JsonNode): boolean
   return n.isClass === true;
 }
 
-export function emitModelTodl(own: TodlDocument, namespace: string, bindings: ModelBindings, conforms?: string, operators?: Map<string, EmitOperator>): string
+export function emitModelTodl(own: TodlDocument, namespace: string, bindings: ModelBindings, conforms?: string, operators?: Map<string, EmitOperator>, model?: Repository): string
 {
   const instances = own.nodes;
   const classes = instances.filter(isClassNode);
@@ -138,7 +160,7 @@ export function emitModelTodl(own: TodlDocument, namespace: string, bindings: Mo
   {
     for (const r of list) if (containedBy.get(r.to) === from && byId.has(r.to)) inline.add(r.to);
   }
-  const ctx: EmitCtx = { byId, instanceOf, rels, inline, operators: operators ?? new Map() };
+  const ctx: EmitCtx = { byId, instanceOf, rels, inline, operators: operators ?? new Map(), namespace, model };
 
   const lines: string[] = [`namespace ${namespace}`, "{"];
   for (const ns of bindings.imports) lines.push(`  import ${ns};`);
@@ -188,7 +210,7 @@ function edgeShorthand(node: JsonNode, ctx: EmitCtx, indent: number): { head: st
     const t = l.trim();
     return !t.startsWith(`${op.from} =`) && !t.startsWith(`${op.to} =`);
   });
-  return { head: `${from} ${op.glyph} ${to}`, rest };
+  return { head: `${ReferenceWriter.Write(from, ctx)} ${op.glyph} ${ReferenceWriter.Write(to, ctx)}`, rest };
 }
 
 /** Emit a top-level record (head + braced body) at `indent` (levels of 2 spaces). */
@@ -240,7 +262,7 @@ function emitBody(node: JsonNode, ctx: EmitCtx, indent: number, inlineChild: boo
     const allInline = targets.length > 0 && targets.every((t) => ctx.inline.has(t) && ctx.byId.has(t));
     const render = allInline
       ? targets.map((t) => emitInline(ctx.byId.get(t)!, ctx, indent))
-      : targets;
+      : targets.map((t) => ReferenceWriter.Write(t, ctx));
     lines.push(render.length === 1 ? `${pad}${member} = ${render[0]};` : `${pad}${member} = [${render.join(", ")}];`);
   }
   return lines;
