@@ -35,12 +35,16 @@ describe('SolutionGraph.Build', () =>
         const full = checkAgainst([metaDoc, libDoc], [ARCH]);
 
         assert.equal(g.DiagnosticsByUri().get('arch/a.todl')?.filter(d => d.severity === Severity.Error).length ?? 0, 0);
+        for (const [uri, diags] of g.DiagnosticsByUri())
+        {
+            assert.equal(diags.filter(d => d.severity === Severity.Error).length, 0, `errors in ${uri}`);
+        }
         // Equivalence: every node the full arch compile has, the shared graph resolves.
         for (const n of full.model.allNodes())
         {
             assert.ok(g.Model.has(n.id), `shared graph missing ${n.id}`);
         }
         // originOf tags the library's own node to its source member storage.
-        assert.ok(g.OriginOf.has('MS'));
+        assert.ok(g.OriginOf.has('lib.MS'));
     });
 });
