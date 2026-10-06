@@ -10,6 +10,7 @@
  * constructor scope) so namespace reachability lives in exactly one place.
  */
 import type { Repository } from "../model/model.js";
+import { NodeIdQualifier } from "../parse/node-id-qualifier.js";
 
 // The foundational scalar TYPE keywords (`Scalar = string | number | boolean`).
 // They are valid field/param types but are NOT declared nodes, so the resolver
@@ -71,15 +72,24 @@ export function makeResolver(
     return ns === null || ns === home.ns || home.imports.includes(ns);
   };
   const resolveRef = (id: string, home: Home): Resolved => {
-    if (exists(id)) return reachable(id, home) ? { kind: "ok" } : { kind: "unreachable", ns: nsOf(id)! };
-    // Strip leading namespace segment(s): `ea.categories` → flat `categories`
-    // in ns `ea`; `ns.tax.term` → flat `tax.term` in ns `ns`. Flat-id match
-    // (above) wins first, so `categories.platform-api` stays the term node.
-    const segs = id.split(".");
-    for (let k = 1; k < segs.length; k++)
+    // Builtins are global scalar TYPE keywords — never nodes, reachable everywhere,
+    // and left exactly as written.
+    if (NodeIdQualifier.IsBuiltin(id)) return { kind: "ok" };
+    // Written as a CANONICAL id already — an explicit qualifier (`ea.Location`), a
+    // prelude/reserved id (`todl.icon`), or a namespace-less base node. An explicit
+    // qualifier names its namespace outright, so it needs no import: resolve as
+    // written. (Bare names never satisfy `exists` now — every declared id carries
+    // its namespace — so this arm only fires for already-qualified / global ids.)
+    if (exists(id)) return { kind: "ok" };
+    // A BARE name: its canonical id is the name qualified by the home namespace, or
+    // by one of that file's imports (first match wins). This is the only place a
+    // name→node id is assembled, so the `flat` the caller writes back is qualified.
+    const homeQualified = NodeIdQualifier.Qualify(home.ns, id);
+    if (exists(homeQualified)) return { kind: "qualified", flat: homeQualified };
+    for (const imp of home.imports)
     {
-      const rest = segs.slice(k).join(".");
-      if (exists(rest) && nsOf(rest) === segs.slice(0, k).join(".")) return { kind: "qualified", flat: rest };
+      const imported = NodeIdQualifier.Qualify(imp, id);
+      if (exists(imported)) return { kind: "qualified", flat: imported };
     }
     return { kind: "undefined" };
   };
