@@ -2,6 +2,7 @@ namespace adl.metaModels.bpmn.concepts
 {
     import adl.metaModels.bpmn.primitives.Identifier;
     import adl.metaModels.bpmn.enums.TaskType;
+    import adl.metaModels.bpmn.enums;
 
     concept EventTrigger { }
 

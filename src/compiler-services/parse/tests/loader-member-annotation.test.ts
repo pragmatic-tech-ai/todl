@@ -16,8 +16,8 @@ const SRC = `namespace t {
 test("a member annotation becomes a resolvable application node with its attrs", () => {
   const { model, diagnostics } = load([{ uri: "t.todl", text: SRC }]);
   assert.deepEqual(diagnostics.filter((d) => d.severity === Severity.Error), []);
-  const node = model.resolve("component.implementedBy@heat");
-  assert.ok(node, "expected component.implementedBy@heat to exist");
+  const node = model.resolve("t.component.implementedBy@t.heat");
+  assert.ok(node, "expected t.component.implementedBy@t.heat to exist");
   // Numeric annotation values store as strings (TODL has no Number value kind —
   // a numeric literal lexes as a Name and is set as a field verbatim).
   assert.equal(node?.attrs.get("level"), "3");
@@ -25,7 +25,7 @@ test("a member annotation becomes a resolvable application node with its attrs",
 
 test("a bodyless member has no application node", () => {
   const { model } = load([{ uri: "t.todl", text: SRC }]);
-  assert.equal(model.resolve("component.linkedTo@heat"), undefined);
+  assert.equal(model.resolve("t.component.linkedTo@t.heat"), undefined);
 });
 
 test("an undeclared annotation on a member is diagnosed", () => {

@@ -30,7 +30,7 @@ function corpus()
 
 test("loads concept schemas from the corpus", () => {
   const model = corpus();
-  const task = model.schemaOf("Task");
+  const task = model.schemaOf("adl.metaModels.bpmn.concepts.Task");
   assert.equal(task.fields.find((field) => field.name === "assignee")?.cardinality, Cardinality.Optional);
   assert.equal(task.fields.find((field) => field.name === "label")?.type, "string");
   assert.equal(task.relationships.find((r) => r.name === "incoming")?.cardinality, Cardinality.Many);
@@ -39,22 +39,22 @@ test("loads concept schemas from the corpus", () => {
 
 test("loads taxonomy terms as class members of the represented concept", () => {
   const model = corpus();
-  assert.ok(model.termsOf("TaskType").includes("TaskType.Service"));
-  assert.equal(model.resolve("TaskType.Service")?.type, "Task");
-  assert.ok(model.termsOf("EventType").includes("EventType.Start"));
+  assert.ok(model.termsOf("adl.metaModels.bpmn.enums.TaskType").includes("adl.metaModels.bpmn.enums.TaskType.Service"));
+  assert.equal(model.resolve("adl.metaModels.bpmn.enums.TaskType.Service")?.type, "adl.metaModels.bpmn.concepts.Task");
+  assert.ok(model.termsOf("adl.metaModels.bpmn.enums.EventType").includes("adl.metaModels.bpmn.enums.EventType.Start"));
 });
 
 test("loads instances with scalar attrs and relationship edges", () => {
   const model = corpus();
-  assert.equal(model.resolve("validatePayment")?.type, "Task");
-  assert.equal(model.resolve("validatePayment")?.attrs.get("label"), "Validate Payment");
+  assert.equal(model.resolve("demo.orderFulfillment.validatePayment")?.type, "adl.metaModels.bpmn.concepts.Task");
+  assert.equal(model.resolve("demo.orderFulfillment.validatePayment")?.attrs.get("label"), "Validate Payment");
   assert.deepEqual(
-    model.related("validatePayment", EdgeKind.Relationship, Direction.Out, "type"),
-    ["TaskType.Service"],
+    model.related("demo.orderFulfillment.validatePayment", EdgeKind.Relationship, Direction.Out, "type"),
+    ["adl.metaModels.bpmn.enums.TaskType.Service"],
   );
   assert.deepEqual(
-    model.related("orderPlaced", EdgeKind.Relationship, Direction.Out, "outgoing"),
-    ["orderToValidate"],
+    model.related("demo.orderFulfillment.orderPlaced", EdgeKind.Relationship, Direction.Out, "outgoing"),
+    ["demo.orderFulfillment.orderToValidate"],
   );
 });
 
@@ -80,8 +80,8 @@ test("loads a meta-model descriptor with numeric and list members", () => {
       concept Location { label : string; }
     }`,
   ]);
-  assert.ok(model.has("EnterpriseArchitecture"));
-  assert.equal(model.resolve("EnterpriseArchitecture")?.attrs.get("version"), "5");
+  assert.ok(model.has("d.EnterpriseArchitecture"));
+  assert.equal(model.resolve("d.EnterpriseArchitecture")?.attrs.get("version"), "5");
 });
 
 test("nested instances load with contains edges and a meta-model binding", () => {
@@ -92,9 +92,9 @@ test("nested instances load with contains edges and a meta-model binding", () =>
       }
     }`,
   ]);
-  assert.equal(model.resolve("saas3p")?.type, "Location");
-  assert.deepEqual(model.related("m", EdgeKind.Contains, Direction.Out), ["saas3p"]);
-  assert.equal(model.resolve("m")?.attrs.get("MetaModel"), "EnterpriseArchitecture");
+  assert.equal(model.resolve("d.saas3p")?.type, "Location");
+  assert.deepEqual(model.related("d.m", EdgeKind.Contains, Direction.Out), ["d.saas3p"]);
+  assert.equal(model.resolve("d.m")?.attrs.get("MetaModel"), "EnterpriseArchitecture");
 });
 
 test("a nested record binds to the parent field typed by its concept", () => {
@@ -108,9 +108,9 @@ test("a nested record binds to the parent field typed by its concept", () => {
     }`,
   ]);
   // Structural containment is still present.
-  assert.deepEqual(model.related("h1", EdgeKind.Contains, Direction.Out), ["s1"]);
+  assert.deepEqual(model.related("d.h1", EdgeKind.Contains, Direction.Out), ["d.s1"]);
   // …and the record populates the `slots` field via a field-named relationship.
-  assert.deepEqual(model.related("h1", EdgeKind.Relationship, Direction.Out, "slots"), ["s1"]);
+  assert.deepEqual(model.related("d.h1", EdgeKind.Relationship, Direction.Out, "slots"), ["d.s1"]);
 });
 
 test("a nested record with no matching parent field is contains-only", () => {
@@ -121,8 +121,8 @@ test("a nested record with no matching parent field is contains-only", () => {
       Host h1 { Slot s1 { } }
     }`,
   ]);
-  assert.deepEqual(model.related("h1", EdgeKind.Contains, Direction.Out), ["s1"]);
-  assert.deepEqual(model.related("h1", EdgeKind.Relationship, Direction.Out), []);
+  assert.deepEqual(model.related("d.h1", EdgeKind.Contains, Direction.Out), ["d.s1"]);
+  assert.deepEqual(model.related("d.h1", EdgeKind.Relationship, Direction.Out), []);
 });
 
 test("ambiguous field binding (two fields of the same type) diagnoses and falls back to contains", () => {
@@ -137,15 +137,15 @@ test("ambiguous field binding (two fields of the same type) diagnoses and falls 
     },
   ]);
   assert.ok(diagnostics.some((d) => d.code === DiagnosticCode.AmbiguousFieldBinding));
-  assert.deepEqual(model.related("h1", EdgeKind.Contains, Direction.Out), ["s1"]);
-  assert.deepEqual(model.related("h1", EdgeKind.Relationship, Direction.Out), []);
+  assert.deepEqual(model.related("d.h1", EdgeKind.Contains, Direction.Out), ["d.s1"]);
+  assert.deepEqual(model.related("d.h1", EdgeKind.Relationship, Direction.Out), []);
 });
 
 test("a |-composed enum-flag value loads as the legacy scalar string", () => {
   const model = load([
     `namespace d { Location onPrem { type = physical | onPremises | logicalGrouping; } }`,
   ]);
-  assert.equal(model.resolve("onPrem")?.attrs.get("type"), "physical | onPremises | logicalGrouping");
+  assert.equal(model.resolve("d.onPrem")?.attrs.get("type"), "physical | onPremises | logicalGrouping");
 });
 
 test("the loaded process satisfies its invariants and target types", () => {

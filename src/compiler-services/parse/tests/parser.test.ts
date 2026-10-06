@@ -49,6 +49,7 @@ test("parses concept imports, fields with cardinality, relationships, and invari
   assert.deepEqual(namespace.imports, [
     "adl.metaModels.bpmn.primitives.Identifier",
     "adl.metaModels.bpmn.enums.TaskType",
+    "adl.metaModels.bpmn.enums",
   ]);
 
   const task = namespace.declarations.find(

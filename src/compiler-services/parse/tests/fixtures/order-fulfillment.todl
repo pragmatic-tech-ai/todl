@@ -1,5 +1,8 @@
 namespace demo.orderFulfillment
 {
+    import adl.metaModels.bpmn.concepts;
+    import adl.metaModels.bpmn.enums;
+
     Lane sales { label = "Sales"; }
 
     EventTrigger message { }

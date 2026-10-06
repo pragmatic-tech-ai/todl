@@ -47,9 +47,9 @@ test("a bare term drops to its flat taxonomy.term node (edge points at stack.azu
        }
      }` }]);
   const doc = toJSON(model);
-  const edge = doc.edges.find((e) => String(e.from) === "gw" && e.via === "realisedBy");
+  const edge = doc.edges.find((e) => String(e.from) === "app.gw" && e.via === "realisedBy");
   assert.ok(edge, "an edge for realised-by exists");
-  assert.equal(String(edge!.to), "Stack.azureOpenai");
+  assert.equal(String(edge!.to), "ea.Stack.azureOpenai");
 });
 
 test("without `uses`, the bare term is undefined", () => {

@@ -32,29 +32,29 @@ test("debug on: concept/model/instance carry readable kind + name + type + names
   const doc = toJSON(model, { debug: true });
   const byId = (id: string) => doc.nodes.find((n) => n.id === id);
 
-  assert.deepEqual(byId("Component")?.debug, {
-    kind: "concept", name: "Component", type: "concept", namespace: "app",
+  assert.deepEqual(byId("app.Component")?.debug, {
+    kind: "concept", name: "app.Component", type: "concept", namespace: "app",
   });
   // `label` is a declared field carried on the Component node (SPEC-01 #4), not a
   // separate `Component.label` member node.
-  assert.equal(byId("Component.label"), undefined);
-  assert.deepEqual(model.resolve("Component")!.fields, [
+  assert.equal(byId("app.Component.label"), undefined);
+  assert.deepEqual(model.resolve("app.Component")!.fields, [
     { name: "label", type: "string", cardinality: 0 },
   ]);
-  assert.deepEqual(byId("M")?.debug, {
-    kind: "model", name: "M", type: "model", namespace: "app",
+  assert.deepEqual(byId("app.M")?.debug, {
+    kind: "model", name: "app.M", type: "model", namespace: "app",
   });
   // The interesting one: an instance names the concept it instantiates.
-  assert.deepEqual(byId("c")?.debug, {
-    kind: "instance", name: "c", type: "Component", namespace: "app",
+  assert.deepEqual(byId("app.c")?.debug, {
+    kind: "instance", name: "app.c", type: "app.Component", namespace: "app",
   });
 });
 
 test("debug on: edges carry readable from/to (behind the opaque endpoint ids)", () => {
   const { model } = compile();
   const doc = toJSON(model, { debug: true });
-  const contains = doc.edges.find((e) => e.kind === "Contains" && e.from === "M");
-  assert.deepEqual(contains?.debug, { from: "M", to: "c" });
+  const contains = doc.edges.find((e) => e.kind === "Contains" && e.from === "app.M");
+  assert.deepEqual(contains?.debug, { from: "app.M", to: "app.c" });
   // No `HasField` edge exists — scalar field schema lives on the concept node now.
   assert.equal(doc.edges.some((e) => e.kind === "HasField"), false);
 });
@@ -63,6 +63,6 @@ test("debug on with provenance: node.debug.source is the origin uri", () => {
   const { model, provenance } = compile();
   const doc = toJSON(model, { debug: true, provenance });
   // Instances/models are homed in provenance; concepts may not be.
-  const m = doc.nodes.find((n) => n.id === "M");
+  const m = doc.nodes.find((n) => n.id === "app.M");
   assert.equal(m?.debug?.source, "app.todl");
 });

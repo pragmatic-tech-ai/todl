@@ -69,7 +69,7 @@ describe("ManifestEmitter — concepts (SPEC-03 task 4)", () => {
     const el = emit().manifest.concepts.Element!;
     assert.equal(el.extends, null);
     assert.deepEqual(el.fields, {});
-    assert.equal(emit().manifest.root, "Element");
+    assert.equal(emit().manifest.root, "todl.Element");
   });
 });
 

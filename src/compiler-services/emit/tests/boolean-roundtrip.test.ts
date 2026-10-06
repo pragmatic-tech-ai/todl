@@ -17,10 +17,10 @@ test("a boolean annotation param round-trips through JSON as a boolean", () => {
     }` }]);
 
   const json = toJSON(model);
-  const app = json.nodes.find((n) => n.id === "Actors@Shelf");
+  const app = json.nodes.find((n) => n.id === "acme.Actors@acme.Shelf");
   assert.equal(app!.attrs.visible, true);
   assert.equal(typeof app!.attrs.visible, "boolean");
 
   const restored = fromJSON(json);
-  assert.equal(restored.resolve("Actors@Shelf")!.attrs.get("visible"), true);
+  assert.equal(restored.resolve("acme.Actors@acme.Shelf")!.attrs.get("visible"), true);
 });

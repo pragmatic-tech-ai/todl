@@ -13,7 +13,7 @@ const SRC = `namespace acme {
 
 test("a model loads as an Instance-tier MetaKind.Model node with binding attrs", () => {
   const { model } = load([{ uri: "a.todl", text: SRC }]);
-  const node = model.resolve("prod");
+  const node = model.resolve("acme.prod");
   assert.ok(node);
   assert.equal(node!.tier, Tier.Instance);
   assert.equal(node!.metaKind, MetaKind.Model);
@@ -24,13 +24,13 @@ test("a model loads as an Instance-tier MetaKind.Model node with binding attrs",
 
 test("the model contains its objects via Contains", () => {
   const { model } = load([{ uri: "a.todl", text: SRC }]);
-  const contained = model.related("prod", EdgeKind.Contains, Direction.Out);
-  assert.deepEqual(contained, ["checkout"]);
+  const contained = model.related("acme.prod", EdgeKind.Contains, Direction.Out);
+  assert.deepEqual(contained, ["acme.checkout"]);
 });
 
 test("every loaded node carries its source namespace as provenance", () => {
   const { model } = load([{ uri: "a.todl", text: SRC }]);
-  assert.equal(model.resolve("prod")!.namespace, "acme");
-  assert.equal(model.resolve("checkout")!.namespace, "acme");
-  assert.equal(model.resolve("Component")!.namespace, "acme");
+  assert.equal(model.resolve("acme.prod")!.namespace, "acme");
+  assert.equal(model.resolve("acme.checkout")!.namespace, "acme");
+  assert.equal(model.resolve("acme.Component")!.namespace, "acme");
 });

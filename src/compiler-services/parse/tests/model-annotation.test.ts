@@ -9,7 +9,7 @@ test("a model block can carry an annotate entrypoint marker, applied to the mode
         text: `namespace a { concept C { name : string; } model M : a { annotate entrypoint { } C x { name = "X"; } } }`,
     }]);
     assert.deepEqual(diagnostics, []);
-    assert.notEqual(model.resolve("M@entrypoint"), undefined, "model node M carries the entrypoint annotation app node");
+    assert.notEqual(model.resolve("a.M@todl.entrypoint"), undefined, "model node M carries the entrypoint annotation app node");
 });
 
 test("a model with no annotation has no entrypoint app node", () =>
@@ -19,5 +19,5 @@ test("a model with no annotation has no entrypoint app node", () =>
         text: `namespace a { concept C { name : string; } model M : a { C x { name = "X"; } } }`,
     }]);
     assert.deepEqual(diagnostics, []);
-    assert.equal(model.resolve("M@entrypoint"), undefined);
+    assert.equal(model.resolve("a.M@todl.entrypoint"), undefined);
 });

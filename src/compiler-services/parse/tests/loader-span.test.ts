@@ -20,9 +20,9 @@ test("load takes SourceFiles, builds a model, and records instance spans", () =>
     { uri: "app.todl", text: MODEL },
   ]);
   assert.equal(diagnostics.length, 0);
-  assert.ok(model.has("teamsChat"));
-  assert.equal(model.spanOf("teamsChat")?.uri, "app.todl");
-  assert.equal(model.spanOf(Repository.memberKey("teamsChat", "label"))?.uri, "app.todl");
+  assert.ok(model.has("app.teamsChat"));
+  assert.equal(model.spanOf("app.teamsChat")?.uri, "app.todl");
+  assert.equal(model.spanOf(Repository.memberKey("app.teamsChat", "label"))?.uri, "app.todl");
 });
 
 test("load surfaces syntax diagnostics from a malformed file", () => {

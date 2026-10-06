@@ -20,13 +20,13 @@ const SRC = `namespace d {
 test("a term's concept-typed field is realized as an edge, not a string attr", () => {
   const m = model(SRC);
   assert.deepEqual(
-    m.related("Kinds.Chat", EdgeKind.Relationship, Direction.Out, "implementedBy"),
-    ["Techs.Copilot"],
+    m.related("d.Kinds.Chat", EdgeKind.Relationship, Direction.Out, "implementedBy"),
+    ["d.Techs.Copilot"],
   );
-  assert.equal(m.resolve("Kinds.Chat")?.attrs.has("implementedBy"), false);
+  assert.equal(m.resolve("d.Kinds.Chat")?.attrs.has("implementedBy"), false);
 });
 
 test("a term's primitive-typed field stays a scalar attr", () => {
   const m = model(SRC);
-  assert.equal(m.resolve("Kinds.Chat")?.attrs.get("label"), "Chat");
+  assert.equal(m.resolve("d.Kinds.Chat")?.attrs.get("label"), "Chat");
 });

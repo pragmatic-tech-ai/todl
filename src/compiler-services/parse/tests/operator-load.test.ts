@@ -22,25 +22,25 @@ function loadSrc(body: string, gen = new FakeIdGenerator())
 test("a reified-edge operator mints a contained, endpoint-bound node", () => {
   const { model, diagnostics } = loadSrc(`endpoint a { label = "a"; } endpoint b { label = "b"; } a ~> b;`);
   assert.deepEqual(diagnostics.filter((d) => d.severity === Severity.Error), []);
-  assert.ok(model.resolve("id-0"), "edge node id-0 minted");
-  assert.deepEqual(model.refs("id-0", "from"), ["a"]);
-  assert.deepEqual(model.refs("id-0", "to"), ["b"]);
+  assert.ok(model.resolve("t.id-0"), "edge node id-0 minted");
+  assert.deepEqual(model.refs("t.id-0", "from"), ["t.a"]);
+  assert.deepEqual(model.refs("t.id-0", "to"), ["t.b"]);
 });
 
 test("a reified-edge body assignment lands on the minted node", () => {
   const { model } = loadSrc(`endpoint a { label = "a"; } endpoint b { label = "b"; } a ~> b { kind = "sync"; };`);
-  assert.equal(model.resolve("id-0")?.attrs.get("kind"), "sync");
+  assert.equal(model.resolve("t.id-0")?.attrs.get("kind"), "sync");
 });
 
 test("an explicit id in the body is reused", () => {
   const { model } = loadSrc(`endpoint a { label = "a"; } endpoint b { label = "b"; } a ~> b { id = link1; };`);
-  assert.ok(model.resolve("link1"), "author id reused");
-  assert.deepEqual(model.refs("link1", "from"), ["a"]);
+  assert.ok(model.resolve("t.link1"), "author id reused");
+  assert.deepEqual(model.refs("t.link1", "from"), ["t.a"]);
 });
 
 test("a relationship-form operator adds one edge, no node", () => {
   const { model } = loadSrc(`component w {} component d {} w ->> d;`);
-  assert.deepEqual(model.related("w", EdgeKind.Relationship, Direction.Out, "depends_on"), ["d"]);
+  assert.deepEqual(model.related("t.w", EdgeKind.Relationship, Direction.Out, "depends_on"), ["t.d"]);
 });
 
 test("an unknown glyph is operator.undefined", () => {

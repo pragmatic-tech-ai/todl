@@ -8,7 +8,7 @@ test("toJSON/fromJSON round-trips a nested taxonomy including Narrower edges", (
   const src = `namespace n { concept Thing {} taxonomy Cc : represents Thing { term Surface { term ApiService {} } term DataStore {} } }`;
   const original = load([{ uri: "t.todl", text: src }]).model;
   const rebuilt = fromJSON(toJSON(original));
-  assert.deepEqual(rebuilt.narrowerOf("Cc.Surface"), ["Cc.ApiService"]);
-  assert.deepEqual(rebuilt.broaderOf("Cc.ApiService"), ["Cc.Surface"]);
-  assert.equal(rebuilt.resolve("Cc")?.metaKind, MetaKind.Taxonomy);
+  assert.deepEqual(rebuilt.narrowerOf("n.Cc.Surface"), ["n.Cc.ApiService"]);
+  assert.deepEqual(rebuilt.broaderOf("n.Cc.ApiService"), ["n.Cc.Surface"]);
+  assert.equal(rebuilt.resolve("n.Cc")?.metaKind, MetaKind.Taxonomy);
 });

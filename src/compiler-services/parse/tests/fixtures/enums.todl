@@ -1,5 +1,7 @@
 namespace adl.metaModels.bpmn.enums
 {
+    import adl.metaModels.bpmn.concepts;
+
     taxonomy TaskType : represents Task
     {
         description = "Classifies a BPMN task by what kind of work performs it.";

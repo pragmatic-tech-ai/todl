@@ -28,15 +28,15 @@ function loadSrc(body: string, gen = new FakeIdGenerator())
 test("a bare edge statement in a record body binds the minted step to the matching array field", () => {
   const { model, diagnostics } = loadSrc(`endpoint a {} endpoint b {} sequence sq { a ==> b; }`);
   assert.deepEqual(diagnostics.filter((d) => d.severity === Severity.Error), []);
-  assert.deepEqual(model.refs("sq", "steps"), ["id-0"]);
-  assert.deepEqual(model.refs("id-0", "src"), ["a"]);
-  assert.deepEqual(model.refs("id-0", "dst"), ["b"]);
+  assert.deepEqual(model.refs("t.sq", "steps"), ["t.id-0"]);
+  assert.deepEqual(model.refs("t.id-0", "src"), ["t.a"]);
+  assert.deepEqual(model.refs("t.id-0", "dst"), ["t.b"]);
 });
 
 test("multiple bare edge statements bind in authored order", () => {
   const { model } = loadSrc(`endpoint a {} endpoint b {} endpoint c {} sequence sq { a ==> b; b ==> c; }`);
-  assert.deepEqual(model.refs("sq", "steps"), ["id-0", "id-1"]);
-  assert.deepEqual(model.refs("id-1", "dst"), ["c"]);
+  assert.deepEqual(model.refs("t.sq", "steps"), ["t.id-0", "t.id-1"]);
+  assert.deepEqual(model.refs("t.id-1", "dst"), ["t.c"]);
 });
 
 test("a bare edge statement with no matching field is containment-only, no error", () => {
@@ -44,8 +44,8 @@ test("a bare edge statement with no matching field is containment-only, no error
   assert.deepEqual(diagnostics.filter((d) => d.severity === Severity.Error), []);
   // The step is still minted (endpoints bound) and contained by c, just not
   // bound to any field (component has no step-typed member).
-  assert.deepEqual(model.refs("id-0", "src"), ["a"]);
-  assert.deepEqual(model.related("c", EdgeKind.Contains, Direction.Out), ["id-0"]);
+  assert.deepEqual(model.refs("t.id-0", "src"), ["t.a"]);
+  assert.deepEqual(model.related("t.c", EdgeKind.Contains, Direction.Out), ["t.id-0"]);
 });
 
 test("a bare edge statement matching two array fields is ambiguous", () => {
@@ -56,6 +56,6 @@ test("a bare edge statement matching two array fields is ambiguous", () => {
 test("a relationship-form operator statement still writes its ref, no minting or binding", () => {
   const { model, diagnostics } = loadSrc(`component w {} component d {} sequence sq { w ->> d; }`);
   assert.deepEqual(diagnostics.filter((d) => d.severity === Severity.Error), []);
-  assert.deepEqual(model.refs("w", "depends_on"), ["d"]);
-  assert.deepEqual(model.refs("sq", "steps"), []);
+  assert.deepEqual(model.refs("t.w", "depends_on"), ["t.d"]);
+  assert.deepEqual(model.refs("t.sq", "steps"), []);
 });

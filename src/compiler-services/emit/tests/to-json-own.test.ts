@@ -41,14 +41,14 @@ describe('toJSONOwn', () => {
     const ids = new Set(own.nodes.map((n) => n.id));
 
     // Own taxonomy + its class terms are present.
-    assert.ok(ids.has('Microsoft.azure'), 'own class term present');
+    assert.ok(ids.has('lib.Microsoft.azure'), 'own class term present');
     // Base concepts and prelude are excluded.
-    assert.ok(!ids.has('Location'), 'base concept excluded');
-    assert.ok(!ids.has('Technology'), 'base concept excluded');
-    assert.ok(!ids.has('element'), 'prelude node excluded');
+    assert.ok(!ids.has('ea.Location'), 'base concept excluded');
+    assert.ok(!ids.has('ea.Technology'), 'base concept excluded');
+    assert.ok(!ids.has('todl.Element'), 'prelude node excluded');
     // Every emitted edge originates from an own node.
     for (const e of own.edges) assert.ok(ownIds.has(e.from), `edge from own node: ${e.from}`);
     // The type reference to the base concept id is preserved (dangling).
-    assert.equal(own.nodes.find((n) => n.id === 'Microsoft.azure')?.type, 'Location');
+    assert.equal(own.nodes.find((n) => n.id === 'lib.Microsoft.azure')?.type, 'ea.Location');
   });
 });

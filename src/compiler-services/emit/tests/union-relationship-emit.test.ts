@@ -15,6 +15,6 @@ test("a union relationship emits a multi-element targets array", () => {
       concept edge { relationship from -> actor | component[]; } }`,
   ]);
   const js = toMetaModule(model, { slug: "n" });
-  assert.match(js, /from: \{ targets: \["actor", "component"\], cardinality: "\*" \},/);
+  assert.match(js, /from: \{ targets: \["n.actor", "n.component"\], cardinality: "\*" \},/);
   assert.doesNotMatch(js, /from: \{ target: /);
 });

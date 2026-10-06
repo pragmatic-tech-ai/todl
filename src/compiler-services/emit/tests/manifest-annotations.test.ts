@@ -27,17 +27,17 @@ function emit(): LogicalManifest
 
 test("emitManifest carries a concept annotation", () =>
 {
-    const anns = emit().concepts["Component"]!.annotations;
+    const anns = emit().concepts["acme.Component"]!.annotations;
     assert.equal(anns.length, 1);
-    assert.equal(anns[0]!.annotation, "icon");
+    assert.equal(anns[0]!.annotation, "todl.icon");
     assert.equal(anns[0]!.args["path"], "resources/component.svg");
 });
 
 test("emitManifest carries a relationship-member annotation", () =>
 {
-    const rel = emit().concepts["Component"]!.relationships["implementedBy"]!;
+    const rel = emit().concepts["acme.Component"]!.relationships["implementedBy"]!;
     assert.equal(rel.annotations.length, 1);
-    assert.equal(rel.annotations[0]!.annotation, "iconSource");
+    assert.equal(rel.annotations[0]!.annotation, "todl.iconSource");
     assert.equal(rel.annotations[0]!.args["order"], "1"); // numeric args store as strings
 });
 
@@ -46,10 +46,10 @@ test("emitManifest carries a term annotation", () =>
     const classes = emit().classes;
     const term = Object.values(classes).find((c) => c.annotations.length > 0);
     assert.ok(term, "expected a term carrying an annotation");
-    assert.ok(term!.annotations.some((a) => a.annotation === "icon" && a.args["path"] === "resources/api.svg"));
+    assert.ok(term!.annotations.some((a) => a.annotation === "todl.icon" && a.args["path"] === "resources/api.svg"));
 });
 
 test("a concept with no annotations has an empty annotations array", () =>
 {
-    assert.deepEqual(emit().concepts["Technology"]!.annotations, []);
+    assert.deepEqual(emit().concepts["acme.Technology"]!.annotations, []);
 });

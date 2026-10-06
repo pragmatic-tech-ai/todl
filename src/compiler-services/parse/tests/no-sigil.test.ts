@@ -20,7 +20,7 @@ const SRC = `namespace d {
 test("a bare name resolves as a reference with no sigil, and no parse error", () => {
   const r = loaded(SRC);
   assert.deepEqual(r.diagnostics.filter((d) => d.severity === "error"), []);
-  assert.deepEqual(r.model.related("c", EdgeKind.Relationship, Direction.Out, "implementedBy"), ["t"]);
+  assert.deepEqual(r.model.related("d.c", EdgeKind.Relationship, Direction.Out, "implementedBy"), ["d.t"]);
 });
 
 test("a leftover `&` sigil is now a parse error", () => {
