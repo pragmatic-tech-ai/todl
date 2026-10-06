@@ -1,0 +1,146 @@
+import type { IStorage } from '@pragmatic-tech-ai/todl-runtime';
+import { mergeBases } from '../../../compiler-services/api.js';
+import { loadInto } from '../../../compiler-services/parse/loader.js';
+import { preludeDocument, preludeNames } from '../../../compiler-services/stdlib/prelude.js';
+import { validate } from '../../../compiler-services/validate/validate.js';
+import { Repository } from '../../../compiler-services/model/model.js';
+import { SnowflakeIdGenerator, type IdGenerator } from '../../../compiler-services/model/id-generator.js';
+import type { Diagnostic } from '../../../compiler-services/diagnostics/diagnostic.js';
+import type { SourceFile } from '../../../compiler-services/diagnostics/span.js';
+import type { TodlDocument } from '../../../compiler-services/emit/json.js';
+import { WikiLocator, type WikiOrigin } from '../../project-services/core/wiki-origin.js';
+
+export interface SolutionGraphMember
+{
+    id: string;
+    storage: IStorage;
+    sources: readonly SourceFile[];
+    baseIds: readonly string[];
+    publishedBases: readonly TodlDocument[];
+}
+
+/**
+ * One Repository for the whole open solution: prelude + published bases merged once,
+ * every source member loaded in, bases shared (no per-member copy).
+ */
+export class SolutionGraph
+{
+    private static readonly ModelScopeUri = '<model>';
+
+    private readonly idGen: IdGenerator = new SnowflakeIdGenerator();
+    private model: Repository = new Repository(mergeBases([preludeDocument()]));
+    private provenance: Map<string, string> = new Map();
+    private memberOf: Map<string, string> = new Map();
+    private originOf: Map<string, WikiOrigin> = new Map();
+    private sourcesOf: Map<string, SourceFile[]> = new Map();
+    private diagnosticsByUri: Map<string, Diagnostic[]> = new Map();
+
+    public get Model(): Repository
+    {
+        return this.model;
+    }
+
+    public get OriginOf(): ReadonlyMap<string, WikiOrigin>
+    {
+        return this.originOf;
+    }
+
+    public DiagnosticsByUri(): ReadonlyMap<string, Diagnostic[]>
+    {
+        return this.diagnosticsByUri;
+    }
+
+    public async Build(members: readonly SolutionGraphMember[]): Promise<void>
+    {
+        this.provenance = new Map();
+        this.memberOf = new Map();
+        this.originOf = new Map();
+        this.sourcesOf = new Map();
+        this.diagnosticsByUri = new Map();
+
+        const bases = this.DistinctBases(members);
+        this.model = new Repository(mergeBases([preludeDocument(), ...bases]));
+
+        const reserved = preludeNames();
+        for (const member of this.TopoOrder(members))
+        {
+            const before = new Set(this.model.allNodes().map(n => n.id));
+            const loadDiags = loadInto(this.model, [...member.sources], reserved, this.idGen, this.provenance);
+            this.sourcesOf.set(member.id, [...member.sources]);
+            const origin = WikiLocator.OpenProjectOrigin(member.storage);
+            for (const node of this.model.allNodes())
+            {
+                if (before.has(node.id))
+                {
+                    continue;
+                }
+                this.memberOf.set(node.id, member.id);
+                if (!this.originOf.has(node.id))
+                {
+                    this.originOf.set(node.id, origin);
+                }
+            }
+            this.AddDiagnostics(loadDiags);
+        }
+        this.AddDiagnostics(validate(this.model));
+    }
+
+    private AddDiagnostics(diags: readonly Diagnostic[]): void
+    {
+        for (const d of diags)
+        {
+            const key = d.span?.uri ?? SolutionGraph.ModelScopeUri;
+            const list = this.diagnosticsByUri.get(key);
+            if (list)
+            {
+                list.push(d);
+            }
+            else
+            {
+                this.diagnosticsByUri.set(key, [d]);
+            }
+        }
+    }
+
+    private DistinctBases(members: readonly SolutionGraphMember[]): TodlDocument[]
+    {
+        const seen = new Set<TodlDocument>();
+        for (const m of members)
+        {
+            for (const b of m.publishedBases)
+            {
+                seen.add(b);
+            }
+        }
+        return [...seen];
+    }
+
+    private TopoOrder(members: readonly SolutionGraphMember[]): SolutionGraphMember[]
+    {
+        const byId = new Map(members.map(m => [m.id, m] as const));
+        const visited = new Set<string>();
+        const order: SolutionGraphMember[] = [];
+        const visit = (m: SolutionGraphMember): void =>
+        {
+            if (visited.has(m.id))
+            {
+                return;
+            }
+            visited.add(m.id);
+            for (const baseId of m.baseIds)
+            {
+                const base = byId.get(baseId);
+                if (base)
+                {
+                    visit(base);
+                }
+            }
+            order.push(m);
+        };
+        for (const m of members)
+        {
+            visit(m);
+        }
+        return order;
+    }
+}
