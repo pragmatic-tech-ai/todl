@@ -2,6 +2,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { FakeStorage } from '@pragmatic-tech-ai/todl-runtime';
 import { SolutionGraph, type SolutionGraphMember } from '../solution-graph.js';
+import { EdgeKind, Direction } from '../../../../compiler-services/model/graph.js';
 import { ResourceLocator } from '../resource-locator.js';
 
 const META = { uri: 'mm/meta.todl', text: 'namespace ea { concept Location { label : string; } }' };
@@ -17,11 +18,11 @@ class Fixture
         return { id, storage, sources: srcs, baseIds, publishedBases: [] };
     }
 
-    public static Lib(termBody: string): { uri: string; text: string }
+    public static Lib(termBody: string, extraTerms: string = ''): { uri: string; text: string }
     {
         return {
             uri: 'lib/lib.todl',
-            text: `namespace lib { import ea; taxonomy MS : represents Location { term azure { ${termBody} } } }`,
+            text: `namespace lib { import ea; taxonomy MS : represents Location { term azure { ${termBody} } ${extraTerms} } }`,
         };
     }
 }
@@ -49,10 +50,13 @@ describe('ResourceLocator', () =>
         const g = new SolutionGraph();
         await g.Build([
             Fixture.Member('tech-architecture', [META], []),
-            Fixture.Member('microsoft', [Fixture.Lib('annotate icon { }')], ['tech-architecture']),
+            Fixture.Member('microsoft', [Fixture.Lib('annotate icon { }', 'term aws { annotate icon { path = ""; } }')], ['tech-architecture']),
         ]);
         const loc = new ResourceLocator(g.Model, g.OriginOf, new FakeStorage());
+        assert.equal(g.Model.related('lib.MS.azure', EdgeKind.Annotated, Direction.Out).length, 1, 'the icon application exists but is skipped for lacking a path');
         assert.deepEqual(loc.Resources('lib.MS.azure'), []);
+        assert.equal(g.Model.related('lib.MS.aws', EdgeKind.Annotated, Direction.Out).length, 1, 'the empty-path application exists');
+        assert.deepEqual(loc.Resources('lib.MS.aws'), [], 'empty-string path is skipped');
     });
 
     test('a new annotation extending MuralResource resolves the same way (generality)', async () =>
