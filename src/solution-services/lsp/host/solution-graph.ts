@@ -176,16 +176,21 @@ export class SolutionGraph
                 this.LoadMember(state, member, state.sourcesOf.get(member.id) ?? []);
             }
             this.RebuildDiagnostics(state);
-            this.Changed.emit({ memberIds: affected.map(m => m.id) });
         }
         catch
         {
             // loadInto can throw mid-reload (e.g. builder.commit "node already exists" on a
             // duplicate declaration while typing), leaving `state` half-stripped. Repair to
-            // a consistent graph via a transactional rebuild so no nodes silently vanish and
-            // a Changed event still fires.
+            // a consistent graph via a transactional rebuild (which fires its own single
+            // Changed) so no nodes silently vanish, then RETURN — the happy-path emit below
+            // must not also run.
             this.RepairFailedReplace(memberId, priorSources);
+            return;
         }
+        // Emit OUTSIDE the try so a throwing GraphChanged subscriber cannot be caught as a
+        // "load failure" and trip RepairFailedReplace (which would revert the user's edit).
+        // Reached only after a clean incremental replace — exactly one emit on this path.
+        this.Changed.emit({ memberIds: affected.map(m => m.id) });
     }
 
     // Repair the graph after a failed incremental ReplaceMember. First try a transactional
