@@ -44,7 +44,7 @@ test("loads a TODL application and reads instances by definition", async () => {
   const found: string[] = [];
   for (const model of graph.Models)
   {
-    if (model.Name !== "Major") continue;
+    if (model.Name !== "application.Major") continue;
     for (const definition of model.GetDefinitions())
     {
       if (definition.Is(locationDefinition as TodlDefinition))
@@ -57,10 +57,11 @@ test("loads a TODL application and reads instances by definition", async () => {
   assert.deepEqual(found.sort(), ["DC1", "DC2"]);
 });
 
-test("GetDefinition resolves by flat id too, and Is honors subtyping", async () => {
+test("GetDefinition resolves by qualified id only (a bare id no longer resolves)", async () => {
   const graph = TODL.ComposeGraph([metaModel], [microsoft]);
   await TODL.Load(graph, new DocumentSource(application));
 
-  assert.ok(graph.GetDefinition("Location"), "flat id resolves");
+  assert.ok(graph.GetDefinition("tech_architecture.Location"), "qualified id resolves");
+  assert.equal(graph.GetDefinition("Location"), undefined, "bare id does not resolve");
   assert.equal(graph.GetDefinition("microsoft.NoSuch"), undefined, "unknown resolves to undefined");
 });

@@ -20,7 +20,7 @@ test("checkAgainst surfaces the origin file of a minted reified edge", () => {
   }` };
   const { model, provenance } = checkAgainst([base], [src]);
   // The minted connector is the sole own node of typeOf "connector".
-  const connector = model.allNodes().find((n) => n.type === "connector");
+  const connector = model.allNodes().find((n) => n.type === "mm.connector");
   assert.ok(connector, "a connector node was minted");
   assert.equal(provenance.get(connector.id), "flow.todl");
 });
@@ -30,5 +30,5 @@ test("check returns a provenance map for named instances", () => {
     concept box {}
     model M : t { box a {} }
   }` }]);
-  assert.equal(provenance.get("a"), "one.todl");
+  assert.equal(provenance.get("t.a"), "one.todl");
 });

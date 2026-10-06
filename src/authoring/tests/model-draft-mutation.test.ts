@@ -49,12 +49,12 @@ test("fromSource reopens a saved model as an editable draft (round-trip)", () =>
   const src = d1.toTodl();
 
   const d2 = ModelDraft.fromSource([base()], src, { namespace: "app" });
-  assert.deepEqual(d2.ownInstances().map((e) => e.id).sort(), ["gw", "t1"]);
-  assert.equal(d2.entity("gw")!.field("label"), "Gateway");
-  assert.deepEqual(d2.entity("gw")!.refs("impl").map((e) => e.id), ["t1"]);
+  assert.deepEqual(d2.ownInstances().map((e) => e.id).sort(), ["app.gw", "app.t1"]);
+  assert.equal(d2.entity("app.gw")!.field("label"), "Gateway");
+  assert.deepEqual(d2.entity("app.gw")!.refs("impl").map((e) => e.id), ["app.t1"]);
   assert.deepEqual(d2.diagnostics, []);
-  d2.setField("gw", "label", "GW2"); // still editable
-  assert.equal(d2.entity("gw")!.field("label"), "GW2");
+  d2.setField("app.gw", "label", "GW2"); // still editable
+  assert.equal(d2.entity("app.gw")!.field("label"), "GW2");
 });
 
 test("fromSource of a blank source yields an empty draft", () => {

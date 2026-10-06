@@ -5,7 +5,7 @@ import { check } from "../compiler-services/api.js";
 
 const CONCEPTS = `namespace ea { concept Component { label : string; } }`;
 // One syntax error (in bad.todl) + one semantic error (missing required label).
-const BAD = `namespace app { Component teamsChat { } component @@@ { } }`;
+const BAD = `namespace app { import ea; Component teamsChat { } component @@@ { } }`;
 
 test("check returns syntax + semantic diagnostics, partitionable by uri", () => {
   const { diagnostics } = check([

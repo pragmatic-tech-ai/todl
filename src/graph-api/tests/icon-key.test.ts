@@ -26,12 +26,12 @@ async function host()
 test("IconKey qualifies with the DECLARING package's model/version", async () =>
 {
     const q = (await host()).Query();
-    assert.equal(q.IconKey("Widget"), "acme.meta/1.0.0/resources/w.svg");
+    assert.equal(q.IconKey("acme.Widget"), "acme.meta/1.0.0/resources/w.svg");
 });
 
 test("IconKey returns undefined for a type without an icon / unknown type", async () =>
 {
     const q = (await host()).Query();
-    assert.equal(q.IconKey("Element"), undefined);
+    assert.equal(q.IconKey("todl.Element"), undefined);
     assert.equal(q.IconKey("Nonexistent"), undefined);
 });

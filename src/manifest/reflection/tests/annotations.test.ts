@@ -28,30 +28,30 @@ for (const binary of [false, true])
 
     test(`TypeInfo.getAnnotations reflects a concept annotation (${label})`, () =>
     {
-        const component = manifest(binary).getType("Component")!;
+        const component = manifest(binary).getType("acme.Component")!;
         const anns = component.getAnnotations();
         assert.equal(anns.length, 1);
-        assert.equal(anns[0]!.type.name, "icon");
+        assert.equal(anns[0]!.type.name, "todl.icon");
         assert.equal(anns[0]!.args.get("path"), "resources/component.svg");
     });
 
     test(`RelationshipInfo.getAnnotations reflects a member annotation (${label})`, () =>
     {
-        const rel = manifest(binary).getType("Component")!.getRelationships().find((r) => r.name === "implementedBy")!;
+        const rel = manifest(binary).getType("acme.Component")!.getRelationships().find((r) => r.name === "implementedBy")!;
         const anns = rel.getAnnotations();
         assert.equal(anns.length, 1);
-        assert.equal(anns[0]!.type.name, "iconSource");
+        assert.equal(anns[0]!.type.name, "todl.iconSource");
         assert.equal(anns[0]!.args.get("order"), "1"); // numeric args store as strings
     });
 }
 
 test("a concept with no annotations returns []", () =>
 {
-    assert.deepEqual(manifest(false).getType("Technology")!.getAnnotations(), []);
+    assert.deepEqual(manifest(false).getType("acme.Technology")!.getAnnotations(), []);
 });
 
 test("FieldInfo.getAnnotations returns [] (fields have no node)", () =>
 {
-    const nameField = manifest(false).getType("Component")!.getField("name")!;
+    const nameField = manifest(false).getType("acme.Component")!.getField("name")!;
     assert.deepEqual(nameField.getAnnotations(), []);
 });

@@ -25,8 +25,8 @@ test("toLogical carries model/version/root and the own concept's fields", () => 
   assert.equal(m.format, "todl-manifest/1");
   assert.equal(m.model, "acme.widgets");
   assert.equal(m.version, "1.0.0");
-  assert.equal(m.root, "Element");
-  const widget = m.concepts["Widget"];
+  assert.equal(m.root, "todl.Element");
+  const widget = m.concepts["acme.Widget"];
   assert.ok(widget, "Widget concept emitted");
   // Reference members are type-directed: `parts : Widget[]` is a concept-typed
   // FIELD (its value materializes as an edge at instance time), not a rel.
@@ -34,7 +34,7 @@ test("toLogical carries model/version/root and the own concept's fields", () => 
   assert.equal(widget.fields["name"]?.type, "string");
   assert.equal(widget.fields["color"]?.card, "?");
   assert.equal(widget.fields["parts"]?.card, "*");
-  assert.equal(widget.fields["parts"]?.type, "Widget");
+  assert.equal(widget.fields["parts"]?.type, "acme.Widget");
 });
 
 // Taxonomy/class lowering is ManifestEmitter's job (covered in
@@ -54,7 +54,7 @@ test("toResolved yields loadable manifest bytes + mapped deps, no seed", () => {
   assert.equal(resolved.seed, undefined);
   const manifest = Manifest.load(resolved.manifest as Uint8Array);
   assert.equal(manifest.model, "acme.widgets");
-  assert.notEqual(manifest.getType("Widget"), undefined);
+  assert.notEqual(manifest.getType("acme.Widget"), undefined);
 });
 
 test("toResolved carries instance nodes + relationship edges as a seed graph", () => {
@@ -69,10 +69,10 @@ test("toResolved carries instance nodes + relationship edges as a seed graph", (
   const resolved = PackageManifestBridge.toResolved(out.package!);
   assert.ok(resolved.seed, "seed present");
   const ids = resolved.seed!.nodes.map((n) => n.id).sort();
-  assert.ok(ids.includes("a") && ids.includes("b"), "instances seeded");
-  const a = resolved.seed!.nodes.find((n) => n.id === "a")!;
-  assert.equal(a.type, "Widget");
-  assert.deepEqual(resolved.seed!.edges, [{ from: "a", rel: "parts", to: "b" }]);
+  assert.ok(ids.includes("acme.a") && ids.includes("acme.b"), "instances seeded");
+  const a = resolved.seed!.nodes.find((n) => n.id === "acme.a")!;
+  assert.equal(a.type, "acme.Widget");
+  assert.deepEqual(resolved.seed!.edges, [{ from: "acme.a", rel: "parts", to: "acme.b" }]);
 });
 
 test("seedOf maps a DataGraph to a SeedGraph (class/namespace optional, edges omitted when empty)", () => {

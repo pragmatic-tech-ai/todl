@@ -16,11 +16,11 @@ function soloManifest(model: string, concept: string): ManifestJson
   const logical: LogicalManifest = {
     format: "todl-manifest/1", model, version: "1.0.0", root: "Element",
     concepts: {
-      Element: { extends: null, fields: {}, relationships: {}, invariants: [] },
+      Element: { extends: null, fields: {}, relationships: {}, invariants: [], annotations: [] },
       [concept]: {
         extends: "Element",
         fields: { label: { type: "string", card: "?" } },
-        relationships: {}, invariants: [],
+        relationships: {}, invariants: [], annotations: [],
       },
     },
     classes: {}, taxonomies: {},
@@ -34,7 +34,7 @@ function manifestB(): ManifestJson
   const w = new ManifestWriter("b", "1.0.0");
   const base = w.addTypeInfo({
     name: w.internString("Base"), ns: 0, kind: MetaKind.Concept,
-    extends: 0, fieldStart: 0, fieldCount: 0, relStart: 0, relCount: 0,
+    extends: 0, fieldStart: 0, fieldCount: 0, relStart: 0, relCount: 0, annotStart: 0, annotCount: 0,
   });
   w.setRoot(base);
   return w.toJSON();
@@ -47,7 +47,7 @@ function manifestA(): ManifestJson
   const sub = w.addTypeInfo({
     name: w.internString("Sub"), ns: 0, kind: MetaKind.Concept,
     extends: new TypeDefOrRef(true, ref).encode(),
-    fieldStart: 0, fieldCount: 0, relStart: 0, relCount: 0,
+    fieldStart: 0, fieldCount: 0, relStart: 0, relCount: 0, annotStart: 0, annotCount: 0,
   });
   w.setRoot(sub);
   return w.toJSON();

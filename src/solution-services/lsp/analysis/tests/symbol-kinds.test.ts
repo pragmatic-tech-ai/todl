@@ -12,8 +12,8 @@ test("SymbolKinds.Of distinguishes concepts, primitives, and instances", () =>
         "  person alice { }",
         "}",
     ].join("\n") }]);
-    assert.equal(SymbolKinds.Of(model, "person"), SymbolKind.Concept);
+    assert.equal(SymbolKinds.Of(model, "demo.person"), SymbolKind.Concept);
     assert.equal(SymbolKinds.Of(model, "string"), SymbolKind.Primitive);
-    assert.equal(SymbolKinds.Of(model, "alice"), SymbolKind.Instance);
+    assert.equal(SymbolKinds.Of(model, "demo.alice"), SymbolKind.Instance);
     assert.equal(SymbolKinds.Of(model, "no-such-id"), SymbolKind.Unknown);
 });

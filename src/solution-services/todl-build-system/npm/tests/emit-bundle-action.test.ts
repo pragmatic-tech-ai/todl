@@ -87,7 +87,7 @@ describe("EmitBundleAction", () =>
         assert.ok(bundle.classes.some((c) => c.localId === "euWest"));
         // Package-level annotations still populate — the reserved package-node id now
         // comes from the shared `PACKAGE_NODE_ID` constant (kinds.ts), not a private copy.
-        assert.deepEqual(bundle.annotations["Author"], { name: "Acme" });
+        assert.deepEqual(bundle.annotations["acme.Author"], { name: "Acme" });
     });
 
     test("library project: writes bundle.json with type 'library'", async () =>

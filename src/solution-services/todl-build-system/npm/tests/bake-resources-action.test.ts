@@ -43,9 +43,9 @@ function contextWith(pkg: CompiledPackage, manifest: ProjectManifest): TodlBuild
 // same as the real prelude.
 function iconPkg(): CompiledPackage
 {
-    const entityNode = { id: "app1", type: null, metaKind: "concept", attrs: {} };
-    const iconNode = { id: "app1@icon", type: "icon", metaKind: null, attrs: { path: "visuals/a.svg" } };
-    const ownEdges = [{ kind: "Annotated", from: "app1", to: "app1@icon" }];
+    const entityNode = { id: "ms.app1", type: null, metaKind: "concept", attrs: {} };
+    const iconNode = { id: "ms.app1@todl.icon", type: "todl.icon", metaKind: null, attrs: { path: "visuals/a.svg" } };
+    const ownEdges = [{ kind: "Annotated", from: "ms.app1", to: "ms.app1@todl.icon" }];
     const ownNodes = [entityNode, iconNode];
     return {
         id: "microsoft",
@@ -54,10 +54,10 @@ function iconPkg(): CompiledPackage
         fullDocument: {
             nodes: [
                 ...ownNodes,
-                { id: "icon", type: null, metaKind: "annotation", attrs: {} },
-                { id: "MuralResource", type: null, metaKind: "annotation", attrs: {} },
+                { id: "todl.icon", type: null, metaKind: "annotation", attrs: {} },
+                { id: "todl.MuralResource", type: null, metaKind: "annotation", attrs: {} },
             ],
-            edges: [...ownEdges, { kind: "Extends", from: "icon", to: "MuralResource" }],
+            edges: [...ownEdges, { kind: "Extends", from: "todl.icon", to: "todl.MuralResource" }],
         },
         sources: [],
         classes: [],
@@ -68,7 +68,7 @@ function iconPkg(): CompiledPackage
 // detect, so DeclaresResources must gate the bake out entirely.
 function plainPkg(): CompiledPackage
 {
-    const entityNode = { id: "app1", type: null, metaKind: "concept", attrs: {} };
+    const entityNode = { id: "ms.app1", type: null, metaKind: "concept", attrs: {} };
     return {
         id: "microsoft",
         version: "1.0.0",

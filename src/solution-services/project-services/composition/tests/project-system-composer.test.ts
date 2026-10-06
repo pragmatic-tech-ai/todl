@@ -275,7 +275,7 @@ describe("ProjectSystemComposer", () =>
         assert.equal(result.Ok, true, JSON.stringify(result.Diagnostics));
         assert.equal(await output.Output.Exists("presentation/presentation.compiled.json"), true);
         const index = JSON.parse(await output.Output.ReadText("presentation/icon-index.json")) as Record<string, string>;
-        assert.equal(index["Widget"], "mm_icon_w");
+        assert.equal(index["acme.Widget"], "mm_icon_w");
     });
 
     test("raising a Created event runs the architecture generators end to end", async () =>

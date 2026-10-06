@@ -30,9 +30,9 @@ function contextWith(pkg: CompiledPackage | undefined): TodlBuildContext
 // `Extends` edge between them live only in the closure — same as the real prelude.
 function iconPkg(): CompiledPackage
 {
-    const entityNode = { id: "app1", type: null, metaKind: "concept", attrs: {} };
-    const iconNode = { id: "app1@icon", type: "icon", metaKind: null, attrs: { path: "visuals/a.svg" } };
-    const ownEdges = [{ kind: "Annotated", from: "app1", to: "app1@icon" }];
+    const entityNode = { id: "ms.app1", type: null, metaKind: "concept", attrs: {} };
+    const iconNode = { id: "ms.app1@todl.icon", type: "todl.icon", metaKind: null, attrs: { path: "visuals/a.svg" } };
+    const ownEdges = [{ kind: "Annotated", from: "ms.app1", to: "ms.app1@todl.icon" }];
     const ownNodes = [entityNode, iconNode];
     return {
         id: "microsoft",
@@ -41,10 +41,10 @@ function iconPkg(): CompiledPackage
         fullDocument: {
             nodes: [
                 ...ownNodes,
-                { id: "icon", type: null, metaKind: "annotation", attrs: {} },
-                { id: "MuralResource", type: null, metaKind: "annotation", attrs: {} },
+                { id: "todl.icon", type: null, metaKind: "annotation", attrs: {} },
+                { id: "todl.MuralResource", type: null, metaKind: "annotation", attrs: {} },
             ],
-            edges: [...ownEdges, { kind: "Extends", from: "icon", to: "MuralResource" }],
+            edges: [...ownEdges, { kind: "Extends", from: "todl.icon", to: "todl.MuralResource" }],
         },
         sources: [],
         classes: [],
@@ -55,7 +55,7 @@ function iconPkg(): CompiledPackage
 // the emitter to detect, so the document must pass through untouched.
 function plainPkg(): CompiledPackage
 {
-    const entityNode = { id: "app1", type: null, metaKind: "concept", attrs: {} };
+    const entityNode = { id: "ms.app1", type: null, metaKind: "concept", attrs: {} };
     return {
         id: "microsoft",
         version: "1.0.0",
@@ -75,7 +75,7 @@ describe("StampResourceKeysAction", () =>
 
         await new StampResourceKeysAction().Execute(ctx);
 
-        const iconNode = pkg.document.nodes.find((n) => (n as unknown as { type: string | null }).type === "icon") as unknown as { attrs: Record<string, unknown> };
+        const iconNode = pkg.document.nodes.find((n) => (n as unknown as { type: string | null }).type === "todl.icon") as unknown as { attrs: Record<string, unknown> };
         assert.equal(typeof iconNode.attrs["key"], "string");
     });
 

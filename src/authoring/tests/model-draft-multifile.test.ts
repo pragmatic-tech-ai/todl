@@ -28,14 +28,14 @@ const fileB = { uri: "deployments.todl", text: `namespace acme {
 
 test("fromSources composes many files into one draft", () => {
   const draft = ModelDraft.fromSources([base()], [fileA, fileB], { namespace: "acme" });
-  assert.equal(draft.resolve("web")?.type, "Component");
-  assert.equal(draft.resolve("host")?.type, "Node");
+  assert.equal(draft.resolve("acme.web")?.type, "mm.Component");
+  assert.equal(draft.resolve("acme.host")?.type, "mm.Node");
 });
 
 test("homeOf maps each entity to its source file", () => {
   const draft = ModelDraft.fromSources([base()], [fileA, fileB], { namespace: "acme" });
-  assert.equal(draft.homeOf("web"), "components.todl");
-  assert.equal(draft.homeOf("host"), "deployments.todl");
+  assert.equal(draft.homeOf("acme.web"), "components.todl");
+  assert.equal(draft.homeOf("acme.host"), "deployments.todl");
 });
 
 test("toTodlByFile emits one file per home, each with its conforms clause", () => {
@@ -43,11 +43,11 @@ test("toTodlByFile emits one file per home, each with its conforms clause", () =
   const files = draft.toTodlByFile();
   assert.deepEqual([...files.keys()].sort(), ["components.todl", "deployments.todl"]);
   const a = files.get("components.todl")!;
-  assert.match(a, /conforms ComponentView/);
+  assert.match(a, /conforms mm.ComponentView/);
   assert.match(a, /Component web/);
   assert.doesNotMatch(a, /conforms\s*=/); // conforms is a block clause, not an entity field
   const b = files.get("deployments.todl")!;
-  assert.match(b, /conforms DeploymentView/);
+  assert.match(b, /conforms mm.DeploymentView/);
   assert.match(b, /Node host/);
 });
 
@@ -65,14 +65,14 @@ test("the emitted files round-trip: recompiling reproduces the model, no diagnos
     ...sources,
   ]);
   assert.deepEqual(diagnostics.map((d) => d.code), []);
-  assert.equal(model.resolve("web")?.type, "Component");
-  assert.equal(model.resolve("host")?.type, "Node");
+  assert.equal(model.resolve("acme.web")?.type, "mm.Component");
+  assert.equal(model.resolve("acme.host")?.type, "mm.Node");
 });
 
 test("create with a home hint places a new entity into that file's output", () => {
   const draft = ModelDraft.fromSources([base()], [fileA, fileB], { namespace: "acme" });
-  draft.create("Component", "api", "components.todl");
-  assert.equal(draft.homeOf("api"), "components.todl");
+  draft.create("mm.Component", "acme.api", "components.todl");
+  assert.equal(draft.homeOf("acme.api"), "components.todl");
   const files = draft.toTodlByFile();
   assert.match(files.get("components.todl")!, /Component api/);
 });

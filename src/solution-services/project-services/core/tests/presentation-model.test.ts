@@ -149,10 +149,10 @@ describe('PresentationResourceEmitter — pure presentation helpers', () =>
         // A projected bag carries an inherited annotation's params under every ancestor
         // name, so an applied `icon` shows up under MuralResource too.
         const withAttrs = node({ id: 'actor', attrs: { icon: 'a.svg', label: 'Attr' } })
-        assert.deepEqual(PresentationResourceEmitter.ResolveFacets(withAttrs, { MuralResource: { path: 'ann.svg' }, label: { text: 'Ann' } }), { icon: 'ann.svg', label: 'Attr' })
+        assert.deepEqual(PresentationResourceEmitter.ResolveFacets(withAttrs, { 'todl.MuralResource': { path: 'ann.svg' }, 'todl.label': { text: 'Ann' } }), { icon: 'ann.svg', label: 'Attr' })
         assert.deepEqual(PresentationResourceEmitter.ResolveFacets(withAttrs, {}), { label: 'Attr' })
         const bare = node({ id: 'app-component' })
-        assert.deepEqual(PresentationResourceEmitter.ResolveFacets(bare, { label: { text: 'Ann' } }), { label: 'Ann' })
+        assert.deepEqual(PresentationResourceEmitter.ResolveFacets(bare, { 'todl.label': { text: 'Ann' } }), { label: 'Ann' })
         assert.deepEqual(PresentationResourceEmitter.ResolveFacets(bare, {}), { label: 'App Component' })
     })
 

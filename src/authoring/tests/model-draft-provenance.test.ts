@@ -33,7 +33,7 @@ function ownOfType(draft: ModelDraft, typeOf: string): string | undefined
 
 test("a minted reified edge is homed to the file that authored it", () => {
   const draft = ModelDraft.fromSources([base()], [structure, flow], { namespace: "acme" });
-  const connectorId = ownOfType(draft, "connector");
+  const connectorId = ownOfType(draft, "mm.connector");
   assert.ok(connectorId, "connector materialised");
   assert.equal(draft.homeOf(connectorId), "flow.todl");
 });

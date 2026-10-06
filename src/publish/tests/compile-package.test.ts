@@ -38,12 +38,12 @@ describe("compilePackage", () => {
     const pkg = out.package!;
 
     const ownIds = new Set(pkg.document.nodes.map((n) => n.id));
-    assert.ok(ownIds.has("Technology"), "own concept present");
-    assert.ok(!ownIds.has("identifier"), "prelude node excluded from own document");
+    assert.ok(ownIds.has("ea.Technology"), "own concept present");
+    assert.ok(!ownIds.has("todl.identifier"), "prelude node excluded from own document");
     assert.equal(pkg.document.dependencies, undefined, "no deps → field omitted");
 
     // fullDocument is the whole compiled closure (prelude included).
-    assert.ok(pkg.fullDocument.nodes.some((n) => n.id === "identifier"), "fullDocument has prelude");
+    assert.ok(pkg.fullDocument.nodes.some((n) => n.id === "todl.identifier"), "fullDocument has prelude");
     assert.equal(pkg.id, "ea");
     assert.equal(pkg.version, "0.1.0");
   });
@@ -58,9 +58,9 @@ describe("compilePackage", () => {
     const pkg = compilePackage([], [META], { id: "ea", version: "0.1.0" }, undefined, {
       debug: true,
     }).package!;
-    const tech = pkg.document.nodes.find((n) => n.id === "Technology");
+    const tech = pkg.document.nodes.find((n) => n.id === "ea.Technology");
     assert.deepEqual(tech?.debug, {
-      kind: "concept", name: "Technology", type: "concept", namespace: "ea",
+      kind: "concept", name: "ea.Technology", type: "concept", namespace: "ea",
     });
     assert.ok(pkg.fullDocument.nodes.some((n) => n.debug !== undefined), "full doc annotated too");
   });
@@ -81,16 +81,16 @@ describe("compilePackage", () => {
     const pkg = out.package!;
 
     const ownIds = new Set(pkg.document.nodes.map((n) => n.id));
-    assert.ok(ownIds.has("Microsoft.azure"), "own class term present");
-    assert.ok(!ownIds.has("Location"), "base concept excluded from own document");
-    assert.ok(!ownIds.has("identifier"), "prelude excluded from own document");
+    assert.ok(ownIds.has("lib.Microsoft.azure"), "own class term present");
+    assert.ok(!ownIds.has("ea.Location"), "base concept excluded from own document");
+    assert.ok(!ownIds.has("todl.identifier"), "prelude excluded from own document");
     assert.deepEqual(pkg.document.dependencies, deps, "dependencies recorded");
 
     // fullDocument still carries the base concept.
-    assert.ok(pkg.fullDocument.nodes.some((n) => n.id === "Location"), "fullDocument has base");
+    assert.ok(pkg.fullDocument.nodes.some((n) => n.id === "ea.Location"), "fullDocument has base");
     // Derived classes are own-only.
-    assert.ok(pkg.classes.some((c) => c.id === "Microsoft.azure"));
-    assert.ok(!pkg.classes.some((c) => c.id === "Location"));
+    assert.ok(pkg.classes.some((c) => c.id === "lib.Microsoft.azure"));
+    assert.ok(!pkg.classes.some((c) => c.id === "ea.Location"));
   });
 
   test("attaches non-empty resources to the package", () => {
