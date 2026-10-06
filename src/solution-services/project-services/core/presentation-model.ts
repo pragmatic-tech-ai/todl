@@ -183,8 +183,8 @@ export class PresentationResourceEmitter
         }
     }
 
-    // "app-component" → "App Component". Splits on '-'/'.'/'_' and title-cases each
-    // word. Used as the fallback label when an entity declares no attrs.label.
+    // "ea.app-component" → "App Component". Humanizes only the final dot-segment (the
+    // localId), splitting it on '-'/'_' and title-casing each word. Used as the fallback label when an entity declares no attrs.label.
     public static Humanize(id: string): string
     {
         const local = id.slice(id.lastIndexOf('.') + 1)
