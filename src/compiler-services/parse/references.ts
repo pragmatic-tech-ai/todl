@@ -297,8 +297,9 @@ function visitInstanceRefs(
     visit({ name: decl.instanceOf, span: decl.instanceOfSpan ?? decl.span, role: RefRole.InstanceOf,
       ownerNode: decl.id, memberPath: null, rewrite: (r) => { (decl as { instanceOf: string | null }).instanceOf = r; } });
   }
-  // The instance's own annotation applications (`annotate icon { … }`).
-  for (const app of decl.annotations)
+  // Only class instances legally carry annotations; a concrete instance keeps its
+  // single `annotation.invalid-target` error with the authored name, so skip it.
+  for (const app of decl.isClass ? decl.annotations : [])
   {
     visit({ name: app.name, span: app.nameSpan ?? app.span, role: RefRole.AnnotationName,
       ownerNode: `${decl.id}@${app.name}`, memberPath: null, rewrite: (r) => { app.name = r; } });

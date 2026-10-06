@@ -106,4 +106,14 @@ describe('qualified ids', () =>
         assert.ok(r.model.has('i.t@todl.icon'), 'instance application id qualified');
         assert.equal(r.model.resolve('i.t@todl.icon')?.type, 'todl.icon');
     });
+
+    test('a concrete instance annotation reports one invalid-target error with the authored name', () =>
+    {
+        const CONC = { uri: 'c/c.todl', text: 'namespace c { import ea; concept Thing : Location { } model M : c { Thing t { annotate icon { path = "x"; } } } }' };
+        const metaDoc = toJSON(check([META]).model);
+        const r = checkAgainst([metaDoc], [CONC]);
+        const errs = r.diagnostics.filter(d => d.severity === 'error' && /annotat/i.test(d.message));
+        assert.equal(errs.length, 1, JSON.stringify(errs.map(e => e.message)));
+        assert.ok(!errs[0]!.message.includes('todl.icon'), errs[0]!.message);
+    });
 });
