@@ -114,6 +114,11 @@ export interface Node
 
   /** User-defined scalar field values ONLY. */
   attrs: Map<string, Scalar>;
+
+  /** Recorded defects of an instance (`variant "…";` in its body): what in it
+   *  breaks a prose invariant of its concept, and why it is so. Absent or empty
+   *  when it has none. Never checked against anything. */
+  variants?: string[];
 }
 
 export interface Edge
@@ -216,6 +221,13 @@ export class Graph
   addFieldDecl(concept: NodeId, decl: FieldDecl): void
   {
     this.store.addFieldDecl(concept, decl);
+  }
+
+  /** Append a recorded defect (`variant "…"`) to an instance node. */
+  addVariant(id: NodeId, text: string): void
+  {
+    this.store.addVariant(id, text);
+    this.changed.emit({ kind: GraphChangeKind.AttrSet, node: id, property: "variants", target: null });
   }
 
   /** Set a scalar field value on a node and emit {@link GraphChangeKind.AttrSet}. */

@@ -61,6 +61,7 @@ export class Builder
   private readonly stagedAttrs: StagedAttr[] = [];
   private readonly stagedEdges: StagedEdge[] = [];
   private readonly stagedFields: StagedField[] = [];
+  private readonly stagedVariants: Array<{ id: NodeId; text: string }> = [];
   private currentNamespace: string | null = null;
 
   constructor(private readonly graph: Graph) {}
@@ -125,6 +126,13 @@ export class Builder
   setField(id: NodeId, name: string, value: Scalar): this
   {
     this.stagedAttrs.push({ id, name, value });
+    return this;
+  }
+
+  /** Stage a recorded defect (`variant "…"`) on an instance. */
+  addVariant(id: NodeId, text: string): this
+  {
+    this.stagedVariants.push({ id, text });
     return this;
   }
 
@@ -312,6 +320,13 @@ export class Builder
         throw new Error(`cannot declare field "${field.decl.name}" on "${field.concept}" — it does not exist`);
       }
     }
+    for (const variant of this.stagedVariants)
+    {
+      if (!exists(variant.id))
+      {
+        throw new Error(`cannot record a variant on node "${variant.id}" — it does not exist`);
+      }
+    }
     for (const edge of this.stagedEdges)
     {
       if (!exists(edge.from))
@@ -345,11 +360,16 @@ export class Builder
     {
       this.graph.addFieldDecl(field.concept, field.decl);
     }
+    for (const variant of this.stagedVariants)
+    {
+      this.graph.addVariant(variant.id, variant.text);
+    }
 
     this.stagedNodes.length = 0;
     this.stagedAttrs.length = 0;
     this.stagedEdges.length = 0;
     this.stagedFields.length = 0;
+    this.stagedVariants.length = 0;
   }
 
   /** Build a fresh {@link Node} with the current namespace and all root fields

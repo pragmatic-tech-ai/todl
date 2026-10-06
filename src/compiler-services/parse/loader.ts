@@ -957,6 +957,7 @@ function termToInstanceDecl(taxonomy: string, t: Term, normalize: (name: string 
     children: t.children.map((c) => termToInstanceDecl(taxonomy, c, normalize)),
     annotations: [],
     edges: [],
+    variants: [],
     span: t.span,
   };
 }
@@ -1205,6 +1206,7 @@ function applyInstance(
   {
     realizeValue(builder, model, decl.concept, nodeId, assignment.name, assignment.value, diagnostics, asserted, idGen, ops, home, resolveRef, rec);
   }
+  applyVariants(builder, decl, nodeId, diagnostics);
   for (const child of decl.children)
   {
     applyInstance(builder, model, child, nodeId, decl.concept, asserted, diagnostics, idGen, ops, home, resolveRef, rec);
@@ -1212,6 +1214,29 @@ function applyInstance(
   // Edge applications in this record's body are contained by this instance, and
   // a reified edge binds to the matching array member (like a nested record).
   applyEdges(builder, model, decl.edges, nodeId, decl.concept, ops, asserted, diagnostics, idGen, home, resolveRef, rec);
+}
+
+/** Record the `variant "…"` statements of a concrete instance on its node. A
+ * variant states a defect of one concrete thing; a class is a type-level
+ * definition, so a variant on it is `variant.invalid-target`. */
+function applyVariants(builder: Builder, decl: InstanceDecl, nodeId: string, diagnostics: Diagnostic[]): void
+{
+  for (const variant of decl.variants)
+  {
+    if (decl.isClass)
+    {
+      diagnostics.push({
+        code: DiagnosticCode.VariantInvalidTarget,
+        severity: Severity.Error,
+        message: `"variant" cannot be stated on class "${decl.id}" — a variant records a defect of a concrete instance in a model`,
+        span: variant.span,
+        node: nodeId,
+        path: null,
+      });
+      continue;
+    }
+    builder.addVariant(nodeId, variant.text);
+  }
 }
 
 /**
@@ -1405,6 +1430,7 @@ function realizeInlineObject(
     children: value.children,
     annotations: [],
     edges: value.edges,
+    variants: value.variants,
     span: value.span,
   };
   applyInstance(builder, model, synth, null, null, asserted, diagnostics, idGen, ops, home, resolveRef, rec);
@@ -1610,7 +1636,7 @@ function mintReifiedEdge(
   for (const a of edge.body) if (a.name !== "id") assignments.push(a);
   const synth: InstanceDecl = {
     kind: DeclKind.Instance, concept: op.concept, id: localId, binds: null, isClass: false, instanceOf: null,
-    assignments, children: [], annotations: [], edges: [], span: edge.span,
+    assignments, children: [], annotations: [], edges: [], variants: [], span: edge.span,
   };
   applyInstance(builder, model, synth, ownerId, null, asserted, diagnostics, idGen, ops, home, resolveRef, rec);
   return NodeIdQualifier.Qualify(home.ns, localId);

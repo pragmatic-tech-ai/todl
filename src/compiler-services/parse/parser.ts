@@ -64,6 +64,7 @@ import {
   type ModelDecl,
   type AnnotationDecl,
   type AnnotationApplication,
+  type VariantNode,
   type PackageDecl,
   type OperatorDecl,
   type EdgeApplication,
@@ -387,9 +388,9 @@ class Parser
     // Optional `: <meta-model>` binding after the id (container records only).
     const binds = this.match(TokenKind.Colon) ? this.expectIdentifier() : null;
     this.expect(TokenKind.LBrace);
-    const { assignments, children, annotations, edges } = this.parseRecordBody();
+    const { assignments, children, annotations, edges, variants } = this.parseRecordBody();
     this.expect(TokenKind.RBrace);
-    const decl: InstanceDecl = { kind: DeclKind.Instance, concept, id, binds, isClass, instanceOf, assignments, children, annotations, edges, span: this.spanFrom(start) };
+    const decl: InstanceDecl = { kind: DeclKind.Instance, concept, id, binds, isClass, instanceOf, assignments, children, annotations, edges, variants, span: this.spanFrom(start) };
     if (conceptSpan !== undefined) decl.conceptSpan = conceptSpan;
     if (instanceOfSpan !== undefined) decl.instanceOfSpan = instanceOfSpan;
     decl.idSpan = tokenSpan(idTok, this.uri);
@@ -397,27 +398,30 @@ class Parser
   }
 
   /** Parse a record body (between `{` and `}`, both consumed by the caller):
-   * annotate applications, `name = value` assignments, edge applications
-   * (`a <glyph> b`), and nested named records. Shared by instance records and
-   * inline objects. */
+   * annotate applications, `variant "…";` statements, `name = value`
+   * assignments, edge applications (`a <glyph> b`), and nested named records.
+   * Shared by instance records and inline objects. */
   private parseRecordBody(): {
     assignments: AssignmentNode[];
     children: InstanceDecl[];
     annotations: AnnotationApplication[];
     edges: EdgeApplication[];
+    variants: VariantNode[];
   }
   {
     const assignments: AssignmentNode[] = [];
     const children: InstanceDecl[] = [];
     const annotations: AnnotationApplication[] = [];
     const edges: EdgeApplication[] = [];
+    const variants: VariantNode[] = [];
     this.parseBodyMembers(() =>
     {
       const memberStart = this.startToken();
-      // Order matters: `annotate` and edge applications are recognised first,
-      // before the generic identifier branch, since both start with tokens the
-      // fallback would otherwise swallow.
+      // Order matters: `annotate`, `variant` and edge applications are recognised
+      // first, before the generic identifier branch, since they start with tokens
+      // the fallback would otherwise swallow.
       if (this.checkKeyword("annotate")) { annotations.push(this.parseAnnotationApplication(memberStart)); return; }
+      if (this.variantAhead()) { variants.push(this.parseVariant(memberStart)); return; }
       if (this.edgeApplicationAhead()) { edges.push(this.parseEdgeApplication(memberStart)); return; }
       // A leading identifier is either `name = value;` (assignment, disambiguated
       // by the `=`) or `<concept> <id> { … }` (a nested containment record).
@@ -433,7 +437,35 @@ class Parser
         children.push(this.parseInstanceFrom(first, memberStart));
       }
     });
-    return { assignments, children, annotations, edges };
+    return { assignments, children, annotations, edges, variants };
+  }
+
+  /** True at `variant "<text>"`. The string after the word tells the statement
+   * apart from a field or a concept that happens to be named `variant`
+   * (`variant = …`, `variant x { … }`). */
+  private variantAhead(): boolean
+  {
+    if (!this.checkKeyword("variant")) return false;
+    const next = this.peekKind(1);
+    return next === TokenKind.String || next === TokenKind.RawString;
+  }
+
+  /** Report a `variant` statement where none is allowed and step over the whole
+   * statement, so the error does not cascade into the rest of the body. */
+  private skipMisplacedVariant(message: string): void
+  {
+    const err = this.error(message);
+    this.parseVariant(this.startToken());
+    this.diagnostics.push(this.toDiagnostic(err));
+  }
+
+  /** `variant "<text>";` — a recorded defect of the instance whose body holds it. */
+  private parseVariant(start: Token): VariantNode
+  {
+    this.expectKeyword("variant");
+    const text = this.parseStringValue();
+    this.expect(TokenKind.Semicolon);
+    return { text, span: this.spanFrom(start) };
   }
 
   /** True when the tokens ahead form `Identifier ( . Identifier )* {` — a typed
@@ -457,9 +489,9 @@ class Parser
     const concept = this.parseDottedPath();
     const conceptSpan = this.spanFrom(cStart);
     this.expect(TokenKind.LBrace);
-    const { assignments, children, annotations, edges } = this.parseRecordBody();
+    const { assignments, children, annotations, edges, variants } = this.parseRecordBody();
     this.expect(TokenKind.RBrace);
-    return { kind: ValueKind.Object, concept, assignments, children, annotations, edges, conceptSpan, span: this.spanFrom(start) };
+    return { kind: ValueKind.Object, concept, assignments, children, annotations, edges, variants, conceptSpan, span: this.spanFrom(start) };
   }
 
   /**
@@ -509,6 +541,7 @@ class Parser
     {
       const memberStart = this.startToken();
       if (this.checkKeyword("annotate")) { annotations.push(this.parseAnnotationApplication(memberStart)); continue; }
+      if (this.variantAhead()) { this.skipMisplacedVariant('"variant" belongs inside the body of the instance it describes, not in the model body'); continue; }
       if (this.edgeApplicationAhead())
       {
         edges.push(this.parseEdgeApplication(memberStart));
@@ -1007,6 +1040,10 @@ class Parser
       else if (this.checkKeyword("invariant"))
       {
         invariants.push(this.parseInvariant());
+      }
+      else if (this.variantAhead())
+      {
+        this.skipMisplacedVariant('"variant" is allowed only in the body of an instance in a model; a concept states its rules with "invariant"');
       }
       else if (this.checkKeyword("annotate"))
       {

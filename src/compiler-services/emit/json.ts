@@ -57,6 +57,8 @@ export interface JsonNode
   storageId: string | null;
   fields: FieldDecl[];
   attrs: Record<string, Scalar>;
+  /** Recorded defects of an instance (`variant "…"`); omitted when it has none. */
+  variants?: string[];
   debug?: NodeDebug;
 }
 
@@ -125,6 +127,7 @@ function emitNode(model: Repository, node: Node, options?: EmitOptions): JsonNod
     fields: node.fields,
     attrs: Object.fromEntries(node.attrs),
   };
+  if (node.variants !== undefined && node.variants.length > 0) json.variants = [...node.variants];
   if (options?.debug) json.debug = nodeDebug(model, node, options.provenance);
   return json;
 }
@@ -199,6 +202,7 @@ export function graphFromJSON(doc: TodlDocument): Graph
       storageId: node.storageId ?? null,
       fields: node.fields ?? [],
       attrs: new Map(Object.entries(node.attrs)),
+      ...(node.variants !== undefined && node.variants.length > 0 ? { variants: [...node.variants] } : {}),
     });
   }
   for (const edge of doc.edges)
