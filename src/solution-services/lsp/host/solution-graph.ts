@@ -22,6 +22,8 @@ export interface SolutionGraphMember
 export interface SolutionGraphChange
 {
     memberIds: readonly string[];
+    /** Full source-file URIs whose nodes were (re)loaded by this change. */
+    fileIds: readonly string[];
 }
 
 // The mutable state a built graph holds — the composed model plus the per-node and
@@ -121,7 +123,23 @@ export class SolutionGraph
         }
         this.RebuildDiagnostics(state);
         this.state = state;
-        this.Changed.emit({ memberIds: [...state.membersById.keys()] });
+        const memberIds = [...state.membersById.keys()];
+        this.Changed.emit({ memberIds, fileIds: this.FileIdsFor(state, new Set(memberIds)) });
+    }
+
+    // The distinct source-file URIs authoring nodes owned by any of the given members.
+    private FileIdsFor(state: GraphState, memberIds: ReadonlySet<string>): string[]
+    {
+        const files = new Set<string>();
+        for (const [nodeId, uri] of state.provenance)
+        {
+            const owner = state.memberOf.get(nodeId);
+            if (owner !== undefined && memberIds.has(owner))
+            {
+                files.add(uri);
+            }
+        }
+        return [...files];
     }
 
     // A transactional full rebuild from the CURRENT member set, each member's sources
@@ -196,7 +214,7 @@ export class SolutionGraph
         // Emit OUTSIDE the try so a throwing GraphChanged subscriber cannot be caught as a
         // "load failure" and trip RepairFailedReplace (which would revert the user's edit).
         // Reached only after a clean incremental replace — exactly one emit on this path.
-        this.Changed.emit({ memberIds: affected.map(m => m.id) });
+        this.Changed.emit({ memberIds: affected.map(m => m.id), fileIds: this.FileIdsFor(state, affectedSet) });
     }
 
     // Repair the graph after a failed incremental ReplaceMember. First try a transactional
