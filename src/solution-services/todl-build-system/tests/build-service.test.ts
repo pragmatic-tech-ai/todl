@@ -159,6 +159,7 @@ class TestFixture
     private static readonly PackageVersion = '1.2.3';
     private static readonly PackageSourceNotExercisedMessage = 'PackageSource: not exercised by this fixture';
     public static readonly ProvidedOutputPath = '/disk/html-bundle';
+    public static readonly InMemoryOutputPath = 'memory://build';
 
     public static async MakeProject(): Promise<FakeStorage>
     {
@@ -337,6 +338,6 @@ describe('BuildService.Build', () =>
         const result = await service.Build(project, FakeNpmPackageBuildSystem.SystemId, FakeNpmPackageBuildSystem.BuildFlavorId);
 
         assert.equal(result.Result.Ok, true);
-        assert.notEqual(result.Result.OutputPath, TestFixture.ProvidedOutputPath);
+        assert.equal(result.Result.OutputPath, TestFixture.InMemoryOutputPath);
     });
 });
