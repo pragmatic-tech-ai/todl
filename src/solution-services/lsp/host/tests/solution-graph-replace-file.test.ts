@@ -158,4 +158,63 @@ describe('SolutionGraph.ReplaceFile', () =>
         await full.Build([lib(afterLib), dep1, dep2]);
         ReplaceFileFixture.AssertGraphEquivalent(g, full);
     });
+
+    // The under-scope gap: file B's only link to file A is a concept FIELD TYPE
+    // (`x : T`) — a load-resolved reference that creates NO edge and is stored on
+    // node.fields[].type, not node.type/class. A field-type-only referrer must still
+    // reload so its per-file reference.undefined diagnostic tracks the full compile.
+    const fieldTypeA = 'namespace m { concept T { label : string; } }';
+    const fieldTypeAEmpty = 'namespace m { }';
+    const fieldTypeB = 'namespace m { concept C { x : T; } }';
+
+    test('renaming a field-type target in file A re-validates file B (field-type cross-file)', async () =>
+    {
+        const g = new SolutionGraph();
+        await g.Build([ReplaceFileFixture.TwoFileMember(fieldTypeA, fieldTypeB)]);
+
+        const afterA = fieldTypeA.replace('concept T', 'concept T2');
+        g.ReplaceFile(ReplaceFileFixture.FileAUri, [
+            ReplaceFileFixture.File(ReplaceFileFixture.FileAUri, afterA),
+            ReplaceFileFixture.File(ReplaceFileFixture.FileBUri, fieldTypeB),
+        ]);
+
+        const full = new SolutionGraph();
+        await full.Build([ReplaceFileFixture.TwoFileMember(afterA, fieldTypeB)]);
+        ReplaceFileFixture.AssertGraphEquivalent(g, full);
+    });
+
+    test('adding a field-type target to file A clears file B stale error (field-type cross-file)', async () =>
+    {
+        const g = new SolutionGraph();
+        // File A starts WITHOUT T, so B's `x : T` is a stale reference.undefined.
+        await g.Build([ReplaceFileFixture.TwoFileMember(fieldTypeAEmpty, fieldTypeB)]);
+
+        g.ReplaceFile(ReplaceFileFixture.FileAUri, [
+            ReplaceFileFixture.File(ReplaceFileFixture.FileAUri, fieldTypeA),
+            ReplaceFileFixture.File(ReplaceFileFixture.FileBUri, fieldTypeB),
+        ]);
+
+        const full = new SolutionGraph();
+        await full.Build([ReplaceFileFixture.TwoFileMember(fieldTypeA, fieldTypeB)]);
+        ReplaceFileFixture.AssertGraphEquivalent(g, full);
+    });
+
+    // Probe: a file using an edge operator (`a ==> b`) mints a synthesized reified-edge
+    // node from the idGen. ReplaceFile that file and assert the synthesized node id stays
+    // stable under incremental reload (matches a full Build).
+    test('reified edge-operator node stays stable under ReplaceFile (probe)', async () =>
+    {
+        const opSource =
+            'namespace k { concept Node { } operator ==> : Node -> Node { } model MK : k { Node a { } Node b { } a ==> b; } }';
+        const member = (text: string): SolutionGraphMember =>
+            ReplaceFileFixture.Member('k1', [ReplaceFileFixture.File('k1/k.todl', text)], []);
+
+        const g = new SolutionGraph();
+        await g.Build([member(opSource)]);
+        g.ReplaceFile('k1/k.todl', [ReplaceFileFixture.File('k1/k.todl', opSource)]);
+
+        const full = new SolutionGraph();
+        await full.Build([member(opSource)]);
+        ReplaceFileFixture.AssertGraphEquivalent(g, full);
+    });
 });

@@ -5,7 +5,7 @@ import { preludeDocument, preludeNames } from '../../../compiler-services/stdlib
 import { validate } from '../../../compiler-services/validate/validate.js';
 import { Repository } from '../../../compiler-services/model/model.js';
 import { SnowflakeIdGenerator, type IdGenerator } from '../../../compiler-services/model/id-generator.js';
-import type { Diagnostic } from '../../../compiler-services/diagnostics/diagnostic.js';
+import { DiagnosticCode, type Diagnostic } from '../../../compiler-services/diagnostics/diagnostic.js';
 import type { SourceFile } from '../../../compiler-services/diagnostics/span.js';
 import type { TodlDocument } from '../../../compiler-services/emit/json.js';
 import { WikiLocator, type WikiOrigin } from '../../project-services/core/wiki-origin.js';
@@ -57,6 +57,15 @@ export class SolutionGraph
     private static readonly CycleSeparator = ' -> ';
     private static readonly UnknownMemberMessage = 'Unknown solution member id';
     private static readonly UnownedFileMessage = 'No solution member owns file';
+    // Load-diagnostic codes a newly-defined node could clear: an unresolved name re-resolves once
+    // its target exists. Drives DanglingReferenceFiles — files carrying one reload when ids are added.
+    private static readonly ResolutionFailureCodes: ReadonlySet<DiagnosticCode> = new Set([
+        DiagnosticCode.ReferenceUndefined,
+        DiagnosticCode.ReferenceUnreachable,
+        DiagnosticCode.TaxonomyUsesUndefined,
+        DiagnosticCode.OperatorUndefined,
+        DiagnosticCode.ModelBindingUndefined,
+    ]);
 
     private readonly idGen: IdGenerator = new SnowflakeIdGenerator();
     private state: GraphState = SolutionGraph.FreshState();
@@ -223,8 +232,8 @@ export class SolutionGraph
 
     // File-granular incremental reload. `memberSources` is the owning member's CURRENT full
     // source set; `fileUri` is the one file that changed. Strips exactly that file's nodes plus
-    // any sibling file whose nodes reference them (so a cross-file rename re-resolves), reloads
-    // that subset in one pass, then strips+reloads every dependent member wholesale (their
+    // any sibling file whose nodes reference the changed set (a fixpoint referrer cone — see the
+    // loop below), reloads those, then strips+reloads every dependent member wholesale (their
     // cross-member references must re-resolve). Crash-safe like ReplaceMember: the incremental
     // mutation is wrapped in a try that repairs from last-good on throw; the emit is outside it.
     public ReplaceFile(fileUri: string, memberSources: readonly SourceFile[]): void
@@ -242,22 +251,68 @@ export class SolutionGraph
         const memberIds = new Set<string>([owningId, ...dependentIds]);
         try
         {
-            // Owning member: strip the changed file + every sibling file that references it,
-            // then reload just that subset together (mutual forward refs resolve; untouched
-            // siblings stay live). The referrer cone is computed BEFORE the strip drops edges.
+            // Owning member: strip + reload the changed file, then widen to any sibling file
+            // that references the changed set — by edge, instance-type, class, OR concept-field /
+            // annotation-param type. A rename/remove is caught by the files' PRIOR ids; an ADD is
+            // caught by the NEW ids a reload mints (a sibling's stale `x : T` now resolves). So the
+            // referrer cone is a FIXPOINT over prior ∪ new ids of everything reloaded so far:
+            // widen, reload the newly-added files, re-widen, until no new sibling appears. Each
+            // batch is stripped+reloaded together so its own mutual forward refs resolve; already-
+            // reloaded and untouched siblings stay live (stable qualified ids keep their edges).
             const owning = state.membersById.get(owningId) as SolutionGraphMember;
-            const changedPriorIds = new Set([...state.provenance].filter(([, uri]) => uri === fileUri).map(([id]) => id));
-            const filesToReload = new Set<string>([fileUri, ...this.ReferrerFiles(state, owningId, changedPriorIds)]);
-            for (const uri of filesToReload)
+            // A sibling's reference to a not-yet-defined symbol is stored UNRESOLVED (the bare
+            // name, absent from the model), so it cannot be matched by a newly-minted qualified
+            // id. Snapshot the pre-edit id set: when a reload ADDS ids, every owning file holding
+            // a dangling reference must reload so its bare name can re-resolve (clearing a stale
+            // reference.undefined). A pure removal adds nothing and cannot satisfy a dangling ref.
+            const idsBefore = new Set(state.model.allNodes().map(n => n.id));
+            const priorIdsByFile = new Map<string, Set<string>>();
+            for (const [id, uri] of state.provenance)
             {
-                this.RemoveOwnedFile(state, uri);
+                if (state.memberOf.get(id) === owningId)
+                {
+                    (priorIdsByFile.get(uri) ?? priorIdsByFile.set(uri, new Set()).get(uri) as Set<string>).add(id);
+                }
             }
-            const subset = memberSources.filter(s => filesToReload.has(s.uri));
-            const loadDiags = this.LoadSources(state, owning, subset);
-            this.AttributeLoadDiags(state, owningId, filesToReload, loadDiags, false);
-            for (const uri of filesToReload)
+            let frontier = new Set<string>([fileUri]);
+            while (frontier.size > 0)
             {
-                reloadedFiles.add(uri);
+                for (const uri of frontier)
+                {
+                    this.RemoveOwnedFile(state, uri);
+                }
+                const subset = memberSources.filter(s => frontier.has(s.uri));
+                const loadDiags = this.LoadSources(state, owning, subset);
+                this.AttributeLoadDiags(state, owningId, frontier, loadDiags, false);
+                for (const uri of frontier)
+                {
+                    reloadedFiles.add(uri);
+                }
+                const seed = new Set<string>();
+                for (const uri of reloadedFiles)
+                {
+                    for (const id of priorIdsByFile.get(uri) ?? [])
+                    {
+                        seed.add(id);
+                    }
+                }
+                for (const [id, uri] of state.provenance)
+                {
+                    if (reloadedFiles.has(uri))
+                    {
+                        seed.add(id);
+                    }
+                }
+                const widen = this.ReferrerFiles(state, owningId, seed);
+                const addedIds = state.model.allNodes().some(n => !idsBefore.has(n.id));
+                if (addedIds)
+                {
+                    for (const uri of this.DanglingReferenceFiles(state, owningId))
+                    {
+                        widen.add(uri);
+                    }
+                }
+                frontier = new Set([...widen].filter(uri => !reloadedFiles.has(uri)));
             }
 
             // Dependent members: whole strip + reload in topological order.
@@ -314,11 +369,13 @@ export class SolutionGraph
                 {
                     continue;
                 }
-                // A node references a seed by instance-type, class-origin, or any out-edge
-                // target — InstanceOf/class links live on the node, not as edges.
+                // A node references a seed by instance-type, class-origin, a concept FIELD /
+                // annotation PARAM type (both stored on node.fields[].type, edge-free), or any
+                // out-edge target — InstanceOf/class/field links live on the node, not as edges.
                 const refs =
                     (node.type !== null && frontier.has(node.type)) ||
                     (node.class !== null && frontier.has(node.class)) ||
+                    node.fields.some(f => frontier.has(f.type)) ||
                     state.model.outEdges(node.id).some(e => frontier.has(String(e.to)));
                 if (refs)
                 {
@@ -338,6 +395,29 @@ export class SolutionGraph
                 {
                     files.add(uri);
                 }
+            }
+        }
+        return files;
+    }
+
+    // The owning member's files that hold at least one UNRESOLVED-reference load diagnostic.
+    // The loader stores an undefined reference as its raw (unqualified) name, so it can't be
+    // matched by a freshly-minted qualified id — but the file's own `reference.*` diagnostic is a
+    // precise flag (and avoids the primitive-type false positives a structural `!has` would hit).
+    // Such a file must reload when the graph gains ids, since its bare name may now resolve.
+    private DanglingReferenceFiles(state: GraphState, memberId: string): Set<string>
+    {
+        const files = new Set<string>();
+        const byFile = state.loadDiagsByMember.get(memberId);
+        if (byFile === undefined)
+        {
+            return files;
+        }
+        for (const [uri, diags] of byFile)
+        {
+            if (diags.some(d => SolutionGraph.ResolutionFailureCodes.has(d.code)))
+            {
+                files.add(uri);
             }
         }
         return files;
