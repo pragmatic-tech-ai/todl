@@ -15,6 +15,7 @@ import type {
     PackageManifestJson,
     PackageRef,
     PublishablePackage,
+    RegistryInspection,
     VersionList,
 } from "../../../package-manager/engine/package-registry.js";
 import { NpmPackageBuildSystem } from "../npm-package-build-system.js";
@@ -62,6 +63,11 @@ class FakeRegistry implements IPackageRegistry
     public Test(): Promise<ConnectionStatus>
     {
         return Promise.resolve({ Ok: true, Message: "ok" });
+    }
+
+    public Inspect(): Promise<RegistryInspection>
+    {
+        return Promise.reject(new Error("not implemented"));
     }
 }
 

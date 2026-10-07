@@ -4,6 +4,7 @@ import {
     type IPackageRegistry,
     type PublishablePackage,
     type ConnectionStatus,
+    type RegistryInspection,
     type PackageRef,
     type VersionList,
     type PackageManifestJson,
@@ -19,9 +20,11 @@ export class NpmHttpRegistry implements IPackageRegistry
     private readonly transport: HttpTransport
     private readonly registryUrl: string
     private readonly token: string
+    private readonly isGithub: boolean
 
     constructor(connection: NpmRegistryConnection, transport: HttpTransport = new FetchTransport())
     {
+        this.isGithub = connection.GithubApi !== undefined
         this.transport = transport
         this.registryUrl = connection.Registry.replace(/\/+$/, '')
         this.token = connection.Token
@@ -89,5 +92,57 @@ export class NpmHttpRegistry implements IPackageRegistry
         {
             return { Ok: false, Message: error instanceof Error ? error.message : String(error) }
         }
+    }
+
+    // Test() plus the token's identity, scopes and visible packages. GitHub
+    // connections report all three; a generic npm registry reports only the whoami
+    // identity. Each facet degrades to empty on failure rather than throwing.
+    public async Inspect(): Promise<RegistryInspection>
+    {
+        const status = await this.Test()
+        const result: RegistryInspection =
+        {
+            Ok: status.Ok,
+            Message: status.Message,
+            Identity: '',
+            Scopes: [],
+            ScopesSupported: this.isGithub,
+            Packages: [],
+            PackagesSupported: this.isGithub,
+        }
+        if (!status.Ok) return result
+        if (this.isGithub)
+        {
+            try
+            {
+                const who = await this.registry.githubUser()
+                result.Identity = who.identity
+                result.Scopes = who.scopes
+            }
+            catch
+            {
+                // degrade: identity/scopes stay empty
+            }
+            try
+            {
+                result.Packages = await this.registry.listPackages()
+            }
+            catch
+            {
+                // degrade: packages stay empty
+            }
+        }
+        else
+        {
+            try
+            {
+                result.Identity = await this.registry.npmWhoami()
+            }
+            catch
+            {
+                // degrade: identity stays empty
+            }
+        }
+        return result
     }
 }
