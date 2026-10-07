@@ -29,7 +29,7 @@ import { validate as runValidation, type Diagnostic } from "../validate/validate
 import type { SourceSpan } from "../diagnostics/span.js";
 
 /** The prelude root concept — the virtual base of every parent-less concept (SPEC-02). */
-const ELEMENT_ID = "todl.Element";
+export const ELEMENT_ID = "todl.Element";
 
 /** The built-in scalar roots every primitive ultimately refines (spec §4). A
  *  field's authored literal is validated against its resolved base. */

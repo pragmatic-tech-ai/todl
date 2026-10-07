@@ -7,8 +7,9 @@ class ProvenanceFixture
 {
     public static readonly FileA = 'a.todl';
     public static readonly FileB = 'b.todl';
-    // Provenance records nodes minted by instance/model declarations (not bare concept
-    // declarations), so each file contributes one model instance.
+    // Provenance homes every minted node to its authoring file — concept declarations
+    // included (homed since Task P) — so each file contributes its concept and its model
+    // instance.
     private static readonly SourceA = 'namespace n { concept T { } model MA : n { T x { } } }';
     private static readonly SourceB = 'namespace p { import n; model MB : n { T y { } } }';
 

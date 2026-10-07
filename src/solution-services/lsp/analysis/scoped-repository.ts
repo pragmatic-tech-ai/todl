@@ -1,4 +1,5 @@
-import { Repository, type ConceptSchema } from "../../../compiler-services/model/model.js";
+import { Repository, ELEMENT_ID, type ConceptSchema, type FieldSchema, type RelationshipSchema } from "../../../compiler-services/model/model.js";
+import { MetaKind } from "../../../compiler-services/model/kinds.js";
 import type { Node, NodeId } from "../../../compiler-services/model/graph.js";
 import type { SourceSpan } from "../../../compiler-services/diagnostics/span.js";
 
@@ -13,11 +14,21 @@ import type { SourceSpan } from "../../../compiler-services/diagnostics/span.js"
 // It extends Repository so it IS one (feature code is untouched and keeps its
 // `Repository`-typed `Model`), and overrides exactly the read methods the analysis
 // providers call, delegating each to the inner whole-solution repository but gating
-// the result by `visibleIds`. `spanOf` is gated by `ownIds` instead: Build records a
-// source span ONLY for the project's own loaded sources — bases arrive as compiled
-// documents with no spans — so navigation into a base symbol must return null just as
-// Build does. The method names mirror Repository's existing (camelCase) surface, so
-// they deliberately do not follow the PascalCase convention.
+// the result so it matches a project-scoped compile:
+//   - VisibleIds-gated (a node contributes only if in scope): `has`, `resolve`,
+//     `isClass`, `allNodes`, `instancesOf`, `subtypesOf`, and — via the visible
+//     supertype chain — `schemaOf` (its `extends`) and `effectiveSchema` (its merged
+//     fields/relationships). An out-of-scope same-namespace supertype or field-type
+//     therefore contributes nothing, exactly as Build (which leaves it unresolved).
+//   - OwnIds-gated: `spanOf`. Build records a source span ONLY for the project's own
+//     loaded sources — bases arrive as compiled documents with no spans — so navigation
+//     into a base symbol must return null just as Build does.
+// The method names mirror Repository's existing (camelCase) surface, so they
+// deliberately do not follow the PascalCase convention.
+//
+// INVARIANT: any new Repository read reached by a provider must get a matching scoped
+// override here — the base graph is empty, so an un-overridden read fails closed
+// (returns nothing) and silently diverges from Build.
 export class ScopedRepository extends Repository
 {
     private readonly inner: Repository;
@@ -65,12 +76,57 @@ export class ScopedRepository extends Repository
 
     public override schemaOf(concept: NodeId): ConceptSchema
     {
-        return this.inner.schemaOf(concept);
+        const schema = this.inner.schemaOf(concept);
+        if (schema.extends === null || this.visibleIds.has(schema.extends)) return schema;
+        // The declared parent is out of scope. Reproduce a scoped Build, where that parent
+        // was never resolved, so the concept is parent-less (and the virtual-root rule
+        // roots a concept at Element). The concept's OWN fields/relationships still stand.
+        return { ...schema, extends: this.ElementFallback(concept) };
     }
 
     public override effectiveSchema(concept: NodeId): ConceptSchema
     {
-        return this.inner.effectiveSchema(concept);
+        // Mirror Repository.effectiveSchema's merge, but over the VISIBLE supertype chain:
+        // a merge that followed an out-of-scope parent would pull in fields/relationships a
+        // scoped Build never sees. `schemaOf` is the gated one, so each step is in scope.
+        const fields = new Map<string, FieldSchema>();
+        const relationships = new Map<string, RelationshipSchema>();
+        for (const current of this.VisibleChain(concept))
+        {
+            const schema = this.schemaOf(current);
+            for (const field of schema.fields) if (!fields.has(field.name)) fields.set(field.name, field);
+            for (const relationship of schema.relationships) if (!relationships.has(relationship.name)) relationships.set(relationship.name, relationship);
+        }
+        return { concept, extends: this.schemaOf(concept).extends, fields: [...fields.values()], relationships: [...relationships.values()] };
+    }
+
+    // The concept plus its supertypes reachable through in-scope parents only, walked via
+    // the GATED `schemaOf.extends` so an out-of-scope parent truncates the chain (then the
+    // Element virtual-root takes over), exactly as a scoped Build's closure would.
+    private VisibleChain(concept: NodeId): NodeId[]
+    {
+        const chain: NodeId[] = [concept];
+        const seen = new Set<string>([concept]);
+        let current = concept;
+        for (;;)
+        {
+            const parent = this.schemaOf(current).extends;
+            if (parent === null || seen.has(parent)) break;
+            seen.add(parent);
+            chain.push(parent);
+            current = parent;
+        }
+        return chain;
+    }
+
+    // Build's virtual-root rule: a parent-less concept (and only a concept) roots at
+    // Element when Element is in scope; anything else is genuinely parent-less (null).
+    private ElementFallback(concept: NodeId): NodeId | null
+    {
+        const rootsAtElement = concept !== ELEMENT_ID
+            && this.inner.resolve(concept)?.metaKind === MetaKind.Concept
+            && this.has(ELEMENT_ID);
+        return rootsAtElement ? ELEMENT_ID : null;
     }
 
     public override spanOf(key: string): SourceSpan | null

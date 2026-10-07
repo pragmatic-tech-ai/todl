@@ -6,6 +6,7 @@ import { AnalysisSnapshot } from "../analysis-snapshot.js";
 import type { GraphSlice } from "../graph-slice.js";
 import { HoverProvider } from "../hover-provider.js";
 import { NavigationProvider } from "../navigation-provider.js";
+import { CompletionProvider } from "../completion-provider.js";
 import { check } from "../../../../compiler-services/api.js";
 import { toJSON, type TodlDocument } from "../../../../compiler-services/emit/json.js";
 import { preludeDocument } from "../../../../compiler-services/stdlib/prelude.js";
@@ -172,6 +173,102 @@ class Compare
     }
 }
 
+// A SEPARATE fixture for the schema-gating case. The sibling B (same namespace acme.a)
+// is loaded BEFORE A, so the shared graph actually RESOLVES A's `Gate : Secret` supertype
+// edge into B's out-of-scope concept — the condition under which an ungated schemaOf /
+// effectiveSchema would merge B's `extends` and inherited members into A's view. A scoped
+// Build never resolves Secret, so Gate roots at Element with none of Secret's members.
+class GateFixture
+{
+    public static readonly MetaUri = "mm/meta.todl";
+    public static readonly AUri = "a/a.todl";
+    public static readonly BUri = "b/b.todl";
+
+    public static readonly MetaSource = "namespace ea { concept Location { label : string; } }";
+    public static readonly ASource = [
+        "namespace acme.a {",
+        "  import ea;",
+        "  concept Hub { }",
+        "  concept Gate : Secret { }",
+        "  Location generic { }",
+        "  Hub h { }",
+        "  Gate g { peer = & }",
+        "}",
+    ].join("\n");
+    // Sibling B owns the out-of-scope supertype Secret, which declares an inherited
+    // relationship `peer` — the member whose leakage into Gate's schema we guard against.
+    public static readonly BSource = "namespace acme.a { import ea; concept Secret : Location { relationship peer -> Location []; } }";
+
+    public static readonly MetaDoc: TodlDocument = toJSON(check([{ uri: GateFixture.MetaUri, text: GateFixture.MetaSource }]).model);
+
+    public static ASources(): SourceFile[]
+    {
+        return [{ uri: GateFixture.AUri, text: GateFixture.ASource }];
+    }
+
+    // B BEFORE A, so A's Gate : Secret resolves in the shared graph.
+    public static async Graph(): Promise<SolutionGraph>
+    {
+        const g = new SolutionGraph();
+        await g.Build([
+            { id: "mm", storage: new FakeStorage("mm/"), sources: [{ uri: GateFixture.MetaUri, text: GateFixture.MetaSource }], baseIds: [], publishedBases: [] },
+            { id: "acme.b", storage: new FakeStorage("b/"), sources: [{ uri: GateFixture.BUri, text: GateFixture.BSource }], baseIds: ["mm"], publishedBases: [] },
+            { id: "acme.a", storage: new FakeStorage("a/"), sources: GateFixture.ASources(), baseIds: ["mm"], publishedBases: [] },
+        ]);
+        return g;
+    }
+
+    public static SliceFor(g: SolutionGraph, bases: readonly TodlDocument[]): GraphSlice
+    {
+        const ownFiles = new Set<string>(GateFixture.ASources().map((s) => s.uri));
+        const ownIds = new Set<string>();
+        for (const [nodeId, uri] of g.Provenance) if (ownFiles.has(uri)) ownIds.add(nodeId);
+        const visibleIds = new Set<string>(ownIds);
+        for (const node of preludeDocument().nodes) visibleIds.add(node.id);
+        for (const base of bases) for (const node of base.nodes) visibleIds.add(node.id);
+        const diagnosticsByUri = g.DiagnosticsByUri();
+        return {
+            Model: g.Model,
+            DiagnosticsByUri: diagnosticsByUri,
+            WholeModelDiagnostics: diagnosticsByUri.get(SolutionGraph.ModelScopeUri) ?? [],
+            VisibleIds: visibleIds,
+            OwnIds: ownIds,
+        };
+    }
+
+    // The 0-based editor Position just AFTER the sole `&` (the ref-value slot), and the
+    // Position of the reference to concept `Gate` in the `Gate g` record header.
+    public static RefValuePosition(): Position
+    {
+        return GateFixture.LocateAfter("peer = &", "&");
+    }
+
+    public static GateReferencePosition(): Position
+    {
+        return GateFixture.LocateAfter("  Gate g", "Gate");
+    }
+
+    private static LocateAfter(lineNeedle: string, token: string): Position
+    {
+        const lines = GateFixture.ASource.split("\n");
+        for (let line = 0; line < lines.length; line += 1)
+        {
+            const at = lines[line]!.indexOf(lineNeedle);
+            if (at >= 0) return { line, character: at + lines[line]!.slice(at).indexOf(token) + token.length };
+        }
+        throw new Error(`line not found: ${lineNeedle}`);
+    }
+
+    public static async Pair(): Promise<{ build: AnalysisSnapshot; graph: AnalysisSnapshot }>
+    {
+        const bases = [GateFixture.MetaDoc];
+        const build = AnalysisSnapshot.Build(GateFixture.ASources(), bases);
+        const g = await GateFixture.Graph();
+        const graph = AnalysisSnapshot.FromGraph(GateFixture.ASources(), GateFixture.SliceFor(g, bases));
+        return { build, graph };
+    }
+}
+
 describe("AnalysisSnapshot.FromGraph parity with Build", () =>
 {
     test("hover matches at an own symbol, a base symbol, and the cross-member leak", async () =>
@@ -207,5 +304,27 @@ describe("AnalysisSnapshot.FromGraph parity with Build", () =>
         const pair = await Pair.Make();
         assert.equal(pair.SharedModelHasSecret, true, "sibling B contributes acme.a.Secret to the shared graph");
         assert.equal(pair.ScopedModelHasSecret, false, "FromGraph scopes acme.a.Secret out of A's view");
+    });
+
+    // schemaOf / effectiveSchema gating: with the sibling loaded first, the shared graph
+    // resolves Gate's out-of-scope supertype Secret; FromGraph must still match Build,
+    // which leaves Secret unresolved — so neither hover nor completion merges Secret's
+    // `extends` or its inherited `peer` relationship into Gate.
+    test("hover on a concept whose supertype is an out-of-scope sibling does not merge that supertype", async () =>
+    {
+        const { build, graph } = await GateFixture.Pair();
+        const pos = GateFixture.GateReferencePosition();
+        assert.deepEqual(
+            new HoverProvider().HoverAt(graph, GateFixture.AUri, pos),
+            new HoverProvider().HoverAt(build, GateFixture.AUri, pos));
+    });
+
+    test("completion in a record of such a concept does not merge the out-of-scope inherited member", async () =>
+    {
+        const { build, graph } = await GateFixture.Pair();
+        const pos = GateFixture.RefValuePosition();
+        const labels = (a: AnalysisSnapshot): string[] =>
+            new CompletionProvider().CompletionsAt(a, GateFixture.AUri, pos).map((i) => i.label).sort();
+        assert.deepEqual(labels(graph), labels(build));
     });
 });
