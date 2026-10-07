@@ -176,6 +176,7 @@ class ResolveConditionsFixture
     private static readonly DevelopmentCondition = "development";
     private static readonly SrcEntryPath = "./src/index.ts";
     private static readonly DistEntryPath = "./dist/index.js";
+    private static readonly InvalidJson = "{ not valid json";
     private static readonly StubSource = "export const x = 1;\n";
 
     public static get Development(): string
@@ -193,12 +194,29 @@ class ResolveConditionsFixture
         };
     }
 
-    // Source checkout: root IS todl, src/index.ts present.
-    public static WriteSourceCheckout(root: string): void
+    // Source checkout: root IS todl, src/index.ts present. Mirrors the real todl
+    // package.json: exports is '.'-nested. `dotNested: false` instead writes a bare
+    // conditions object (exports-shape variance, e.g. a third-party consumer).
+    public static WriteSourceCheckout(root: string, dotNested: boolean = true): void
     {
-        ResolveConditionsFixture.WritePackageJson(root, ResolveConditionsFixture.ExportsConditions());
+        const conditions = ResolveConditionsFixture.ExportsConditions();
+        ResolveConditionsFixture.WritePackageJson(root, dotNested ? { ".": conditions } : conditions);
         mkdirSync(join(root, ResolveConditionsFixture.SrcDir), { recursive: true });
         writeFileSync(join(root, ResolveConditionsFixture.SrcDir, ResolveConditionsFixture.SrcEntryFile), ResolveConditionsFixture.StubSource);
+    }
+
+    // Root IS todl but its package.json is not valid JSON.
+    public static WriteUnparseablePackageJson(root: string): void
+    {
+        writeFileSync(join(root, ResolveConditionsFixture.PackageJson), ResolveConditionsFixture.InvalidJson);
+    }
+
+    // Root IS todl; exports declares only a `default` target (no development key).
+    public static WriteNoDevelopmentKey(root: string): void
+    {
+        ResolveConditionsFixture.WritePackageJson(
+            root,
+            { ".": { import: { default: ResolveConditionsFixture.DistEntryPath } } });
     }
 
     // Installed shape: todl under node_modules, '.' subkey exports, dist only.
@@ -247,6 +265,51 @@ describe("BundleAppAction.ResolveConditions", () =>
             ResolveConditionsFixture.WriteSourceCheckout(root);
 
             assert.deepEqual(ResolveConditionsFixture.Resolve(root), [ResolveConditionsFixture.Development]);
+        }
+        finally
+        {
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    test("bare-conditions exports shape (third-party consumer variance) with src present selects development", () =>
+    {
+        const root = ResolveConditionsFixture.MakeRoot();
+        try
+        {
+            ResolveConditionsFixture.WriteSourceCheckout(root, false);
+
+            assert.deepEqual(ResolveConditionsFixture.Resolve(root), [ResolveConditionsFixture.Development]);
+        }
+        finally
+        {
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    test("unparseable todl package.json does not throw and selects no condition", () =>
+    {
+        const root = ResolveConditionsFixture.MakeRoot();
+        try
+        {
+            ResolveConditionsFixture.WriteUnparseablePackageJson(root);
+
+            assert.deepEqual(ResolveConditionsFixture.Resolve(root), []);
+        }
+        finally
+        {
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    test("exports with no development key selects no condition", () =>
+    {
+        const root = ResolveConditionsFixture.MakeRoot();
+        try
+        {
+            ResolveConditionsFixture.WriteNoDevelopmentKey(root);
+
+            assert.deepEqual(ResolveConditionsFixture.Resolve(root), []);
         }
         finally
         {
