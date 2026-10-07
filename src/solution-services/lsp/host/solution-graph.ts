@@ -51,7 +51,9 @@ interface GraphState
  */
 export class SolutionGraph
 {
-    private static readonly ModelScopeUri = '<model>';
+    // The diagnostics-bucket key for whole-model (null-span) diagnostics. Public so the
+    // host can lift this bucket out when assembling a per-project GraphSlice.
+    public static readonly ModelScopeUri = '<model>';
     private static readonly DuplicateIdMessage = 'Duplicate solution member id';
     private static readonly CycleMessage = 'Solution member dependency cycle';
     private static readonly CycleSeparator = ' -> ';

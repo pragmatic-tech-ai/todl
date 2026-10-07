@@ -13,6 +13,8 @@ import type { SourceFile } from "../../../compiler-services/diagnostics/span.js"
 import type { PackageSource } from "../../../domain/domain.js";
 import { AnalysisEngine } from "../analysis/analysis-engine.js";
 import { AnalyzeKind, type AnalyzeContext, type AnalyzeRequest, type AnalyzeResponse } from "../analysis/protocol.js";
+import type { GraphSlice } from "../analysis/graph-slice.js";
+import { preludeDocument } from "../../../compiler-services/stdlib/prelude.js";
 import type { RenameError } from "../analysis/rename-provider.js";
 import { AnalysisEngineKey, type IAnalysisEngine } from "./i-analysis-engine.js";
 import { ProjectRegistry, PushedSourceProvider, type Project, type OpenDocuments } from "./project-registry.js";
@@ -669,12 +671,47 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
         const documents: readonly SourceFile[] = this.sources.SourcesFor(project, this.liveDocuments);
         const include = project !== this.lastProject || this.sentTokenByProject.get(project.RootUri) !== this.baseSetToken;
         this.lastProject = project;
+        // The warm bases ride along only when newly active / the token moved — the engine
+        // keeps them for the Build fallback path. The shared-graph slice is attached
+        // whenever the graph represents this project (the preferred warm path).
+        const context: AnalyzeContext = { BaseSetToken: this.baseSetToken, Documents: documents };
         if (include)
         {
             this.sentTokenByProject.set(project.RootUri, this.baseSetToken);
-            return { BaseSetToken: this.baseSetToken, Bases: project.Bases, Documents: documents };
+            context.Bases = project.Bases;
         }
-        return { BaseSetToken: this.baseSetToken, Documents: documents };
+        const slice = this.GraphSliceFor(project);
+        if (slice !== undefined) context.Graph = slice;
+        return context;
+    }
+
+    // Assemble the shared SolutionGraph's per-project read slice, or undefined when the
+    // graph cannot serve this request (a recorded build error, or no node authored under
+    // this project — the engine then falls back to the per-request `checkAgainst`). The
+    // visible-id set reproduces a project-scoped `Build` model's membership: the project's
+    // OWN authored nodes plus the prelude and its declared bases' closure, so a bare
+    // reference never resolves to a same-named node contributed by an unrelated member.
+    private GraphSliceFor(project: Project): GraphSlice | undefined
+    {
+        if (this.lastGraphBuildError !== undefined) return undefined;
+        const provenance = this.solutionGraph.Provenance;
+        const ownIds = new Set<string>();
+        for (const [nodeId, uri] of provenance)
+        {
+            if (this.projects.ProjectFor(uri)?.RootUri === project.RootUri) ownIds.add(nodeId);
+        }
+        if (ownIds.size === 0) return undefined;
+        const visibleIds = new Set<string>(ownIds);
+        for (const node of preludeDocument().nodes) visibleIds.add(node.id);
+        for (const base of project.Bases) for (const node of base.nodes) visibleIds.add(node.id);
+        const diagnosticsByUri = this.solutionGraph.DiagnosticsByUri();
+        return {
+            Model: this.solutionGraph.Model,
+            DiagnosticsByUri: diagnosticsByUri,
+            WholeModelDiagnostics: diagnosticsByUri.get(SolutionGraph.ModelScopeUri) ?? [],
+            VisibleIds: visibleIds,
+            OwnIds: ownIds,
+        };
     }
 
     // Eagerly resolve each open member's warm base-set into the registry, keyed by

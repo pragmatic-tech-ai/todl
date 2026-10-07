@@ -232,6 +232,31 @@ test("editing a base member replaces it AND its dependent, GraphChanged carries 
         `cascade should reload the base member and its dependent; fired = ${JSON.stringify(fired)}`);
 });
 
+test("an Analyze issued between a strip and its commit never observes a half-stripped graph", async () =>
+{
+    const world = new World();
+    await world.Service.Ready();
+
+    // Every commit (GraphChanged) must expose a WHOLE graph: the edited member's node AND
+    // its base node coexist. ReplaceMember/ReplaceFile strip-then-reload synchronously and
+    // emit only after the reload, so a reader driven off the pending seam can never catch a
+    // half-stripped state (app.M present without ea.App, or vice versa).
+    const graph = (world.Service as unknown as { solutionGraph: SolutionGraph }).solutionGraph;
+    const observations: boolean[] = [];
+    world.Service.GraphChanged.subscribe(() => observations.push(graph.Model.has("ea.App") && graph.Model.has("app.M")));
+
+    // Issue a read WITHOUT awaiting Flush — it must reflect one consistent state (the
+    // enqueued replace has either not run or fully run), never a partial one.
+    world.Service.DidChange("arch/a.todl", 'namespace app { import ea; model M : ea { App a { note = "y"; } } }');
+    const during = await world.Service.ModelView(world.Arch);
+    assert.ok(during!.model.has("ea.App") && during!.model.has("app.M"), "mid-flight read sees a whole graph");
+
+    await world.Service.Flush();
+    assert.ok(observations.length > 0 && observations.every((whole) => whole),
+        `every commit exposed a whole graph; observations = ${JSON.stringify(observations)}`);
+    assert.equal((await world.Service.ModelView(world.Arch))!.model.attr("app.a", "note"), "y");
+});
+
 // Sibling-file fixtures: a second `.todl` in the ARCH member, both an independent one
 // (for the file-granular DidChange test) and a referrer of a.todl (for add/remove).
 class SiblingFiles
