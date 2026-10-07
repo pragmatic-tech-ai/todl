@@ -62,13 +62,16 @@ export class SolutionGraph
     // Load-diagnostic codes a newly-defined node could clear: an unresolved name (or a reference
     // to a not-yet-defined declaration) re-resolves once its target exists. Drives
     // DanglingReferenceFiles — any owning file carrying one reloads when a reload adds ids.
-    // COMPLETENESS: every LOADER-emitted (i.e. reaching loadDiagsByMember), cross-file-clearable
-    // resolution-failure code MUST be listed — an omission leaks an add-direction stale
-    // diagnostic. Listing is conservative: over-listing only reloads an extra sibling (always
-    // equivalence-preserving), under-listing is a correctness bug. Validate-only codes (e.g.
-    // ModelBindingUndefined) are deliberately absent — they never reach a load bucket.
-    // Covers the split-taxonomy case too (a `represents` clause in one file, a nested term
-    // record in another) via TermConceptNotRepresented.
+    // COMPLETENESS: every LOADER-emitted (i.e. reaching loadDiagsByMember) code that clears when a
+    // referenced id is newly DEFINED MUST be listed — an omission leaks an add-direction stale
+    // diagnostic. Scope is deliberately the add-direction only: DanglingReferenceFiles reloads on
+    // ids GAINED, so a failure that clears only when a candidate is REMOVED (e.g.
+    // TaxonomyAmbiguousBareReference, which disambiguates on candidate removal) is intentionally
+    // absent — listing it here would not fire on the removal it needs. Listing is conservative:
+    // over-listing only reloads an extra sibling (always equivalence-preserving), under-listing is
+    // a correctness bug. Validate-only codes (e.g. ModelBindingUndefined) are deliberately absent —
+    // they never reach a load bucket. Covers the split-taxonomy case too (a `represents` clause in
+    // one file, a nested term record in another) via TermConceptNotRepresented.
     private static readonly ResolutionFailureCodes: ReadonlySet<DiagnosticCode> = new Set([
         DiagnosticCode.ReferenceUndefined,
         DiagnosticCode.ReferenceUnreachable,
