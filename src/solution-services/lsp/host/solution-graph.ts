@@ -121,6 +121,19 @@ export class SolutionGraph
         return this.state.membersById.has(memberId);
     }
 
+    /** True when some member's current source set already declares `fileUri` (so ReplaceFile is safe). */
+    public HasFile(fileUri: string): boolean
+    {
+        for (const sources of this.state.sourcesOf.values())
+        {
+            if (sources.some(s => s.uri === fileUri))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public DiagnosticsByUri(): ReadonlyMap<string, Diagnostic[]>
     {
         return this.state.diagnosticsByUri;

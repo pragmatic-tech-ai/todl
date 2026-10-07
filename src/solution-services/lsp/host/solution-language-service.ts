@@ -127,8 +127,8 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     // is registered (a headless / test host). A local member's resources resolve to
     // its own OpenProject storage, so this is consulted only for published origins.
     private readonly emptyPackages: IStorage = new FakeStorage();
-    // Per-member-root generation counter coalescing live-edit replaces: DidChange bumps
-    // the root's generation and captures it; the dequeued replace runs only if it is
+    // Per-URI generation counter coalescing live-edit replaces: DidChange bumps the
+    // file's generation and captures it; the dequeued replace runs only if it is
     // still the latest (an older keystroke superseded by a newer one is skipped).
     private readonly replaceGeneration = new Map<string, number>();
     // False until the first RewireMembers (the construction-time call) has run, so that
@@ -249,13 +249,15 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
         // The resolver base-cache is deliberately NOT invalidated on a keystroke (an edit
         // does not change the base closure); only the shared graph's owning slice is
         // re-loaded, debounced onto the same pending tail WhenIdle/Flush await. Bump the
-        // owning member's generation and capture it so a burst of keystrokes coalesces —
-        // only the latest enqueued replace for that member actually runs (see below).
+        // file's generation and capture it so a burst of keystrokes coalesces —
+        // only the latest enqueued replace for that file actually runs (see below).
         const root = this.MemberRootForUri(uri);
         if (root === undefined) return;
-        const generation = (this.replaceGeneration.get(root) ?? 0) + 1;
-        this.replaceGeneration.set(root, generation);
-        this.Enqueue(() => this.ReplaceOwningMember(uri, root, generation));
+        // The generation is per-URI: sibling files of one member must not supersede each
+        // other, only a newer keystroke in the SAME file does.
+        const generation = (this.replaceGeneration.get(uri) ?? 0) + 1;
+        this.replaceGeneration.set(uri, generation);
+        this.Enqueue(() => this.ReplaceOwningFile(uri, root, generation));
     }
 
     // The shared graph's Changed signal, re-exposed: it fires with the affected member
@@ -813,6 +815,39 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
         return true;
     }
 
+    // The file-granular live-edit path: re-load just the edited file (plus its referrer cone)
+    // via SolutionGraph.ReplaceFile. ReplaceFile only handles an in-place edit of a file the
+    // graph already knows, so a URI not yet loaded (e.g. a just-created file) falls back to
+    // the member-granular replace instead of throwing.
+    private async ReplaceOwningFile(uri: string, root: string, generation: number): Promise<void>
+    {
+        if (this.disposed) return;
+        await this.warmup;
+        // Latest-wins per file: a newer keystroke for this URI already bumped the generation.
+        if (this.replaceGeneration.get(uri) !== generation) return;
+        const owner = await this.MemberForUri(uri);
+        if (owner === undefined) return;
+        const id = SolutionLanguageService.MemberIdOf(owner.manifest);
+        if (!this.solutionGraph.Has(id)) return;
+        if (!this.solutionGraph.HasFile(uri))
+        {
+            await this.ReplaceOwningMember(uri, root, generation);
+            return;
+        }
+        try
+        {
+            const sources = await this.SourcesForMember(owner.storage, owner.manifest.type);
+            if (this.disposed) return;
+            this.solutionGraph.ReplaceFile(uri, sources);
+        }
+        catch (error)
+        {
+            // Non-fatal to the queue (e.g. a replace race), but not ignored: the error is
+            // captured to lastGraphBuildError so a consumer can tell the graph may be stale.
+            this.lastGraphBuildError = error instanceof Error ? error.message : String(error);
+        }
+    }
+
     // The live-edit path: re-load just the member that owns the changed URI from its
     // current (live-overlaid) sources, so the shared graph reflects the keystroke and
     // GraphChanged fires. Awaits warmup so the graph exists; a member not yet built (or
@@ -821,9 +856,9 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     {
         if (this.disposed) return;
         await this.warmup;
-        // Latest-wins: a newer keystroke for the same member has already bumped the
+        // Latest-wins: a newer keystroke for the same file has already bumped the
         // generation, so this superseded replace skips its re-read + reload.
-        if (this.replaceGeneration.get(root) !== generation) return;
+        if (this.replaceGeneration.get(uri) !== generation) return;
         const owner = await this.MemberForUri(uri);
         if (owner === undefined) return;
         const id = SolutionLanguageService.MemberIdOf(owner.manifest);
