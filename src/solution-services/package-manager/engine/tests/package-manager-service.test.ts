@@ -165,3 +165,16 @@ test('tests a connection through its live registry', async () =>
     assert.equal(status.Ok, false)
     assert.equal(status.Message, 'unauthorized')
 })
+
+test('InspectConnection resolves the registry by id and returns its inspection', async () =>
+{
+    const { service, backend } = harness()
+    await service.AddConnection(spec('gh'), 't')
+    await service.AddConnection(spec('other'), 't')
+    backend.RegistryFor('gh').TestResult = { Ok: true, Message: 'gh-sentinel' }
+    backend.RegistryFor('other').TestResult = { Ok: true, Message: 'other-sentinel' }
+
+    const result = await service.InspectConnection('gh')
+
+    assert.equal(result.Message, 'gh-sentinel')
+})
