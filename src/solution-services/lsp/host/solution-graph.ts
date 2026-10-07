@@ -65,6 +65,8 @@ export class SolutionGraph
     // diagnostic. Listing is conservative: over-listing only reloads an extra sibling (always
     // equivalence-preserving), under-listing is a correctness bug. Validate-only codes (e.g.
     // ModelBindingUndefined) are deliberately absent — they never reach a load bucket.
+    // Covers the split-taxonomy case too (a `represents` clause in one file, a nested term
+    // record in another) via TermConceptNotRepresented.
     private static readonly ResolutionFailureCodes: ReadonlySet<DiagnosticCode> = new Set([
         DiagnosticCode.ReferenceUndefined,
         DiagnosticCode.ReferenceUnreachable,
@@ -72,6 +74,7 @@ export class SolutionGraph
         DiagnosticCode.OperatorUndefined,
         DiagnosticCode.OperatorBadEndpoint,
         DiagnosticCode.ModelConformsNotViewpoint,
+        DiagnosticCode.TermConceptNotRepresented,
         DiagnosticCode.InlineObjectTarget,
         DiagnosticCode.InlineObjectType,
     ]);
