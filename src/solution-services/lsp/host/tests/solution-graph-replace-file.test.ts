@@ -199,10 +199,12 @@ describe('SolutionGraph.ReplaceFile', () =>
         ReplaceFileFixture.AssertGraphEquivalent(g, full);
     });
 
-    // Probe: a file using an edge operator (`a ==> b`) mints a synthesized reified-edge
-    // node from the idGen. ReplaceFile that file and assert the synthesized node id stays
-    // stable under incremental reload (matches a full Build).
-    test('reified edge-operator node stays stable under ReplaceFile (probe)', async () =>
+    // Probe: `a ==> b` resolves as a RELATIONSHIP operator — a single reference edge with NO
+    // minted node. ReplaceFile the file holding it and assert the edge round-trips (same edge
+    // set) under incremental reload vs a full Build. (This is edge-round-trip stability, not
+    // idGen node-id stability — an anonymous REIFIED edge would churn its idGen id on reload,
+    // a pre-existing Phase-1 property not addressed here.)
+    test('relationship edge-operator round-trips under ReplaceFile (probe)', async () =>
     {
         const opSource =
             'namespace k { concept Node { } operator ==> : Node -> Node { } model MK : k { Node a { } Node b { } a ==> b; } }';
@@ -215,6 +217,44 @@ describe('SolutionGraph.ReplaceFile', () =>
 
         const full = new SolutionGraph();
         await full.Build([member(opSource)]);
+        ReplaceFileFixture.AssertGraphEquivalent(g, full);
+    });
+
+    // conforms-to-viewpoint is a loader-emitted, cross-file-clearable resolution failure:
+    // `model MB : m conforms V` with V undefined carries ModelConformsNotViewpoint. Adding the
+    // viewpoint in the changed file must re-validate B (add clears); removing it re-creates the
+    // error. Both must match a full Build — the add-direction is the round-1 bug class.
+    const conformsAEmpty = 'namespace m { }';
+    const conformsAViewpoint = 'namespace m { viewpoint V : frames Thing }';
+    const conformsB = 'namespace m { concept Thing { } model MB : m conforms V { Thing t { } } }';
+
+    test('adding a viewpoint to file A clears file B conforms error (cross-file)', async () =>
+    {
+        const g = new SolutionGraph();
+        await g.Build([ReplaceFileFixture.TwoFileMember(conformsAEmpty, conformsB)]);
+
+        g.ReplaceFile(ReplaceFileFixture.FileAUri, [
+            ReplaceFileFixture.File(ReplaceFileFixture.FileAUri, conformsAViewpoint),
+            ReplaceFileFixture.File(ReplaceFileFixture.FileBUri, conformsB),
+        ]);
+
+        const full = new SolutionGraph();
+        await full.Build([ReplaceFileFixture.TwoFileMember(conformsAViewpoint, conformsB)]);
+        ReplaceFileFixture.AssertGraphEquivalent(g, full);
+    });
+
+    test('removing a viewpoint from file A re-creates file B conforms error (cross-file)', async () =>
+    {
+        const g = new SolutionGraph();
+        await g.Build([ReplaceFileFixture.TwoFileMember(conformsAViewpoint, conformsB)]);
+
+        g.ReplaceFile(ReplaceFileFixture.FileAUri, [
+            ReplaceFileFixture.File(ReplaceFileFixture.FileAUri, conformsAEmpty),
+            ReplaceFileFixture.File(ReplaceFileFixture.FileBUri, conformsB),
+        ]);
+
+        const full = new SolutionGraph();
+        await full.Build([ReplaceFileFixture.TwoFileMember(conformsAEmpty, conformsB)]);
         ReplaceFileFixture.AssertGraphEquivalent(g, full);
     });
 });

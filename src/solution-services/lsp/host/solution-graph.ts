@@ -57,14 +57,23 @@ export class SolutionGraph
     private static readonly CycleSeparator = ' -> ';
     private static readonly UnknownMemberMessage = 'Unknown solution member id';
     private static readonly UnownedFileMessage = 'No solution member owns file';
-    // Load-diagnostic codes a newly-defined node could clear: an unresolved name re-resolves once
-    // its target exists. Drives DanglingReferenceFiles — files carrying one reload when ids are added.
+    // Load-diagnostic codes a newly-defined node could clear: an unresolved name (or a reference
+    // to a not-yet-defined declaration) re-resolves once its target exists. Drives
+    // DanglingReferenceFiles — any owning file carrying one reloads when a reload adds ids.
+    // COMPLETENESS: every LOADER-emitted (i.e. reaching loadDiagsByMember), cross-file-clearable
+    // resolution-failure code MUST be listed — an omission leaks an add-direction stale
+    // diagnostic. Listing is conservative: over-listing only reloads an extra sibling (always
+    // equivalence-preserving), under-listing is a correctness bug. Validate-only codes (e.g.
+    // ModelBindingUndefined) are deliberately absent — they never reach a load bucket.
     private static readonly ResolutionFailureCodes: ReadonlySet<DiagnosticCode> = new Set([
         DiagnosticCode.ReferenceUndefined,
         DiagnosticCode.ReferenceUnreachable,
         DiagnosticCode.TaxonomyUsesUndefined,
         DiagnosticCode.OperatorUndefined,
-        DiagnosticCode.ModelBindingUndefined,
+        DiagnosticCode.OperatorBadEndpoint,
+        DiagnosticCode.ModelConformsNotViewpoint,
+        DiagnosticCode.InlineObjectTarget,
+        DiagnosticCode.InlineObjectType,
     ]);
 
     private readonly idGen: IdGenerator = new SnowflakeIdGenerator();
@@ -247,24 +256,25 @@ export class SolutionGraph
         const dependents = this.TopoOrder([...state.membersById.values()])
             .filter(m => dependentIds.includes(m.id));
 
-        const reloadedFiles = new Set<string>();
+        const reloadedFiles = new Set<string>([fileUri]);
         const memberIds = new Set<string>([owningId, ...dependentIds]);
         try
         {
-            // Owning member: strip + reload the changed file, then widen to any sibling file
-            // that references the changed set — by edge, instance-type, class, OR concept-field /
-            // annotation-param type. A rename/remove is caught by the files' PRIOR ids; an ADD is
-            // caught by the NEW ids a reload mints (a sibling's stale `x : T` now resolves). So the
-            // referrer cone is a FIXPOINT over prior ∪ new ids of everything reloaded so far:
-            // widen, reload the newly-added files, re-widen, until no new sibling appears. Each
-            // batch is stripped+reloaded together so its own mutual forward refs resolve; already-
-            // reloaded and untouched siblings stay live (stable qualified ids keep their edges).
+            // Owning member: strip + reload the changed file, then widen to any sibling file that
+            // references the changed set — by edge, instance-type, class, concept-field /
+            // annotation-param type, or a reference-bearing ATTR (`conforms`). A rename/remove is
+            // caught by the files' PRIOR ids; an ADD by the NEW ids a reload mints (a sibling's
+            // stale `x : T` / undefined `conforms` now resolves). The cone is a FIXPOINT over
+            // prior ∪ current ids of everything reloaded so far. The ENTIRE cone is re-stripped and
+            // reloaded TOGETHER each round (not just the newly-added files): a file reloaded in an
+            // earlier round may own an edge INTO a file added in a later round, and stripping that
+            // later file drops the earlier edge — only a joint reload re-mints both ends.
             const owning = state.membersById.get(owningId) as SolutionGraphMember;
             // A sibling's reference to a not-yet-defined symbol is stored UNRESOLVED (the bare
             // name, absent from the model), so it cannot be matched by a newly-minted qualified
             // id. Snapshot the pre-edit id set: when a reload ADDS ids, every owning file holding
-            // a dangling reference must reload so its bare name can re-resolve (clearing a stale
-            // reference.undefined). A pure removal adds nothing and cannot satisfy a dangling ref.
+            // an unresolved-reference load diagnostic must reload so its bare name can re-resolve.
+            // A pure removal adds nothing and cannot satisfy a dangling reference.
             const idsBefore = new Set(state.model.allNodes().map(n => n.id));
             const priorIdsByFile = new Map<string, Set<string>>();
             for (const [id, uri] of state.provenance)
@@ -274,20 +284,15 @@ export class SolutionGraph
                     (priorIdsByFile.get(uri) ?? priorIdsByFile.set(uri, new Set()).get(uri) as Set<string>).add(id);
                 }
             }
-            let frontier = new Set<string>([fileUri]);
-            while (frontier.size > 0)
+            while (true)
             {
-                for (const uri of frontier)
+                for (const uri of reloadedFiles)
                 {
                     this.RemoveOwnedFile(state, uri);
                 }
-                const subset = memberSources.filter(s => frontier.has(s.uri));
+                const subset = memberSources.filter(s => reloadedFiles.has(s.uri));
                 const loadDiags = this.LoadSources(state, owning, subset);
-                this.AttributeLoadDiags(state, owningId, frontier, loadDiags, false);
-                for (const uri of frontier)
-                {
-                    reloadedFiles.add(uri);
-                }
+                this.AttributeLoadDiags(state, owningId, reloadedFiles, loadDiags, false);
                 const seed = new Set<string>();
                 for (const uri of reloadedFiles)
                 {
@@ -304,15 +309,22 @@ export class SolutionGraph
                     }
                 }
                 const widen = this.ReferrerFiles(state, owningId, seed);
-                const addedIds = state.model.allNodes().some(n => !idsBefore.has(n.id));
-                if (addedIds)
+                if (state.model.allNodes().some(n => !idsBefore.has(n.id)))
                 {
                     for (const uri of this.DanglingReferenceFiles(state, owningId))
                     {
                         widen.add(uri);
                     }
                 }
-                frontier = new Set([...widen].filter(uri => !reloadedFiles.has(uri)));
+                const before = reloadedFiles.size;
+                for (const uri of widen)
+                {
+                    reloadedFiles.add(uri);
+                }
+                if (reloadedFiles.size === before)
+                {
+                    break;
+                }
             }
 
             // Dependent members: whole strip + reload in topological order.
@@ -370,12 +382,15 @@ export class SolutionGraph
                     continue;
                 }
                 // A node references a seed by instance-type, class-origin, a concept FIELD /
-                // annotation PARAM type (both stored on node.fields[].type, edge-free), or any
-                // out-edge target — InstanceOf/class/field links live on the node, not as edges.
+                // annotation PARAM type (both stored on node.fields[].type, edge-free), a
+                // reference-bearing ATTR whose value is a node id (e.g. `conforms` → a viewpoint
+                // id, edge-free and not a field), or any out-edge target — InstanceOf/class/field/
+                // conforms links live on the node, not as edges.
                 const refs =
                     (node.type !== null && frontier.has(node.type)) ||
                     (node.class !== null && frontier.has(node.class)) ||
                     node.fields.some(f => frontier.has(f.type)) ||
+                    [...node.attrs.values()].some(v => typeof v === 'string' && frontier.has(v)) ||
                     state.model.outEdges(node.id).some(e => frontier.has(String(e.to)));
                 if (refs)
                 {
