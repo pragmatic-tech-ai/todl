@@ -50,7 +50,8 @@ export class BundleAppAction implements IBuildAction<TodlBuildContext>
     private static readonly NodeModulesDirectory = "node_modules";
     private static readonly TodlPackageName = "@pragmatic-tech-ai/todl";
     private static readonly PackageJsonFile = "package.json";
-    private static readonly ScopedTodlDir = "@pragmatic-tech-ai/todl";
+    private static readonly ScopedTodlDir = BundleAppAction.TodlPackageName;
+    private static readonly ManifestEncoding = "utf8";
     private static readonly StagePrefix = "todl-bundle-stage-";
 
     private static readonly EsbuildFormat = "iife";
@@ -230,7 +231,7 @@ export class BundleAppAction implements IBuildAction<TodlBuildContext>
 
         try
         {
-            const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+            const manifest = JSON.parse(readFileSync(manifestPath, BundleAppAction.ManifestEncoding)) as {
                 exports?: Record<string, unknown>;
             };
             const exportsField = manifest.exports;
@@ -239,6 +240,7 @@ export class BundleAppAction implements IBuildAction<TodlBuildContext>
             // under '.'; the development target is a package-relative path like
             // "./src/index.ts".
             const dot = (exportsField["."] ?? exportsField) as { import?: { development?: string } };
+            // The `?.` chain deliberately guards a value of unknown shape (null/string/object).
             const developmentEntry = dot?.import?.development;
             if (typeof developmentEntry !== "string") return [];
 
@@ -261,7 +263,7 @@ export class BundleAppAction implements IBuildAction<TodlBuildContext>
         {
             try
             {
-                const name = (JSON.parse(readFileSync(rootManifest, "utf8")) as { name?: string }).name;
+                const name = (JSON.parse(readFileSync(rootManifest, BundleAppAction.ManifestEncoding)) as { name?: string }).name;
                 if (name === BundleAppAction.TodlPackageName) return rootManifest;
             }
             catch

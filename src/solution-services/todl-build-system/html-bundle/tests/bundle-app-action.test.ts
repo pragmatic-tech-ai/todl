@@ -165,6 +165,50 @@ class ResolveConditionsFixture
     private static readonly RootPrefix = "todl-resolve-conditions-";
     private static readonly PackageJson = "package.json";
     private static readonly TodlName = "@pragmatic-tech-ai/todl";
+    private static readonly OtherName = "something-else";
+    private static readonly Scope = "@pragmatic-tech-ai";
+    private static readonly PackageDirName = "todl";
+    private static readonly NodeModules = "node_modules";
+    private static readonly SrcDir = "src";
+    private static readonly DistDir = "dist";
+    private static readonly SrcEntryFile = "index.ts";
+    private static readonly DistEntryFile = "index.js";
+    private static readonly DevelopmentCondition = "development";
+    private static readonly SrcEntryPath = "./src/index.ts";
+    private static readonly DistEntryPath = "./dist/index.js";
+    private static readonly StubSource = "export const x = 1;\n";
+
+    public static get Development(): string
+    {
+        return ResolveConditionsFixture.DevelopmentCondition;
+    }
+
+    public static ExportsConditions(): unknown
+    {
+        return {
+            import: {
+                [ResolveConditionsFixture.DevelopmentCondition]: ResolveConditionsFixture.SrcEntryPath,
+                default: ResolveConditionsFixture.DistEntryPath,
+            },
+        };
+    }
+
+    // Source checkout: root IS todl, src/index.ts present.
+    public static WriteSourceCheckout(root: string): void
+    {
+        ResolveConditionsFixture.WritePackageJson(root, ResolveConditionsFixture.ExportsConditions());
+        mkdirSync(join(root, ResolveConditionsFixture.SrcDir), { recursive: true });
+        writeFileSync(join(root, ResolveConditionsFixture.SrcDir, ResolveConditionsFixture.SrcEntryFile), ResolveConditionsFixture.StubSource);
+    }
+
+    // Installed shape: todl under node_modules, '.' subkey exports, dist only.
+    public static WriteInstalledDistOnly(root: string): void
+    {
+        const pkg = join(root, ResolveConditionsFixture.NodeModules, ResolveConditionsFixture.Scope, ResolveConditionsFixture.PackageDirName);
+        ResolveConditionsFixture.WritePackageJson(pkg, { ".": ResolveConditionsFixture.ExportsConditions() });
+        mkdirSync(join(pkg, ResolveConditionsFixture.DistDir), { recursive: true });
+        writeFileSync(join(pkg, ResolveConditionsFixture.DistDir, ResolveConditionsFixture.DistEntryFile), ResolveConditionsFixture.StubSource);
+    }
 
     // Builds a throwaway resolution-root directory; callers tear it down in a finally.
     public static MakeRoot(): string
@@ -182,7 +226,7 @@ class ResolveConditionsFixture
 
     public static WriteOtherPackageJson(dir: string): void
     {
-        writeFileSync(join(dir, ResolveConditionsFixture.PackageJson), JSON.stringify({ name: "something-else" }));
+        writeFileSync(join(dir, ResolveConditionsFixture.PackageJson), JSON.stringify({ name: ResolveConditionsFixture.OtherName }));
     }
 
     // Reaches the private static under test. A cast is the honest way to unit-test a
@@ -200,13 +244,9 @@ describe("BundleAppAction.ResolveConditions", () =>
         const root = ResolveConditionsFixture.MakeRoot();
         try
         {
-            // In-repo shape: root/package.json IS todl, exports is a bare conditions
-            // object (no '.' subkey), and ./src/index.ts exists on disk.
-            ResolveConditionsFixture.WritePackageJson(root, { import: { development: "./src/index.ts", default: "./dist/index.js" } });
-            mkdirSync(join(root, "src"), { recursive: true });
-            writeFileSync(join(root, "src", "index.ts"), "export const x = 1;\n");
+            ResolveConditionsFixture.WriteSourceCheckout(root);
 
-            assert.deepEqual(ResolveConditionsFixture.Resolve(root), ["development"]);
+            assert.deepEqual(ResolveConditionsFixture.Resolve(root), [ResolveConditionsFixture.Development]);
         }
         finally
         {
@@ -219,12 +259,7 @@ describe("BundleAppAction.ResolveConditions", () =>
         const root = ResolveConditionsFixture.MakeRoot();
         try
         {
-            // Installed shape: todl lives under node_modules, exports uses a '.' subkey,
-            // ships only dist; the declared development target src/index.ts is ABSENT.
-            const pkg = join(root, "node_modules", "@pragmatic-tech-ai", "todl");
-            ResolveConditionsFixture.WritePackageJson(pkg, { ".": { import: { development: "./src/index.ts", default: "./dist/index.js" } } });
-            mkdirSync(join(pkg, "dist"), { recursive: true });
-            writeFileSync(join(pkg, "dist", "index.js"), "export const x = 1;\n");
+            ResolveConditionsFixture.WriteInstalledDistOnly(root);
 
             assert.deepEqual(ResolveConditionsFixture.Resolve(root), []);
         }
