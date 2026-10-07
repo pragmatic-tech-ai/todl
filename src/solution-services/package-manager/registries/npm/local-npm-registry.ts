@@ -4,6 +4,7 @@ import {
     type IPackageRegistry,
     type PublishablePackage,
     type ConnectionStatus,
+    type RegistryInspection,
     type PackageRef,
     type VersionList,
     type PackageManifestJson,
@@ -105,6 +106,20 @@ export class LocalNpmRegistry implements IPackageRegistry
     public async Test(): Promise<ConnectionStatus>
     {
         return { Ok: true, Message: LocalNpmRegistry.OkMessage }
+    }
+
+    // A local directory has no token identity or scopes; it can list its packages.
+    public async Inspect(): Promise<RegistryInspection>
+    {
+        return {
+            Ok: true,
+            Message: LocalNpmRegistry.OkMessage,
+            Identity: '',
+            Scopes: [],
+            ScopesSupported: false,
+            Packages: await this.ListPackages(),
+            PackagesSupported: true,
+        }
     }
 
     private async versionsOf(name: string): Promise<string[]>

@@ -79,6 +79,10 @@ function encodeName(name: string): string
 
 export class NpmRegistry
 {
+  private static readonly UserPath = "/user";
+  private static readonly WhoamiPath = "/-/whoami";
+  private static readonly OAuthScopesHeader = "x-oauth-scopes";
+
   private readonly registry: string;
   private readonly scope: string;
   private readonly token: string;
@@ -112,6 +116,25 @@ export class NpmRegistry
       if (batch.length < 100) break;
     }
     return names;
+  }
+
+  /** The GitHub user the token authenticates as, plus its classic-PAT OAuth scopes
+   *  (empty for fine-grained tokens, which send no `x-oauth-scopes` header). */
+  async githubUser(): Promise<{ identity: string; scopes: string[] }>
+  {
+    const res = await this.transport.request({ method: "GET", url: `${this.githubApi}${NpmRegistry.UserPath}`, headers: this.githubHeaders() });
+    if (res.status !== 200) throw new Error(`whoami failed: HTTP ${res.status} ${text(res)}`);
+    const identity = (JSON.parse(text(res)) as { login?: string }).login ?? "";
+    const scopes = NpmRegistry.parseScopes(NpmRegistry.headerOf(res, NpmRegistry.OAuthScopesHeader));
+    return { identity, scopes };
+  }
+
+  /** The npm username the token authenticates as (`GET /-/whoami`). */
+  async npmWhoami(): Promise<string>
+  {
+    const res = await this.transport.request({ method: "GET", url: `${this.registry}${NpmRegistry.WhoamiPath}`, headers: this.authHeaders() });
+    if (res.status !== 200) throw new Error(`whoami failed: HTTP ${res.status} ${text(res)}`);
+    return (JSON.parse(text(res)) as { username?: string }).username ?? "";
   }
 
   /** List a package's published versions and dist-tags (registry packument). */
@@ -262,6 +285,21 @@ export class NpmRegistry
     if (tags[version] !== undefined) return tags[version];
     if (packument.versions?.[version] !== undefined) return version;
     throw new Error(`${name}@${version} not found`);
+  }
+
+  private static headerOf(res: HttpResponse, name: string): string
+  {
+    const lower = name.toLowerCase();
+    for (const key of Object.keys(res.headers))
+    {
+      if (key.toLowerCase() === lower) return res.headers[key]!;
+    }
+    return "";
+  }
+
+  private static parseScopes(header: string): string[]
+  {
+    return header.split(",").map((s) => s.trim()).filter((s) => s.length > 0);
   }
 
   private authHeaders(): Record<string, string>

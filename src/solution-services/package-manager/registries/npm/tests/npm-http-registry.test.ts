@@ -69,7 +69,7 @@ class InMemoryNpm implements HttpTransport
     }
 }
 
-function connection(): NpmRegistryConnection
+function connection(github: boolean = true): NpmRegistryConnection
 {
     return new NpmRegistryConnection({
         Id: 'gh',
@@ -77,9 +77,26 @@ function connection(): NpmRegistryConnection
         Registry: REGISTRY,
         Scope: SCOPE,
         Token: 'tok',
-        GithubApi: GITHUB,
-        Org: 'acme',
+        ...(github ? { GithubApi: GITHUB, Org: 'acme' } : {}),
     })
+}
+
+// A transport answering canned responses by exact URL (GET only); anything else 404s.
+class ScriptedTransport implements HttpTransport
+{
+    private readonly routes = new Map<string, HttpResponse>()
+
+    public Route(url: string, status: number, body: unknown, headers: Record<string, string> = {}): this
+    {
+        this.routes.set(url, { status, headers, body: enc.encode(JSON.stringify(body)) })
+        return this
+    }
+
+    public request(req: HttpRequest): Promise<HttpResponse>
+    {
+        const hit = this.routes.get(req.url.split('?')[0]!)
+        return Promise.resolve(hit ?? { status: 404, headers: {}, body: enc.encode('{}') })
+    }
 }
 
 function publishable(name: string, version: string): PublishablePackage
@@ -126,4 +143,80 @@ test('an unauthorized registry tests not-ok', async () =>
     const status = await registry.Test()
     assert.equal(status.Ok, false)
     assert.match(status.Message, /401/)
+})
+
+const USER_URL = `${GITHUB}/user`
+const PACKAGES_URL = `${GITHUB}/orgs/acme/packages`
+const WHOAMI_URL = `${REGISTRY}/-/whoami`
+
+test('Inspect reports identity, scopes and packages for a classic PAT', async () =>
+{
+    const transport = new ScriptedTransport()
+        .Route(REGISTRY, 200, {})
+        .Route(USER_URL, 200, { login: 'octocat' }, { 'x-oauth-scopes': 'read:packages' })
+        .Route(PACKAGES_URL, 200, [{ name: 'pkg-a' }])
+
+    const result = await new NpmHttpRegistry(connection(), transport).Inspect()
+
+    assert.equal(result.Ok, true)
+    assert.equal(result.Identity, 'octocat')
+    assert.deepEqual(result.Scopes, ['read:packages'])
+    assert.equal(result.ScopesSupported, true)
+    assert.deepEqual(result.Packages, ['pkg-a'])
+    assert.equal(result.PackagesSupported, true)
+})
+
+test('Inspect on a fine-grained token has no scopes but still supports them', async () =>
+{
+    const transport = new ScriptedTransport()
+        .Route(REGISTRY, 200, {})
+        .Route(USER_URL, 200, { login: 'octocat' })
+        .Route(PACKAGES_URL, 200, [])
+
+    const result = await new NpmHttpRegistry(connection(), transport).Inspect()
+
+    assert.deepEqual(result.Scopes, [])
+    assert.equal(result.ScopesSupported, true)
+    assert.equal(result.Identity, 'octocat')
+})
+
+test('Inspect on an unauthorized registry is not-ok and empty', async () =>
+{
+    const transport = new ScriptedTransport().Route(REGISTRY, 401, {})
+
+    const result = await new NpmHttpRegistry(connection(), transport).Inspect()
+
+    assert.equal(result.Ok, false)
+    assert.equal(result.Identity, '')
+    assert.deepEqual(result.Scopes, [])
+    assert.deepEqual(result.Packages, [])
+})
+
+test('Inspect degrades when listing packages fails', async () =>
+{
+    const transport = new ScriptedTransport()
+        .Route(REGISTRY, 200, {})
+        .Route(USER_URL, 200, { login: 'octocat' })
+        .Route(PACKAGES_URL, 404, {})
+
+    const result = await new NpmHttpRegistry(connection(), transport).Inspect()
+
+    assert.equal(result.Identity, 'octocat')
+    assert.deepEqual(result.Packages, [])
+    assert.equal(result.PackagesSupported, true)
+})
+
+test('Inspect on a generic npm registry reports only the whoami identity', async () =>
+{
+    const transport = new ScriptedTransport()
+        .Route(REGISTRY, 200, {})
+        .Route(WHOAMI_URL, 200, { username: 'alice' })
+
+    const result = await new NpmHttpRegistry(connection(false), transport).Inspect()
+
+    assert.equal(result.Identity, 'alice')
+    assert.equal(result.ScopesSupported, false)
+    assert.deepEqual(result.Scopes, [])
+    assert.equal(result.PackagesSupported, false)
+    assert.deepEqual(result.Packages, [])
 })
