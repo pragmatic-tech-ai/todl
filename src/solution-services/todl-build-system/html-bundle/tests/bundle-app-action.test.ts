@@ -305,9 +305,8 @@ class DistOnlyBundleFixture
 {
     private static readonly RootPrefix = "todl-dist-only-bundle-";
     private static readonly NodeModules = "node_modules";
-    private static readonly Scope = "@pragmatic-tech-ai";
-    private static readonly PackageDirName = "todl";
     private static readonly PackageName = "@pragmatic-tech-ai/todl";
+    public static readonly Marker = "__DistOnlyMarker__";
     private static readonly PackageJson = "package.json";
     private static readonly DistDir = "dist";
     private static readonly DistEntryFile = "index.js";
@@ -315,7 +314,7 @@ class DistOnlyBundleFixture
     private static readonly SrcEntryPath = "./src/index.ts";
     private static readonly DistEntryPath = "./dist/index.js";
     private static readonly DevelopmentCondition = "development";
-    private static readonly DistEntrySource = "export const TodlAppBootstrap = {};\n";
+    private static readonly DistEntrySource = `export const TodlAppBootstrap = { tag: "${DistOnlyBundleFixture.Marker}" };\n`;
 
     public static MakeRoot(): string
     {
@@ -327,7 +326,7 @@ class DistOnlyBundleFixture
     // symbol the generated entry imports (TodlAppBootstrap).
     public static WriteDistOnlyTodl(root: string): void
     {
-        const pkg = join(root, DistOnlyBundleFixture.NodeModules, DistOnlyBundleFixture.Scope, DistOnlyBundleFixture.PackageDirName);
+        const pkg = join(root, DistOnlyBundleFixture.NodeModules, ...DistOnlyBundleFixture.PackageName.split("/"));
         mkdirSync(join(pkg, DistOnlyBundleFixture.DistDir), { recursive: true });
         writeFileSync(
             join(pkg, DistOnlyBundleFixture.PackageJson),
@@ -364,6 +363,7 @@ describe("BundleAppAction dist-only resolution (integration)", () =>
             assert.equal(typeof bundle, "string");
             assert.ok(bundle!.length > 0, "produced a non-empty bundle against dist-only todl");
             assert.match(bundle!, /\(\(\) => \{/, "output is an IIFE");
+            assert.ok(bundle!.includes(DistOnlyBundleFixture.Marker), "bundle came from the dist stub (default -> dist/index.js)");
         }
         finally
         {
