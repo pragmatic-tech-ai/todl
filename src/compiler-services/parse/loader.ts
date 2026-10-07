@@ -521,13 +521,16 @@ export function loadInto(
   for (const { ns, imports, uri, decl: declaration } of units)
   {
     first.setNamespace(ns);
+    if (rec !== undefined) rec.current = uri;
     switch (declaration.kind)
     {
       case DeclKind.Primitive:
         first.definePrimitive(NodeIdQualifier.Qualify(ns, declaration.name), declaration.base, declaration.regex);
+        recordHome(rec, NodeIdQualifier.Qualify(ns, declaration.name));
         break;
       case DeclKind.Viewpoint:
         first.defineViewpoint(NodeIdQualifier.Qualify(ns, declaration.name), declaration.frames);
+        recordHome(rec, NodeIdQualifier.Qualify(ns, declaration.name));
         break;
       case DeclKind.Taxonomy:
       {
@@ -564,6 +567,8 @@ export function loadInto(
               path: taxonomyId,
             });
           }
+          // buildTerm runs exactly for the terms minted as nodes (top-level + hierarchy sub-terms).
+          recordHome(rec, `${taxonomyId}.${t.id}`);
           const hierarchy: TermInput[] = [];
           for (const child of t.children)
           {
@@ -619,6 +624,7 @@ export function loadInto(
         };
 
         first.defineTaxonomy(taxonomyId, decl.represents, decl.terms.map((t) => buildTerm(t, normConcept(t.concept) ?? primary)));
+        recordHome(rec, taxonomyId);
         break;
       }
       case DeclKind.Concept:
@@ -628,10 +634,12 @@ export function loadInto(
         // resolution (`Repository.supertypesOf`/`schemaOf`), not a stored
         // `Extends → Element` edge — killing the `Element` super-node.
         first.defineConcept(NodeIdQualifier.Qualify(ns, declaration.name), declaration.extends ?? null);
+        recordHome(rec, NodeIdQualifier.Qualify(ns, declaration.name));
         break;
       }
       case DeclKind.Annotation:
         first.defineAnnotation(NodeIdQualifier.Qualify(ns, declaration.name), declaration.extends ?? null);
+        recordHome(rec, NodeIdQualifier.Qualify(ns, declaration.name));
         break;
       case DeclKind.Operator:
         // Stage a glyph once; a redeclaration would collide on the node id, so
@@ -640,6 +648,7 @@ export function loadInto(
         {
           definedOps.add(declaration.glyph);
           first.defineOperator(declaration.glyph, declaration.concept, declaration.fromMember, declaration.toMember, declaration.relationship);
+          recordHome(rec, declaration.glyph);
         }
         break;
       case DeclKind.Instance:
@@ -658,8 +667,9 @@ export function loadInto(
   // Invariants are parsed here but only registered at the very end.
   const second = model.builder();
   const invariants: PendingInvariant[] = [];
-  for (const { ns, decl: declaration } of units)
+  for (const { ns, uri, decl: declaration } of units)
   {
+    if (rec !== undefined) rec.current = uri;
     if (declaration.kind === DeclKind.Annotation)
     {
       second.setNamespace(ns);
@@ -677,6 +687,7 @@ export function loadInto(
     for (const relationship of declaration.relationships)
     {
       second.addConceptRelationship(conceptId, relationship.name, relationship.targets, relationship.cardinality);
+      recordHome(rec, `${conceptId}.${relationship.name}`);
     }
     for (const invariant of declaration.invariants)
     {
