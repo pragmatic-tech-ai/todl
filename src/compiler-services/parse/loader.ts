@@ -761,26 +761,27 @@ export function loadInto(
   const fourth = model.builder();
   const seenApps = new Set<string>();
   let packageStaged = false;
-  for (const { ns, imports, decl } of units)
+  for (const { ns, imports, uri, decl } of units)
   {
     const home: Home = { ns, imports };
+    if (rec !== undefined) rec.current = uri;
     if (decl.kind === DeclKind.Concept)
     {
       fourth.setNamespace(ns);
       const conceptId = NodeIdQualifier.Qualify(ns, decl.name);
-      stageApplications(fourth, model, conceptId, decl.annotations, seenApps, diagnostics, asserted, idGenerator, ops, home, resolveRef);
+      stageApplications(fourth, model, conceptId, decl.annotations, seenApps, diagnostics, asserted, idGenerator, ops, home, resolveRef, rec);
       // Member-level annotations decorate the member node (`<concept>.<member>@<Ann>`).
       for (const rel of decl.relationships)
       {
         if (rel.annotations.length > 0)
-          stageApplications(fourth, model, `${conceptId}.${rel.name}`, rel.annotations, seenApps, diagnostics, asserted, idGenerator, ops, home, resolveRef);
+          stageApplications(fourth, model, `${conceptId}.${rel.name}`, rel.annotations, seenApps, diagnostics, asserted, idGenerator, ops, home, resolveRef, rec);
       }
     }
     else if (decl.kind === DeclKind.Package)
     {
       fourth.setNamespace(ns);
-      if (!packageStaged) { fourth.definePackageNode(PACKAGE_NODE_ID); packageStaged = true; }
-      stageApplications(fourth, model, PACKAGE_NODE_ID, decl.annotations, seenApps, diagnostics, asserted, idGenerator, ops, home, resolveRef);
+      if (!packageStaged) { fourth.definePackageNode(PACKAGE_NODE_ID); recordHome(rec, PACKAGE_NODE_ID); packageStaged = true; }
+      stageApplications(fourth, model, PACKAGE_NODE_ID, decl.annotations, seenApps, diagnostics, asserted, idGenerator, ops, home, resolveRef, rec);
     }
     else if (decl.kind === DeclKind.Taxonomy)
     {
@@ -788,11 +789,11 @@ export function loadInto(
       const taxonomyId = NodeIdQualifier.Qualify(ns, decl.name);
       // Taxonomy-level annotations decorate the taxonomy node itself
       // (`<taxonomy>@<name>`), exactly like a concept.
-      stageApplications(fourth, model, taxonomyId, decl.annotations, seenApps, diagnostics, asserted, idGenerator, ops, home, resolveRef);
+      stageApplications(fourth, model, taxonomyId, decl.annotations, seenApps, diagnostics, asserted, idGenerator, ops, home, resolveRef, rec);
       const walkTerm = (t: Term): void => {
         if (t.annotations.length > 0)
         {
-          stageApplications(fourth, model, `${taxonomyId}.${t.id}`, t.annotations, seenApps, diagnostics, asserted, idGenerator, ops, home, resolveRef);
+          stageApplications(fourth, model, `${taxonomyId}.${t.id}`, t.annotations, seenApps, diagnostics, asserted, idGenerator, ops, home, resolveRef, rec);
         }
         t.children.forEach(walkTerm);
       };
@@ -801,13 +802,13 @@ export function loadInto(
     else if (decl.kind === DeclKind.Instance)
     {
       fourth.setNamespace(ns);
-      stageInstanceAnnotations(fourth, model, decl, seenApps, diagnostics, asserted, idGenerator, ops, home, resolveRef);
+      stageInstanceAnnotations(fourth, model, decl, seenApps, diagnostics, asserted, idGenerator, ops, home, resolveRef, rec);
     }
     else if (decl.kind === DeclKind.Model)
     {
       fourth.setNamespace(ns);
-      stageApplications(fourth, model, NodeIdQualifier.Qualify(ns, decl.id), decl.annotations, seenApps, diagnostics, asserted, idGenerator, ops, home, resolveRef);
-      for (const inst of decl.instances) stageInstanceAnnotations(fourth, model, inst, seenApps, diagnostics, asserted, idGenerator, ops, home, resolveRef);
+      stageApplications(fourth, model, NodeIdQualifier.Qualify(ns, decl.id), decl.annotations, seenApps, diagnostics, asserted, idGenerator, ops, home, resolveRef, rec);
+      for (const inst of decl.instances) stageInstanceAnnotations(fourth, model, inst, seenApps, diagnostics, asserted, idGenerator, ops, home, resolveRef, rec);
     }
   }
   fourth.commit(undefinedIds);
@@ -1029,6 +1030,7 @@ function stageApplications(
   ops: OperatorTable,
   home: Home,
   resolveRef: ResolveRef,
+  rec?: HomeRecorder,
 ): void
 {
   for (const app of apps)
@@ -1048,8 +1050,9 @@ function stageApplications(
     }
     seen.add(appId);
     builder.annotate(target, app.name);
+    recordHome(rec, appId);
     model.recordSpan(appId, app.span);
-    for (const a of app.assignments) realizeValue(builder, model, app.name, appId, a.name, a.value, diagnostics, asserted, idGen, ops, home, resolveRef);
+    for (const a of app.assignments) realizeValue(builder, model, app.name, appId, a.name, a.value, diagnostics, asserted, idGen, ops, home, resolveRef, rec);
   }
 }
 
@@ -1066,13 +1069,14 @@ function stageInstanceAnnotations(
   ops: OperatorTable,
   home: Home,
   resolveRef: ResolveRef,
+  rec?: HomeRecorder,
 ): void
 {
   if (decl.annotations.length > 0)
   {
     if (decl.isClass)
     {
-      stageApplications(builder, model, NodeIdQualifier.Qualify(home.ns, decl.id), decl.annotations, seen, diagnostics, asserted, idGen, ops, home, resolveRef);
+      stageApplications(builder, model, NodeIdQualifier.Qualify(home.ns, decl.id), decl.annotations, seen, diagnostics, asserted, idGen, ops, home, resolveRef, rec);
     }
     else
     {
@@ -1089,7 +1093,7 @@ function stageInstanceAnnotations(
       }
     }
   }
-  for (const child of decl.children) stageInstanceAnnotations(builder, model, child, seen, diagnostics, asserted, idGen, ops, home, resolveRef);
+  for (const child of decl.children) stageInstanceAnnotations(builder, model, child, seen, diagnostics, asserted, idGen, ops, home, resolveRef, rec);
 }
 
 // ── The instance-materialisation engine ───────────────────────────────────────
