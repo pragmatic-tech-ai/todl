@@ -283,3 +283,91 @@ describe("BundleAppAction.ResolveConditions", () =>
         }
     });
 });
+
+// --- Spec B: real bundle against a dist-only todl layout ---
+
+// A BundleAppAction whose resolution root is a caller-supplied fixture dir, so a test
+// can stage a dist-only @pragmatic-tech-ai/todl there instead of the real checkout.
+class RootOverrideBundleAppAction extends BundleAppAction
+{
+    constructor(private readonly root: string)
+    {
+        super();
+    }
+
+    protected override ResolutionRoot(): string | undefined
+    {
+        return this.root;
+    }
+}
+
+class DistOnlyBundleFixture
+{
+    private static readonly RootPrefix = "todl-dist-only-bundle-";
+    private static readonly NodeModules = "node_modules";
+    private static readonly Scope = "@pragmatic-tech-ai";
+    private static readonly PackageDirName = "todl";
+    private static readonly PackageName = "@pragmatic-tech-ai/todl";
+    private static readonly PackageJson = "package.json";
+    private static readonly DistDir = "dist";
+    private static readonly DistEntryFile = "index.js";
+    private static readonly ModuleType = "module";
+    private static readonly SrcEntryPath = "./src/index.ts";
+    private static readonly DistEntryPath = "./dist/index.js";
+    private static readonly DevelopmentCondition = "development";
+    private static readonly DistEntrySource = "export const TodlAppBootstrap = {};\n";
+
+    public static MakeRoot(): string
+    {
+        return mkdtempSync(join(tmpdir(), DistOnlyBundleFixture.RootPrefix));
+    }
+
+    // A dist-only @pragmatic-tech-ai/todl: package.json declares both conditions but
+    // ships ONLY dist — exactly a published install. The dist entry exports the single
+    // symbol the generated entry imports (TodlAppBootstrap).
+    public static WriteDistOnlyTodl(root: string): void
+    {
+        const pkg = join(root, DistOnlyBundleFixture.NodeModules, DistOnlyBundleFixture.Scope, DistOnlyBundleFixture.PackageDirName);
+        mkdirSync(join(pkg, DistOnlyBundleFixture.DistDir), { recursive: true });
+        writeFileSync(
+            join(pkg, DistOnlyBundleFixture.PackageJson),
+            JSON.stringify({
+                name: DistOnlyBundleFixture.PackageName,
+                type: DistOnlyBundleFixture.ModuleType,
+                exports: {
+                    import: {
+                        [DistOnlyBundleFixture.DevelopmentCondition]: DistOnlyBundleFixture.SrcEntryPath,
+                        default: DistOnlyBundleFixture.DistEntryPath,
+                    },
+                },
+            }));
+        writeFileSync(join(pkg, DistOnlyBundleFixture.DistDir, DistOnlyBundleFixture.DistEntryFile), DistOnlyBundleFixture.DistEntrySource);
+    }
+}
+
+describe("BundleAppAction dist-only resolution (integration)", () =>
+{
+    test("bundles against a dist-only todl (no src) by resolving the default/dist export", async () =>
+    {
+        const root = DistOnlyBundleFixture.MakeRoot();
+        try
+        {
+            DistOnlyBundleFixture.WriteDistOnlyTodl(root);
+
+            const ctx = contextWith();
+            await stageValidInputs(ctx);
+
+            await new RootOverrideBundleAppAction(root).Execute(ctx);
+
+            assert.equal(ctx.Diagnostics.Count, 0, JSON.stringify(ctx.Diagnostics.All()));
+            const bundle = ctx.Artifacts.Get(HtmlArtifacts.AppBundle);
+            assert.equal(typeof bundle, "string");
+            assert.ok(bundle!.length > 0, "produced a non-empty bundle against dist-only todl");
+            assert.match(bundle!, /\(\(\) => \{/, "output is an IIFE");
+        }
+        finally
+        {
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
+});
