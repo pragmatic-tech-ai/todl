@@ -39,7 +39,10 @@ interface GraphState
     sourcesOf: Map<string, SourceFile[]>;
     diagnosticsByUri: Map<string, Diagnostic[]>;
     membersById: Map<string, SolutionGraphMember>;
-    loadDiagsByMember: Map<string, Diagnostic[]>;
+    // member id → (authoring file uri → that file's load diagnostics). Keyed per FILE so a
+    // single-file reload (ReplaceFile) can replace exactly one file's load diagnostics while
+    // preserving its sibling files', and a whole-member reload replaces the member's inner map.
+    loadDiagsByMember: Map<string, Map<string, Diagnostic[]>>;
 }
 
 /**
@@ -53,6 +56,7 @@ export class SolutionGraph
     private static readonly CycleMessage = 'Solution member dependency cycle';
     private static readonly CycleSeparator = ' -> ';
     private static readonly UnknownMemberMessage = 'Unknown solution member id';
+    private static readonly UnownedFileMessage = 'No solution member owns file';
 
     private readonly idGen: IdGenerator = new SnowflakeIdGenerator();
     private state: GraphState = SolutionGraph.FreshState();
@@ -217,6 +221,128 @@ export class SolutionGraph
         this.Changed.emit({ memberIds: affected.map(m => m.id), fileIds: this.FileIdsFor(state, affectedSet) });
     }
 
+    // File-granular incremental reload. `memberSources` is the owning member's CURRENT full
+    // source set; `fileUri` is the one file that changed. Strips exactly that file's nodes plus
+    // any sibling file whose nodes reference them (so a cross-file rename re-resolves), reloads
+    // that subset in one pass, then strips+reloads every dependent member wholesale (their
+    // cross-member references must re-resolve). Crash-safe like ReplaceMember: the incremental
+    // mutation is wrapped in a try that repairs from last-good on throw; the emit is outside it.
+    public ReplaceFile(fileUri: string, memberSources: readonly SourceFile[]): void
+    {
+        const state = this.state;
+        const owningId = this.FindOwningMember(state, fileUri);
+        const priorSources = [...(state.sourcesOf.get(owningId) ?? [])];
+        state.sourcesOf.set(owningId, [...memberSources]);
+
+        const dependentIds = this.DependentsOf(owningId);
+        const dependents = this.TopoOrder([...state.membersById.values()])
+            .filter(m => dependentIds.includes(m.id));
+
+        const reloadedFiles = new Set<string>();
+        const memberIds = new Set<string>([owningId, ...dependentIds]);
+        try
+        {
+            // Owning member: strip the changed file + every sibling file that references it,
+            // then reload just that subset together (mutual forward refs resolve; untouched
+            // siblings stay live). The referrer cone is computed BEFORE the strip drops edges.
+            const owning = state.membersById.get(owningId) as SolutionGraphMember;
+            const changedPriorIds = new Set([...state.provenance].filter(([, uri]) => uri === fileUri).map(([id]) => id));
+            const filesToReload = new Set<string>([fileUri, ...this.ReferrerFiles(state, owningId, changedPriorIds)]);
+            for (const uri of filesToReload)
+            {
+                this.RemoveOwnedFile(state, uri);
+            }
+            const subset = memberSources.filter(s => filesToReload.has(s.uri));
+            const loadDiags = this.LoadSources(state, owning, subset);
+            this.AttributeLoadDiags(state, owningId, filesToReload, loadDiags, false);
+            for (const uri of filesToReload)
+            {
+                reloadedFiles.add(uri);
+            }
+
+            // Dependent members: whole strip + reload in topological order.
+            for (const member of dependents)
+            {
+                this.RemoveOwnedNodes(state, member.id);
+            }
+            for (const member of dependents)
+            {
+                this.LoadMember(state, member, state.sourcesOf.get(member.id) ?? []);
+                for (const s of state.sourcesOf.get(member.id) ?? [])
+                {
+                    reloadedFiles.add(s.uri);
+                }
+            }
+            this.RebuildDiagnostics(state);
+        }
+        catch
+        {
+            this.RepairFailedReplace(owningId, priorSources);
+            return;
+        }
+        this.Changed.emit({ memberIds: [...memberIds], fileIds: [...reloadedFiles] });
+    }
+
+    // The owning member of a file: the one whose CURRENT source set declares that uri. Searched
+    // before the edit is recorded, so the changed file is still present in its member's sources.
+    private FindOwningMember(state: GraphState, fileUri: string): string
+    {
+        for (const [memberId, sources] of state.sourcesOf)
+        {
+            if (sources.some(s => s.uri === fileUri))
+            {
+                return memberId;
+            }
+        }
+        throw new Error(`${SolutionGraph.UnownedFileMessage}: ${fileUri}`);
+    }
+
+    // The owning member's files (excluding the changed file itself) whose nodes transitively
+    // reference `seedIds` — they must reload so their references re-resolve against the re-minted
+    // nodes. Walks the referrer frontier over the live graph (Repository exposes only forward
+    // edges, so referrers are found by scanning outEdges), then homes each referrer to its file.
+    private ReferrerFiles(state: GraphState, memberId: string, seedIds: ReadonlySet<string>): Set<string>
+    {
+        const referrers = new Set<string>();
+        let frontier = new Set<string>(seedIds);
+        while (frontier.size > 0)
+        {
+            const next = new Set<string>();
+            for (const node of state.model.allNodes())
+            {
+                if (referrers.has(node.id) || seedIds.has(node.id))
+                {
+                    continue;
+                }
+                // A node references a seed by instance-type, class-origin, or any out-edge
+                // target — InstanceOf/class links live on the node, not as edges.
+                const refs =
+                    (node.type !== null && frontier.has(node.type)) ||
+                    (node.class !== null && frontier.has(node.class)) ||
+                    state.model.outEdges(node.id).some(e => frontier.has(String(e.to)));
+                if (refs)
+                {
+                    referrers.add(node.id);
+                    next.add(node.id);
+                }
+            }
+            frontier = next;
+        }
+        const files = new Set<string>();
+        for (const id of referrers)
+        {
+            if (state.memberOf.get(id) === memberId)
+            {
+                const uri = state.provenance.get(id);
+                if (uri !== undefined)
+                {
+                    files.add(uri);
+                }
+            }
+        }
+        return files;
+    }
+
     // Repair the graph after a failed incremental ReplaceMember. First try a transactional
     // rebuild honoring the edit (sources already in sourcesOf); if the edit itself is
     // uncompilable that rebuild throws too, so fall back to rebuilding from the member's
@@ -237,9 +363,19 @@ export class SolutionGraph
 
     private LoadMember(state: GraphState, member: SolutionGraphMember, sources: readonly SourceFile[]): void
     {
+        // Whole-member (re)load: a FRESH inner diagnostics map replaces the member's old one,
+        // so a dropped/renamed file's stale load diagnostics vanish with it.
+        const loadDiags = this.LoadSources(state, member, sources);
+        this.AttributeLoadDiags(state, member.id, new Set(sources.map(s => s.uri)), loadDiags, true);
+    }
+
+    // Load one member's `sources` (a full set or a single-file subset) into the live model in
+    // one loadInto pass — so a subset's mutual forward references resolve — attributing every
+    // newly-minted node to `member`. Returns the load diagnostics for the caller to bucket.
+    private LoadSources(state: GraphState, member: SolutionGraphMember, sources: readonly SourceFile[]): Diagnostic[]
+    {
         const before = new Set(state.model.allNodes().map(n => n.id));
         const loadDiags = loadInto(state.model, [...sources], preludeNames(), this.idGen, state.provenance);
-        state.loadDiagsByMember.set(member.id, loadDiags);
         const origin = WikiLocator.OpenProjectOrigin(member.storage);
         for (const node of state.model.allNodes())
         {
@@ -253,6 +389,36 @@ export class SolutionGraph
                 state.originOf.set(node.id, origin);
             }
         }
+        return loadDiags;
+    }
+
+    // Bucket a load pass's diagnostics into the member's per-file map. Each diagnostic is homed
+    // by its span uri, else by its offending node's provenance, else the model scope. When
+    // `fresh`, the member's inner map is rebuilt from scratch (whole-member reload); otherwise
+    // only the `reloaded` files' buckets are cleared first, leaving sibling files untouched
+    // (single-file reload). Every reloaded file is given a bucket so an empty reload clears it.
+    private AttributeLoadDiags(
+        state: GraphState, memberId: string, reloaded: ReadonlySet<string>, diags: readonly Diagnostic[], fresh: boolean): void
+    {
+        const inner = fresh ? new Map<string, Diagnostic[]>() : (state.loadDiagsByMember.get(memberId) ?? new Map<string, Diagnostic[]>());
+        for (const uri of reloaded)
+        {
+            inner.set(uri, []);
+        }
+        for (const d of diags)
+        {
+            const home = d.span?.uri ?? (d.node !== null ? state.provenance.get(d.node) : undefined) ?? SolutionGraph.ModelScopeUri;
+            const list = inner.get(home);
+            if (list)
+            {
+                list.push(d);
+            }
+            else
+            {
+                inner.set(home, [d]);
+            }
+        }
+        state.loadDiagsByMember.set(memberId, inner);
     }
 
     private RemoveOwnedNodes(state: GraphState, memberId: string): void
@@ -267,12 +433,30 @@ export class SolutionGraph
         }
     }
 
+    // Strip every node (and, via model.remove, its edges) authored by a single file, keyed on
+    // provenance. Mirrors RemoveOwnedNodes but at file granularity — the strip half of
+    // ReplaceFile, so a changed file's nodes can be re-minted without touching sibling files.
+    private RemoveOwnedFile(state: GraphState, fileUri: string): void
+    {
+        const owned = [...state.provenance].filter(([, uri]) => uri === fileUri).map(([id]) => id);
+        for (const id of owned)
+        {
+            state.model.remove(id);
+            state.provenance.delete(id);
+            state.originOf.delete(id);
+            state.memberOf.delete(id);
+        }
+    }
+
     private RebuildDiagnostics(state: GraphState): void
     {
         state.diagnosticsByUri = new Map();
-        for (const diags of state.loadDiagsByMember.values())
+        for (const byFile of state.loadDiagsByMember.values())
         {
-            this.AddDiagnostics(state, diags);
+            for (const diags of byFile.values())
+            {
+                this.AddDiagnostics(state, diags);
+            }
         }
         this.AddDiagnostics(state, validate(state.model));
     }
