@@ -11,6 +11,8 @@ import { parseManifest } from '../package-manager/manifest.js';
 import { PROJECT_MANIFEST_FILENAME } from '../project-services/core/project-factory.js';
 import { TodlProjectBuildManager } from './todl-project-build-manager.js';
 import { InMemoryBuildStorage } from './in-memory-build-storage.js';
+import { BuildStorageProviderKey } from './build-storage-provider-key.js';
+import type { BuildOptions } from '../build-system-core/build-options.js';
 import { ScopeFlatteningStorage } from './scope-flattening-storage.js';
 
 export interface PublishOutcome
@@ -37,12 +39,13 @@ export class BuildService
     {
     }
 
-    public async Build(project: IStorage, buildSystemId: string, flavorId?: string, progress?: IBuildProgress): Promise<ProjectBuildOutput>
+    public async Build(project: IStorage, buildSystemId: string, flavorId?: string, progress?: IBuildProgress, options?: BuildOptions): Promise<ProjectBuildOutput>
     {
         const store = this.provider.getRequired(PackageStoreKey);
         const manifest = parseManifest(await project.ReadText(PROJECT_MANIFEST_FILENAME));
         const buildSystems = this.provider.getRequired(BuildSystemRegistryKey);
-        const manager = new TodlProjectBuildManager(buildSystems, new InMemoryBuildStorage());
+        const storage = this.provider.get(BuildStorageProviderKey) ?? new InMemoryBuildStorage();
+        const manager = new TodlProjectBuildManager(buildSystems, storage);
         return manager.Build({
             Project: project,
             Manifest: manifest,
@@ -50,6 +53,7 @@ export class BuildService
             Source: store,
             ...(flavorId !== undefined ? { BuildFlavorId: flavorId } : {}),
             ...(progress !== undefined ? { Progress: progress } : {}),
+            ...(options !== undefined ? { Options: options } : {}),
         });
     }
 
@@ -60,7 +64,8 @@ export class BuildService
             ?? new LocalNpmRegistry(new ScopeFlatteningStorage(store.Storage));
         const manifest = parseManifest(await project.ReadText(PROJECT_MANIFEST_FILENAME));
         const buildSystems = this.provider.getRequired(BuildSystemRegistryKey);
-        const manager = new TodlProjectBuildManager(buildSystems, new InMemoryBuildStorage());
+        const storage = this.provider.get(BuildStorageProviderKey) ?? new InMemoryBuildStorage();
+        const manager = new TodlProjectBuildManager(buildSystems, storage);
         const { Result: result } = await manager.Build({
             Project: project,
             Manifest: manifest,

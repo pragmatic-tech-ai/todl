@@ -27,6 +27,8 @@ import { type IPackageRegistry } from '../../package-manager/engine/package-regi
 import { FakeRegistry } from '../../package-manager/engine/tests/fakes.js';
 import { PROJECT_MANIFEST_FILENAME } from '../../project-services/core/project-factory.js';
 import { BuildService } from '../build-service.js';
+import { BuildStorageProviderKey } from '../build-storage-provider-key.js';
+import type { IBuildStorageProvider } from '../../build-system-core/build-storage-provider.js';
 
 // Records the PublishRegistry the manager's TodlBuildContext carried — the single
 // action in the fake npm-package system's npm-publish flavor, standing in for the
@@ -45,6 +47,24 @@ class RecordingPublishAction implements IBuildAction<TodlBuildContext>
     {
         this.SeenRegistry = ctx.PublishRegistry;
         return Promise.resolve();
+    }
+}
+
+// Stands in for an emit action: writes a file into the build sandbox, which the
+// manager copies into the opened output storage on success.
+class SandboxWritingAction implements IBuildAction<TodlBuildContext>
+{
+    public static readonly OutputFile = 'out.txt';
+    private static readonly ActionName = 'sandbox-writing';
+    private static readonly Content = 'built';
+
+    public readonly Name = SandboxWritingAction.ActionName;
+    public readonly Consumes: readonly ArtifactKey<unknown>[] = [];
+    public readonly Produces: readonly ArtifactKey<unknown>[] = [];
+
+    public Execute(ctx: TodlBuildContext): Promise<void>
+    {
+        return ctx.Sandbox.WriteText(SandboxWritingAction.OutputFile, SandboxWritingAction.Content);
     }
 }
 
@@ -138,6 +158,7 @@ class TestFixture
     private static readonly PackageId = 'widgets';
     private static readonly PackageVersion = '1.2.3';
     private static readonly PackageSourceNotExercisedMessage = 'PackageSource: not exercised by this fixture';
+    public static readonly ProvidedOutputPath = '/disk/html-bundle';
 
     public static async MakeProject(): Promise<FakeStorage>
     {
@@ -201,6 +222,7 @@ class TestFixture
         publishAction: IBuildAction<TodlBuildContext>,
         solutionManager: SolutionManagerService,
         buildAction: IBuildAction<TodlBuildContext> = publishAction,
+        storageProvider?: IBuildStorageProvider,
     ): IServiceProvider
     {
         const buildSystems = new BuildSystemRegistry<TodlBuildContext, ProjectManifest>();
@@ -210,6 +232,7 @@ class TestFixture
         provider.registerInstance(PackageStoreKey, new StoragePackageStore(new FakeStorage()));
         provider.registerInstance(BuildSystemRegistryKey, buildSystems);
         provider.registerInstance(SolutionManagerService.Key, solutionManager);
+        if (storageProvider !== undefined) provider.registerInstance(BuildStorageProviderKey, storageProvider);
         return provider;
     }
 }
@@ -281,5 +304,39 @@ describe('BuildService.Build', () =>
         const output = await service.Build(project, FakeNpmPackageBuildSystem.SystemId, FakeNpmPackageBuildSystem.BuildFlavorId);
 
         assert.equal(output.Result.Ok, true);
+    });
+
+    test('uses the registered BuildStorageProviderKey output provider', async () =>
+    {
+        const output = new FakeStorage();
+        const storageProvider: IBuildStorageProvider =
+        {
+            CreateSandbox: () => Promise.resolve(new FakeStorage()),
+            DeleteSandbox: () => Promise.resolve(),
+            OpenOutput: () => Promise.resolve({ Storage: output, Path: TestFixture.ProvidedOutputPath }),
+        };
+        const publishAction = new RecordingPublishAction();
+        const provider = TestFixture.MakeProvider(
+            publishAction, TestFixture.MakeSolutionManagerService(), new SandboxWritingAction(), storageProvider);
+        const service = new BuildService(provider);
+        const project = await TestFixture.MakeProject();
+
+        const result = await service.Build(project, FakeNpmPackageBuildSystem.SystemId, FakeNpmPackageBuildSystem.BuildFlavorId);
+
+        assert.equal(result.Result.OutputPath, TestFixture.ProvidedOutputPath);
+        assert.equal(await output.Exists(SandboxWritingAction.OutputFile), true);
+    });
+
+    test('falls back to in-memory output when no provider is registered', async () =>
+    {
+        const publishAction = new RecordingPublishAction();
+        const provider = TestFixture.MakeProvider(publishAction, TestFixture.MakeSolutionManagerService(), new SandboxWritingAction());
+        const service = new BuildService(provider);
+        const project = await TestFixture.MakeProject();
+
+        const result = await service.Build(project, FakeNpmPackageBuildSystem.SystemId, FakeNpmPackageBuildSystem.BuildFlavorId);
+
+        assert.equal(result.Result.Ok, true);
+        assert.notEqual(result.Result.OutputPath, TestFixture.ProvidedOutputPath);
     });
 });
