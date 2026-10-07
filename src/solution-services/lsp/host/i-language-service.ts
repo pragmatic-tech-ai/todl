@@ -46,7 +46,7 @@ export interface ILanguageService
     // whole active solution (the SAME graph for every consumer; undefined when no solution
     // is active or the storage is not a member), the resources a node declares, and a
     // signal that fires with the affected member ids when a member's slice is replaced.
-    ModelView(consumerStorage: IStorage): Promise<{ model: Repository; originOf: ReadonlyMap<string, WikiOrigin> } | undefined>;
+    ModelView(consumerStorage: IStorage): Promise<{ model: Repository; originOf: ReadonlyMap<string, WikiOrigin>; provenanceOf: ReadonlyMap<string, string> } | undefined>;
     Resources(nodeId: string): Promise<ResolvedResource[]>;
     readonly GraphChanged: Signal<SolutionGraphChange>;
 }

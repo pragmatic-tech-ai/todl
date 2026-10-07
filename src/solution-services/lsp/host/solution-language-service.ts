@@ -13,6 +13,8 @@ import type { SourceFile } from "../../../compiler-services/diagnostics/span.js"
 import type { PackageSource } from "../../../domain/domain.js";
 import { AnalysisEngine } from "../analysis/analysis-engine.js";
 import { AnalyzeKind, type AnalyzeContext, type AnalyzeRequest, type AnalyzeResponse } from "../analysis/protocol.js";
+import type { GraphSlice } from "../analysis/graph-slice.js";
+import { preludeDocument } from "../../../compiler-services/stdlib/prelude.js";
 import type { RenameError } from "../analysis/rename-provider.js";
 import { AnalysisEngineKey, type IAnalysisEngine } from "./i-analysis-engine.js";
 import { ProjectRegistry, PushedSourceProvider, type Project, type OpenDocuments } from "./project-registry.js";
@@ -127,8 +129,8 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     // is registered (a headless / test host). A local member's resources resolve to
     // its own OpenProject storage, so this is consulted only for published origins.
     private readonly emptyPackages: IStorage = new FakeStorage();
-    // Per-member-root generation counter coalescing live-edit replaces: DidChange bumps
-    // the root's generation and captures it; the dequeued replace runs only if it is
+    // Per-URI generation counter coalescing live-edit replaces: DidChange bumps the
+    // file's generation and captures it; the dequeued replace runs only if it is
     // still the latest (an older keystroke superseded by a newer one is skipped).
     private readonly replaceGeneration = new Map<string, number>();
     // False until the first RewireMembers (the construction-time call) has run, so that
@@ -249,13 +251,15 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
         // The resolver base-cache is deliberately NOT invalidated on a keystroke (an edit
         // does not change the base closure); only the shared graph's owning slice is
         // re-loaded, debounced onto the same pending tail WhenIdle/Flush await. Bump the
-        // owning member's generation and capture it so a burst of keystrokes coalesces —
-        // only the latest enqueued replace for that member actually runs (see below).
+        // file's generation and capture it so a burst of keystrokes coalesces —
+        // only the latest enqueued replace for that file actually runs (see below).
         const root = this.MemberRootForUri(uri);
         if (root === undefined) return;
-        const generation = (this.replaceGeneration.get(root) ?? 0) + 1;
-        this.replaceGeneration.set(root, generation);
-        this.Enqueue(() => this.ReplaceOwningMember(uri, root, generation));
+        // The generation is per-URI: sibling files of one member must not supersede each
+        // other, only a newer keystroke in the SAME file does.
+        const generation = (this.replaceGeneration.get(uri) ?? 0) + 1;
+        this.replaceGeneration.set(uri, generation);
+        this.Enqueue(() => this.ReplaceOwningFile(uri, root, generation));
     }
 
     // The shared graph's Changed signal, re-exposed: it fires with the affected member
@@ -269,7 +273,7 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     // The shared solution view for a member: the ONE Repository + origin map the whole
     // solution composes into. Awaits warmup; undefined when no solution is active or the
     // storage is not one of its members (every valid member shares the identical graph).
-    public async ModelView(consumerStorage: IStorage): Promise<{ model: Repository; originOf: ReadonlyMap<string, WikiOrigin> } | undefined>
+    public async ModelView(consumerStorage: IStorage): Promise<{ model: Repository; originOf: ReadonlyMap<string, WikiOrigin>; provenanceOf: ReadonlyMap<string, string> } | undefined>
     {
         await this.warmup;
         const solution = this.Provider.get(SolutionManagerService.Key)?.ActiveSolution;
@@ -277,7 +281,7 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
         let isMember = false;
         for (const member of solution.Members) if (member.Storage === consumerStorage) isMember = true;
         if (!isMember) return undefined;
-        return { model: this.solutionGraph.Model, originOf: this.solutionGraph.OriginOf };
+        return { model: this.solutionGraph.Model, originOf: this.solutionGraph.OriginOf, provenanceOf: this.solutionGraph.Provenance };
     }
 
     // The resources a node declares (icon / MuralResource annotations carrying a path),
@@ -667,12 +671,47 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
         const documents: readonly SourceFile[] = this.sources.SourcesFor(project, this.liveDocuments);
         const include = project !== this.lastProject || this.sentTokenByProject.get(project.RootUri) !== this.baseSetToken;
         this.lastProject = project;
+        // The warm bases ride along only when newly active / the token moved — the engine
+        // keeps them for the Build fallback path. The shared-graph slice is attached
+        // whenever the graph represents this project (the preferred warm path).
+        const context: AnalyzeContext = { BaseSetToken: this.baseSetToken, Documents: documents };
         if (include)
         {
             this.sentTokenByProject.set(project.RootUri, this.baseSetToken);
-            return { BaseSetToken: this.baseSetToken, Bases: project.Bases, Documents: documents };
+            context.Bases = project.Bases;
         }
-        return { BaseSetToken: this.baseSetToken, Documents: documents };
+        const slice = this.GraphSliceFor(project);
+        if (slice !== undefined) context.Graph = slice;
+        return context;
+    }
+
+    // Assemble the shared SolutionGraph's per-project read slice, or undefined when the
+    // graph cannot serve this request (a recorded build error, or no node authored under
+    // this project — the engine then falls back to the per-request `checkAgainst`). The
+    // visible-id set reproduces a project-scoped `Build` model's membership: the project's
+    // OWN authored nodes plus the prelude and its declared bases' closure, so a bare
+    // reference never resolves to a same-named node contributed by an unrelated member.
+    private GraphSliceFor(project: Project): GraphSlice | undefined
+    {
+        if (this.lastGraphBuildError !== undefined) return undefined;
+        const provenance = this.solutionGraph.Provenance;
+        const ownIds = new Set<string>();
+        for (const [nodeId, uri] of provenance)
+        {
+            if (this.projects.ProjectFor(uri)?.RootUri === project.RootUri) ownIds.add(nodeId);
+        }
+        if (ownIds.size === 0) return undefined;
+        const visibleIds = new Set<string>(ownIds);
+        for (const node of preludeDocument().nodes) visibleIds.add(node.id);
+        for (const base of project.Bases) for (const node of base.nodes) visibleIds.add(node.id);
+        const diagnosticsByUri = this.solutionGraph.DiagnosticsByUri();
+        return {
+            Model: this.solutionGraph.Model,
+            DiagnosticsByUri: diagnosticsByUri,
+            WholeModelDiagnostics: diagnosticsByUri.get(SolutionGraph.ModelScopeUri) ?? [],
+            VisibleIds: visibleIds,
+            OwnIds: ownIds,
+        };
     }
 
     // Eagerly resolve each open member's warm base-set into the registry, keyed by
@@ -813,6 +852,39 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
         return true;
     }
 
+    // The file-granular live-edit path: re-load just the edited file (plus its referrer cone)
+    // via SolutionGraph.ReplaceFile. ReplaceFile only handles an in-place edit of a file the
+    // graph already knows, so a URI not yet loaded (e.g. a just-created file) falls back to
+    // the member-granular replace instead of throwing.
+    private async ReplaceOwningFile(uri: string, root: string, generation: number): Promise<void>
+    {
+        if (this.disposed) return;
+        await this.warmup;
+        // Latest-wins per file: a newer keystroke for this URI already bumped the generation.
+        if (this.replaceGeneration.get(uri) !== generation) return;
+        const owner = await this.MemberForUri(uri);
+        if (owner === undefined) return;
+        const id = SolutionLanguageService.MemberIdOf(owner.manifest);
+        if (!this.solutionGraph.Has(id)) return;
+        if (!this.solutionGraph.HasFile(uri))
+        {
+            await this.ReplaceOwningMember(uri, root, generation);
+            return;
+        }
+        try
+        {
+            const sources = await this.SourcesForMember(owner.storage, owner.manifest.type);
+            if (this.disposed) return;
+            this.solutionGraph.ReplaceFile(uri, sources);
+        }
+        catch (error)
+        {
+            // Non-fatal to the queue (e.g. a replace race), but not ignored: the error is
+            // captured to lastGraphBuildError so a consumer can tell the graph may be stale.
+            this.lastGraphBuildError = error instanceof Error ? error.message : String(error);
+        }
+    }
+
     // The live-edit path: re-load just the member that owns the changed URI from its
     // current (live-overlaid) sources, so the shared graph reflects the keystroke and
     // GraphChanged fires. Awaits warmup so the graph exists; a member not yet built (or
@@ -821,9 +893,9 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     {
         if (this.disposed) return;
         await this.warmup;
-        // Latest-wins: a newer keystroke for the same member has already bumped the
+        // Latest-wins: a newer keystroke for the same file has already bumped the
         // generation, so this superseded replace skips its re-read + reload.
-        if (this.replaceGeneration.get(root) !== generation) return;
+        if (this.replaceGeneration.get(uri) !== generation) return;
         const owner = await this.MemberForUri(uri);
         if (owner === undefined) return;
         const id = SolutionLanguageService.MemberIdOf(owner.manifest);
