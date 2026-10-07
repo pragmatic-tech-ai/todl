@@ -159,6 +159,16 @@ test("ModelView returns the shared graph for a member and undefined for a non-me
     assert.equal(await world.Service.ModelView(new FakeStorage("outside")), undefined);
 });
 
+test("ModelView exposes provenanceOf mapping a node to its authoring file uri", async () =>
+{
+    const world = new World();
+    await world.Service.Ready();
+
+    const view = await world.Service.ModelView(world.Arch);
+    assert.ok(view !== undefined);
+    assert.ok(view.provenanceOf.get("app.M")?.endsWith("a.todl"), `got ${String(view.provenanceOf.get("app.M"))}`);
+});
+
 test("Resources through the service resolves an icon annotation to its source member storage", async () =>
 {
     const world = new World();

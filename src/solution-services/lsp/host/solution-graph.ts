@@ -82,6 +82,12 @@ export class SolutionGraph
         return this.state.originOf;
     }
 
+    /** nodeId → full source-file URI that authored the node. */
+    public get Provenance(): ReadonlyMap<string, string>
+    {
+        return this.state.provenance;
+    }
+
     /** True once `memberId` has been built into the graph (so ReplaceMember is safe). */
     public Has(memberId: string): boolean
     {

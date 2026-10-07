@@ -269,7 +269,7 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     // The shared solution view for a member: the ONE Repository + origin map the whole
     // solution composes into. Awaits warmup; undefined when no solution is active or the
     // storage is not one of its members (every valid member shares the identical graph).
-    public async ModelView(consumerStorage: IStorage): Promise<{ model: Repository; originOf: ReadonlyMap<string, WikiOrigin> } | undefined>
+    public async ModelView(consumerStorage: IStorage): Promise<{ model: Repository; originOf: ReadonlyMap<string, WikiOrigin>; provenanceOf: ReadonlyMap<string, string> } | undefined>
     {
         await this.warmup;
         const solution = this.Provider.get(SolutionManagerService.Key)?.ActiveSolution;
@@ -277,7 +277,7 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
         let isMember = false;
         for (const member of solution.Members) if (member.Storage === consumerStorage) isMember = true;
         if (!isMember) return undefined;
-        return { model: this.solutionGraph.Model, originOf: this.solutionGraph.OriginOf };
+        return { model: this.solutionGraph.Model, originOf: this.solutionGraph.OriginOf, provenanceOf: this.solutionGraph.Provenance };
     }
 
     // The resources a node declares (icon / MuralResource annotations carrying a path),
