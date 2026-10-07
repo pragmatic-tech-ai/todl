@@ -1,5 +1,5 @@
 import { build } from "esbuild";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { copyTree } from "@pragmatic-tech-ai/todl-runtime";
@@ -27,11 +27,14 @@ import { HtmlArtifacts } from "./html-artifacts.js";
 // root's node_modules by walking up, and "@pragmatic-tech-ai/todl" (the package the
 // staged files sit inside) resolves by package self-reference against its exports map.
 //
-// SCOPE: this currently supports building TODL projects from an in-repo / source
-// checkout, where "@pragmatic-tech-ai/*" resolve to their TypeScript `src` under the
-// `development` export condition (see DevelopmentCondition below). A published/installed
-// TODL (which ships only `dist`, per package.json `files`) is NOT yet supported — that
-// dist-based resolution is a KNOWN FOLLOW-UP, deferred by ruling.
+// RESOLUTION: "@pragmatic-tech-ai/*" are bundled from their TypeScript `src` under the
+// `development` export condition when a source checkout is resolvable (in-repo). When
+// todl is consumed installed/dist-only (ships only `dist`, per package.json `files`),
+// the `development` condition is omitted so esbuild resolves the `default` (built
+// `dist`) exports instead. ResolveConditions picks between these by probing whether
+// todl's `development` entry file exists on disk. Electron asar-packed resolution
+// (reading todl from inside app.asar) is out of scope: todl must be present under
+// node_modules (dev/preview layout, or electron-builder `asarUnpack`).
 export class BundleAppAction implements IBuildAction<TodlBuildContext>
 {
     private static readonly ActionName = "bundle-app";
@@ -45,20 +48,20 @@ export class BundleAppAction implements IBuildAction<TodlBuildContext>
     private static readonly AppRootExportPattern = /\bexport const app\b/;
     private static readonly GeneratedDirectory = "generated";
     private static readonly NodeModulesDirectory = "node_modules";
+    private static readonly TodlPackageName = "@pragmatic-tech-ai/todl";
+    private static readonly PackageJsonFile = "package.json";
+    private static readonly ScopedTodlDir = "@pragmatic-tech-ai/todl";
     private static readonly StagePrefix = "todl-bundle-stage-";
 
     private static readonly EsbuildFormat = "iife";
     private static readonly EsbuildPlatform = "browser";
     private static readonly EsbuildTarget = "es2020";
     private static readonly EsbuildLogLevel = "silent";
-    // The package.json `import` conditions map "@pragmatic-tech-ai/*" to their `src`
-    // TypeScript entries, so this build resolves and bundles those packages FROM SOURCE,
-    // mirroring the proven scripts/gen-graph-app.mjs path and matching the runner
-    // (`--conditions=development`). This is why the action is scoped to in-repo / source
-    // checkouts (see class doc): a published/installed TODL ships only `dist` (its `src`
-    // is absent), so under this condition resolution would fail. Making a published build
-    // work would mean resolving the `default` (built `dist`) exports instead — a known
-    // follow-up, not currently supported.
+    // The `development` export condition maps "@pragmatic-tech-ai/*" to their `src`
+    // TypeScript entries, bundling those packages FROM SOURCE (mirrors the proven
+    // scripts/gen-graph-app.mjs path and the `--conditions=development` runner). Applied
+    // only when a source checkout is resolvable; ResolveConditions omits it for an
+    // installed/dist-only todl so the built `dist` exports resolve instead.
     private static readonly DevelopmentCondition = "development";
 
     private static readonly MissingEntryMessage = "no app entry to bundle";
@@ -89,7 +92,7 @@ export class BundleAppAction implements IBuildAction<TodlBuildContext>
         const compiled = ctx.Artifacts.Get(HtmlArtifacts.CompiledUi) ?? [];
         if (!(await this.GuardAppRoots(ctx, compiled))) return;
 
-        const resolutionRoot = BundleAppAction.ResolutionRoot();
+        const resolutionRoot = this.ResolutionRoot();
         if (resolutionRoot === undefined)
         {
             this.ReportError(ctx, BundleAppAction.NoResolutionRootMessage);
@@ -178,7 +181,7 @@ export class BundleAppAction implements IBuildAction<TodlBuildContext>
                 logLevel: BundleAppAction.EsbuildLogLevel,
                 absWorkingDir: stageDir,
                 nodePaths: [join(resolutionRoot, BundleAppAction.NodeModulesDirectory)],
-                conditions: [BundleAppAction.DevelopmentCondition],
+                conditions: BundleAppAction.ResolveConditions(resolutionRoot),
             });
             return result.outputFiles[0]!.text;
         }
@@ -196,11 +199,11 @@ export class BundleAppAction implements IBuildAction<TodlBuildContext>
     }
 
     // Walks up from this module to the nearest ancestor directory that contains a
-    // node_modules folder — the TODL repo/source-checkout root when running in-repo (the
-    // supported scope; see class doc). The staging dir is created inside it so esbuild's
-    // upward node_modules walk (and the "@pragmatic-tech-ai/todl" package self-reference)
-    // resolve there.
-    private static ResolutionRoot(): string | undefined
+    // node_modules folder: the todl source-checkout root when running in-repo, or the
+    // consumer's package root when todl is installed. The staging dir is created inside
+    // it so esbuild's upward node_modules walk resolves bare package imports there.
+    // `protected` (not static) so a test can override it to point at a fixture root.
+    protected ResolutionRoot(): string | undefined
     {
         let dir = dirname(fileURLToPath(import.meta.url));
         while (true)
@@ -210,5 +213,68 @@ export class BundleAppAction implements IBuildAction<TodlBuildContext>
             if (parent === dir) return undefined;
             dir = parent;
         }
+    }
+
+    // Selects esbuild resolution conditions by what the resolvable todl package provides
+    // on disk. The `development` export maps "@pragmatic-tech-ai/*" to their TypeScript
+    // `src`; a published/installed todl ships only `dist` (its `development` target is
+    // absent). So: return ['development'] ONLY when todl's development entry file exists
+    // (a source checkout), otherwise [] so esbuild uses the `default`/dist entry. The
+    // probe finds todl's package.json two ways: the root IS todl (Node package
+    // self-reference, in-repo), or todl lives under <root>/node_modules. Never throws:
+    // an unreadable/absent manifest yields [] (prefer the always-present dist entry).
+    private static ResolveConditions(resolutionRoot: string): string[]
+    {
+        const manifestPath = BundleAppAction.LocateTodlManifest(resolutionRoot);
+        if (manifestPath === undefined) return [];
+
+        try
+        {
+            const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+                exports?: Record<string, unknown>;
+            };
+            const exportsField = manifest.exports;
+            if (exportsField === undefined) return [];
+            // exports may be a bare conditions object (todl's own shape) or subpath-keyed
+            // under '.'; the development target is a package-relative path like
+            // "./src/index.ts".
+            const dot = (exportsField["."] ?? exportsField) as { import?: { development?: string } };
+            const developmentEntry = dot?.import?.development;
+            if (typeof developmentEntry !== "string") return [];
+
+            const packageDir = dirname(manifestPath);
+            const target = join(packageDir, developmentEntry);
+            return existsSync(target) ? [BundleAppAction.DevelopmentCondition] : [];
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    // Locates the todl package.json reachable from resolutionRoot: the root itself when
+    // it is the todl package (self-reference), else <root>/node_modules/@pragmatic-tech-ai/todl.
+    private static LocateTodlManifest(resolutionRoot: string): string | undefined
+    {
+        const rootManifest = join(resolutionRoot, BundleAppAction.PackageJsonFile);
+        if (existsSync(rootManifest))
+        {
+            try
+            {
+                const name = (JSON.parse(readFileSync(rootManifest, "utf8")) as { name?: string }).name;
+                if (name === BundleAppAction.TodlPackageName) return rootManifest;
+            }
+            catch
+            {
+                // fall through to the node_modules lookup
+            }
+        }
+
+        const installedManifest = join(
+            resolutionRoot,
+            BundleAppAction.NodeModulesDirectory,
+            BundleAppAction.ScopedTodlDir,
+            BundleAppAction.PackageJsonFile);
+        return existsSync(installedManifest) ? installedManifest : undefined;
     }
 }

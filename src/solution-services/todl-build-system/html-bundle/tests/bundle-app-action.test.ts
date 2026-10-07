@@ -1,4 +1,7 @@
 import { test, describe } from "node:test";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import assert from "node:assert/strict";
 import { FakeStorage } from "@pragmatic-tech-ai/todl-runtime";
 import { BuildArtifacts } from "../../../build-system-core/build-artifacts.js";
@@ -152,5 +155,96 @@ describe("BundleAppAction", () =>
 
         assert.equal(ctx.Diagnostics.Count, 0, JSON.stringify(ctx.Diagnostics.All()));
         assert.equal(typeof ctx.Artifacts.Get(HtmlArtifacts.AppBundle), "string");
+    });
+});
+
+// --- Spec B: condition selection by development-entry presence ---
+
+class ResolveConditionsFixture
+{
+    private static readonly RootPrefix = "todl-resolve-conditions-";
+    private static readonly PackageJson = "package.json";
+    private static readonly TodlName = "@pragmatic-tech-ai/todl";
+
+    // Builds a throwaway resolution-root directory; callers tear it down in a finally.
+    public static MakeRoot(): string
+    {
+        return mkdtempSync(join(tmpdir(), ResolveConditionsFixture.RootPrefix));
+    }
+
+    public static WritePackageJson(dir: string, exportsField: unknown): void
+    {
+        mkdirSync(dir, { recursive: true });
+        writeFileSync(
+            join(dir, ResolveConditionsFixture.PackageJson),
+            JSON.stringify({ name: ResolveConditionsFixture.TodlName, exports: exportsField }));
+    }
+
+    public static WriteOtherPackageJson(dir: string): void
+    {
+        writeFileSync(join(dir, ResolveConditionsFixture.PackageJson), JSON.stringify({ name: "something-else" }));
+    }
+
+    // Reaches the private static under test. A cast is the honest way to unit-test a
+    // private helper whose behavior the spec singles out; the method stays private.
+    public static Resolve(root: string): string[]
+    {
+        return (BundleAppAction as unknown as { ResolveConditions(r: string): string[] }).ResolveConditions(root);
+    }
+}
+
+describe("BundleAppAction.ResolveConditions", () =>
+{
+    test("source checkout (self-reference root with src present) selects the development condition", () =>
+    {
+        const root = ResolveConditionsFixture.MakeRoot();
+        try
+        {
+            // In-repo shape: root/package.json IS todl, exports is a bare conditions
+            // object (no '.' subkey), and ./src/index.ts exists on disk.
+            ResolveConditionsFixture.WritePackageJson(root, { import: { development: "./src/index.ts", default: "./dist/index.js" } });
+            mkdirSync(join(root, "src"), { recursive: true });
+            writeFileSync(join(root, "src", "index.ts"), "export const x = 1;\n");
+
+            assert.deepEqual(ResolveConditionsFixture.Resolve(root), ["development"]);
+        }
+        finally
+        {
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    test("installed dist-only todl (node_modules, no src) selects no condition", () =>
+    {
+        const root = ResolveConditionsFixture.MakeRoot();
+        try
+        {
+            // Installed shape: todl lives under node_modules, exports uses a '.' subkey,
+            // ships only dist; the declared development target src/index.ts is ABSENT.
+            const pkg = join(root, "node_modules", "@pragmatic-tech-ai", "todl");
+            ResolveConditionsFixture.WritePackageJson(pkg, { ".": { import: { development: "./src/index.ts", default: "./dist/index.js" } } });
+            mkdirSync(join(pkg, "dist"), { recursive: true });
+            writeFileSync(join(pkg, "dist", "index.js"), "export const x = 1;\n");
+
+            assert.deepEqual(ResolveConditionsFixture.Resolve(root), []);
+        }
+        finally
+        {
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    test("no todl package.json under the root does not throw and selects no condition", () =>
+    {
+        const root = ResolveConditionsFixture.MakeRoot();
+        try
+        {
+            ResolveConditionsFixture.WriteOtherPackageJson(root);
+            assert.deepEqual(ResolveConditionsFixture.Resolve(root), []);
+        }
+        finally
+        {
+            rmSync(root, { recursive: true, force: true });
+        }
     });
 });
