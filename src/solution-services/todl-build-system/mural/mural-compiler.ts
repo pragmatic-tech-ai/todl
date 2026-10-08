@@ -11,11 +11,21 @@ import { compile, EmitError, ParseError } from "@pragmatic-tech-ai/mural/compile
 // the sandbox — never the project, since compiled JS is build output, not source the
 // developer edits. A compile failure (or a basename collision) stops the run rather
 // than emitting partial/garbage output.
+// Where a compiled module lands in the sandbox. CompiledBasename (default) flattens
+// to `compiled/<basename>.mu.js` (npm-package build); Sibling keeps the source's
+// project-relative path, so `src/a/foo.mu` -> `src/a/foo.mu.js` next to its source.
+export enum MuralOutputLayout
+{
+    CompiledBasename,
+    Sibling,
+}
+
 export class MuralCompiler
 {
     private static readonly ActionName = "compile-mural";
     private static readonly SourceExtension = ".mu";
     private static readonly CompiledExtension = ".mu.js";
+    private static readonly CompiledSuffixAfterMu = ".js";
     private static readonly CompiledDirectory = "compiled";
     private static readonly CompileFailedMessagePrefix = "failed to compile ";
     private static readonly CollisionMessagePrefix = "two .mu sources compile to the same output ";
@@ -37,6 +47,10 @@ export class MuralCompiler
     private static readonly GeneratedPresentationFile = "presentation.generated.mu";
     private static readonly PresentationDir = "presentation";
 
+    public constructor(private readonly layout: MuralOutputLayout = MuralOutputLayout.CompiledBasename)
+    {
+    }
+
     public async Compile(ctx: TodlBuildContext): Promise<readonly string[]>
     {
         const sources = (await StorageTree.Files(ctx.Project))
@@ -53,7 +67,7 @@ export class MuralCompiler
         const sourceByOutput = new Map<string, string>();
         for (const path of sources)
         {
-            const outputPath = MuralCompiler.OutputPathFor(path);
+            const outputPath = this.OutputPathFor(path);
             const prior = sourceByOutput.get(outputPath);
             if (prior !== undefined)
             {
@@ -73,7 +87,7 @@ export class MuralCompiler
             const js = await this.CompileOne(ctx, path, source);
             if (js === undefined) return [];
 
-            const outputPath = MuralCompiler.OutputPathFor(path);
+            const outputPath = this.OutputPathFor(path);
             await ctx.Sandbox.WriteText(outputPath, js);
             written.push(outputPath);
         }
@@ -125,9 +139,13 @@ export class MuralCompiler
             && path.slice(0, path.indexOf(MuralCompiler.PathSeparator)) === MuralCompiler.PresentationDir;
     }
 
-    private static OutputPathFor(sourcePath: string): string
+    private OutputPathFor(sourcePath: string): string
     {
-        const slashIndex = sourcePath.lastIndexOf("/");
+        if (this.layout === MuralOutputLayout.Sibling)
+        {
+            return `${sourcePath}${MuralCompiler.CompiledSuffixAfterMu}`;
+        }
+        const slashIndex = sourcePath.lastIndexOf(MuralCompiler.PathSeparator);
         const fileName = slashIndex === -1 ? sourcePath : sourcePath.slice(slashIndex + 1);
         const baseName = fileName.slice(0, -MuralCompiler.SourceExtension.length);
         return `${MuralCompiler.CompiledDirectory}/${baseName}${MuralCompiler.CompiledExtension}`;

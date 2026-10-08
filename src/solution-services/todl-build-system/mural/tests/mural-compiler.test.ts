@@ -5,7 +5,7 @@ import { BuildArtifacts } from "../../../build-system-core/build-artifacts.js";
 import { DiagnosticSink, Severity } from "../../../build-system-core/diagnostic-sink.js";
 import { EmptyPackageSource, libraryManifest } from "../../tests/fakes.js";
 import type { TodlBuildContext } from "../../todl-build-context.js";
-import { MuralCompiler } from "../mural-compiler.js";
+import { MuralCompiler, MuralOutputLayout } from "../mural-compiler.js";
 
 // Same fixtures as html-bundle/tests/compile-mural-action.test.ts (the logic under
 // test here moved out of that action verbatim) — a minimal valid application root,
@@ -141,5 +141,29 @@ describe("MuralCompiler", () =>
         const written = await new MuralCompiler().Compile(ctx);
 
         assert.deepEqual(written, ["compiled/alpha.mu.js", "compiled/zeta.mu.js"]);
+    });
+
+    test("Sibling layout writes <path>.mu.js next to each source, preserving directories", async () =>
+    {
+        const ctx = contextWith();
+        await ctx.Project.WriteText("src/app.mu", ValidAppMu);
+        await ctx.Project.WriteText("src/sub/foo.mu", ValidAppMu);
+
+        const written = await new MuralCompiler(MuralOutputLayout.Sibling).Compile(ctx);
+
+        assert.deepEqual(written, ["src/app.mu.js", "src/sub/foo.mu.js"]);
+        assert.equal(await ctx.Sandbox.Exists("compiled/app.mu.js"), false);
+    });
+
+    test("Sibling layout does not collide on equal basenames in different folders", async () =>
+    {
+        const ctx = contextWith();
+        await ctx.Project.WriteText("a/app.mu", ValidAppMu);
+        await ctx.Project.WriteText("b/app.mu", ValidAppMu);
+
+        const written = await new MuralCompiler(MuralOutputLayout.Sibling).Compile(ctx);
+
+        assert.deepEqual(written, ["a/app.mu.js", "b/app.mu.js"]);
+        assert.equal(ctx.Diagnostics.Count, 0);
     });
 });
