@@ -375,6 +375,14 @@ export {
 } from './solution-services/project-services/composition/project-system-composer.js';
 export { TodlProjectSystemModule } from './solution-services/project-services/composition/todl-project-system-module.js';
 export { BuildSystemRegistryKey } from './solution-services/project-services/composition/build-system-registry-key.js';
+// The html-bundle build system + its storage-provider seam key, exposed on the main
+// barrel from their deep BROWSER-SAFE modules (NOT the ./todl-build-system barrel, which
+// also re-exports TodlBuildSystemRegistry -> EsbuildBundler -> esbuild). After the
+// IBundler seam (0.50.0) HtmlBundleBuildSystem imports only BundlerKey/IBundler, so a
+// renderer host can import it here and call HtmlBundleBuildSystem.Register with its own
+// IBundler. Guarded browser-safe by browser-safe-composition.test.ts.
+export { HtmlBundleBuildSystem } from './solution-services/todl-build-system/html-bundle/html-bundle-build-system.js';
+export { BuildStorageProviderKey } from './solution-services/todl-build-system/build-storage-provider-key.js';
 // The project build runner a browser host drives to publish one project (npm-publish
 // flavor). Browser-safe (build-system-core + todl-build-context types only) — exposed
 // here so renderer hosts need not import the ./todl-build-system barrel, which also

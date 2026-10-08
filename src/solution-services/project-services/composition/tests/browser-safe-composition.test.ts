@@ -18,9 +18,11 @@ class BrowserBundleProbe
     // Imports (and uses, so nothing is dropped) exactly what the renderer host consumes.
     public static readonly BarrelEntry = [
         "import { TodlProjectSystemModule, ProjectSystemComposer, BuildSystemRegistryKey,",
-        "  TodlProjectBuildManager, LocalNpmRegistry, StoragePackagePacker, WebTgz, TarArchive } from './index.ts';",
+        "  TodlProjectBuildManager, LocalNpmRegistry, StoragePackagePacker, WebTgz, TarArchive,",
+        "  HtmlBundleBuildSystem, BuildStorageProviderKey } from './index.ts';",
         "globalThis.__probe = [TodlProjectSystemModule, ProjectSystemComposer, BuildSystemRegistryKey,",
-        "  TodlProjectBuildManager, LocalNpmRegistry, StoragePackagePacker, WebTgz, TarArchive];",
+        "  TodlProjectBuildManager, LocalNpmRegistry, StoragePackagePacker, WebTgz, TarArchive,",
+        "  HtmlBundleBuildSystem, BuildStorageProviderKey];",
     ].join("\n");
 
     public static readonly HtmlBundleEntry =
