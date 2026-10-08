@@ -36,7 +36,14 @@ jobs:
           } > .npmrc
         env:
           PACKAGES_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
-      - run: npm ci
+      # `npm install`, not `npm ci`: the committed lock is a local-dev lock — it
+      # links @pragmatic-tech-ai/mural to the sibling ../Mural checkout (absent in
+      # CI) and lags package.json besides. `npm install` reconciles against the
+      # registries configured above, resolving mural/todl-runtime from GitHub
+      # Packages and pulling this runner's own esbuild native (tsx needs it, and a
+      # Windows-authored lock omits it — npm/cli#4828), which strict `npm ci`
+      # cannot do.
+      - run: npm install
       # `npm run build` typechecks + compiles the shippable source
       # (tsconfig.build.json, which excludes *.test.ts). The whole-repo
       # `npm run typecheck` is intentionally NOT the gate: it has pre-existing
