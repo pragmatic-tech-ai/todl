@@ -3,6 +3,7 @@ import {
     isStatStorage, isWatchableStorage, FileChangeKind, type FileChange,
 } from '@pragmatic-tech-ai/todl-runtime'
 import { ProjectNodeKind } from '../core/project.js'
+import { PROJECT_MANIFEST_FILENAME } from '../core/project-factory.js'
 import { ProjectContentNode, type ContentNodeId } from './content-node.js'
 import { ContentAdded, ContentRemoved, ContentUpdated, type ContentChange } from './content-change.js'
 
@@ -31,6 +32,12 @@ export class ProjectContentStore
 {
     private static readonly RootPath = ''
     private static readonly InvalidNameMessage = 'Invalid name'
+    // Root-level files the content tree never surfaces: the project manifest
+    // (`project.plexus`) is the project — it is already represented by the project's
+    // own logical node, so showing it as a child file is redundant and inviting to
+    // edit/delete by hand. Only the ROOT entry is hidden; a same-named file nested in
+    // a subfolder (not the manifest) still appears.
+    private static readonly HiddenRootFiles: ReadonlySet<string> = new Set([PROJECT_MANIFEST_FILENAME])
     private static readonly DiagramExts = ['.archdiagram', '.diagram']
     // Rename correlation window. Sized to bridge the gap between a rename's add and
     // unlink events (measured ~107ms on Windows chokidar); a new/removed file surfaces
@@ -184,6 +191,7 @@ export class ProjectContentStore
         for (const entry of entries)
         {
             const childPath = dirPath === '' ? entry.Name : `${dirPath}/${entry.Name}`
+            if (ProjectContentStore.isHiddenEntry(childPath)) continue
             seen.add(childPath)
             const node = this.internChild(state, childPath, entry.Name, ProjectContentStore.kindOf(entry.Name, entry.IsDirectory))
             const inoKey = await this.inoKeyFor(childPath)
@@ -222,6 +230,7 @@ export class ProjectContentStore
         }
         if (c.Kind === FileChangeKind.Added)
         {
+            if (ProjectContentStore.isHiddenEntry(c.Path)) return
             const inoKey = await this.inoKeyFor(c.Path)
             state.pendingAdds.set(c.Path, { inoKey, isDir: c.IsDirectory })
             this.scheduleFlush(state)
@@ -349,6 +358,13 @@ export class ProjectContentStore
     {
         const i = path.lastIndexOf('/')
         return i === -1 ? path : path.slice(i + 1)
+    }
+
+    // A root-level entry the tree hides (today: the project manifest). Root-level means
+    // no path separator — a nested same-named file is a real content node and stays.
+    private static isHiddenEntry(path: string): boolean
+    {
+        return !path.includes('/') && ProjectContentStore.HiddenRootFiles.has(path)
     }
 
     // Mint-or-reuse a child node by path (a later slice adds ino reconciliation).
