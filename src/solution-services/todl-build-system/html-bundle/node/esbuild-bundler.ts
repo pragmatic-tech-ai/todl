@@ -1,4 +1,4 @@
-import { build } from "esbuild";
+import { build, type Plugin } from "esbuild";
 import { existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -28,6 +28,13 @@ export class EsbuildBundler implements IBundler
     private static readonly EsbuildPlatform = "browser";
     private static readonly EsbuildTarget = "es2020";
     private static readonly EsbuildLogLevel = "silent";
+
+    // Every `@pragmatic-tech-ai/mural` import — the bare package and any subpath
+    // (`/runtime`, `/visual-engine`, `/resources/pragmatic`, …).
+    private static readonly MuralSpecifierPattern = /^@pragmatic-tech-ai\/mural(\/.*)?$/;
+    private static readonly MuralDedupPluginName = "todl-single-mural";
+    // Tags our own re-resolve so the onResolve hook doesn't recurse on it.
+    private static readonly MuralDedupMarker = "todl-single-mural-anchored";
     // The `development` export condition maps "@pragmatic-tech-ai/*" to their `src`
     // TypeScript entries, bundling those packages FROM SOURCE. Applied only when a source
     // checkout is resolvable; ResolveConditions omits it for an installed/dist-only todl.
@@ -70,6 +77,7 @@ export class EsbuildBundler implements IBundler
                 absWorkingDir: stageDir,
                 nodePaths: [join(resolutionRoot, EsbuildBundler.NodeModulesDirectory)],
                 conditions: EsbuildBundler.ResolveConditions(resolutionRoot),
+                plugins: [this.MuralDedupPlugin(resolutionRoot)],
             });
             return { Text: result.outputFiles[0]!.text, Diagnostics: [] };
         }
@@ -82,6 +90,39 @@ export class EsbuildBundler implements IBundler
         {
             if (stageDir !== undefined) rmSync(stageDir, { recursive: true, force: true });
         }
+    }
+
+    // Forces a SINGLE mural instance across the whole bundle. When the consumer's
+    // hoisted mural version doesn't satisfy todl's own `@pragmatic-tech-ai/mural`
+    // range, npm installs a SECOND copy nested under todl/node_modules, and esbuild
+    // would otherwise bundle both. Two copies mean two sets of module-level
+    // singletons — Application.current, FontManager.Current, ThemeManager's active
+    // theme: the app builds its root Application from one copy and activates the
+    // theme through the other, whose Application.current is still null, so theme
+    // activation throws and nothing renders. Anchoring every mural specifier (bare
+    // and subpath) to the consumer's hoisted copy collapses it to one instance. If
+    // that copy can't be resolved from the anchor, defer to esbuild's default
+    // resolution so an install laid out differently still builds.
+    private MuralDedupPlugin(anchorDir: string): Plugin
+    {
+        return {
+            name: EsbuildBundler.MuralDedupPluginName,
+            setup: (build) =>
+            {
+                build.onResolve({ filter: EsbuildBundler.MuralSpecifierPattern }, async (args) =>
+                {
+                    // Our own anchored re-resolve — let esbuild's default resolver handle it.
+                    if (args.pluginData === EsbuildBundler.MuralDedupMarker) return undefined;
+                    const resolved = await build.resolve(args.path, {
+                        kind: args.kind,
+                        resolveDir: anchorDir,
+                        pluginData: EsbuildBundler.MuralDedupMarker,
+                    });
+                    if (resolved.errors.length > 0) return undefined;
+                    return { path: resolved.path, external: resolved.external };
+                });
+            },
+        };
     }
 
     private static Failure(message: string): BundleAppResult

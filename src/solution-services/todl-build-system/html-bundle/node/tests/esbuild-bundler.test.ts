@@ -280,6 +280,87 @@ describe("EsbuildBundler dist-only resolution (integration)", () =>
     });
 });
 
+// Stages a root with TWO copies of a fake `@pragmatic-tech-ai/mural`: a top-level
+// one and a SECOND nested under `@pragmatic-tech-ai/todl/node_modules` — exactly the
+// layout npm produces when the consumer's hoisted mural doesn't satisfy todl's own
+// mural range. Each copy declares a distinctive module-level marker so a double-bundle
+// is visible: without deduping, the bare `@pragmatic-tech-ai/mural` import (resolved
+// from the stage dir -> top-level) and todl's own re-export (resolved -> nested) pull
+// two copies and the marker appears twice. The dedup plugin must collapse them to one.
+class DuplicateMuralFixture
+{
+    private static readonly RootPrefix = "todl-dup-mural-";
+    private static readonly NodeModules = "node_modules";
+    private static readonly MuralName = "@pragmatic-tech-ai/mural";
+    private static readonly TodlName = "@pragmatic-tech-ai/todl";
+    private static readonly PackageJson = "package.json";
+    private static readonly IndexFile = "index.js";
+    private static readonly ModuleType = "module";
+    public static readonly Marker = "__MURAL_SINGLETON_MARKER__";
+    // A module-level const whose initializer text is what we count in the output.
+    private static readonly MuralSource = `export const MURAL_COPY = "${DuplicateMuralFixture.Marker}";\nexport function who() { return MURAL_COPY; }\n`;
+    private static readonly TodlSource = 'export { who } from "@pragmatic-tech-ai/mural";\nexport const TodlAppBootstrap = {};\n';
+    public static readonly EntrySource =
+        'import { who } from "@pragmatic-tech-ai/mural";\n'
+        + 'import { who as who2 } from "@pragmatic-tech-ai/todl";\n'
+        + "export const app = [who(), who2()];\n";
+
+    public static MakeRoot(): string
+    {
+        return mkdtempSync(join(tmpdir(), DuplicateMuralFixture.RootPrefix));
+    }
+
+    public static WriteDuplicateTree(root: string): void
+    {
+        const topMural = join(root, DuplicateMuralFixture.NodeModules, ...DuplicateMuralFixture.MuralName.split("/"));
+        const todl = join(root, DuplicateMuralFixture.NodeModules, ...DuplicateMuralFixture.TodlName.split("/"));
+        const nestedMural = join(todl, DuplicateMuralFixture.NodeModules, ...DuplicateMuralFixture.MuralName.split("/"));
+        DuplicateMuralFixture.WritePackage(topMural, DuplicateMuralFixture.MuralName, DuplicateMuralFixture.MuralSource);
+        DuplicateMuralFixture.WritePackage(nestedMural, DuplicateMuralFixture.MuralName, DuplicateMuralFixture.MuralSource);
+        DuplicateMuralFixture.WritePackage(todl, DuplicateMuralFixture.TodlName, DuplicateMuralFixture.TodlSource);
+    }
+
+    private static WritePackage(dir: string, name: string, source: string): void
+    {
+        mkdirSync(dir, { recursive: true });
+        writeFileSync(
+            join(dir, DuplicateMuralFixture.PackageJson),
+            JSON.stringify({ name, type: DuplicateMuralFixture.ModuleType, main: DuplicateMuralFixture.IndexFile }));
+        writeFileSync(join(dir, DuplicateMuralFixture.IndexFile), source);
+    }
+
+    public static MarkerCount(bundle: string): number
+    {
+        return bundle.split(DuplicateMuralFixture.Marker).length - 1;
+    }
+}
+
+describe("EsbuildBundler mural dedup (integration)", () =>
+{
+    test("collapses a hoisted + nested mural to a SINGLE copy in the bundle", async () =>
+    {
+        const root = DuplicateMuralFixture.MakeRoot();
+        try
+        {
+            DuplicateMuralFixture.WriteDuplicateTree(root);
+            const result = await new RootOverrideEsbuildBundler(root).BundleApp({
+                Entry: "entry.js",
+                Files: [{ Path: "entry.js", Text: DuplicateMuralFixture.EntrySource }],
+            });
+            assert.equal(result.Diagnostics.length, 0, JSON.stringify(result.Diagnostics));
+            // The marker's definition survives exactly once — both importers share one copy.
+            assert.equal(
+                DuplicateMuralFixture.MarkerCount(result.Text ?? ""),
+                1,
+                "mural must be bundled exactly once (two copies reintroduce the ThemeManager/Application.current split)");
+        }
+        finally
+        {
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
+});
+
 describe("EsbuildBundler", () =>
 {
     test("bundles a staged entry to IIFE text", async () =>
