@@ -1,6 +1,6 @@
 {
   "name": "@pragmatic-tech-ai/todl",
-  "version": "0.50.5",
+  "version": "0.50.6",
   "description": "Typed substrate for authoring and reasoning over ontologies and taxonomies",
   "type": "module",
   "main": "dist/index.js",
