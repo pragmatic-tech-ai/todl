@@ -66,6 +66,32 @@ describe("MuralCompiler", () =>
             "the error names both colliding sources");
     });
 
+    test("ignores .mu sources under the top-level dist/ build-output folder so the root copy does not self-collide", async () =>
+    {
+        const ctx = contextWith();
+        // A producer project's `dist/` is its published artifact tree — a compiled copy of
+        // its own sources. The root `presentation.generated.mu` and the staged copy at
+        // `dist/resources/presentation.generated.mu` both map to the same output; without
+        // the exclusion this is a spurious collision that blocks publish.
+        await ctx.Project.WriteText("presentation.generated.mu", ValidAppMu);
+        await ctx.Project.WriteText("dist/resources/presentation.generated.mu", ValidAppMu);
+
+        const written = await new MuralCompiler().Compile(ctx);
+
+        assert.deepEqual(written, ["compiled/presentation.generated.mu.js"]);
+        assert.equal(ctx.Diagnostics.Count, 0);
+    });
+
+    test("only the top-level dist/ is excluded — a nested dist/ folder is compiled normally", async () =>
+    {
+        const ctx = contextWith();
+        await ctx.Project.WriteText("views/dist/app.mu", ValidAppMu);
+
+        const written = await new MuralCompiler().Compile(ctx);
+
+        assert.deepEqual(written, ["compiled/app.mu.js"]);
+    });
+
     test("a syntax error reports a Severity.Error diagnostic naming the file and does not throw", async () =>
     {
         const ctx = contextWith();

@@ -19,11 +19,20 @@ export class MuralCompiler
     private static readonly CompiledDirectory = "compiled";
     private static readonly CompileFailedMessagePrefix = "failed to compile ";
     private static readonly CollisionMessagePrefix = "two .mu sources compile to the same output ";
+    // Top-level directories that hold build OUTPUT, not source: a producer project's
+    // `dist/` is its published artifact tree (a compiled copy of its own `.mu`/`.todl`
+    // sources). Walking it as source makes every generated `.mu` collide with its root
+    // original on the shared `compiled/<basename>.mu.js` output, which blocks publish.
+    // Excluded at the project root only — mirrors TodlProjectSourceFiles' `.todl`
+    // collection; a nested `dist/` folder is not special.
+    private static readonly BuildOutputDirs: ReadonlySet<string> = new Set(["dist"]);
+    private static readonly PathSeparator = "/";
 
     public async Compile(ctx: TodlBuildContext): Promise<readonly string[]>
     {
         const sources = (await StorageTree.Files(ctx.Project))
-            .filter((path) => path.endsWith(MuralCompiler.SourceExtension));
+            .filter((path) => path.endsWith(MuralCompiler.SourceExtension))
+            .filter((path) => !MuralCompiler.IsUnderBuildOutput(path));
 
         const written: string[] = [];
         // Two `.mu` sources in different folders share a basename (e.g. `a/app.mu` and
@@ -84,6 +93,15 @@ export class MuralCompiler
             });
             return undefined;
         }
+    }
+
+    // True when the source lives under a top-level build-output directory (`dist/`).
+    // A path with no separator is a project-root file and is never excluded.
+    private static IsUnderBuildOutput(path: string): boolean
+    {
+        const slashIndex = path.indexOf(MuralCompiler.PathSeparator);
+        if (slashIndex === -1) return false;
+        return MuralCompiler.BuildOutputDirs.has(path.slice(0, slashIndex));
     }
 
     private static OutputPathFor(sourcePath: string): string
