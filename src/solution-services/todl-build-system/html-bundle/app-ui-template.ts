@@ -1,7 +1,7 @@
 import { AppNaming } from "../../project-services/generators/app-naming.js";
 
 // Builds `src/app.mu`: the tiny Application scaffold written once at project
-// creation (AppGenerator, project-services/generators/). The root ContentControl
+// creation (AppGenerator, project-services/generators/). The root ContentPresenter
 // (`x:root`) resolves the model's app view-model via `$service(<AppClass>)`, and the
 // implicit (key-less) DataTemplate keyed on that class renders it. `<AppClass>` is
 // AppNaming.AppClass(identity) — the same class src/main.ts exports. The file is
@@ -19,7 +19,7 @@ export class AppUiTemplate
         "{",
         "    resources:",
         "    {",
-        "        ContentControl x:root [ Content = $service(__APP_CLASS__) ]",
+        "        ContentPresenter x:root [ Content = $service(__APP_CLASS__) ]",
         "",
         "        DataTemplate [ DataType = __APP_CLASS__ ]",
         "        {",

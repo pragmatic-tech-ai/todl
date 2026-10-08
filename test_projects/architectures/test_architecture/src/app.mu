@@ -6,7 +6,7 @@ Application
 {
     resources:
     {
-        ContentControl x:root [ Content = $service(TodlTestArchApp) ]
+        ContentPresenter x:root [ Content = $service(TodlTestArchApp) ]
 
         DataTemplate [ DataType = TodlTestArchApp ]
         {

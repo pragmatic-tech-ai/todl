@@ -20,5 +20,3 @@ export class TodlTestArchApp extends Observable
         return `The application has access to ${model.ConceptNames().length} concepts`;
     }
 }
-
-new TodlTestArchApp();

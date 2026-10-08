@@ -45,7 +45,9 @@ test("scaffolds src/main.ts with the <Project>App view-model", async () =>
     assert.match(out, /Application\.current\?\.Services\.addInstance\(this\);/);
     assert.match(out, /Hello from test_waf_architectures/);
     assert.match(out, /model\.ConceptNames\(\)\.length/);
-    assert.match(out, /\nnew TestWafArchitecturesApp\(\);/);
+    assert.doesNotMatch(out, /new TestWafArchitecturesApp\(\)/);
+    assert.match(out, /public get HelloText\(\): string/);
+    assert.match(out, /public get ConceptSummary\(\): string/);
     assert.match(out, /\n\{\n    constructor\(\)\n    \{\n        super\(\);/);
 });
 

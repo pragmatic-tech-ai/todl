@@ -39,8 +39,6 @@ export class AppViewModelGenerator implements IProjectContentGenerator
         "    }",
         "}",
         "",
-        "new {App}();",
-        "",
     ].join(AppViewModelGenerator.Eol);
     private static readonly AppToken = "{App}";
     private static readonly ProjectToken = "{Project}";

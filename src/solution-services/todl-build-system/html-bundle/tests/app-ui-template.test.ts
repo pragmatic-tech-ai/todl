@@ -9,7 +9,7 @@ describe("AppUiTemplate.Render", () =>
         const mu = AppUiTemplate.Render("test_waf_architectures");
         assert.match(mu, /^import TestWafArchitecturesApp from "\.\/main\.js"/m);
         assert.match(mu, /Application\s*\{/);
-        assert.match(mu, /ContentControl x:root \[ Content = \$service\(TestWafArchitecturesApp\) \]/);
+        assert.match(mu, /ContentPresenter x:root \[ Content = \$service\(TestWafArchitecturesApp\) \]/);
         assert.match(mu, /DataTemplate \[ DataType = TestWafArchitecturesApp \]/);
         assert.match(mu, /Text = \$HelloText/);
         assert.match(mu, /Text = \$ConceptSummary/);

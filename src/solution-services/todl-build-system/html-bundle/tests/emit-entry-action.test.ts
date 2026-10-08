@@ -39,22 +39,38 @@ describe("EmitEntryAction", () =>
         assert.equal(await ctx.Project.Exists("entry.ts"), false);
         const src = await ctx.Sandbox.ReadText("entry.ts");
         assert.match(src, /import \{ app \} from "\.\/src\/app\.mu\.js";/);
-        assert.match(src, /^import "\.\/src\/main\.js";$/m);
+        assert.match(src, /import \{ Widget\w*App \} from "\.\/src\/main\.js";/);
         assert.match(src, /import \{ model \} from "\.\/generated\/data\.js";/);
         assert.match(src, /import \{ TodlAppBootstrap \} from "@pragmatic-tech-ai\/todl";/);
         assert.match(src, /TodlAppBootstrap\.Mount\(app, model\);/);
     });
 
-    test("imports app.mu.js before main.js so Application.current exists", async () =>
+    test("imports app.mu.js before instantiating the VM, and instantiates before Mount", async () =>
     {
         const ctx = contextWith();
 
         await new EmitEntryAction().Execute(ctx);
 
         const src = await ctx.Sandbox.ReadText("entry.ts");
-        const iApp = src.indexOf("./src/app.mu.js");
-        const iMain = src.indexOf("./src/main.js");
-        assert.ok(iApp >= 0 && iMain >= 0 && iApp < iMain, "app.mu.js must import before main.js");
+        const iApp = src.indexOf(`import { app } from "./src/app.mu.js"`);
+        const iNew = src.indexOf("new WidgetApp()");
+        const iMount = src.indexOf("TodlAppBootstrap.Mount(app, model)");
+        assert.ok(iApp === 0, "app.mu.js import must be first");
+        assert.ok(iApp < iNew, "app.mu.js must import before the VM is constructed");
+        assert.ok(iNew >= 0 && iNew < iMount, "VM must be constructed before Mount");
+    });
+
+    test("derives the VM class name from manifest id, not name", async () =>
+    {
+        const ctx = contextWith();
+        ctx.Manifest = { type: ProjectType.Architecture, name: "my_proj", id: "real_id", version: 1 };
+
+        await new EmitEntryAction().Execute(ctx);
+
+        const src = await ctx.Sandbox.ReadText("entry.ts");
+        assert.match(src, /import \{ RealIdApp \} from "\.\/src\/main\.js";/);
+        assert.match(src, /^new RealIdApp\(\);$/m);
+        assert.doesNotMatch(src, /MyProjApp/);
     });
 
     test("records the sandbox-relative path under HtmlArtifacts.AppEntry", async () =>
