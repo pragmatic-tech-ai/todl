@@ -29,3 +29,4 @@ export {
     type BuildContextFactory,
 } from "./project-build-manager.js";
 export { SolutionDependencyGraph, type SolutionOrder } from "./solution/solution-dependency-graph.js";
+export { BundlerKey, type IBundler, type BundleAppRequest, type BundleAppResult, type StagedFile } from "./bundler.js";
