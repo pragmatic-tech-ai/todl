@@ -6,9 +6,10 @@
  * re-seeds. Exported solely from the node-only `./project-system` subpath.
  */
 
-import { type IServiceContainer, ServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
+import { type IServiceContainer } from "@pragmatic-tech-ai/todl-runtime";
 import { HtmlBundleBuildSystem } from "../../todl-build-system/html-bundle/html-bundle-build-system.js";
-import { BuildSystemRegistryKey } from "./build-system-registry-key.js";
+import { EsbuildBundler } from "../../todl-build-system/html-bundle/node/esbuild-bundler.js";
+import { BundlerKey } from "../../build-system-core/bundler.js";
 import { ProjectSystemComposer, type ProjectSystemComposerOptions } from "./project-system-composer.js";
 
 export class NodeProjectSystemComposer extends ProjectSystemComposer
@@ -17,8 +18,7 @@ export class NodeProjectSystemComposer extends ProjectSystemComposer
     {
         super.Compose(container, options);
 
-        const provider = container as unknown as ServiceProvider;
-        container.register(HtmlBundleBuildSystem, () => new HtmlBundleBuildSystem());
-        provider.getRequired(BuildSystemRegistryKey).RegisterResolved(provider.getRequired(HtmlBundleBuildSystem));
+        container.registerInstance(BundlerKey, new EsbuildBundler());
+        HtmlBundleBuildSystem.Register(container);
     }
 }

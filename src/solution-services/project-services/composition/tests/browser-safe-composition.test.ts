@@ -23,6 +23,10 @@ class BrowserBundleProbe
         "  TodlProjectBuildManager, LocalNpmRegistry, StoragePackagePacker, WebTgz, TarArchive];",
     ].join("\n");
 
+    public static readonly HtmlBundleEntry =
+        "import { HtmlBundleBuildSystem } from './solution-services/todl-build-system/html-bundle/html-bundle-build-system.ts'; "
+        + "globalThis.__probe = [HtmlBundleBuildSystem];";
+
     public static readonly NodeSubpathEntryContents =
         `import * as ps from '${BrowserBundleProbe.NodeSubpathEntry}'; globalThis.__probe = ps;`;
 
@@ -66,6 +70,15 @@ describe("browser-safe project-system composition (main barrel)", () =>
         const { Metafile: metafile, Errors: errors } = await BrowserBundleProbe.Bundle(BrowserBundleProbe.BarrelEntry);
 
         assert.deepEqual(errors, [], `the main barrel's composition graph reached a node-only module:\n${errors.join("\n")}`);
+        assert.ok(metafile !== undefined);
+        assert.deepEqual(BrowserBundleProbe.EsbuildInputs(metafile), [], "esbuild must not be bundled into the browser graph");
+    });
+
+    test("HtmlBundleBuildSystem (with BundleAppAction) bundles for the browser with no node builtin and no esbuild", async () =>
+    {
+        const { Metafile: metafile, Errors: errors } = await BrowserBundleProbe.Bundle(BrowserBundleProbe.HtmlBundleEntry);
+
+        assert.deepEqual(errors, [], `HtmlBundleBuildSystem reached a node-only module:\n${errors.join("\n")}`);
         assert.ok(metafile !== undefined);
         assert.deepEqual(BrowserBundleProbe.EsbuildInputs(metafile), [], "esbuild must not be bundled into the browser graph");
     });

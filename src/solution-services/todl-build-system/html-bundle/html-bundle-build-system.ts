@@ -1,6 +1,9 @@
+import { ServiceProvider, type IServiceContainer } from "@pragmatic-tech-ai/todl-runtime";
 import type { IBuildSystem } from "../../build-system-core/build-system.js";
 import type { IBuildAction } from "../../build-system-core/build-action.js";
 import { StaticBuildFlavor, type BuildFlavor, type RequiredContent } from "../../build-system-core/build-flavor.js";
+import { BundlerKey, type IBundler } from "../../build-system-core/bundler.js";
+import { BuildSystemRegistryKey } from "../../project-services/composition/build-system-registry-key.js";
 import type { TodlBuildContext } from "../todl-build-context.js";
 import { ProjectType, type ProjectManifest } from "../../package-manager/manifest.js";
 import { ResolveBasesAction } from "../npm/resolve-bases-action.js";
@@ -37,14 +40,26 @@ export class HtmlBundleBuildSystem implements IBuildSystem<TodlBuildContext, Pro
 
     // Order satisfies consume-before-produce: resolve -> compile -> emit the sandbox
     // entry -> compile mural (reading generated/app.mu required above) -> bundle -> emit.
-    private readonly actions: readonly IBuildAction<TodlBuildContext>[] = [
-        new ResolveBasesAction(),
-        new CompileModelAction(),
-        new EmitEntryAction(),
-        new CompileMuralAction(),
-        new BundleAppAction(),
-        new EmitBundledHostAction(),
-    ];
+    private readonly actions: readonly IBuildAction<TodlBuildContext>[];
+
+    constructor(bundler: IBundler)
+    {
+        this.actions = [
+            new ResolveBasesAction(),
+            new CompileModelAction(),
+            new EmitEntryAction(),
+            new CompileMuralAction(),
+            new BundleAppAction(bundler),
+            new EmitBundledHostAction(),
+        ];
+    }
+
+    public static Register(container: IServiceContainer): void
+    {
+        const provider = container as unknown as ServiceProvider;
+        container.register(HtmlBundleBuildSystem, (p) => new HtmlBundleBuildSystem(p.getRequired(BundlerKey)));
+        provider.getRequired(BuildSystemRegistryKey).RegisterResolved(provider.getRequired(HtmlBundleBuildSystem));
+    }
 
     public AppliesTo(manifest: ProjectManifest): boolean
     {

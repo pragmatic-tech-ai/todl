@@ -3,6 +3,7 @@ import type { ProjectManifest } from "../package-manager/manifest.js";
 import type { TodlBuildContext } from "./todl-build-context.js";
 import { NpmPackageBuildSystem } from "./npm/npm-package-build-system.js";
 import { HtmlBundleBuildSystem } from "./html-bundle/html-bundle-build-system.js";
+import { EsbuildBundler } from "./html-bundle/node/esbuild-bundler.js";
 import { DefaultPresentationBaker } from "../project-services/core/default-presentation-baker.js";
 
 // The build-system registry todl composes: a BuildSystemRegistry pre-populated with
@@ -22,6 +23,6 @@ export class TodlBuildSystemRegistry extends BuildSystemRegistry<TodlBuildContex
     {
         super();
         this.Register(new NpmPackageBuildSystem(new DefaultPresentationBaker()));
-        this.Register(new HtmlBundleBuildSystem());
+        this.Register(new HtmlBundleBuildSystem(new EsbuildBundler()));
     }
 }

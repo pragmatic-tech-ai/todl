@@ -1,6 +1,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { ArtifactKey } from "../artifact-key.js";
+import type { IBundler } from "../bundler.js";
 import { StaticBuildFlavor } from "../build-flavor.js";
 import type { CoreBuildContext, IBuildAction } from "../build-action.js";
 import { NpmPackageBuildSystem } from "../../todl-build-system/npm/npm-package-build-system.js";
@@ -66,7 +67,8 @@ describe("built-in systems expose their flavors", () =>
 
     test("html-bundle flavor mirrors the system output + non-empty pipeline", () =>
     {
-        const flavors = new HtmlBundleBuildSystem().Flavors();
+        const fakeBundler: IBundler = { BundleApp: async () => ({ Diagnostics: [] }) };
+        const flavors = new HtmlBundleBuildSystem(fakeBundler).Flavors();
         assert.equal(flavors.length, 1);
         assert.equal(flavors[0]!.OutputName, "html-bundle");
         assert.ok(flavors[0]!.Actions().length > 0);

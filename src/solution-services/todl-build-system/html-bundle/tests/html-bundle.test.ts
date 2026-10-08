@@ -14,6 +14,7 @@ import type { BuildOptions } from "../../../build-system-core/build-options.js";
 import { ProjectBuildStatus } from "../../../build-system-core/build-result.js";
 import { TodlBuildSystemRegistry } from "../../todl-build-system-registry.js";
 import { HtmlBundleBuildSystem } from "../html-bundle-build-system.js";
+import { EsbuildBundler } from "../node/esbuild-bundler.js";
 import { EmitBundledHostAction } from "../emit-bundled-host-action.js";
 import { EmptyPackageSource, libraryManifest } from "../../tests/fakes.js";
 import { parseManifest, ProjectType } from "../../../package-manager/manifest.js";
@@ -62,7 +63,7 @@ describe("HtmlBundleBuildSystem", () =>
 {
     test("applies to architecture projects only", () =>
     {
-        const system = new HtmlBundleBuildSystem();
+        const system = new HtmlBundleBuildSystem(new EsbuildBundler());
         assert.equal(system.AppliesTo({ type: "architecture", name: "a", version: 1 } as never), true);
         assert.equal(system.AppliesTo({ type: "meta-model", name: "m", version: 1 } as never), false);
         assert.equal(system.AppliesTo({ type: "library", name: "l", version: 1 } as never), false);
