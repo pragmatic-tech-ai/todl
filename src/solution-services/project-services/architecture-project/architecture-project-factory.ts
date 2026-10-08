@@ -10,6 +10,8 @@ import { ARCHITECTURE_CLAUDE_ROOT } from '../core/scaffold.generated.js'
 import { type IProjectContentGenerator } from '../generators/project-content-generator.js'
 import { AppGenerator } from '../generators/app-generator.js'
 import { DtoGenerator } from '../generators/dto-generator.js'
+import { ModelInstanceGenerator } from '../generators/model-instance-generator.js'
+import { AppViewModelGenerator } from '../generators/app-view-model-generator.js'
 
 // The 'architecture' project type — a module's contribution to the generic project
 // explorer (declared via `.projectFactories:`, resolved through the factory
@@ -85,9 +87,10 @@ export class ArchitectureProjectFactory extends TodlProjectFactory
     }
 
     // The content generators for an architecture project (§ IGeneratingProjectFactory) —
-    // the default app UI placeholder and the read-client model DTO. Order: UI then DTO.
+    // the read-client model DTO, the model instance data, the app view-model entry, and
+    // the default app UI. Order: DTO, data, view-model, UI.
     public Generators(): readonly IProjectContentGenerator[]
     {
-        return [new AppGenerator(), new DtoGenerator()]
+        return [new DtoGenerator(), new ModelInstanceGenerator(), new AppViewModelGenerator(), new AppGenerator()]
     }
 }
