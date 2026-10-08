@@ -7,20 +7,35 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    env:
-      # Inert: root has no @pragmatic-tech-ai deps, nothing scoped installs.
-      # Set only so the local .npmrc's ${PACKAGES_TOKEN} reference is defined
-      # if a runner ever has one; the value is never actually used here.
-      PACKAGES_TOKEN: ${{ github.token }}
+    permissions:
+      contents: read
+      packages: read   # read @pragmatic-tech-ai/* from GitHub Packages
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           # Node 22 (not 20): the test scripts pass a glob to `node --test`,
           # which only supports globs on Node >=21. engines says >=20, but the
           # suite needs >=21 to run.
           node-version: 22
           cache: npm
+      # todl depends on @pragmatic-tech-ai/mural (the build-system bootstrapper
+      # that couples to the mural compiler) and @pragmatic-tech-ai/todl-runtime,
+      # which live on GitHub Packages, not npmjs. The repo's committed .npmrc is
+      # gitignored, so write a CI-only one: public npm for OSS deps, GitHub
+      # Packages for the @pragmatic-tech-ai scope (auth via the PACKAGES_TOKEN
+      # secret — a PAT with read:packages; the default GITHUB_TOKEN can't read
+      # the org's internal packages).
+      - name: Configure npm registries
+        shell: bash
+        run: |
+          {
+            printf 'registry=https://registry.npmjs.org/\n'
+            printf '@pragmatic-tech-ai:registry=https://npm.pkg.github.com\n'
+            printf '//npm.pkg.github.com/:_authToken=%s\n' "${PACKAGES_TOKEN}"
+          } > .npmrc
+        env:
+          PACKAGES_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
       - run: npm ci
       # `npm run build` typechecks + compiles the shippable source
       # (tsconfig.build.json, which excludes *.test.ts). The whole-repo
