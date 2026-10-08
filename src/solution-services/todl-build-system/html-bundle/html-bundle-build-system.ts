@@ -24,7 +24,7 @@ export class HtmlBundleBuildSystem implements IBuildSystem<TodlBuildContext, Pro
 
     // The "require, never create" boundary (spec §per-project-app-build, task 11): the
     // model DTO and default app UI are now project content the generators (DtoGenerator/
-    // UiPlaceholderGenerator) own — this flavor only requires they already exist, and
+    // AppGenerator) own — this flavor only requires they already exist, and
     // fails fast (before provisioning) with a hint naming the generator to run.
     private static readonly ModelDtoPath = "generated/model.ts";
     private static readonly ModelDtoGeneratorId = "model-dto";

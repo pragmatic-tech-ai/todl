@@ -348,7 +348,7 @@ export {
     ProjectGeneratorRegistryKey,
 } from './solution-services/project-services/generators/project-generator-registry.js';
 export { DtoGenerator } from './solution-services/project-services/generators/dto-generator.js';
-export { UiPlaceholderGenerator } from './solution-services/project-services/generators/ui-placeholder-generator.js';
+export { AppGenerator } from './solution-services/project-services/generators/app-generator.js';
 export {
     ProjectEvents,
     ProjectEventsKey,

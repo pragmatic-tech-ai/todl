@@ -8,7 +8,7 @@ import { ProjectNodeKind } from '../core/project.js'
 import { TodlProjectFactory, CLAUDE_MD_FILENAME, type ScaffoldFile } from '../core/todl-project-factory.js'
 import { ARCHITECTURE_CLAUDE_ROOT } from '../core/scaffold.generated.js'
 import { type IProjectContentGenerator } from '../generators/project-content-generator.js'
-import { UiPlaceholderGenerator } from '../generators/ui-placeholder-generator.js'
+import { AppGenerator } from '../generators/app-generator.js'
 import { DtoGenerator } from '../generators/dto-generator.js'
 
 // The 'architecture' project type — a module's contribution to the generic project
@@ -88,6 +88,6 @@ export class ArchitectureProjectFactory extends TodlProjectFactory
     // the default app UI placeholder and the read-client model DTO. Order: UI then DTO.
     public Generators(): readonly IProjectContentGenerator[]
     {
-        return [new UiPlaceholderGenerator(), new DtoGenerator()]
+        return [new AppGenerator(), new DtoGenerator()]
     }
 }

@@ -30,7 +30,7 @@ import { compilePackage, type CompiledPackage } from "../../../../publish/publis
 import { GeneratorTrigger, type GeneratorContext } from "../../../project-services/generators/project-content-generator.js";
 import { ProjectModelProvider } from "../../../project-services/generators/project-model-provider.js";
 import { DtoGenerator } from "../../../project-services/generators/dto-generator.js";
-import { UiPlaceholderGenerator } from "../../../project-services/generators/ui-placeholder-generator.js";
+import { AppGenerator } from "../../../project-services/generators/app-generator.js";
 
 // A sentinel standing in for a real esbuild-produced bundle (BundleAppAction's output) —
 // distinctive enough that its presence in the emitted page proves the ACTUAL AppBundle
@@ -159,7 +159,7 @@ async function generateRequiredContent(architecture: SolutionProject, source: IP
         Reason: GeneratorTrigger.OnDemand,
     };
     await new DtoGenerator().Generate(ctx);
-    await new UiPlaceholderGenerator().Generate(ctx);
+    await new AppGenerator().Generate(ctx);
     assert.equal(diagnostics.Count, 0, JSON.stringify(diagnostics.All()));
 }
 
@@ -270,7 +270,7 @@ describe("end-to-end: real test_architecture fixture through the new html-bundle
 {
     // Success path (Task 11 item 1): the flavor no longer generates generated/model.ts
     // /generated/app.mu itself — they are generated up front here, via the same
-    // generators (DtoGenerator/UiPlaceholderGenerator) and compile seam
+    // generators (DtoGenerator/AppGenerator) and compile seam
     // (ProjectModelProvider) a real caller would run before ever invoking this build,
     // against the same RegistrySource the architecture resolves its bases with.
     test("builds a self-contained index.html carrying the model payload and a real compiled bundle", async (t) =>
