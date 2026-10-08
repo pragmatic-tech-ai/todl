@@ -1,40 +1,17 @@
-import { build } from "esbuild";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { copyTree } from "@pragmatic-tech-ai/todl-runtime";
-import { NodeFsStorage } from "@pragmatic-tech-ai/todl-runtime/node";
+import type { IStorage } from "@pragmatic-tech-ai/todl-runtime";
 import type { IBuildAction } from "../../build-system-core/build-action.js";
 import type { ArtifactKey } from "../../build-system-core/artifact-key.js";
+import type { IBundler, StagedFile } from "../../build-system-core/bundler.js";
 import { Severity } from "../../build-system-core/diagnostic-sink.js";
 import type { TodlBuildContext } from "../todl-build-context.js";
 import { HtmlArtifacts } from "./html-artifacts.js";
 
-// The TS bundler action of the per-project html-bundle app pipeline (spec
-// §per-project-app-build, task 6): bundles the generated entry — with the compiled
-// model DTO, the compiled UI modules, and the mural/todl runtimes it imports — into a
-// single browser IIFE string recorded under HtmlArtifacts.AppBundle, so the emit action
-// can inline it with no bundler at emit time.
-//
-// The hard part is module resolution across storages. The generated model DTO/app.mu
-// live in ctx.Project's generated/ tree; the entry (build glue — Task 10) and the
-// compiled UI live in ctx.Sandbox; both are IStorage abstractions that may not be a
-// single on-disk root and never have node_modules adjacent — yet the entry
-// imports the bare packages "@pragmatic-tech-ai/todl" (and, transitively, "@pragmatic-
-// tech-ai/mural/runtime"), which esbuild resolves on the REAL filesystem by walking up
-// to node_modules. So the action MATERIALIZES both stores into one on-disk staging dir
-// created INSIDE the TODL repo/source-checkout root: from there esbuild reaches that
-// root's node_modules by walking up, and "@pragmatic-tech-ai/todl" (the package the
-// staged files sit inside) resolves by package self-reference against its exports map.
-//
-// RESOLUTION: "@pragmatic-tech-ai/*" are bundled from their TypeScript `src` under the
-// `development` export condition when a source checkout is resolvable (in-repo). When
-// todl is consumed installed/dist-only (ships only `dist`, per package.json `files`),
-// the `development` condition is omitted so esbuild resolves the `default` (built
-// `dist`) exports instead. ResolveConditions picks between these by probing whether
-// todl's `development` entry file exists on disk. Electron asar-packed resolution
-// (reading todl from inside app.asar) is out of scope: todl must be present under
-// node_modules (dev/preview layout, or electron-builder `asarUnpack`).
+// The bundler action of the per-project html-bundle app pipeline: gathers the staged
+// app (the generated tree from ctx.Project, the compiled UI modules and the entry glue
+// from ctx.Sandbox) into plain StagedFile[] and delegates the actual bundling to an
+// injected IBundler, recording its output under HtmlArtifacts.AppBundle. This action is
+// browser-safe: all node-only work (esbuild, filesystem staging, module resolution)
+// lives behind the IBundler seam.
 export class BundleAppAction implements IBuildAction<TodlBuildContext>
 {
     private static readonly ActionName = "bundle-app";
@@ -42,36 +19,16 @@ export class BundleAppAction implements IBuildAction<TodlBuildContext>
     // A compiled module is the application root when it exports the binding `app`
     // (what mural emits for an `Application` with an `x:root` visual). Matched with a
     // trailing word boundary so a DIFFERENT export whose name merely starts with "app"
-    // — `appBar`, `appTheme` — is not misread as a second root (which used to trip the
-    // multiple-roots guard). `\bexport const app\b`: the `\b` after `app` requires a
-    // non-word char next (` `, `=`, `;`), which `appBar`/`appTheme` fail.
+    // — `appBar`, `appTheme` — is not misread as a second root.
     private static readonly AppRootExportPattern = /\bexport const app\b/;
     private static readonly GeneratedDirectory = "generated";
-    private static readonly NodeModulesDirectory = "node_modules";
-    private static readonly TodlPackageName = "@pragmatic-tech-ai/todl";
-    private static readonly PackageJsonFile = "package.json";
-    private static readonly ScopedTodlDir = BundleAppAction.TodlPackageName;
-    private static readonly ManifestEncoding = "utf8";
-    private static readonly StagePrefix = "todl-bundle-stage-";
-
-    private static readonly EsbuildFormat = "iife";
-    private static readonly EsbuildPlatform = "browser";
-    private static readonly EsbuildTarget = "es2020";
-    private static readonly EsbuildLogLevel = "silent";
-    // The `development` export condition maps "@pragmatic-tech-ai/*" to their `src`
-    // TypeScript entries, bundling those packages FROM SOURCE (mirrors the proven
-    // scripts/gen-graph-app.mjs path and the `--conditions=development` runner). Applied
-    // only when a source checkout is resolvable; ResolveConditions omits it for an
-    // installed/dist-only todl so the built `dist` exports resolve instead.
-    private static readonly DevelopmentCondition = "development";
+    private static readonly PathSeparator = "/";
 
     private static readonly MissingEntryMessage = "no app entry to bundle";
     private static readonly MissingAppRootMessage =
         `no ${BundleAppAction.AppRootModule} among the compiled UI modules to bundle as the app root`;
     private static readonly MultipleAppRootsMessagePrefix =
         "more than one compiled module is an application root; disambiguation is not supported: ";
-    private static readonly NoResolutionRootMessage =
-        "could not locate a node_modules root to resolve the app's package imports against";
     private static readonly BundleFailedMessagePrefix = "failed to bundle the app: ";
 
     public readonly Name = BundleAppAction.ActionName;
@@ -80,6 +37,10 @@ export class BundleAppAction implements IBuildAction<TodlBuildContext>
         HtmlArtifacts.CompiledUi,
     ];
     public readonly Produces: readonly ArtifactKey<unknown>[] = [HtmlArtifacts.AppBundle];
+
+    constructor(private readonly bundler: IBundler)
+    {
+    }
 
     public async Execute(ctx: TodlBuildContext): Promise<void>
     {
@@ -93,33 +54,20 @@ export class BundleAppAction implements IBuildAction<TodlBuildContext>
         const compiled = ctx.Artifacts.Get(HtmlArtifacts.CompiledUi) ?? [];
         if (!(await this.GuardAppRoots(ctx, compiled))) return;
 
-        const resolutionRoot = this.ResolutionRoot();
-        if (resolutionRoot === undefined)
-        {
-            this.ReportError(ctx, BundleAppAction.NoResolutionRootMessage);
-            return;
-        }
-
-        // The whole staging + bundle is inside the try so ANY failure — temp-dir
-        // creation (read-only root, disk full, permissions), the cross-store copy, or
-        // esbuild itself — is reported as a Severity.Error and Execute returns normally,
-        // honoring the no-throw contract. stageDir may still be unset if mkdtempSync
-        // itself threw, so the finally cleanup guards for that.
-        let stageDir: string | undefined;
+        // Gathering and bundling are inside the try so ANY failure (storage read, the
+        // bundler itself) is reported as a Severity.Error and Execute returns normally,
+        // honoring the no-throw contract.
         try
         {
-            stageDir = mkdtempSync(join(resolutionRoot, BundleAppAction.StagePrefix));
-            const bundle = await this.BundleStaged(ctx, entry, compiled, resolutionRoot, stageDir);
-            if (bundle !== undefined) ctx.Artifacts.Set(HtmlArtifacts.AppBundle, bundle);
+            const files = await this.Collect(ctx, entry, compiled);
+            const result = await this.bundler.BundleApp({ Entry: entry, Files: files });
+            for (const diagnostic of result.Diagnostics) ctx.Diagnostics.Report(diagnostic);
+            if (result.Text !== undefined) ctx.Artifacts.Set(HtmlArtifacts.AppBundle, result.Text);
         }
         catch (err)
         {
             const detail = err instanceof Error ? err.message : String(err);
             this.ReportError(ctx, `${BundleAppAction.BundleFailedMessagePrefix}${detail}`);
-        }
-        finally
-        {
-            if (stageDir !== undefined) rmSync(stageDir, { recursive: true, force: true });
         }
     }
 
@@ -147,136 +95,29 @@ export class BundleAppAction implements IBuildAction<TodlBuildContext>
         return true;
     }
 
-    // Materializes the generated tree (from Project), the compiled modules (from
-    // Sandbox), and the entry (also from Sandbox — build glue) into stageDir, then runs
-    // esbuild over the staged entry. esbuild resolves bare package imports against
-    // resolutionRoot's node_modules (nodePaths) and, for the enclosing
-    // "@pragmatic-tech-ai/todl" package, by self-reference from inside the root.
-    private async BundleStaged(
-        ctx: TodlBuildContext,
-        entry: string,
-        compiled: readonly string[],
-        resolutionRoot: string,
-        stageDir: string): Promise<string | undefined>
+    // The generated tree (Project), the compiled modules (Sandbox), and the entry (also
+    // Sandbox — build glue written by EmitEntryAction, not part of generated/).
+    private async Collect(ctx: TodlBuildContext, entry: string, compiled: readonly string[]): Promise<StagedFile[]>
     {
-        const stage = new NodeFsStorage(stageDir);
-        await copyTree(ctx.Project, BundleAppAction.GeneratedDirectory, stage, BundleAppAction.GeneratedDirectory, true);
-        for (const path of compiled)
-        {
-            await copyTree(ctx.Sandbox, path, stage, path, false);
-        }
-        // entry.ts is build glue (Task 10): EmitEntryAction writes it into ctx.Sandbox,
-        // not ctx.Project's generated/ tree copied above, so it is staged separately.
-        await copyTree(ctx.Sandbox, entry, stage, entry, false);
+        const files: StagedFile[] = [];
+        await this.GatherTree(ctx.Project, BundleAppAction.GeneratedDirectory, files);
+        for (const path of compiled) files.push({ Path: path, Text: await ctx.Sandbox.ReadText(path) });
+        files.push({ Path: entry, Text: await ctx.Sandbox.ReadText(entry) });
+        return files;
+    }
 
-        try
+    private async GatherTree(storage: IStorage, dir: string, out: StagedFile[]): Promise<void>
+    {
+        for (const entry of await storage.List(dir))
         {
-            const result = await build({
-                entryPoints: [join(stageDir, entry)],
-                bundle: true,
-                format: BundleAppAction.EsbuildFormat,
-                platform: BundleAppAction.EsbuildPlatform,
-                target: BundleAppAction.EsbuildTarget,
-                keepNames: true,
-                write: false,
-                logLevel: BundleAppAction.EsbuildLogLevel,
-                absWorkingDir: stageDir,
-                nodePaths: [join(resolutionRoot, BundleAppAction.NodeModulesDirectory)],
-                conditions: BundleAppAction.ResolveConditions(resolutionRoot),
-            });
-            return result.outputFiles[0]!.text;
-        }
-        catch (err)
-        {
-            const detail = err instanceof Error ? err.message : String(err);
-            this.ReportError(ctx, `${BundleAppAction.BundleFailedMessagePrefix}${detail}`);
-            return undefined;
+            const path = `${dir}${BundleAppAction.PathSeparator}${entry.Name}`;
+            if (entry.IsDirectory) await this.GatherTree(storage, path, out);
+            else out.push({ Path: path, Text: await storage.ReadText(path) });
         }
     }
 
     private ReportError(ctx: TodlBuildContext, message: string): void
     {
         ctx.Diagnostics.Report({ severity: Severity.Error, message, source: BundleAppAction.ActionName });
-    }
-
-    // Walks up from this module to the nearest ancestor directory that contains a
-    // node_modules folder: the todl source-checkout root when running in-repo, or the
-    // consumer's package root when todl is installed. The staging dir is created inside
-    // it so esbuild's upward node_modules walk resolves bare package imports there.
-    // `protected` (not static) so a test can override it to point at a fixture root.
-    protected ResolutionRoot(): string | undefined
-    {
-        let dir = dirname(fileURLToPath(import.meta.url));
-        while (true)
-        {
-            if (existsSync(join(dir, BundleAppAction.NodeModulesDirectory))) return dir;
-            const parent = dirname(dir);
-            if (parent === dir) return undefined;
-            dir = parent;
-        }
-    }
-
-    // Selects esbuild resolution conditions by what the resolvable todl package provides
-    // on disk. The `development` export maps "@pragmatic-tech-ai/*" to their TypeScript
-    // `src`; a published/installed todl ships only `dist` (its `development` target is
-    // absent). So: return ['development'] ONLY when todl's development entry file exists
-    // (a source checkout), otherwise [] so esbuild uses the `default`/dist entry. The
-    // probe finds todl's package.json two ways: the root IS todl (Node package
-    // self-reference, in-repo), or todl lives under <root>/node_modules. Never throws:
-    // an unreadable/absent manifest yields [] (prefer the always-present dist entry).
-    private static ResolveConditions(resolutionRoot: string): string[]
-    {
-        const manifestPath = BundleAppAction.LocateTodlManifest(resolutionRoot);
-        if (manifestPath === undefined) return [];
-
-        try
-        {
-            const manifest = JSON.parse(readFileSync(manifestPath, BundleAppAction.ManifestEncoding)) as {
-                exports?: Record<string, unknown>;
-            };
-            const exportsField = manifest.exports;
-            if (exportsField === undefined) return [];
-            // exports may be a bare conditions object (todl's own shape) or subpath-keyed
-            // under '.'; the development target is a package-relative path like
-            // "./src/index.ts".
-            const dot = (exportsField["."] ?? exportsField) as { import?: { development?: string } };
-            // The `?.` chain deliberately guards a value of unknown shape (null/string/object).
-            const developmentEntry = dot?.import?.development;
-            if (typeof developmentEntry !== "string") return [];
-
-            const packageDir = dirname(manifestPath);
-            const target = join(packageDir, developmentEntry);
-            return existsSync(target) ? [BundleAppAction.DevelopmentCondition] : [];
-        }
-        catch
-        {
-            return [];
-        }
-    }
-
-    // Locates the todl package.json reachable from resolutionRoot: the root itself when
-    // it is the todl package (self-reference), else <root>/node_modules/@pragmatic-tech-ai/todl.
-    private static LocateTodlManifest(resolutionRoot: string): string | undefined
-    {
-        const rootManifest = join(resolutionRoot, BundleAppAction.PackageJsonFile);
-        if (existsSync(rootManifest))
-        {
-            try
-            {
-                const name = (JSON.parse(readFileSync(rootManifest, BundleAppAction.ManifestEncoding)) as { name?: string }).name;
-                if (name === BundleAppAction.TodlPackageName) return rootManifest;
-            }
-            catch
-            {
-                // fall through to the node_modules lookup
-            }
-        }
-
-        const installedManifest = join(
-            resolutionRoot,
-            BundleAppAction.NodeModulesDirectory,
-            BundleAppAction.ScopedTodlDir,
-            BundleAppAction.PackageJsonFile);
-        return existsSync(installedManifest) ? installedManifest : undefined;
     }
 }
