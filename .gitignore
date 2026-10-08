@@ -2,6 +2,9 @@ node_modules/
 dist/
 *.tsbuildinfo
 
+# Transient backup written by scripts/strip-dev-exports.mjs during pack/publish
+package.json.prepack-bak
+
 # macOS Finder metadata
 .DS_Store
 
