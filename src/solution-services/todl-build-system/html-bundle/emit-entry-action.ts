@@ -17,16 +17,11 @@ export class EmitEntryAction implements IBuildAction<TodlBuildContext>
     // Application.current) before main.js's top-level `new <Vm>()` registers itself
     // via Application.current.Services.addInstance(this).
     private static readonly EntrySource =
-        `import { app } from "./src/app.mu.js";
-` +
-        `import "./src/main.js";
-` +
-        `import { model } from "./generated/data.js";
-` +
-        `import { TodlAppBootstrap } from "@pragmatic-tech-ai/todl";
-` +
-        `TodlAppBootstrap.Mount(app, model);
-`;
+        `import { app } from "./src/app.mu.js";\n` +
+        `import "./src/main.js";\n` +
+        `import { model } from "./generated/data.js";\n` +
+        `import { TodlAppBootstrap } from "@pragmatic-tech-ai/todl";\n` +
+        `TodlAppBootstrap.Mount(app, model);\n`;
 
     public readonly Name = EmitEntryAction.ActionName;
     public readonly Consumes: readonly ArtifactKey<unknown>[] = [];
