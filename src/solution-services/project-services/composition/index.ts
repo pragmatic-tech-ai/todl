@@ -21,3 +21,4 @@ export { BuildSystemRegistryKey } from './build-system-registry-key.js';
 export { NodeProjectSystemComposer } from './node-project-system-composer.js';
 export { TodlNodeProjectSystemModule } from './todl-node-project-system-module.js';
 export { ProjectSystemContribution } from './project-system-contribution.js';
+export { EsbuildBundler } from '../../todl-build-system/html-bundle/node/esbuild-bundler.js';
