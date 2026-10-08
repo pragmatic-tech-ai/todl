@@ -32,35 +32,35 @@ describe("CompileMuralAction", () =>
     test("compiles a project .mu file into a sibling <name>.mu.js in the sandbox", async () =>
     {
         const ctx = contextWith();
-        await ctx.Project.WriteText("generated/app.mu", ValidAppMu);
+        await ctx.Project.WriteText("src/app.mu", ValidAppMu);
 
         await new CompileMuralAction().Execute(ctx);
 
-        assert.equal(await ctx.Sandbox.Exists("generated/app.mu.js"), true);
-        const js = await ctx.Sandbox.ReadText("generated/app.mu.js");
+        assert.equal(await ctx.Sandbox.Exists("src/app.mu.js"), true);
+        const js = await ctx.Sandbox.ReadText("src/app.mu.js");
         assert.match(js, /export const app/);
     });
 
     test("records the written path under HtmlArtifacts.CompiledUi", async () =>
     {
         const ctx = contextWith();
-        await ctx.Project.WriteText("generated/app.mu", ValidAppMu);
+        await ctx.Project.WriteText("src/app.mu", ValidAppMu);
 
         await new CompileMuralAction().Execute(ctx);
 
-        assert.deepEqual(ctx.Artifacts.Get(HtmlArtifacts.CompiledUi), ["generated/app.mu.js"]);
+        assert.deepEqual(ctx.Artifacts.Get(HtmlArtifacts.CompiledUi), ["src/app.mu.js"]);
     });
 
     test("a syntax error reports a Severity.Error diagnostic naming the file and does not throw", async () =>
     {
         const ctx = contextWith();
-        await ctx.Project.WriteText("generated/app.mu", InvalidAppMu);
+        await ctx.Project.WriteText("src/app.mu", InvalidAppMu);
 
         await assert.doesNotReject(() => new CompileMuralAction().Execute(ctx));
 
         const diagnostics = ctx.Diagnostics.All();
-        assert.ok(diagnostics.some((d) => d.severity === Severity.Error && d.message.includes("generated/app.mu")));
-        assert.equal(await ctx.Sandbox.Exists("generated/app.mu.js"), false);
+        assert.ok(diagnostics.some((d) => d.severity === Severity.Error && d.message.includes("src/app.mu")));
+        assert.equal(await ctx.Sandbox.Exists("src/app.mu.js"), false);
     });
 
     test("no diagnostic and no CompiledUi artifact when the project has no .mu files", async () =>

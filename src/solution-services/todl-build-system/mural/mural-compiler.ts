@@ -41,7 +41,7 @@ export class MuralCompiler
     // baked separately into presentation.compiled.json by BakeResourcesAction (which wires an
     // include resolver over the project's SVGs). It uses `include colored "resources/*.svg"`,
     // which this text-only generic compile cannot resolve, and its compiled output is never
-    // loaded (the html-bundle app only ever loads compiled/app.mu.js). Two forms are excluded:
+    // loaded (the html-bundle app only ever loads the src/*.mu.js siblings of its entry graph). Two forms are excluded:
     // the generated inspection preview `presentation.generated.mu` (any location) and the
     // author templates under a top-level `presentation/` folder.
     private static readonly GeneratedPresentationFile = "presentation.generated.mu";
@@ -60,7 +60,7 @@ export class MuralCompiler
 
         const written: string[] = [];
         // Two `.mu` sources in different folders share a basename (e.g. `a/app.mu` and
-        // `b/app.mu`) → the same `compiled/app.mu.js` output. Detected up front (before
+        // `b/app.mu`) → the same `compiled/app.mu.js` output (default layout). Detected up front (before
         // any compile) so one silently clobbers the other's JS instead of both landing:
         // report an Error naming both sources and stop, rather than emit a bundle built
         // from whichever happened to be written last.
