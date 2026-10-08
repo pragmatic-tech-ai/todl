@@ -70,15 +70,15 @@ describe("MuralCompiler", () =>
     {
         const ctx = contextWith();
         // A producer project's `dist/` is its published artifact tree — a compiled copy of
-        // its own sources. The root `presentation.generated.mu` and the staged copy at
-        // `dist/resources/presentation.generated.mu` both map to the same output; without
-        // the exclusion this is a spurious collision that blocks publish.
-        await ctx.Project.WriteText("presentation.generated.mu", ValidAppMu);
-        await ctx.Project.WriteText("dist/resources/presentation.generated.mu", ValidAppMu);
+        // its own sources. The root `app.mu` and the staged copy at `dist/resources/app.mu`
+        // both map to the same output; without the exclusion this is a spurious collision
+        // that blocks publish.
+        await ctx.Project.WriteText("app.mu", ValidAppMu);
+        await ctx.Project.WriteText("dist/resources/app.mu", ValidAppMu);
 
         const written = await new MuralCompiler().Compile(ctx);
 
-        assert.deepEqual(written, ["compiled/presentation.generated.mu.js"]);
+        assert.deepEqual(written, ["compiled/app.mu.js"]);
         assert.equal(ctx.Diagnostics.Count, 0);
     });
 
@@ -90,6 +90,32 @@ describe("MuralCompiler", () =>
         const written = await new MuralCompiler().Compile(ctx);
 
         assert.deepEqual(written, ["compiled/app.mu.js"]);
+    });
+
+    test("excludes the generated presentation inspection file (presentation.generated.mu) — baked separately, uses unresolvable include", async () =>
+    {
+        const ctx = contextWith();
+        // The generated presentation preview uses `include colored "resources/*.svg"`, which
+        // the text-only generic compiler cannot resolve. Its real runtime form is baked into
+        // presentation.compiled.json by BakeResourcesAction, so it must never enter this glob.
+        await ctx.Project.WriteText("presentation.generated.mu", 'resources P {\n    include colored "resources/x.svg" as icon_x\n}\n');
+        await ctx.Project.WriteText("views/app.mu", ValidAppMu);
+
+        const written = await new MuralCompiler().Compile(ctx);
+
+        assert.deepEqual(written, ["compiled/app.mu.js"]);
+        assert.equal(ctx.Diagnostics.Count, 0);
+    });
+
+    test("excludes author presentation templates under the top-level presentation/ folder", async () =>
+    {
+        const ctx = contextWith();
+        await ctx.Project.WriteText("presentation/component.mu", 'resources C {\n    include colored "resources/c.svg" as icon_c\n}\n');
+
+        const written = await new MuralCompiler().Compile(ctx);
+
+        assert.deepEqual(written, []);
+        assert.equal(ctx.Diagnostics.Count, 0);
     });
 
     test("a syntax error reports a Severity.Error diagnostic naming the file and does not throw", async () =>

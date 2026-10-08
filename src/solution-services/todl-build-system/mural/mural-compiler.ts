@@ -27,12 +27,22 @@ export class MuralCompiler
     // collection; a nested `dist/` folder is not special.
     private static readonly BuildOutputDirs: ReadonlySet<string> = new Set(["dist"]);
     private static readonly PathSeparator = "/";
+    // Presentation `.mu` is NOT an app view — it is the project's icon/visual presentation,
+    // baked separately into presentation.compiled.json by BakeResourcesAction (which wires an
+    // include resolver over the project's SVGs). It uses `include colored "resources/*.svg"`,
+    // which this text-only generic compile cannot resolve, and its compiled output is never
+    // loaded (the html-bundle app only ever loads compiled/app.mu.js). Two forms are excluded:
+    // the generated inspection preview `presentation.generated.mu` (any location) and the
+    // author templates under a top-level `presentation/` folder.
+    private static readonly GeneratedPresentationFile = "presentation.generated.mu";
+    private static readonly PresentationDir = "presentation";
 
     public async Compile(ctx: TodlBuildContext): Promise<readonly string[]>
     {
         const sources = (await StorageTree.Files(ctx.Project))
             .filter((path) => path.endsWith(MuralCompiler.SourceExtension))
-            .filter((path) => !MuralCompiler.IsUnderBuildOutput(path));
+            .filter((path) => !MuralCompiler.IsUnderBuildOutput(path))
+            .filter((path) => !MuralCompiler.IsPresentationSource(path));
 
         const written: string[] = [];
         // Two `.mu` sources in different folders share a basename (e.g. `a/app.mu` and
@@ -102,6 +112,17 @@ export class MuralCompiler
         const slashIndex = path.indexOf(MuralCompiler.PathSeparator);
         if (slashIndex === -1) return false;
         return MuralCompiler.BuildOutputDirs.has(path.slice(0, slashIndex));
+    }
+
+    // True when the source is presentation markup (baked separately, see the field comments):
+    // the generated inspection file by basename, or anything under a top-level `presentation/`.
+    private static IsPresentationSource(path: string): boolean
+    {
+        const slashIndex = path.lastIndexOf(MuralCompiler.PathSeparator);
+        const baseName = slashIndex === -1 ? path : path.slice(slashIndex + 1);
+        if (baseName === MuralCompiler.GeneratedPresentationFile) return true;
+        return path.indexOf(MuralCompiler.PathSeparator) !== -1
+            && path.slice(0, path.indexOf(MuralCompiler.PathSeparator)) === MuralCompiler.PresentationDir;
     }
 
     private static OutputPathFor(sourcePath: string): string
