@@ -29,7 +29,7 @@ export class UiPlaceholderGenerator implements IProjectContentGenerator
 
     public async Generate(ctx: GeneratorContext): Promise<GeneratorResult>
     {
-        const model = await ctx.Model.Compile();
+        const model = await ctx.Model.CompileLocal();
         if (model.package === undefined)
         {
             this.ReportErrors(ctx, model.errors);

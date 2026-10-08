@@ -20,6 +20,11 @@ class FakeModelProvider implements IProjectModelProvider
     {
         return Promise.resolve({ errors: [] });
     }
+
+    public CompileLocal(): Promise<ProjectModel>
+    {
+        return Promise.resolve({ errors: [] });
+    }
 }
 
 function MakeFakeGenerator(id: string, triggers: readonly GeneratorTrigger[], produces: readonly string[], ran: string[]): IProjectContentGenerator

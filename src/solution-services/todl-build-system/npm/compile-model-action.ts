@@ -21,7 +21,16 @@ export class CompileModelAction implements IBuildAction<TodlBuildContext>
     {
         const bases = ctx.Artifacts.Get(NpmArtifacts.ResolvedBases) ?? [];
         const provider = new ProjectModelProvider(ctx.Project, ctx.Manifest, ctx.Source);
-        const result = await provider.CompileWithBases(bases);
+        // A publishable project (meta-model / library) compiles with its real package
+        // identity, which model.json carries into the published artifact. A consumer
+        // project (architecture) has no publishable id — the publishable compile throws
+        // "has no id to publish" — and never publishes anyway, so it compiles with the
+        // synthetic-local identity (symbols are identical). Without this, building an
+        // architecture app (html-bundle) died at compile-model.
+        const hasPublishableId = ctx.Manifest.id !== undefined && ctx.Manifest.id.length > 0;
+        const result = hasPublishableId
+            ? await provider.CompileWithBases(bases)
+            : await provider.CompileLocalWithBases(bases);
         if (result.package === undefined)
         {
             for (const error of result.errors)

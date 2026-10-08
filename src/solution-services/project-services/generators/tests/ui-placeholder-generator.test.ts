@@ -24,6 +24,11 @@ class FakeModelProvider implements IProjectModelProvider
     {
         return Promise.resolve(this.result);
     }
+
+    public CompileLocal(): Promise<ProjectModel>
+    {
+        return Promise.resolve(this.result);
+    }
 }
 
 function widgetManifest(): ProjectManifest
