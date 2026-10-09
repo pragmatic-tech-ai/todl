@@ -40,3 +40,7 @@ test("allocateUnique suffixes later duplicates with the smallest free number, in
 test("allocateUnique is the identity on distinct names", () => {
   assert.deepEqual(allocateUnique(["x", "y", "z"]), ["x", "y", "z"]);
 });
+
+test("allocateUnique never duplicates when a suffixed name collides with a literal", () => {
+  assert.deepEqual(allocateUnique(["a", "a", "a2"]), ["a", "a2", "a22"]);
+});

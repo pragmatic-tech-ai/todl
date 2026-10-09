@@ -86,6 +86,7 @@ test("a concept plural colliding with a taxonomy name is disambiguated, not dupl
   b.commit();
   const out = generateReadClient(r, { name: "collide", importSpecifier: "../../../index.js" });
   assert.equal(out.split("get actors(").length - 1, 1);
+  assert.equal(out.split("get actors2(").length - 1, 1);
   assert.match(out, /get actors\(\): readonly Actor\[\] \{\s*return this\.instancesOf\("actor"\)/);
   assert.match(out, /get actors2\(\): readonly Actor\[\] \{\s*return this\.termsOf\("actors"\)/);
 });
@@ -100,7 +101,6 @@ test("entity fields whose camelCase names collide get distinct getters", () => {
   b.commit();
   const out = generateReadClient(r, { name: "collide2", importSpecifier: "../../../index.js" });
   assert.equal(out.split("get myName(").length - 1, 1);
-  assert.match(out, /get myName2\(\)/);
-  assert.match(out, /this\.field\("my-name"\)/);
-  assert.match(out, /this\.field\("myName"\)/);
+  assert.match(out, /get myName\(\): string \{ return this\.field\("my-name"\)/);
+  assert.match(out, /get myName2\(\): string \{ return this\.field\("myName"\)/);
 });
