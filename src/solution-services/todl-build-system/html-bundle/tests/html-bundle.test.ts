@@ -5,7 +5,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { FakeStorage, type IStorage } from "@pragmatic-tech-ai/todl-runtime";
+import { FakeStorage, type IStorage, type IServiceProvider, type ServiceToken } from "@pragmatic-tech-ai/todl-runtime";
 import { NodeFsStorage } from "@pragmatic-tech-ai/todl-runtime/node";
 import { BuildArtifacts } from "../../../build-system-core/build-artifacts.js";
 import { DiagnosticSink, Severity } from "../../../build-system-core/diagnostic-sink.js";
@@ -15,7 +15,7 @@ import { ProjectBuildStatus } from "../../../build-system-core/build-result.js";
 import { TodlBuildSystemRegistry } from "../../todl-build-system-registry.js";
 import { HtmlBundleBuildSystem } from "../html-bundle-build-system.js";
 import { EsbuildBundler } from "../node/esbuild-bundler.js";
-import type { ITypeChecker, TypeCheckResult } from "../../../build-system-core/type-checker.js";
+import { TypeCheckerKey, type ITypeChecker, type TypeCheckResult } from "../../../build-system-core/type-checker.js";
 import { EmitBundledHostAction } from "../emit-bundled-host-action.js";
 import { EmptyPackageSource, libraryManifest } from "../../tests/fakes.js";
 import { parseManifest, ProjectType } from "../../../package-manager/manifest.js";
@@ -71,6 +71,24 @@ class NoopTypeChecker implements ITypeChecker
     }
 }
 
+// Provider whose only registration is the no-op checker (what the registry's DSL ctor receives).
+class NoopCheckerProvider implements IServiceProvider
+{
+    private readonly checker = new NoopTypeChecker();
+    public get<T>(token: ServiceToken<T>): T | undefined
+    {
+        return token === (TypeCheckerKey as unknown) ? (this.checker as unknown as T) : undefined;
+    }
+    public getRequired<T>(token: ServiceToken<T>): T
+    {
+        return this.get(token)!;
+    }
+    public has(token: ServiceToken<unknown>): boolean
+    {
+        return this.get(token) !== undefined;
+    }
+}
+
 describe("HtmlBundleBuildSystem", () =>
 {
     test("requires the DTO, data, view-model and app UI content, each naming its generator", () =>
@@ -94,7 +112,7 @@ describe("HtmlBundleBuildSystem", () =>
 
     test("the registry offers html-bundle for architecture, not for meta-model", () =>
     {
-        const registry = new TodlBuildSystemRegistry(new NoopTypeChecker());
+        const registry = new TodlBuildSystemRegistry(new NoopCheckerProvider());
         assert.equal(registry.For({ type: ProjectType.Architecture, name: "a" } as never).some((s) => s.Id === "html-bundle"), true);
         assert.equal(registry.For({ type: ProjectType.MetaModel, name: "m" } as never).some((s) => s.Id === "html-bundle"), false);
     });
@@ -281,7 +299,7 @@ async function buildAndPublishBases(t: TestContext): Promise<{ solution: Solutio
     const provider = new ScratchBuildStorage(scratchRoot);
     const registry = new LocalNpmRegistry(new FakeStorage());
     const client = new PackageRegistryClient(registry);
-    const solution = new SolutionBuildManager(new TodlBuildSystemRegistry(new NoopTypeChecker()), provider);
+    const solution = new SolutionBuildManager(new TodlBuildSystemRegistry(new NoopCheckerProvider()), provider);
 
     const meta = readOnlyFixture(MetaModelFixture);
     const microsoft = readOnlyFixture(MicrosoftLibraryFixture);
@@ -343,7 +361,7 @@ describe("end-to-end: real test_architecture fixture through the new html-bundle
         const scratchRoot = await mkdtemp(join(tmpdir(), "todl-e2e-missing-"));
         t.after(async () => { await rm(scratchRoot, { recursive: true, force: true }); });
         const provider = new ScratchBuildStorage(scratchRoot);
-        const solution = new SolutionBuildManager(new TodlBuildSystemRegistry(new NoopTypeChecker()), provider);
+        const solution = new SolutionBuildManager(new TodlBuildSystemRegistry(new NoopCheckerProvider()), provider);
 
         const architecture = await copiedArchitectureFixture(t);
         const result = await solution.Build({

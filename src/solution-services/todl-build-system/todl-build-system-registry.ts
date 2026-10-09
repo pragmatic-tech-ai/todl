@@ -1,4 +1,5 @@
-import type { ITypeChecker } from "../build-system-core/type-checker.js";
+import type { IServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
+import { TypeCheckerKey, type ITypeChecker } from "../build-system-core/type-checker.js";
 import { BuildSystemRegistry } from "../build-system-core/build-system-registry.js";
 import type { ProjectManifest } from "../package-manager/manifest.js";
 import type { TodlBuildContext } from "./todl-build-context.js";
@@ -21,10 +22,12 @@ import { DefaultPresentationBaker } from "../project-services/core/default-prese
 // provider/service context to resolve one from.
 export class TodlBuildSystemRegistry extends BuildSystemRegistry<TodlBuildContext, ProjectManifest>
 {
-    // typeChecker defaults to the node tsc gate; a caller may substitute another ITypeChecker.
-    constructor(typeChecker: ITypeChecker = new TscTypeChecker())
+    // The module DSL registers this as `new TodlBuildSystemRegistry(p)`, passing the provider.
+    // The checker is resolved from it (TypeCheckerKey), falling back to the node tsc gate.
+    constructor(provider?: IServiceProvider)
     {
         super();
+        const typeChecker: ITypeChecker = provider?.get(TypeCheckerKey) ?? new TscTypeChecker();
         this.Register(new NpmPackageBuildSystem(new DefaultPresentationBaker()));
         this.Register(new HtmlBundleBuildSystem(new EsbuildBundler(), typeChecker));
     }
