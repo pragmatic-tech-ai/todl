@@ -9,6 +9,7 @@ import { parse } from "../parser.js";
 import { DeclKind } from "../ast.js";
 import { Repository } from "../../model/model.js";
 import { satisfies } from "../../predicate/evaluate.js";
+import { ExprKind, UnaryOp } from "../../predicate/ast.js";
 
 function predicate(source: string)
 {
@@ -80,4 +81,27 @@ test("parses the predicate captured from the concept fixture and evaluates it", 
   const expr = parsePredicate(captured);
   assert.equal(satisfies(serviceTask(null), expr, "t1"), true);
   assert.equal(satisfies(serviceTask("bob"), expr, "t1"), false);
+});
+
+test("word operators 'and' / 'or' produce the same AST as '&&' / '||'", () => {
+  assert.deepEqual(predicate("a and b"), predicate("a && b"));
+  assert.deepEqual(predicate("a or b"), predicate("a || b"));
+});
+
+test("'not a' parses to a unary Not over the name", () => {
+  const expr = predicate("not a");
+  assert.equal(expr.kind, ExprKind.Unary);
+  assert.equal(expr.op, UnaryOp.Not);
+  assert.deepEqual(expr.operand, predicate("a"));
+});
+
+test("word operators keep precedence: 'a and b or c' is Or(And(a,b), c)", () => {
+  assert.deepEqual(predicate("a and b or c"), predicate("(a && b) || c"));
+  assert.deepEqual(predicate("a or b and c"), predicate("a || (b && c)"));
+});
+
+test("'not' binds tightly and negates a parenthesised comparison", () => {
+  assert.deepEqual(predicate("not a and b"), predicate("(not a) && b"));
+  assert.equal(satisfies(serviceTask(null), predicate("not (this.assignee != none)"), "t1"), true);
+  assert.equal(satisfies(serviceTask("x"), predicate("not (this.assignee != none)"), "t1"), false);
 });

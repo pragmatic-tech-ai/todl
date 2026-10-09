@@ -18,7 +18,7 @@ test("a match block lowers to a Match node with normalized rules", () =>
 {
     const { model, diagnostics } = Harness.compile(
         `namespace n { concept C { email : string; tax : string; country : string; }
-         match C { same when a.email == b.email; same when a.tax == b.tax && a.country == b.country; } }`);
+         match C { same when a.email == b.email; same when a.tax == b.tax and a.country == b.country; } }`);
     assert.deepEqual(diagnostics, []);
     const ids = model.nodesOfMetaKind(MetaKind.Match);
     assert.equal(ids.length, 1);

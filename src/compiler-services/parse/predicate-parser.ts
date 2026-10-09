@@ -20,12 +20,13 @@
  * operator, so the lowest-precedence operator ends up highest in the tree and
  * binds most loosely. The delegation chain, lowest → highest precedence:
  *
- *     parseOr        `||`         (loosest)
- *       └ parseAnd   `&&`
+ *     parseOr        `||` / `or`  (loosest)
+ *       └ parseAnd   `&&` / `and`
  *          └ parseImplies         `implies`
  *             └ parseComparison   `==` / `!=` / `in`
- *                └ parsePostfix   `.member` chains
- *                   └ parsePrimary   `this` / `none` / `(…)` / `&name` / ident (tightest)
+ *                └ parseUnary     `not x` (prefix)
+ *                   └ parsePostfix   `.member` chains
+ *                      └ parsePrimary   `this` / `none` / `(…)` / `&name` / ident (tightest)
  *
  * The parser walks a flat `Token[]` via a movable cursor (`pos`) with a family
  * of small helpers — `current` / `check` / `match` / `advance` / `expect` —
@@ -47,6 +48,7 @@ import {
   and,
   or,
   implies,
+  not,
   type Expr,
 } from "../predicate/ast.js";
 
@@ -92,7 +94,7 @@ class PredicateParser
   private parseOr(): Expr
   {
     let left = this.parseAnd();
-    while (this.match(TokenKind.Or))
+    while (this.match(TokenKind.Or) || this.matchKeyword("or"))
     {
       left = or(left, this.parseAnd());
     }
@@ -103,7 +105,7 @@ class PredicateParser
   private parseAnd(): Expr
   {
     let left = this.parseImplies();
-    while (this.match(TokenKind.And))
+    while (this.match(TokenKind.And) || this.matchKeyword("and"))
     {
       left = and(left, this.parseImplies());
     }
@@ -127,11 +129,18 @@ class PredicateParser
    */
   private parseComparison(): Expr
   {
-    const left = this.parsePostfix();
-    if (this.matchSymbol("==")) return eq(left, this.parsePostfix());
-    if (this.matchSymbol("!=")) return neq(left, this.parsePostfix());
-    if (this.matchKeyword("in")) return isIn(left, this.parsePostfix());
+    const left = this.parseUnary();
+    if (this.matchSymbol("==")) return eq(left, this.parseUnary());
+    if (this.matchSymbol("!=")) return neq(left, this.parseUnary());
+    if (this.matchKeyword("in")) return isIn(left, this.parseUnary());
     return left;
+  }
+
+  /** `not x` — logical negation (prefix). Binds tighter than comparison. */
+  private parseUnary(): Expr
+  {
+    if (this.matchKeyword("not")) return not(this.parseUnary());
+    return this.parsePostfix();
   }
 
   /**

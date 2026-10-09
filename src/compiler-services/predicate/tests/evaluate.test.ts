@@ -13,6 +13,7 @@ import {
   any,
   implies,
   neq,
+  not,
   isIn,
 } from "../ast.js";
 
@@ -82,4 +83,12 @@ test("any/all quantify over a concept's instances", () => {
 
   assert.equal(satisfies(model, someCovers, "shop-web"), true); // react, vue
   assert.equal(satisfies(model, allCover, "shop-web"), false); // express does not
+});
+
+test("unary not negates its operand", () => {
+  const model = techModel();
+  const covered = neq(member(THIS, "implementedBy"), NONE);
+
+  assert.equal(satisfies(model, covered, "shop-web"), true);
+  assert.equal(satisfies(model, not(covered), "shop-web"), false);
 });
