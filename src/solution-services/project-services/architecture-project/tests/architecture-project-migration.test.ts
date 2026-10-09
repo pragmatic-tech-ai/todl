@@ -109,7 +109,9 @@ describe("architecture migration on Opened (composed, before backfill)", () =>
 
         assert.equal(await project.ReadText(NewAppPath), OldAppContent, "migration must run before AppGenerator's backfill");
         assert.equal(await project.Exists(OldAppPath), false);
-        assert.equal(await project.ReadText(ModelPath), ModelContent, "generated/model.ts intact");
+        const model = await project.ReadText(ModelPath);
+        assert.notEqual(model, ModelContent, "a stale machine-owned generated/model.ts is refreshed by backfill on open");
+        assert.match(model, /export class AcmeWidget extends ReflectedEntity/, "generated/model.ts regenerated from the project's model.todl");
         assert.ok(await project.Exists(MainPath), "src/main.ts backfilled");
         assert.ok(await project.Exists(DataPath), "generated/data.ts backfilled");
     });
