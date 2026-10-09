@@ -53,6 +53,7 @@ export enum DeclKind
   Package,
   Operator,
   Identity,
+  Match,
 }
 
 /** The kind of an authored VALUE (the right-hand side of `name = …`, an array
@@ -297,6 +298,25 @@ export interface OperatorDecl
   span: SourceSpan;
 }
 
+/** One `same when <expr>;` clause of a match block. The predicate is the raw
+ * token slice between `when` and `;`, parsed later by the loader via parsePredicate. */
+export interface MatchRule
+{
+  predicate: Token[];
+  span: SourceSpan;
+}
+
+/** A `match <Concept> { same when <expr>; ... }` declaration — declarative
+ * cross-record equivalence rules beyond the identity key. Clauses OR together. */
+export interface MatchDecl
+{
+  kind: DeclKind.Match;
+  concept: string;
+  rules: MatchRule[];
+  span: SourceSpan;
+  conceptSpan?: SourceSpan;
+}
+
 /** An `identity <Concept> key <attr>;` declaration — names the attribute whose
  * value identifies an instance of the concept for entity-resolution. */
 export interface IdentityDecl
@@ -452,7 +472,7 @@ export interface PrimitiveDecl
  * {@link DeclKind}). This is what a {@link NamespaceNode} holds. */
 export type Declaration =
   | ConceptDecl | TaxonomyDecl | ViewpointDecl | PrimitiveDecl | InstanceDecl | ModelDecl
-  | AnnotationDecl | PackageDecl | OperatorDecl | IdentityDecl;
+  | AnnotationDecl | PackageDecl | OperatorDecl | IdentityDecl | MatchDecl;
 
 // ═══════════════════════════════ FILE ROOT ════════════════════════════════════
 

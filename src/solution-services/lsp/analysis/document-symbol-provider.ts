@@ -40,6 +40,8 @@ export class DocumentSymbolProvider
                 return this.leaf(decl.glyph, LspSymbolKind.Operator, range, this.nameRange(decl.glyphSpan, range));
             case DeclKind.Identity:
                 return null; // an identity declaration has no name of its own to surface
+            case DeclKind.Match:
+                return null; // a match declaration has no name of its own to surface
         }
     }
 

@@ -67,6 +67,8 @@ import {
   type PackageDecl,
   type OperatorDecl,
   type IdentityDecl,
+  type MatchDecl,
+  type MatchRule,
   type EdgeApplication,
   type AssignmentNode,
   type ValueNode,
@@ -206,7 +208,7 @@ class Parser
       this.checkKeyword("viewpoint") || this.checkKeyword("concept") ||
       this.checkKeyword("model") || this.checkKeyword("annotation") ||
       this.checkKeyword("package") || this.checkKeyword("operator") ||
-      this.checkKeyword("identity") ||
+      this.checkKeyword("identity") || this.checkKeyword("match") ||
       this.checkKeyword("class") || this.checkKeyword("internal") || this.checkKeyword("sealed")
     )
     {
@@ -352,6 +354,7 @@ class Parser
     if (this.checkKeyword("package")) return this.parsePackage(start);
     if (this.checkKeyword("operator")) return this.parseOperator(start);
     if (this.checkKeyword("identity")) return this.parseIdentity(start);
+    if (this.checkKeyword("match")) return this.parseMatch(start);
     if (this.checkKeyword("class"))
     {
       this.advance(); // class modifier
@@ -669,6 +672,32 @@ class Parser
     const decl: IdentityDecl = { kind: DeclKind.Identity, concept, key: keyTok.value, span: this.spanFrom(start) };
     decl.conceptSpan = conceptSpan;
     decl.keySpan = tokenSpan(keyTok, this.uri);
+    return decl;
+  }
+
+  /** `match <Concept> { same when <expr>; ... }` — declarative cross-record
+   *  equivalence rules. Each predicate is captured as a raw token slice (parsed
+   *  later by the loader). Namespace scope only. */
+  private parseMatch(start: Token): MatchDecl
+  {
+    this.expectKeyword("match");
+    const conceptStart = this.current();
+    const concept = this.parseDottedPath();
+    const conceptSpan = this.spanFrom(conceptStart);
+    const rules: MatchRule[] = [];
+    this.expect(TokenKind.LBrace);
+    this.parseBodyMembers(() =>
+    {
+      const ruleStart = this.current();
+      this.expectKeyword("same");
+      this.expectKeyword("when");
+      const predicate = this.collectUntilSemicolon();
+      this.expect(TokenKind.Semicolon);
+      rules.push({ predicate, span: this.spanFrom(ruleStart) });
+    });
+    this.expect(TokenKind.RBrace);
+    const decl: MatchDecl = { kind: DeclKind.Match, concept, rules, span: this.spanFrom(start) };
+    decl.conceptSpan = conceptSpan;
     return decl;
   }
 
