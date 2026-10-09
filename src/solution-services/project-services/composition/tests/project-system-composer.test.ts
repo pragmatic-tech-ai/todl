@@ -14,7 +14,7 @@ import { BuildSystemRegistryKey } from "../build-system-registry-key.js";
 import { NpmPackageBuildSystem } from "../../../todl-build-system/npm/npm-package-build-system.js";
 import { HtmlBundleBuildSystem } from "../../../todl-build-system/html-bundle/html-bundle-build-system.js";
 import { DtoGenerator } from "../../generators/dto-generator.js";
-import { UiPlaceholderGenerator } from "../../generators/ui-placeholder-generator.js";
+import { AppGenerator } from "../../generators/app-generator.js";
 import { ProjectSystemComposer } from "../project-system-composer.js";
 import { NodeProjectSystemComposer } from "../node-project-system-composer.js";
 import { FakePresentationBaker } from "../../core/tests/fake-producer-seams.js";
@@ -232,9 +232,9 @@ describe("ProjectSystemComposer", () =>
         const generators = provider.getRequired(ProjectGeneratorRegistryKey);
         const forArch = generators.For(ArchitectureProjectFactory.ProjectType);
 
-        assert.equal(forArch.length, 2);
+        assert.equal(forArch.length, 4);
         assert.equal(forArch.filter((g) => g instanceof DtoGenerator).length, 1);
-        assert.equal(forArch.filter((g) => g instanceof UiPlaceholderGenerator).length, 1);
+        assert.equal(forArch.filter((g) => g instanceof AppGenerator).length, 1);
     });
 
     test("Compose registers the default presentation baker under PresentationBakerKey", () =>
@@ -293,7 +293,7 @@ describe("ProjectSystemComposer", () =>
             Manifest: ComposerFixtures.ArchManifest(),
         });
 
-        assert.ok(await project.Exists("generated/app.mu"), "UiPlaceholderGenerator should have written generated/app.mu");
+        assert.ok(await project.Exists("src/app.mu"), "AppGenerator should have written src/app.mu");
         assert.ok(await project.Exists("generated/model.ts"), "DtoGenerator should have written generated/model.ts");
     });
 
@@ -312,13 +312,14 @@ describe("ProjectSystemComposer", () =>
             Manifest: ComposerFixtures.BoundArchManifest(),
         });
 
-        // One lookup per generator (each gets a fresh model provider), all for the bound base.
+        // One lookup, by the only model-compiling generator (DtoGenerator), for the bound base.
         const bound = `${ComposerFixtures.BoundMetaModelId}@${ComposerFixtures.BoundMetaModelVersion}`;
-        assert.deepEqual(store.Requested.map((r) => `${r.id}@${r.version}`), [bound, bound]);
+        assert.deepEqual(store.Requested.map((r) => `${r.id}@${r.version}`), [bound]);
         // The bound base missed in the host store, so the model did not compile and
-        // nothing was generated — the host store (not the empty fallback) was the source.
+        // no DTO was generated — the host store (not the empty fallback) was the source.
+        // The app scaffold needs no model compile, so it is written regardless.
         assert.equal(await project.Exists("generated/model.ts"), false);
-        assert.equal(await project.Exists("generated/app.mu"), false);
+        assert.ok(await project.Exists("src/app.mu"));
     });
 
     test("an explicit composer Source wins over a registered PackageStoreKey store", async () =>
@@ -362,7 +363,7 @@ describe("ProjectSystemComposer", () =>
         // the live sibling resolved.
         assert.equal(store.Requested.length, 0, "the live sibling resolved before the published store was ever asked");
         assert.ok(await project.Exists("generated/model.ts"), "DtoGenerator ran against a model that resolved the live base");
-        assert.ok(await project.Exists("generated/app.mu"), "UiPlaceholderGenerator ran against a model that resolved the live base");
+        assert.ok(await project.Exists("src/app.mu"), "AppGenerator ran against a model that resolved the live base");
         const dto = await project.ReadText("generated/model.ts");
         assert.ok(dto.includes("Widget"), "the generated DTO reflects the live base's own concept");
     });
@@ -430,7 +431,7 @@ describe("ProjectSystemComposer", () =>
             Manifest: ComposerFixtures.ArchManifest(),
         });
 
-        assert.ok(await project.Exists("generated/app.mu"), "UiPlaceholderGenerator should still run with no SolutionManagerService registered");
+        assert.ok(await project.Exists("src/app.mu"), "AppGenerator should still run with no SolutionManagerService registered");
         assert.ok(await project.Exists("generated/model.ts"), "DtoGenerator should still run with no SolutionManagerService registered");
     });
 });
@@ -457,6 +458,6 @@ describe("NodeProjectSystemComposer", () =>
         NodeProjectSystemComposer.Compose(provider);
 
         const forArch = provider.getRequired(ProjectGeneratorRegistryKey).For(ArchitectureProjectFactory.ProjectType);
-        assert.equal(forArch.length, 2);
+        assert.equal(forArch.length, 4);
     });
 });

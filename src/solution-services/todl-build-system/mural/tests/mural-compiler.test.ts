@@ -5,7 +5,7 @@ import { BuildArtifacts } from "../../../build-system-core/build-artifacts.js";
 import { DiagnosticSink, Severity } from "../../../build-system-core/diagnostic-sink.js";
 import { EmptyPackageSource, libraryManifest } from "../../tests/fakes.js";
 import type { TodlBuildContext } from "../../todl-build-context.js";
-import { MuralCompiler } from "../mural-compiler.js";
+import { MuralCompiler, MuralOutputLayout } from "../mural-compiler.js";
 
 // Same fixtures as html-bundle/tests/compile-mural-action.test.ts (the logic under
 // test here moved out of that action verbatim) — a minimal valid application root,
@@ -13,24 +13,27 @@ import { MuralCompiler } from "../mural-compiler.js";
 const ValidAppMu = "Application { resources: { Border x:root {} } }\n";
 const InvalidAppMu = "Application { resources: { Border x:root { \n";
 
-function contextWith(): TodlBuildContext
+class Fixture
 {
-    return {
-        Project: new FakeStorage(),
-        Sandbox: new FakeStorage(),
-        Artifacts: new BuildArtifacts(),
-        Source: new EmptyPackageSource(),
-        Manifest: libraryManifest(),
-        Options: {},
-        Diagnostics: new DiagnosticSink(),
-    };
+    public static ContextWith(): TodlBuildContext
+    {
+        return {
+            Project: new FakeStorage(),
+            Sandbox: new FakeStorage(),
+            Artifacts: new BuildArtifacts(),
+            Source: new EmptyPackageSource(),
+            Manifest: libraryManifest(),
+            Options: {},
+            Diagnostics: new DiagnosticSink(),
+        };
+    }
 }
 
 describe("MuralCompiler", () =>
 {
     test("compiles a project .mu file into compiled/<name>.mu.js in the sandbox and writes nothing to the project", async () =>
     {
-        const ctx = contextWith();
+        const ctx = Fixture.ContextWith();
         await ctx.Project.WriteText("views/app.mu", ValidAppMu);
 
         const written = await new MuralCompiler().Compile(ctx);
@@ -42,7 +45,7 @@ describe("MuralCompiler", () =>
 
     test("no .mu files under the project returns an empty array and reports no diagnostic", async () =>
     {
-        const ctx = contextWith();
+        const ctx = Fixture.ContextWith();
 
         const written = await new MuralCompiler().Compile(ctx);
 
@@ -52,7 +55,7 @@ describe("MuralCompiler", () =>
 
     test("two .mu sources with the same basename in different folders report an Error naming both and return an empty array", async () =>
     {
-        const ctx = contextWith();
+        const ctx = Fixture.ContextWith();
         // Both map to compiled/app.mu.js — a silent clobber if not guarded.
         await ctx.Project.WriteText("a/app.mu", ValidAppMu);
         await ctx.Project.WriteText("b/app.mu", ValidAppMu);
@@ -68,7 +71,7 @@ describe("MuralCompiler", () =>
 
     test("ignores .mu sources under the top-level dist/ build-output folder so the root copy does not self-collide", async () =>
     {
-        const ctx = contextWith();
+        const ctx = Fixture.ContextWith();
         // A producer project's `dist/` is its published artifact tree — a compiled copy of
         // its own sources. The root `app.mu` and the staged copy at `dist/resources/app.mu`
         // both map to the same output; without the exclusion this is a spurious collision
@@ -84,7 +87,7 @@ describe("MuralCompiler", () =>
 
     test("only the top-level dist/ is excluded — a nested dist/ folder is compiled normally", async () =>
     {
-        const ctx = contextWith();
+        const ctx = Fixture.ContextWith();
         await ctx.Project.WriteText("views/dist/app.mu", ValidAppMu);
 
         const written = await new MuralCompiler().Compile(ctx);
@@ -94,7 +97,7 @@ describe("MuralCompiler", () =>
 
     test("excludes the generated presentation inspection file (presentation.generated.mu) — baked separately, uses unresolvable include", async () =>
     {
-        const ctx = contextWith();
+        const ctx = Fixture.ContextWith();
         // The generated presentation preview uses `include colored "resources/*.svg"`, which
         // the text-only generic compiler cannot resolve. Its real runtime form is baked into
         // presentation.compiled.json by BakeResourcesAction, so it must never enter this glob.
@@ -109,7 +112,7 @@ describe("MuralCompiler", () =>
 
     test("excludes author presentation templates under the top-level presentation/ folder", async () =>
     {
-        const ctx = contextWith();
+        const ctx = Fixture.ContextWith();
         await ctx.Project.WriteText("presentation/component.mu", 'resources C {\n    include colored "resources/c.svg" as icon_c\n}\n');
 
         const written = await new MuralCompiler().Compile(ctx);
@@ -120,7 +123,7 @@ describe("MuralCompiler", () =>
 
     test("a syntax error reports a Severity.Error diagnostic naming the file and does not throw", async () =>
     {
-        const ctx = contextWith();
+        const ctx = Fixture.ContextWith();
         await ctx.Project.WriteText("views/app.mu", InvalidAppMu);
 
         let written: readonly string[] = [];
@@ -134,12 +137,36 @@ describe("MuralCompiler", () =>
 
     test("returns written paths in sorted order", async () =>
     {
-        const ctx = contextWith();
+        const ctx = Fixture.ContextWith();
         await ctx.Project.WriteText("b/zeta.mu", ValidAppMu);
         await ctx.Project.WriteText("a/alpha.mu", ValidAppMu);
 
         const written = await new MuralCompiler().Compile(ctx);
 
         assert.deepEqual(written, ["compiled/alpha.mu.js", "compiled/zeta.mu.js"]);
+    });
+
+    test("Sibling layout writes <path>.mu.js next to each source, preserving directories", async () =>
+    {
+        const ctx = Fixture.ContextWith();
+        await ctx.Project.WriteText("src/app.mu", ValidAppMu);
+        await ctx.Project.WriteText("src/sub/foo.mu", ValidAppMu);
+
+        const written = await new MuralCompiler(MuralOutputLayout.Sibling).Compile(ctx);
+
+        assert.deepEqual(written, ["src/app.mu.js", "src/sub/foo.mu.js"]);
+        assert.equal(await ctx.Sandbox.Exists("compiled/app.mu.js"), false);
+    });
+
+    test("Sibling layout does not collide on equal basenames in different folders", async () =>
+    {
+        const ctx = Fixture.ContextWith();
+        await ctx.Project.WriteText("a/app.mu", ValidAppMu);
+        await ctx.Project.WriteText("b/app.mu", ValidAppMu);
+
+        const written = await new MuralCompiler(MuralOutputLayout.Sibling).Compile(ctx);
+
+        assert.deepEqual(written, ["a/app.mu.js", "b/app.mu.js"]);
+        assert.equal(ctx.Diagnostics.Count, 0);
     });
 });

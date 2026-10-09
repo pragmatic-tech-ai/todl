@@ -60,7 +60,7 @@ describe("compilePackage", () => {
     }).package!;
     const tech = pkg.document.nodes.find((n) => n.id === "ea.Technology");
     assert.deepEqual(tech?.debug, {
-      kind: "concept", name: "ea.Technology", type: "concept", namespace: "ea",
+      kind: "concept", name: "ea.Technology", type: "concept", namespace: "ea", source: "ea.todl",
     });
     assert.ok(pkg.fullDocument.nodes.some((n) => n.debug !== undefined), "full doc annotated too");
   });

@@ -24,14 +24,20 @@ export class HtmlBundleBuildSystem implements IBuildSystem<TodlBuildContext, Pro
 
     // The "require, never create" boundary (spec §per-project-app-build, task 11): the
     // model DTO and default app UI are now project content the generators (DtoGenerator/
-    // UiPlaceholderGenerator) own — this flavor only requires they already exist, and
+    // AppGenerator) own — this flavor only requires they already exist, and
     // fails fast (before provisioning) with a hint naming the generator to run.
     private static readonly ModelDtoPath = "generated/model.ts";
     private static readonly ModelDtoGeneratorId = "model-dto";
-    private static readonly AppUiPath = "generated/app.mu";
+    private static readonly ModelDataPath = "generated/data.ts";
+    private static readonly ModelDataGeneratorId = "model-data";
+    private static readonly AppViewModelPath = "src/main.ts";
+    private static readonly AppViewModelGeneratorId = "app-view-model";
+    private static readonly AppUiPath = "src/app.mu";
     private static readonly AppUiGeneratorId = "app-ui";
     private static readonly RequiredContent: readonly RequiredContent[] = [
         { Path: HtmlBundleBuildSystem.ModelDtoPath, GeneratorId: HtmlBundleBuildSystem.ModelDtoGeneratorId },
+        { Path: HtmlBundleBuildSystem.ModelDataPath, GeneratorId: HtmlBundleBuildSystem.ModelDataGeneratorId },
+        { Path: HtmlBundleBuildSystem.AppViewModelPath, GeneratorId: HtmlBundleBuildSystem.AppViewModelGeneratorId },
         { Path: HtmlBundleBuildSystem.AppUiPath, GeneratorId: HtmlBundleBuildSystem.AppUiGeneratorId },
     ];
 
@@ -39,7 +45,7 @@ export class HtmlBundleBuildSystem implements IBuildSystem<TodlBuildContext, Pro
     public readonly DisplayName = HtmlBundleBuildSystem.Display;
 
     // Order satisfies consume-before-produce: resolve -> compile -> emit the sandbox
-    // entry -> compile mural (reading generated/app.mu required above) -> bundle -> emit.
+    // entry -> compile mural (reading src/app.mu required above) -> bundle -> emit.
     private readonly actions: readonly IBuildAction<TodlBuildContext>[];
 
     constructor(bundler: IBundler)

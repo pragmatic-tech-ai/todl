@@ -12,7 +12,7 @@ const ArchitectureProjectType = ProjectType.Architecture;
 const DtoGeneratorId = "dto";
 const UiGeneratorId = "ui";
 const DtoOutputPath = "generated/model.ts";
-const UiOutputPath = "generated/app.mu";
+const UiOutputPath = "src/app.mu";
 
 class FakeModelProvider implements IProjectModelProvider
 {

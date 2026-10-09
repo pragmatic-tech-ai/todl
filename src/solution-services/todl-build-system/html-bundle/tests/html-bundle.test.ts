@@ -30,7 +30,9 @@ import { compilePackage, type CompiledPackage } from "../../../../publish/publis
 import { GeneratorTrigger, type GeneratorContext } from "../../../project-services/generators/project-content-generator.js";
 import { ProjectModelProvider } from "../../../project-services/generators/project-model-provider.js";
 import { DtoGenerator } from "../../../project-services/generators/dto-generator.js";
-import { UiPlaceholderGenerator } from "../../../project-services/generators/ui-placeholder-generator.js";
+import { AppGenerator } from "../../../project-services/generators/app-generator.js";
+import { ModelInstanceGenerator } from "../../../project-services/generators/model-instance-generator.js";
+import { AppViewModelGenerator } from "../../../project-services/generators/app-view-model-generator.js";
 
 // A sentinel standing in for a real esbuild-produced bundle (BundleAppAction's output) —
 // distinctive enough that its presence in the emitted page proves the ACTUAL AppBundle
@@ -61,6 +63,17 @@ function compiledModelFixture(): CompiledPackage
 
 describe("HtmlBundleBuildSystem", () =>
 {
+    test("requires the DTO, data, view-model and app UI content, each naming its generator", () =>
+    {
+        const flavor = new HtmlBundleBuildSystem(new EsbuildBundler()).Flavors()[0]!;
+        assert.deepEqual(flavor.Requires, [
+            { Path: "generated/model.ts", GeneratorId: "model-dto" },
+            { Path: "generated/data.ts", GeneratorId: "model-data" },
+            { Path: "src/main.ts", GeneratorId: "app-view-model" },
+            { Path: "src/app.mu", GeneratorId: "app-ui" },
+        ]);
+    });
+
     test("applies to architecture projects only", () =>
     {
         const system = new HtmlBundleBuildSystem(new EsbuildBundler());
@@ -139,11 +152,15 @@ const ArchitectureFixture = "architectures/test_architecture";
 // asserted against the same identifiers the flavor declares.
 const ModelDtoPath = "generated/model.ts";
 const ModelDtoGeneratorId = "model-dto";
-const AppUiPath = "generated/app.mu";
+const ModelDataPath = "generated/data.ts";
+const ModelDataGeneratorId = "model-data";
+const AppViewModelPath = "src/main.ts";
+const AppViewModelGeneratorId = "app-view-model";
+const AppUiPath = "src/app.mu";
 const AppUiGeneratorId = "app-ui";
 const GeneratedDirectory = "generated";
 
-// Runs the two project content generators (Tasks 3-4) that now own the html-bundle
+// Runs the four project content generators that now own the html-bundle
 // flavor's required content, against the same compile seam (ProjectModelProvider) and
 // package source the architecture resolves its bases with. Stands in for whatever
 // scheduled the generators outside of this test (project creation / references-changed).
@@ -159,7 +176,9 @@ async function generateRequiredContent(architecture: SolutionProject, source: IP
         Reason: GeneratorTrigger.OnDemand,
     };
     await new DtoGenerator().Generate(ctx);
-    await new UiPlaceholderGenerator().Generate(ctx);
+    await new ModelInstanceGenerator().Generate(ctx);
+    await new AppViewModelGenerator().Generate(ctx);
+    await new AppGenerator().Generate(ctx);
     assert.equal(diagnostics.Count, 0, JSON.stringify(diagnostics.All()));
 }
 
@@ -191,9 +210,9 @@ function readOnlyFixture(rel: string): SolutionProject
 
 // Copies the architecture fixture into a scratch dir so a test's generated/* writes
 // (the content generators write into the copy's Project; EmitEntryAction writes its
-// build glue into ctx.Sandbox) never touch the real checked-in fixture. Strips any
-// generated/ the copy inherited from the checked-in fixture (gitignored local build
-// leftovers, not fixture content) so every test starts from a clean, deterministic
+// build glue into ctx.Sandbox) never touch the real checked-in fixture. Strips the
+// generated/ dir and the scaffolded src/main.ts + src/app.mu the copy inherited from the
+// checked-in fixture (which now ships app source) so every test starts from a clean, deterministic
 // "required content absent" state and opts into generating it explicitly.
 async function copiedArchitectureFixture(t: TestContext): Promise<SolutionProject>
 {
@@ -201,6 +220,8 @@ async function copiedArchitectureFixture(t: TestContext): Promise<SolutionProjec
     t.after(async () => { await rm(scratch, { recursive: true, force: true }); });
     cpSync(join(FixtureRoot, ArchitectureFixture), scratch, { recursive: true });
     rmSync(join(scratch, GeneratedDirectory), { recursive: true, force: true });
+    rmSync(join(scratch, AppViewModelPath), { force: true });
+    rmSync(join(scratch, AppUiPath), { force: true });
     const manifest = parseManifest(readFileSync(join(scratch, "project.plexus"), "utf8"));
     return { Id: manifest.id ?? manifest.name, Project: new NodeFsStorage(scratch), Manifest: manifest };
 }
@@ -269,8 +290,8 @@ async function buildAndPublishBases(t: TestContext): Promise<{ solution: Solutio
 describe("end-to-end: real test_architecture fixture through the new html-bundle pipeline", () =>
 {
     // Success path (Task 11 item 1): the flavor no longer generates generated/model.ts
-    // /generated/app.mu itself — they are generated up front here, via the same
-    // generators (DtoGenerator/UiPlaceholderGenerator) and compile seam
+    // /src/app.mu etc. itself — they are generated up front here, via the same
+    // generators (DtoGenerator/AppGenerator) and compile seam
     // (ProjectModelProvider) a real caller would run before ever invoking this build,
     // against the same RegistrySource the architecture resolves its bases with.
     test("builds a self-contained index.html carrying the model payload and a real compiled bundle", async (t) =>
@@ -327,6 +348,14 @@ describe("end-to-end: real test_architecture fixture through the new html-bundle
         assert.ok(
             messages.some((m) => m.includes(ModelDtoPath) && m.includes(ModelDtoGeneratorId)),
             `expected a diagnostic naming ${ModelDtoPath} + ${ModelDtoGeneratorId}, got ${JSON.stringify(messages)}`,
+        );
+        assert.ok(
+            messages.some((m) => m.includes(ModelDataPath) && m.includes(ModelDataGeneratorId)),
+            `expected a diagnostic naming ${ModelDataPath} + ${ModelDataGeneratorId}, got ${JSON.stringify(messages)}`,
+        );
+        assert.ok(
+            messages.some((m) => m.includes(AppViewModelPath) && m.includes(AppViewModelGeneratorId)),
+            `expected a diagnostic naming ${AppViewModelPath} + ${AppViewModelGeneratorId}, got ${JSON.stringify(messages)}`,
         );
         assert.ok(
             messages.some((m) => m.includes(AppUiPath) && m.includes(AppUiGeneratorId)),

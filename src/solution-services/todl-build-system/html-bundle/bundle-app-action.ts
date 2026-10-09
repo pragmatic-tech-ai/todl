@@ -7,28 +7,24 @@ import type { TodlBuildContext } from "../todl-build-context.js";
 import { HtmlArtifacts } from "./html-artifacts.js";
 
 // The bundler action of the per-project html-bundle app pipeline: gathers the staged
-// app (the generated tree from ctx.Project, the compiled UI modules and the entry glue
-// from ctx.Sandbox) into plain StagedFile[] and delegates the actual bundling to an
+// app (the src/ and generated/ trees from ctx.Project, the compiled UI modules and the
+// entry glue from ctx.Sandbox) into plain StagedFile[] and delegates the actual bundling to an
 // injected IBundler, recording its output under HtmlArtifacts.AppBundle. This action is
 // browser-safe: all node-only work (esbuild, filesystem staging, module resolution)
 // lives behind the IBundler seam.
 export class BundleAppAction implements IBuildAction<TodlBuildContext>
 {
     private static readonly ActionName = "bundle-app";
-    private static readonly AppRootModule = "compiled/app.mu.js";
-    // A compiled module is the application root when it exports the binding `app`
-    // (what mural emits for an `Application` with an `x:root` visual). Matched with a
-    // trailing word boundary so a DIFFERENT export whose name merely starts with "app"
-    // — `appBar`, `appTheme` — is not misread as a second root.
-    private static readonly AppRootExportPattern = /\bexport const app\b/;
+    // The hidden entry imports the app root by this fixed path, so no discovery is needed;
+    // it is only checked (softly) so a missing root is a clear diagnostic, not an esbuild one.
+    private static readonly AppRootModule = "src/app.mu.js";
+    private static readonly SourceDirectory = "src";
     private static readonly GeneratedDirectory = "generated";
     private static readonly PathSeparator = "/";
 
     private static readonly MissingEntryMessage = "no app entry to bundle";
     private static readonly MissingAppRootMessage =
         `no ${BundleAppAction.AppRootModule} among the compiled UI modules to bundle as the app root`;
-    private static readonly MultipleAppRootsMessagePrefix =
-        "more than one compiled module is an application root; disambiguation is not supported: ";
     private static readonly BundleFailedMessagePrefix = "failed to bundle the app: ";
 
     public readonly Name = BundleAppAction.ActionName;
@@ -52,7 +48,11 @@ export class BundleAppAction implements IBuildAction<TodlBuildContext>
         }
 
         const compiled = ctx.Artifacts.Get(HtmlArtifacts.CompiledUi) ?? [];
-        if (!(await this.GuardAppRoots(ctx, compiled))) return;
+        if (!compiled.includes(BundleAppAction.AppRootModule))
+        {
+            this.ReportError(ctx, BundleAppAction.MissingAppRootMessage);
+            return;
+        }
 
         // Gathering and bundling are inside the try so ANY failure (storage read, the
         // bundler itself) is reported as a Severity.Error and Execute returns normally,
@@ -71,39 +71,22 @@ export class BundleAppAction implements IBuildAction<TodlBuildContext>
         }
     }
 
-    // Verifies exactly one application root is bundleable: the hardcoded compiled/app.mu.js
-    // must be present, and (best-effort) no more than one compiled module may export `app`.
-    private async GuardAppRoots(ctx: TodlBuildContext, compiled: readonly string[]): Promise<boolean>
-    {
-        if (!compiled.includes(BundleAppAction.AppRootModule))
-        {
-            this.ReportError(ctx, BundleAppAction.MissingAppRootMessage);
-            return false;
-        }
-
-        const roots: string[] = [];
-        for (const path of compiled)
-        {
-            const js = await ctx.Sandbox.ReadText(path);
-            if (BundleAppAction.AppRootExportPattern.test(js)) roots.push(path);
-        }
-        if (roots.length > 1)
-        {
-            this.ReportError(ctx, `${BundleAppAction.MultipleAppRootsMessagePrefix}${roots.join(", ")}`);
-            return false;
-        }
-        return true;
-    }
-
-    // The generated tree (Project), the compiled modules (Sandbox), and the entry (also
-    // Sandbox — build glue written by EmitEntryAction, not part of generated/).
+    // The project src/ and generated/ trees (Project) at their own relative paths, then the
+    // compiled modules and the entry (Sandbox — build output/glue). Sandbox files are added
+    // last and win on a path collision, so a project file can never clobber a compiled
+    // sibling *.mu.js.
     private async Collect(ctx: TodlBuildContext, entry: string, compiled: readonly string[]): Promise<StagedFile[]>
     {
-        const files: StagedFile[] = [];
-        await this.GatherTree(ctx.Project, BundleAppAction.GeneratedDirectory, files);
-        for (const path of compiled) files.push({ Path: path, Text: await ctx.Sandbox.ReadText(path) });
-        files.push({ Path: entry, Text: await ctx.Sandbox.ReadText(entry) });
-        return files;
+        const projectFiles: StagedFile[] = [];
+        await this.GatherTree(ctx.Project, BundleAppAction.SourceDirectory, projectFiles);
+        await this.GatherTree(ctx.Project, BundleAppAction.GeneratedDirectory, projectFiles);
+
+        const sandboxFiles: StagedFile[] = [];
+        for (const path of compiled) sandboxFiles.push({ Path: path, Text: await ctx.Sandbox.ReadText(path) });
+        sandboxFiles.push({ Path: entry, Text: await ctx.Sandbox.ReadText(entry) });
+
+        const sandboxPaths = new Set(sandboxFiles.map((f) => f.Path));
+        return [...projectFiles.filter((f) => !sandboxPaths.has(f.Path)), ...sandboxFiles];
     }
 
     private async GatherTree(storage: IStorage, dir: string, out: StagedFile[]): Promise<void>

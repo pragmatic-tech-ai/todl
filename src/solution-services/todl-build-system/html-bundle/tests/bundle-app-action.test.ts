@@ -9,15 +9,22 @@ import type { TodlBuildContext } from "../../todl-build-context.js";
 import { HtmlArtifacts } from "../html-artifacts.js";
 import { BundleAppAction } from "../bundle-app-action.js";
 
-const EntrySource = `import { app } from "../compiled/app.mu.js";\nconsole.log(app);\n`;
+const EntrySource = `import { app } from "./src/app.mu.js";\nconsole.log(app);\n`;
 const ModelSource = `export class Model {}\n`;
 const DeepSource = `export class Deep {}\n`;
 const CompiledAppRoot = `export const app = {};\n`;
 
-const EntryPath = "generated/entry.ts";
+const EntryPath = "entry.ts";
+const MainPath = "src/main.ts";
+const MainSource = `export const main = 1;
+`;
+const DataPath = "generated/data.ts";
+const DataSource = `export const data = 1;
+`;
+const ProjectMuPath = "src/app.mu";
 const ModelPath = "generated/model.ts";
 const DeepPath = "generated/sub/deep.ts";
-const CompiledAppPath = "compiled/app.mu.js";
+const CompiledAppPath = "src/app.mu.js";
 
 // A fake IBundler captures the request and returns a canned result (or throws).
 class FakeBundler implements IBundler
@@ -56,6 +63,9 @@ class Fixture
         await ctx.Sandbox.WriteText(EntryPath, EntrySource);
         await ctx.Project.WriteText(ModelPath, ModelSource);
         await ctx.Project.WriteText(DeepPath, DeepSource);
+        await ctx.Project.WriteText(MainPath, MainSource);
+        await ctx.Project.WriteText(DataPath, DataSource);
+        await ctx.Project.WriteText(ProjectMuPath, `Application {}`);
         await ctx.Sandbox.WriteText(CompiledAppPath, CompiledAppRoot);
         ctx.Artifacts.Set(HtmlArtifacts.AppEntry, EntryPath);
         ctx.Artifacts.Set(HtmlArtifacts.CompiledUi, [CompiledAppPath]);
@@ -69,7 +79,7 @@ class Fixture
 
 describe("BundleAppAction", () =>
 {
-    test("forwards the entry and the flattened generated tree + compiled modules + entry to the bundler", async () =>
+    test("forwards the entry and the src + generated trees + compiled modules + entry to the bundler", async () =>
     {
         const ctx = Fixture.Context();
         await Fixture.StageValidInputs(ctx);
@@ -84,6 +94,8 @@ describe("BundleAppAction", () =>
         assert.equal(byPath.get(DeepPath), DeepSource);
         assert.equal(byPath.get(CompiledAppPath), CompiledAppRoot);
         assert.equal(byPath.get(EntryPath), EntrySource);
+        assert.equal(byPath.get(MainPath), MainSource);
+        assert.equal(byPath.get(DataPath), DataSource);
     });
 
     test("a Text result is recorded as the app bundle", async () =>
@@ -123,13 +135,13 @@ describe("BundleAppAction", () =>
         assert.ok(ctx.Diagnostics.All().some((d) => d.severity === Severity.Error && d.message.includes("kaput")));
     });
 
-    test("a missing compiled app root reports a Severity.Error and produces no bundle", async () =>
+    test("a missing src/app.mu.js reports a Severity.Error and produces no bundle", async () =>
     {
         const ctx = Fixture.Context();
         await ctx.Sandbox.WriteText(EntryPath, EntrySource);
         ctx.Artifacts.Set(HtmlArtifacts.AppEntry, EntryPath);
-        await ctx.Sandbox.WriteText("compiled/resources.mu.js", `export const resources = {};\n`);
-        ctx.Artifacts.Set(HtmlArtifacts.CompiledUi, ["compiled/resources.mu.js"]);
+        await ctx.Sandbox.WriteText("src/resources.mu.js", `export const resources = {};\n`);
+        ctx.Artifacts.Set(HtmlArtifacts.CompiledUi, ["src/resources.mu.js"]);
         const fake = Fixture.Ok();
 
         await new BundleAppAction(fake).Execute(ctx);
@@ -139,30 +151,27 @@ describe("BundleAppAction", () =>
         assert.ok(ctx.Diagnostics.All().some((d) => d.severity === Severity.Error));
     });
 
-    test("more than one application root reports a Severity.Error naming the candidates", async () =>
-    {
-        const ctx = Fixture.Context();
-        await ctx.Sandbox.WriteText(EntryPath, EntrySource);
-        ctx.Artifacts.Set(HtmlArtifacts.AppEntry, EntryPath);
-        await ctx.Sandbox.WriteText(CompiledAppPath, CompiledAppRoot);
-        await ctx.Sandbox.WriteText("compiled/other.mu.js", CompiledAppRoot);
-        ctx.Artifacts.Set(HtmlArtifacts.CompiledUi, [CompiledAppPath, "compiled/other.mu.js"]);
-
-        await new BundleAppAction(Fixture.Ok()).Execute(ctx);
-
-        assert.equal(ctx.Artifacts.Get(HtmlArtifacts.AppBundle), undefined);
-        const error = ctx.Diagnostics.All().find((d) => d.severity === Severity.Error);
-        assert.ok(error, "reported an error");
-        assert.ok(error!.message.includes(CompiledAppPath) && error!.message.includes("compiled/other.mu.js"),
-            "the error names both application-root candidates");
-    });
-
-    test("a module whose export name merely starts with 'app' is not counted as a second root", async () =>
+    test("a project file never clobbers the compiled sibling in the sandbox", async () =>
     {
         const ctx = Fixture.Context();
         await Fixture.StageValidInputs(ctx);
-        await ctx.Sandbox.WriteText("compiled/app-bar.mu.js", `export const appBar = {};\n`);
-        ctx.Artifacts.Set(HtmlArtifacts.CompiledUi, [CompiledAppPath, "compiled/app-bar.mu.js"]);
+        await ctx.Project.WriteText(CompiledAppPath, `export const stale = 1;
+`);
+        const fake = Fixture.Ok();
+
+        await new BundleAppAction(fake).Execute(ctx);
+
+        const matches = fake.Last!.Files.filter((f) => f.Path === CompiledAppPath);
+        assert.equal(matches.length, 1);
+        assert.equal(matches[0]!.Text, CompiledAppRoot);
+    });
+
+    test("a second module mentioning app no longer rejects the bundle", async () =>
+    {
+        const ctx = Fixture.Context();
+        await Fixture.StageValidInputs(ctx);
+        await ctx.Sandbox.WriteText("src/other.mu.js", CompiledAppRoot);
+        ctx.Artifacts.Set(HtmlArtifacts.CompiledUi, [CompiledAppPath, "src/other.mu.js"]);
 
         await new BundleAppAction(Fixture.Ok()).Execute(ctx);
 

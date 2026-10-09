@@ -28,7 +28,9 @@ import type { PackageRef } from "../src/publish/publish.js";
 import {
     ProjectModelProvider,
     DtoGenerator,
-    UiPlaceholderGenerator,
+    ModelInstanceGenerator,
+    AppViewModelGenerator,
+    AppGenerator,
     GeneratorTrigger,
     type GeneratorContext,
 } from "../src/index.js";
@@ -160,7 +162,7 @@ describe("user smoke: build test_architecture into a bundled application", () =>
         assert.equal(bases.Ok, true, JSON.stringify(bases.Projects.map((p) => ({ p: p.ProjectId, d: p.Result?.Diagnostics }))));
         for (const outcome of bases.Projects) await client.publish(outcome.Result!.OutputPath!);
 
-        // Generation step — html-bundle now REQUIRES generated/model.ts + generated/app.mu
+        // Generation step — html-bundle now REQUIRES generated/model.ts + src/app.mu
         // to already exist as project content (Task 11's "require, never create"
         // boundary), so produce them up front via the same generators and compile seam
         // (ProjectModelProvider) a real caller would run before ever invoking the build,
@@ -176,7 +178,9 @@ describe("user smoke: build test_architecture into a bundled application", () =>
             Reason: GeneratorTrigger.ProjectCreated,
         };
         await new DtoGenerator().Generate(genCtx);
-        await new UiPlaceholderGenerator().Generate(genCtx);
+        await new ModelInstanceGenerator().Generate(genCtx);
+        await new AppViewModelGenerator().Generate(genCtx);
+        await new AppGenerator().Generate(genCtx);
         assert.equal(genCtx.Diagnostics.Count, 0, JSON.stringify(genCtx.Diagnostics.All()));
 
         // Phase 2 — build the architecture as an html-bundle, resolving its meta-model +
@@ -211,10 +215,9 @@ describe("user smoke: build test_architecture into a bundled application", () =>
 
         // REAL-BROWSER render check (requires `npx playwright install chromium`). The build
         // assertions above prove the page is well-formed, but not that it renders. Load the built
-        // page in headless Chromium and assert the generated app.mu actually paints: no page
-        // errors, and many <text> nodes including known concept-section headers. The generated UI
-        // (app-ui-template.ts) emits one section per concept — a bold TextBlock header of
-        // pascalCase(conceptId) over a ListBox of instance ids — so the headers are PascalCase.
+        // page in headless Chromium and assert the app actually paints: no page errors, the
+        // hello-world greeting, and the "access to N concepts" summary bound from the generated
+        // view-model (src/main.ts) through the app's src/app.mu.
         const indexHtml = join(built.Result!.OutputPath!, "index.html");
         const { chromium } = await import("playwright");
         const browser = await chromium.launch();
@@ -223,6 +226,12 @@ describe("user smoke: build test_architecture into a bundled application", () =>
             const page = await browser.newPage();
             const errors: string[] = [];
             page.on("pageerror", (e) => errors.push(e.message));
+            page.on("console", (m) =>
+            {
+                // Web-font fetch() is unsupported on file:// (the page is opened from disk); the
+                // app falls back to system fonts, so that one known artefact is not a failure.
+                if (m.type() === "error" && !/Fetch API cannot load file:\/\/\/.*\.woff2/.test(m.text())) errors.push(m.text());
+            });
             await page.goto(pathToFileURL(indexHtml).href, { waitUntil: "load" });
             await page.waitForTimeout(1500);   // let the RafClock paint a few frames
             const render = await page.evaluate(() =>
@@ -235,24 +244,15 @@ describe("user smoke: build test_architecture into a bundled application", () =>
             await page.screenshot({ path: join(built.Result!.OutputPath!, "render.png") });
 
             assert.deepEqual(errors, [], `browser page errors: ${errors.join("; ")}`);
-            assert.ok(render.textCount >= 20, `expected the rendered list to paint many text nodes, got ${render.textCount}`);
-            const headers = ["Actor", "Application", "Component", "Block"];
+            const joined = render.texts.join(" | ");
             assert.ok(
-                render.texts.some((s) => headers.includes(s)),
-                `expected a known concept header (${headers.join("/")}) in ${JSON.stringify(render.texts.slice(0, 30))}`,
+                render.texts.some((s) => s.includes("Hello from todl-test-arch")),
+                `expected "Hello from todl-test-arch" in ${JSON.stringify(render.texts.slice(0, 30))}`,
             );
-            // The ListBox rows bind DisplayMemberPath="id": each must paint the entity's
-            // id, not a stringified object. "[object Object]" means DisplayMemberPath was
-            // ignored (regression guard for the mural ListBox DisplayMemberPath fix).
-            assert.ok(
-                !render.texts.includes("[object Object]"),
-                `rows rendered as "[object Object]" — DisplayMemberPath not applied: ${JSON.stringify(render.texts.slice(0, 30))}`,
-            );
-            // And a known test_architecture instance id actually paints in a row.
-            assert.ok(
-                render.texts.includes("business_user"),
-                `expected instance id "business_user" among rendered rows: ${JSON.stringify(render.texts.slice(0, 40))}`,
-            );
+            const access = /access to (\d+) concepts/.exec(joined);
+            assert.notEqual(access, null, `expected "access to N concepts" in ${JSON.stringify(render.texts.slice(0, 30))}`);
+            assert.ok(Number(access![1]) > 0, "the application sees at least one concept");
+            t.diagnostic(`rendered text: ${JSON.stringify(render.texts)}`);
         }
         finally
         {
