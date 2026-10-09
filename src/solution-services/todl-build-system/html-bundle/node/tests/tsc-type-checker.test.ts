@@ -74,6 +74,29 @@ test("a .js import resolves to its .ts sibling under bundler resolution", async 
     }
 });
 
+test("the standard library (es2020 + dom) loads: Map, Array, and window resolve", async () =>
+{
+    const root = Fixtures.FreshRoot();
+    try
+    {
+        const checker = new FixtureChecker(root);
+        const result = await checker.Check({
+            Options: CanonicalTypeScriptOptions,
+            Files: [{
+                Path: "src/main.ts",
+                Text: "const m = new Map<string, number>();\n"
+                    + "const a: readonly number[] = [1, 2, 3];\n"
+                    + "export const n: string = `${m.size + a.length}${typeof window}`;\n",
+            }],
+        });
+        assert.deepEqual(result.Diagnostics, []);
+    }
+    finally
+    {
+        rmSync(root, { recursive: true, force: true });
+    }
+});
+
 test("a type error is reported as a Severity.Error diagnostic", async () =>
 {
     const root = Fixtures.FreshRoot();
