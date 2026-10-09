@@ -2,6 +2,7 @@ import ts from "typescript";
 import { existsSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 import { Severity, type BuildDiagnostic } from "../../../build-system-core/diagnostic-sink.js";
 import type { ITypeChecker, TypeCheckRequest, TypeCheckResult } from "../../../build-system-core/type-checker.js";
 import type { CanonicalCompilerOptions } from "../../../build-system-core/compiler-options.js";
@@ -16,6 +17,7 @@ export class TscTypeChecker implements ITypeChecker
     private static readonly Source = "type-check";
     private static readonly StagePrefix = "todl-tsc-stage-";
     private static readonly NodeModulesDirectory = "node_modules";
+    private static readonly TypeScriptModule = "typescript";
     private static readonly NoResolutionRootMessage =
         "could not locate a node_modules root to resolve the project's type imports against";
     private static readonly CheckFailedPrefix = "failed to type-check the project: ";
@@ -41,7 +43,8 @@ export class TscTypeChecker implements ITypeChecker
                 writeFileSync(abs, file.Text);
                 rootNames.push(abs);
             }
-            const program = ts.createProgram(rootNames, TscTypeChecker.MapOptions(request.Options));
+            const options = TscTypeChecker.MapOptions(request.Options);
+            const program = ts.createProgram(rootNames, options, TscTypeChecker.HostFor(options));
             const diagnostics = [
                 ...program.getGlobalDiagnostics(),
                 ...program.getSyntacticDiagnostics(),
@@ -76,6 +79,39 @@ export class TscTypeChecker implements ITypeChecker
             skipLibCheck: options.SkipLibCheck,
             esModuleInterop: options.EsModuleInterop,
         };
+    }
+
+    // A compiler host whose default-lib directory points at the INSTALLED typescript
+    // package's lib/ (holding lib.es2020.d.ts, lib.dom.d.ts, ...). TypeScript's own
+    // default host derives that directory from its executing-file path, which is wrong
+    // whenever typescript is bundled (e.g. into an Electron main process): the path then
+    // points at the host bundle, no lib.*.d.ts loads, and every global type is reported
+    // missing ("Cannot find global type 'Array'", "Cannot find name 'Map'/'window'").
+    // Resolving the real package location keeps the gate correct in every environment.
+    private static HostFor(options: ts.CompilerOptions): ts.CompilerHost
+    {
+        const host = ts.createCompilerHost(options);
+        const libDir = TscTypeChecker.TsLibDirectory();
+        if (libDir !== undefined)
+        {
+            host.getDefaultLibLocation = () => libDir;
+        }
+        return host;
+    }
+
+    // The installed typescript package's lib/ directory, resolved from the package entry
+    // rather than ts's self-location. Undefined if typescript cannot be resolved (then the
+    // host keeps its default behavior).
+    private static TsLibDirectory(): string | undefined
+    {
+        try
+        {
+            return dirname(createRequire(import.meta.url).resolve(TscTypeChecker.TypeScriptModule));
+        }
+        catch
+        {
+            return undefined;
+        }
     }
 
     private static ToBuildDiagnostic(d: ts.Diagnostic): BuildDiagnostic
