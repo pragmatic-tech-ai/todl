@@ -56,6 +56,9 @@ export class Builder
   /** Reserved primitive-node attr keys: the refined base type and literal regex. */
   public static readonly PrimitiveBaseAttr = "base";
   public static readonly PrimitiveRegexAttr = "regex";
+  /** Reserved identity-node attr keys: the identified concept and its key attr. */
+  public static readonly IdentityConceptAttr = "concept";
+  public static readonly IdentityKeyAttr = "key";
 
   private readonly stagedNodes: Node[] = [];
   private readonly stagedAttrs: StagedAttr[] = [];
@@ -268,6 +271,16 @@ export class Builder
     if (toMember !== null) this.stagedAttrs.push({ id: glyph, name: "to", value: toMember });
     if (relationship !== null) this.stagedAttrs.push({ id: glyph, name: "relationship", value: relationship });
     this.stagedEdges.push({ kind: EdgeKind.Targets, via: null, from: glyph, to: concept });
+    return this;
+  }
+
+  /** Define an identity node (Ontology-tier) naming the `key` attr that identifies
+   *  entities of `concept`. Both are carried as attrs on the node `id`. */
+  defineIdentity(id: NodeId, concept: NodeId, key: string): this
+  {
+    this.stagedNodes.push(this.makeNode(id, Tier.Ontology, { metaKind: MetaKind.Identity }));
+    this.stagedAttrs.push({ id, name: Builder.IdentityConceptAttr, value: concept });
+    this.stagedAttrs.push({ id, name: Builder.IdentityKeyAttr, value: key });
     return this;
   }
 

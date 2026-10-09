@@ -88,6 +88,10 @@ export enum DiagnosticCode
   ApplicationMultipleRoots = "application.multiple-roots",
   ApplicationRootUndesignated = "application.root-undesignated",
   ApplicationRootNotAModel = "application.root-not-a-model",
+  // Entity-identity declarations: the concept must exist, and the key must be one of
+  // its fields (or the reserved `storageId`).
+  IdentityUnknownConcept = "identity.unknown-concept",
+  IdentityUnknownKey = "identity.unknown-key",
   // Solution composition phase (SPEC-06): a member/dependency package could not
   // be resolved or loaded into the composed Domain.
   PackageUnresolved = "package.unresolved",

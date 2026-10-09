@@ -16,6 +16,7 @@ export enum MetaKind
   Annotation = "annotation",
   Package = "package",
   Operator = "operator",
+  Identity = "identity",
 }
 
 /** Reserved id of the singleton package node that hosts package-level annotations. */

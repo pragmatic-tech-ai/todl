@@ -706,6 +706,48 @@ export function loadInto(
   // Operator glyphs can now be checked against the concept schemas they reference.
   validateOperators(model, units, diagnostics);
 
+  // ═══════════════════════ IDENTITY declarations (entity-identity) ═════════════════
+  // Lower each `identity <Concept> key <field>;` to an identity node. It runs once
+  // concept members are committed, so the key can be checked against the concept's
+  // effective (inherited) schema. The concept is resolved here (not in the reference
+  // pre-pass) so an unknown one yields `identity.unknown-concept` alone.
+  const identityBuilder = model.builder();
+  const stagedIdentities = new Set<string>();
+  for (const { ns, imports, uri, decl: declaration } of units)
+  {
+    if (declaration.kind !== DeclKind.Identity) continue;
+    identityBuilder.setNamespace(ns);
+    if (rec !== undefined) rec.current = uri;
+    const resolved = resolveRef(declaration.concept, { ns, imports });
+    const conceptId = resolved.kind === "qualified" ? resolved.flat : declaration.concept;
+    if (resolved.kind === "undefined" || resolved.kind === "unreachable" || model.resolve(conceptId)?.metaKind !== MetaKind.Concept)
+    {
+      diagnostics.push({
+        code: DiagnosticCode.IdentityUnknownConcept, severity: Severity.Error,
+        message: `identity references unknown concept "${declaration.concept}"`,
+        span: declaration.conceptSpan ?? declaration.span, node: declaration.concept, path: null,
+      });
+      continue;
+    }
+    const known = declaration.key === IDENTITY_STORAGE_KEY
+      || model.effectiveSchema(conceptId).fields.some((f) => f.name === declaration.key);
+    if (!known)
+    {
+      diagnostics.push({
+        code: DiagnosticCode.IdentityUnknownKey, severity: Severity.Error,
+        message: `identity key "${declaration.key}" is not a field of "${declaration.concept}"`,
+        span: declaration.keySpan ?? declaration.span, node: conceptId, path: declaration.key,
+      });
+      continue;
+    }
+    const identityId = `${conceptId}@identity`;
+    // A second identity for the same concept would collide on the node id: dropped.
+    if (model.has(identityId) || !stagedIdentities.add(identityId)) continue;
+    identityBuilder.defineIdentity(identityId, conceptId, declaration.key);
+    recordHome(rec, identityId);
+  }
+  identityBuilder.commit(undefinedIds);
+
   // ═══════════════════════════ PASS 2b: instances & models ═════════════════════
   // Stage the concrete graph: model containers, their objects, deferred term
   // compositions/values, and reified edges. This is where authored VALUES turn into
@@ -976,6 +1018,9 @@ function termToInstanceDecl(taxonomy: string, t: Term, normalize: (name: string 
 
 /** File-level grouping keywords that wrap records but are not themselves records. */
 const WRAPPER_CONCEPTS = new Set(["technology-library"]);
+
+/** The one reserved identity key besides a concept's own fields: the storage id. */
+const IDENTITY_STORAGE_KEY = "storageId";
 
 /**
  * A concrete object (`isClass = false`) is legal only inside a model. Walk the
