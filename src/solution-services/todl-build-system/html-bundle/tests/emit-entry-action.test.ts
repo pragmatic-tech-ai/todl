@@ -9,29 +9,32 @@ import { HtmlArtifacts } from "../html-artifacts.js";
 import { EmitEntryAction } from "../emit-entry-action.js";
 import { ProjectType, type ProjectManifest } from "../../../package-manager/manifest.js";
 
-function widgetManifest(): ProjectManifest
+class Fixture
 {
-    return { type: ProjectType.Architecture, name: "widget", id: "widget", version: 1 };
-}
+    public static WidgetManifest(): ProjectManifest
+    {
+        return { type: ProjectType.Architecture, name: "widget", id: "widget", version: 1 };
+    }
 
-function contextWith(): TodlBuildContext
-{
-    return {
-        Project: new FakeStorage(),
-        Sandbox: new FakeStorage(),
-        Artifacts: new BuildArtifacts(),
-        Source: new EmptyPackageSource(),
-        Manifest: widgetManifest(),
-        Options: {},
-        Diagnostics: new DiagnosticSink(),
-    };
+    public static ContextWith(): TodlBuildContext
+    {
+        return {
+            Project: new FakeStorage(),
+            Sandbox: new FakeStorage(),
+            Artifacts: new BuildArtifacts(),
+            Source: new EmptyPackageSource(),
+            Manifest: Fixture.WidgetManifest(),
+            Options: {},
+            Diagnostics: new DiagnosticSink(),
+        };
+    }
 }
 
 describe("EmitEntryAction", () =>
 {
     test("writes entry.ts into the sandbox (not the project) with the exact entry lines", async () =>
     {
-        const ctx = contextWith();
+        const ctx = Fixture.ContextWith();
 
         await new EmitEntryAction().Execute(ctx);
 
@@ -47,7 +50,7 @@ describe("EmitEntryAction", () =>
 
     test("imports app.mu.js before instantiating the VM, and instantiates before Mount", async () =>
     {
-        const ctx = contextWith();
+        const ctx = Fixture.ContextWith();
 
         await new EmitEntryAction().Execute(ctx);
 
@@ -62,7 +65,7 @@ describe("EmitEntryAction", () =>
 
     test("derives the VM class name from manifest id, not name", async () =>
     {
-        const ctx = contextWith();
+        const ctx = Fixture.ContextWith();
         ctx.Manifest = { type: ProjectType.Architecture, name: "my_proj", id: "real_id", version: 1 };
 
         await new EmitEntryAction().Execute(ctx);
@@ -75,7 +78,7 @@ describe("EmitEntryAction", () =>
 
     test("records the sandbox-relative path under HtmlArtifacts.AppEntry", async () =>
     {
-        const ctx = contextWith();
+        const ctx = Fixture.ContextWith();
 
         await new EmitEntryAction().Execute(ctx);
 
@@ -84,7 +87,7 @@ describe("EmitEntryAction", () =>
 
     test("reports no diagnostics", async () =>
     {
-        const ctx = contextWith();
+        const ctx = Fixture.ContextWith();
 
         await new EmitEntryAction().Execute(ctx);
 

@@ -5,10 +5,11 @@ import { HtmlArtifacts } from "./html-artifacts.js";
 import { AppNaming } from "../../project-services/generators/app-naming.js";
 
 // The entry-emitting action of the per-project html-bundle app pipeline: emits
-// the fixed, static build glue (sandbox-root entry.ts) that evaluates the
-// compiled src/app.mu.js, then src/main.js, and mounts the UI with the
-// initialized generated/data.js model as its DataContext. It is never
-// hand-edited, so it belongs in ctx.Sandbox (build glue), not ctx.Project.
+// the fixed, static build glue (sandbox-root entry.ts) that imports the compiled
+// app (src/app.mu.js), the app view-model class (src/main.js) and the initialized
+// generated/data.js model, constructs the view-model once the Application exists,
+// then calls TodlAppBootstrap.Mount(app, model). It is never hand-edited, so it
+// belongs in ctx.Sandbox (build glue), not ctx.Project.
 export class EmitEntryAction implements IBuildAction<TodlBuildContext>
 {
     private static readonly ActionName = "emit-entry";

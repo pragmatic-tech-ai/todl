@@ -215,10 +215,9 @@ describe("user smoke: build test_architecture into a bundled application", () =>
 
         // REAL-BROWSER render check (requires `npx playwright install chromium`). The build
         // assertions above prove the page is well-formed, but not that it renders. Load the built
-        // page in headless Chromium and assert the generated app.mu actually paints: no page
-        // errors, and many <text> nodes including known concept-section headers. The generated UI
-        // (app-ui-template.ts) emits one section per concept — a bold TextBlock header of
-        // pascalCase(conceptId) over a ListBox of instance ids — so the headers are PascalCase.
+        // page in headless Chromium and assert the app actually paints: no page errors, the
+        // hello-world greeting, and the "access to N concepts" summary bound from the generated
+        // view-model (src/main.ts) through the app's src/app.mu.
         const indexHtml = join(built.Result!.OutputPath!, "index.html");
         const { chromium } = await import("playwright");
         const browser = await chromium.launch();

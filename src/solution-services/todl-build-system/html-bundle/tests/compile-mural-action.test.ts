@@ -14,24 +14,27 @@ import { CompileMuralAction } from "../compile-mural-action.js";
 const ValidAppMu = "Application { resources: { Border x:root {} } }\n";
 const InvalidAppMu = "Application { resources: { Border x:root { \n";
 
-function contextWith(): TodlBuildContext
+class Fixture
 {
-    return {
-        Project: new FakeStorage(),
-        Sandbox: new FakeStorage(),
-        Artifacts: new BuildArtifacts(),
-        Source: new EmptyPackageSource(),
-        Manifest: libraryManifest(),
-        Options: {},
-        Diagnostics: new DiagnosticSink(),
-    };
+    public static ContextWith(): TodlBuildContext
+    {
+        return {
+            Project: new FakeStorage(),
+            Sandbox: new FakeStorage(),
+            Artifacts: new BuildArtifacts(),
+            Source: new EmptyPackageSource(),
+            Manifest: libraryManifest(),
+            Options: {},
+            Diagnostics: new DiagnosticSink(),
+        };
+    }
 }
 
 describe("CompileMuralAction", () =>
 {
     test("compiles a project .mu file into a sibling <name>.mu.js in the sandbox", async () =>
     {
-        const ctx = contextWith();
+        const ctx = Fixture.ContextWith();
         await ctx.Project.WriteText("src/app.mu", ValidAppMu);
 
         await new CompileMuralAction().Execute(ctx);
@@ -43,7 +46,7 @@ describe("CompileMuralAction", () =>
 
     test("records the written path under HtmlArtifacts.CompiledUi", async () =>
     {
-        const ctx = contextWith();
+        const ctx = Fixture.ContextWith();
         await ctx.Project.WriteText("src/app.mu", ValidAppMu);
 
         await new CompileMuralAction().Execute(ctx);
@@ -53,7 +56,7 @@ describe("CompileMuralAction", () =>
 
     test("a syntax error reports a Severity.Error diagnostic naming the file and does not throw", async () =>
     {
-        const ctx = contextWith();
+        const ctx = Fixture.ContextWith();
         await ctx.Project.WriteText("src/app.mu", InvalidAppMu);
 
         await assert.doesNotReject(() => new CompileMuralAction().Execute(ctx));
@@ -65,7 +68,7 @@ describe("CompileMuralAction", () =>
 
     test("no diagnostic and no CompiledUi artifact when the project has no .mu files", async () =>
     {
-        const ctx = contextWith();
+        const ctx = Fixture.ContextWith();
 
         await new CompileMuralAction().Execute(ctx);
 
@@ -75,7 +78,7 @@ describe("CompileMuralAction", () =>
 
     test("compiles src/**/*.mu to sibling .mu.js and skips dist/ and presentation sources", async () =>
     {
-        const ctx = contextWith();
+        const ctx = Fixture.ContextWith();
         await ctx.Project.WriteText("src/app.mu", ValidAppMu);
         await ctx.Project.WriteText("src/sub/foo.mu", ValidAppMu);
         await ctx.Project.WriteText("dist/bad.mu", InvalidAppMu);
@@ -90,7 +93,7 @@ describe("CompileMuralAction", () =>
 
     test("a syntactically broken src/broken.mu yields a Severity.Error diagnostic, not a silent skip", async () =>
     {
-        const ctx = contextWith();
+        const ctx = Fixture.ContextWith();
         await ctx.Project.WriteText("src/app.mu", ValidAppMu);
         await ctx.Project.WriteText("src/broken.mu", InvalidAppMu);
 

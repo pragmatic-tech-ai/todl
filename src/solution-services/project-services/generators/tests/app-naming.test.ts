@@ -6,15 +6,18 @@ import { AppNaming } from "../app-naming.js";
 
 const DTO_NAMES = ["widgets_demo", "test_waf_architectures", "tech-catalog", "Widgets"];
 
-function minimalRepo(): Repository
+class Fixture
 {
-    const r = new Repository();
-    const b = r.builder();
-    b.definePrimitive("string");
-    b.defineConcept("widget");
-    b.addField("widget", "label", "string");
-    b.commit();
-    return r;
+    public static MinimalRepo(): Repository
+    {
+        const r = new Repository();
+        const b = r.builder();
+        b.definePrimitive("string");
+        b.defineConcept("widget");
+        b.addField("widget", "label", "string");
+        b.commit();
+        return r;
+    }
 }
 
 test("DtoClass / AppClass derive PascalCase names from the model name", () =>
@@ -27,7 +30,7 @@ test("AppNaming.DtoClass equals the class read-client actually emits", () =>
 {
     for (const name of DTO_NAMES)
     {
-        const js = generateReadClient(minimalRepo(), { name, importSpecifier: "@pragmatic-tech-ai/todl" });
+        const js = generateReadClient(Fixture.MinimalRepo(), { name, importSpecifier: "@pragmatic-tech-ai/todl" });
         assert.ok(js.includes(`export class ${AppNaming.DtoClass(name)} extends ModelDataSource`), name);
     }
 });
