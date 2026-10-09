@@ -15,6 +15,7 @@ function node(id: NodeId, type = "thing"): Node
     isClass: false,
     class: null,
     storageId: null,
+    canonicalId: null,
     fields: [],
     attrs: new Map(),
   };

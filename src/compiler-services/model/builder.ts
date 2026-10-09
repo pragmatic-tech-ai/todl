@@ -376,6 +376,7 @@ export class Builder
       isClass: opts.isClass ?? false,
       class: opts.class ?? null,
       storageId: null,
+      canonicalId: null,
       fields: [],
       attrs: new Map<string, Scalar>(),
     };

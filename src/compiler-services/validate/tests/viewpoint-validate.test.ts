@@ -20,6 +20,7 @@ test("a viewpoint that frames nothing is flagged (graph-built backstop)", () => 
     isClass: false,
     class: null,
     storageId: null,
+    canonicalId: null,
     fields: [],
     attrs: new Map(),
   });

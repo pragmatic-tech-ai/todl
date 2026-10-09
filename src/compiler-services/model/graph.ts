@@ -41,6 +41,7 @@ export enum EdgeKind
   Annotated, // concept | package -> annotation application node
   Frames, // viewpoint -> the concept it frames
   Targets, // relationship-schema node -> a target concept node (one per union member)
+  SameAs, // alias instance -> canonical instance (entity-identity resolution)
 }
 
 /** Which way to walk an edge from a node. */
@@ -107,6 +108,8 @@ export interface Node
 
   /** Reserved dedicated persistence id (#3). DEFERRED — a typed slot only. */
   storageId: string | null;
+  /** The canonical instance this node was resolved into (entity-identity), or null. */
+  canonicalId: NodeId | null;
 
   /** Declared scalar/field schema of a concept or annotation (SPEC-01 #4). Carried
    *  here instead of as `HasField` member nodes; empty for non-schema-owning nodes. */

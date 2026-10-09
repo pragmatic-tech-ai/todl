@@ -8,8 +8,8 @@ function pkg(): CompiledPackage
 {
   const document = {
     nodes: [
-      { id: "ms.a", tier: "Instance", type: "t", metaKind: null, namespace: null, localId: "a", isClass: false, class: null, storageId: null, fields: [], attrs: { label: "A" } },
-      { id: "ms.b", tier: "Instance", type: "t", metaKind: null, namespace: null, localId: "b", isClass: false, class: null, storageId: null, fields: [], attrs: {} },
+      { id: "ms.a", tier: "Instance", type: "t", metaKind: null, namespace: null, localId: "a", isClass: false, class: null, storageId: null, canonicalId: null, fields: [], attrs: { label: "A" } },
+      { id: "ms.b", tier: "Instance", type: "t", metaKind: null, namespace: null, localId: "b", isClass: false, class: null, storageId: null, canonicalId: null, fields: [], attrs: {} },
     ],
     edges: [{ kind: "Relationship", via: "rel", from: "ms.a", to: "ms.b" }],
   };

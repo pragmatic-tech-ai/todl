@@ -23,6 +23,7 @@ function instance(id: string, type: string): Node
     isClass: false,
     class: null,
     storageId: null,
+    canonicalId: null,
     fields: [],
     attrs: new Map(),
   };
@@ -61,8 +62,8 @@ test("addEdge for a domain relationship emits EdgeAdded carrying the relationshi
 
 test("addEdge for a structural edge emits EdgeAdded with a null property", () => {
   const graph = new Graph();
-  graph.addNode({ id: "frontend", tier: Tier.Ontology, type: null, metaKind: MetaKind.Concept, namespace: null, localId: null, isClass: false, class: null, storageId: null, fields: [], attrs: new Map() });
-  graph.addNode({ id: "component", tier: Tier.Ontology, type: null, metaKind: MetaKind.Concept, namespace: null, localId: null, isClass: false, class: null, storageId: null, fields: [], attrs: new Map() });
+  graph.addNode({ id: "frontend", tier: Tier.Ontology, type: null, metaKind: MetaKind.Concept, namespace: null, localId: null, isClass: false, class: null, storageId: null, canonicalId: null, fields: [], attrs: new Map() });
+  graph.addNode({ id: "component", tier: Tier.Ontology, type: null, metaKind: MetaKind.Concept, namespace: null, localId: null, isClass: false, class: null, storageId: null, canonicalId: null, fields: [], attrs: new Map() });
   const changes = record(graph);
 
   graph.addEdge({ kind: EdgeKind.Extends, via: null, from: "frontend", to: "component" });
