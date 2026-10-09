@@ -53,6 +53,57 @@ test("instances with no key value stay standalone", () =>
     new ResolutionPass(model).Resolve();
     assert.deepEqual(model.instancesOf("n.C").sort(), ["n.a", "n.b"]);
     assert.equal(model.resolve("n.a")!.canonicalId, null);
+    assert.equal(model.resolve("n.b")!.canonicalId, null);
+});
+
+test("empty-string key values are real values and merge", () =>
+{
+    const model = seed();
+    addInstance(model, "n.b", "");
+    addInstance(model, "n.a", "");
+    new ResolutionPass(model).Resolve();
+    assert.deepEqual(model.instancesOf("n.C"), ["n.a"]);
+    assert.equal(model.resolve("n.b")!.canonicalId, "n.a");
+});
+
+function seedStorageKey(): Repository
+{
+    const model = new Repository();
+    const b = model.builder();
+    b.setNamespace("n").defineConcept("n.C");
+    b.commit();
+    const ib = model.builder();
+    ib.setNamespace("n");
+    ib.defineIdentity("n.C@identity", "n.C", "storageId");
+    ib.commit();
+    return model;
+}
+
+function addPlain(model: Repository, id: string, storageId: string | null)
+{
+    const b = model.builder();
+    b.setNamespace("n").assertInstance("n.C", id);
+    b.commit();
+    model.resolve(id)!.storageId = storageId;
+}
+
+test("the reserved storageId key merges instances with the same stamped storageId", () =>
+{
+    const model = seedStorageKey();
+    addPlain(model, "n.b", "s1");
+    addPlain(model, "n.a", "s1");
+    new ResolutionPass(model).Resolve();
+    assert.deepEqual(model.instancesOf("n.C"), ["n.a"]);
+    assert.equal(model.resolve("n.b")!.canonicalId, "n.a");
+});
+
+test("the storageId key does not merge unstamped instances", () =>
+{
+    const model = seedStorageKey();
+    addPlain(model, "n.a", null);
+    addPlain(model, "n.b", null);
+    new ResolutionPass(model).Resolve();
+    assert.deepEqual(model.instancesOf("n.C").sort(), ["n.a", "n.b"]);
 });
 
 test("three instances sharing a key all collapse to one canonical", () =>

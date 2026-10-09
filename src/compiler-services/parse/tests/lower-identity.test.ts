@@ -35,3 +35,22 @@ test("identity with an unknown key is reported", () =>
     const { diagnostics } = LowerIdentityHarness.Compile(`namespace n { concept C { k : string; } identity C key nope; }`);
     assert.ok(diagnostics.some((d) => d.code === DiagnosticCode.IdentityUnknownKey));
 });
+
+test("a duplicate identity declaration for the same concept is first-wins and does not crash", () =>
+{
+    const { model, diagnostics } = LowerIdentityHarness.Compile(`namespace n { concept C { k : string; } identity C key k; identity C key k; }`);
+    assert.equal(model.nodesOfMetaKind(MetaKind.Identity).length, 1);
+    assert.deepEqual(diagnostics.filter((d) => d.severity === "error"), []);
+});
+
+test("identity keyed on the reserved storageId lowers without IdentityUnknownKey", () =>
+{
+    const { diagnostics } = LowerIdentityHarness.Compile(`namespace n { concept C { k : string; } identity C key storageId; }`);
+    assert.ok(!diagnostics.some((d) => d.code === DiagnosticCode.IdentityUnknownKey));
+});
+
+test("identity keyed on an inherited field lowers without IdentityUnknownKey", () =>
+{
+    const { diagnostics } = LowerIdentityHarness.Compile(`namespace n { concept A { k : string; } concept B : A { } identity B key k; }`);
+    assert.ok(!diagnostics.some((d) => d.code === DiagnosticCode.IdentityUnknownKey));
+});

@@ -59,6 +59,7 @@ export class Builder
   /** Reserved identity-node attr keys: the identified concept and its key attr. */
   public static readonly IdentityConceptAttr = "concept";
   public static readonly IdentityKeyAttr = "key";
+  public static readonly StorageIdKey = "storageId";
 
   private readonly stagedNodes: Node[] = [];
   private readonly stagedAttrs: StagedAttr[] = [];

@@ -23,7 +23,7 @@ namespace shop
     public static readonly CustomerConcept = "shop.Customer";
 }
 
-test("checkAgainst resolves duplicate-key instances to one canonical", () =>
+test("check resolves duplicate-key instances to one canonical", () =>
 {
     const { model, diagnostics } = check([{ uri: ResolutionEndToEndFixture.Uri, text: ResolutionEndToEndFixture.Source }]);
     assert.deepEqual(diagnostics.filter((d) => d.severity === Severity.Error), []);

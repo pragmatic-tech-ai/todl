@@ -56,7 +56,7 @@ import { parse } from "./parser.js";
 import { parsePredicate } from "./predicate-parser.js";
 import { ApplicationRootPass } from "./application-root-pass.js";
 import { Repository } from "../model/model.js";
-import type { Builder, TermInput } from "../model/builder.js";
+import { Builder, type TermInput } from "../model/builder.js";
 import type { Expr } from "../predicate/ast.js";
 import {
   DeclKind,
@@ -729,7 +729,7 @@ export function loadInto(
       });
       continue;
     }
-    const known = declaration.key === IDENTITY_STORAGE_KEY
+    const known = declaration.key === Builder.StorageIdKey
       || model.effectiveSchema(conceptId).fields.some((f) => f.name === declaration.key);
     if (!known)
     {
@@ -742,7 +742,8 @@ export function loadInto(
     }
     const identityId = `${conceptId}@identity`;
     // A second identity for the same concept would collide on the node id: dropped.
-    if (model.has(identityId) || !stagedIdentities.add(identityId)) continue;
+    if (model.has(identityId) || stagedIdentities.has(identityId)) continue;
+    stagedIdentities.add(identityId);
     identityBuilder.defineIdentity(identityId, conceptId, declaration.key);
     recordHome(rec, identityId);
   }
@@ -1018,9 +1019,6 @@ function termToInstanceDecl(taxonomy: string, t: Term, normalize: (name: string 
 
 /** File-level grouping keywords that wrap records but are not themselves records. */
 const WRAPPER_CONCEPTS = new Set(["technology-library"]);
-
-/** The one reserved identity key besides a concept's own fields: the storage id. */
-const IDENTITY_STORAGE_KEY = "storageId";
 
 /**
  * A concrete object (`isClass = false`) is legal only inside a model. Walk the
