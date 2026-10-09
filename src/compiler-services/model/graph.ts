@@ -229,6 +229,39 @@ export class Graph
     this.changed.emit({ kind: GraphChangeKind.EdgeRemoved, node: from, property, target: to });
   }
 
+  /**
+   * Mark `aliasId` as a duplicate of `canonicalId`: sets `alias.canonicalId`, adds a
+   * single `SameAs` edge alias -> canonical, and redirects every incoming edge of the
+   * alias (except the `SameAs` marker) to the canonical. Idempotent; a self-alias or
+   * an absent node on either side is a no-op.
+   */
+  alias(aliasId: NodeId, canonicalId: NodeId): void
+  {
+    if (aliasId === canonicalId) return;
+    const node = this.getNode(aliasId);
+    if (node === undefined || !this.hasNode(canonicalId)) return;
+    if (node.canonicalId === canonicalId) return;
+
+    node.canonicalId = canonicalId;
+    if (this.related(aliasId, EdgeKind.SameAs, Direction.Out).indexOf(canonicalId) < 0)
+    {
+      this.addEdge({ kind: EdgeKind.SameAs, via: null, from: aliasId, to: canonicalId });
+    }
+
+    for (const edge of [...this.inEdges(aliasId)])
+    {
+      if (edge.kind === EdgeKind.SameAs) continue;
+      this.removeEdge(edge.kind, edge.via, edge.from, edge.to);
+      if (edge.from === canonicalId) continue;
+      const duplicate = this.outEdges(edge.from).some(
+        (e) => e.kind === edge.kind && e.via === edge.via && e.to === canonicalId);
+      if (!duplicate)
+      {
+        this.addEdge({ kind: edge.kind, via: edge.via, from: edge.from, to: canonicalId });
+      }
+    }
+  }
+
   /** Append a declared field to a concept/annotation node's schema (SPEC-01 #4). */
   addFieldDecl(concept: NodeId, decl: FieldDecl): void
   {

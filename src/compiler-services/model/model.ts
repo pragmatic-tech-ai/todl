@@ -164,7 +164,7 @@ export class Repository
 
   instancesOf(concept: NodeId): NodeId[]
   {
-    return this.graph.instancesOf(concept);
+    return this.graph.instancesOf(concept).filter((id) => this.resolve(id)?.canonicalId == null);
   }
 
   /** Every node whose `metaKind` is `kind` (concept declarations, taxonomies,
@@ -190,6 +190,18 @@ export class Repository
   outEdges(id: NodeId): Edge[]
   {
     return this.graph.outEdges(id);
+  }
+
+  /** All edges entering `id` (reverse adjacency). */
+  inEdges(id: NodeId): Edge[]
+  {
+    return this.graph.inEdges(id);
+  }
+
+  /** Mark `aliasId` as a duplicate of `canonicalId`; see {@link Graph.alias}. */
+  alias(aliasId: NodeId, canonicalId: NodeId): void
+  {
+    this.graph.alias(aliasId, canonicalId);
   }
 
   related(id: NodeId, kind: EdgeKind, direction: Direction, via: NodeId | null = null): NodeId[]
