@@ -136,3 +136,16 @@ test("load rebuilds the working copy from DB rows", async () => {
 
 // Same contract as InMemoryGraphStore — the seam is proven against both back-ends.
 describeGraphStore("CypherGraphStore", () => new CypherGraphStore());
+
+test("removeEdge detaches the edge from the working copy and records a REMOVE_EDGE op", () => {
+  const s = new CypherGraphStore();
+  s.addNode(node("a"));
+  s.addNode(node("b"));
+  s.addEdge(edge("a", "b", "rel"));
+  s.removeEdge(EdgeKind.Relationship, "rel", "a", "b");
+  assert.equal(s.outEdges("a").length, 0);
+  assert.equal(s.inEdges("b").length, 0);
+  const last = s.pendingCypher()[s.pendingCypher().length - 1]!;
+  assert.match(last.cypher, /DELETE r/);
+  assert.deepEqual(last.params, { from: "a", to: "b", kind: "Relationship", via: "rel" });
+});

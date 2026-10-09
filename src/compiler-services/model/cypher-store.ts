@@ -30,6 +30,11 @@ const NODE_COLUMNS = "n.type = $type, n.metaKind = $metaKind, n.namespace = $nam
 const ADD_NODE = `CREATE (n:Node {id: $id}) SET n.tier = $tier, ${NODE_COLUMNS}, n += $attrs`;
 const ADD_EDGE =
   "MATCH (a:Node {id: $from}), (b:Node {id: $to}) CREATE (a)-[:REL {kind: $kind, via: $via}]->(b)";
+// Null `via` (structural edges) is stored as an absent property, and `= null` never matches in Cypher,
+// so the null case is matched explicitly.
+const REMOVE_EDGE =
+  "MATCH (a:Node {id: $from})-[r:REL {kind: $kind}]->(b:Node {id: $to}) " +
+  "WHERE r.via = $via OR (r.via IS NULL AND $via IS NULL) DELETE r";
 const SET_ATTR = "MATCH (n:Node {id: $id}) SET n += $delta";
 const SET_FIELDS = "MATCH (n:Node {id: $id}) SET n.fields = $fields";
 const REMOVE = "MATCH (n:Node {id: $id}) DETACH DELETE n";
@@ -147,6 +152,15 @@ export class CypherGraphStore implements GraphStore
     this.pending.push({
       cypher: ADD_EDGE,
       params: { from: edge.from, to: edge.to, kind: EdgeKind[edge.kind], via: edge.via },
+    });
+  }
+
+  removeEdge(kind: EdgeKind, via: NodeId | null, from: NodeId, to: NodeId): void
+  {
+    this.inner.removeEdge(kind, via, from, to);
+    this.pending.push({
+      cypher: REMOVE_EDGE,
+      params: { from, to, kind: EdgeKind[kind], via },
     });
   }
 
