@@ -52,6 +52,7 @@ export enum DeclKind
   Annotation,
   Package,
   Operator,
+  Identity,
 }
 
 /** The kind of an authored VALUE (the right-hand side of `name = …`, an array
@@ -296,6 +297,18 @@ export interface OperatorDecl
   span: SourceSpan;
 }
 
+/** An `identity <Concept> key <attr>;` declaration — names the attribute whose
+ * value identifies an instance of the concept for entity-resolution. */
+export interface IdentityDecl
+{
+  kind: DeclKind.Identity;
+  concept: string;
+  key: string;
+  span: SourceSpan;
+  conceptSpan?: SourceSpan;
+  keySpan?: SourceSpan;
+}
+
 // ── Concept members (fields, relationships, invariants) ────────────────────────
 // The building blocks of a ConceptDecl body. Also reused elsewhere: FieldDecl
 // doubles as an annotation's typed param.
@@ -439,7 +452,7 @@ export interface PrimitiveDecl
  * {@link DeclKind}). This is what a {@link NamespaceNode} holds. */
 export type Declaration =
   | ConceptDecl | TaxonomyDecl | ViewpointDecl | PrimitiveDecl | InstanceDecl | ModelDecl
-  | AnnotationDecl | PackageDecl | OperatorDecl;
+  | AnnotationDecl | PackageDecl | OperatorDecl | IdentityDecl;
 
 // ═══════════════════════════════ FILE ROOT ════════════════════════════════════
 

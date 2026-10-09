@@ -66,6 +66,7 @@ import {
   type AnnotationApplication,
   type PackageDecl,
   type OperatorDecl,
+  type IdentityDecl,
   type EdgeApplication,
   type AssignmentNode,
   type ValueNode,
@@ -205,6 +206,7 @@ class Parser
       this.checkKeyword("viewpoint") || this.checkKeyword("concept") ||
       this.checkKeyword("model") || this.checkKeyword("annotation") ||
       this.checkKeyword("package") || this.checkKeyword("operator") ||
+      this.checkKeyword("identity") ||
       this.checkKeyword("class") || this.checkKeyword("internal") || this.checkKeyword("sealed")
     )
     {
@@ -349,6 +351,7 @@ class Parser
     if (this.checkKeyword("annotation")) return this.parseAnnotation(start);
     if (this.checkKeyword("package")) return this.parsePackage(start);
     if (this.checkKeyword("operator")) return this.parseOperator(start);
+    if (this.checkKeyword("identity")) return this.parseIdentity(start);
     if (this.checkKeyword("class"))
     {
       this.advance(); // class modifier
@@ -649,6 +652,23 @@ class Parser
     };
     decl.glyphSpan = tokenSpan(glyphTok, this.uri);
     decl.conceptSpan = this.spanFrom(conceptStart);
+    return decl;
+  }
+
+  /** `identity <Concept> key <attr>;` — names the attribute that identifies an
+   *  instance of the concept for entity resolution. Namespace scope only. */
+  private parseIdentity(start: Token): IdentityDecl
+  {
+    this.expectKeyword("identity");
+    const conceptStart = this.current();
+    const concept = this.parseDottedPath();            // concept may be ns-qualified
+    const conceptSpan = this.spanFrom(conceptStart);
+    this.expectKeyword("key");
+    const keyTok = this.expect(TokenKind.Identifier);
+    this.expect(TokenKind.Semicolon);
+    const decl: IdentityDecl = { kind: DeclKind.Identity, concept, key: keyTok.value, span: this.spanFrom(start) };
+    decl.conceptSpan = conceptSpan;
+    decl.keySpan = tokenSpan(keyTok, this.uri);
     return decl;
   }
 
