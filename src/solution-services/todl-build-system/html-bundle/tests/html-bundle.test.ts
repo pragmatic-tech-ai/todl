@@ -210,9 +210,9 @@ function readOnlyFixture(rel: string): SolutionProject
 
 // Copies the architecture fixture into a scratch dir so a test's generated/* writes
 // (the content generators write into the copy's Project; EmitEntryAction writes its
-// build glue into ctx.Sandbox) never touch the real checked-in fixture. Strips any
-// generated/ the copy inherited from the checked-in fixture (gitignored local build
-// leftovers, not fixture content) so every test starts from a clean, deterministic
+// build glue into ctx.Sandbox) never touch the real checked-in fixture. Strips the
+// generated/ dir and the scaffolded src/main.ts + src/app.mu the copy inherited from the
+// checked-in fixture (which now ships app source) so every test starts from a clean, deterministic
 // "required content absent" state and opts into generating it explicitly.
 async function copiedArchitectureFixture(t: TestContext): Promise<SolutionProject>
 {
@@ -220,6 +220,8 @@ async function copiedArchitectureFixture(t: TestContext): Promise<SolutionProjec
     t.after(async () => { await rm(scratch, { recursive: true, force: true }); });
     cpSync(join(FixtureRoot, ArchitectureFixture), scratch, { recursive: true });
     rmSync(join(scratch, GeneratedDirectory), { recursive: true, force: true });
+    rmSync(join(scratch, AppViewModelPath), { force: true });
+    rmSync(join(scratch, AppUiPath), { force: true });
     const manifest = parseManifest(readFileSync(join(scratch, "project.plexus"), "utf8"));
     return { Id: manifest.id ?? manifest.name, Project: new NodeFsStorage(scratch), Manifest: manifest };
 }
