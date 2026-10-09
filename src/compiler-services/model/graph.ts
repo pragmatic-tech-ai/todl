@@ -215,6 +215,20 @@ export class Graph
     this.changed.emit({ kind: GraphChangeKind.EdgeAdded, node: edge.from, property, target: edge.to });
   }
 
+  /**
+   * Remove one edge from both adjacency directions, emitting
+   * {@link GraphChangeKind.EdgeRemoved}. No-op (no event) when the edge is absent.
+   */
+  removeEdge(kind: EdgeKind, via: NodeId | null, from: NodeId, to: NodeId): void
+  {
+    const present = this.store.outEdges(from).some(
+      (e) => e.kind === kind && e.via === via && e.to === to);
+    if (!present) return;
+    this.store.removeEdge(kind, via, from, to);
+    const property = kind === EdgeKind.Relationship || kind === EdgeKind.Derived ? via : null;
+    this.changed.emit({ kind: GraphChangeKind.EdgeRemoved, node: from, property, target: to });
+  }
+
   /** Append a declared field to a concept/annotation node's schema (SPEC-01 #4). */
   addFieldDecl(concept: NodeId, decl: FieldDecl): void
   {
