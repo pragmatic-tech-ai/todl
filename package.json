@@ -126,6 +126,7 @@
   "dependencies": {
     "@pragmatic-tech-ai/mural": "^0.62.6",
     "@pragmatic-tech-ai/todl-runtime": "^0.7.0",
+    "typescript": "^5.7.0",
     "vscode-languageserver": "^9.0.1",
     "vscode-languageserver-textdocument": "^1.0.12",
     "vscode-languageserver-types": "3.17.5"
