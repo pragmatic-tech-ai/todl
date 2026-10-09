@@ -92,6 +92,9 @@ export enum DiagnosticCode
   // its fields (or the reserved `storageId`).
   IdentityUnknownConcept = "identity.unknown-concept",
   IdentityUnknownKey = "identity.unknown-key",
+  MatchUnknownConcept = "match.unknown-concept",
+  MatchUnknownField = "match.unknown-field",
+  MatchUnsupportedRule = "match.unsupported-rule",
   // Solution composition phase (SPEC-06): a member/dependency package could not
   // be resolved or loaded into the composed Domain.
   PackageUnresolved = "package.unresolved",

@@ -60,6 +60,12 @@ export class Builder
   public static readonly IdentityConceptAttr = "concept";
   public static readonly IdentityKeyAttr = "key";
   public static readonly StorageIdKey = "storageId";
+  /** Reserved match-node attr keys (the concept reuses the identity key) and the
+   *  two candidate variable names a `same when` rule may reference. */
+  public static readonly MatchConceptAttr = Builder.IdentityConceptAttr;
+  public static readonly MatchRulesAttr = "rules";
+  public static readonly MatchLeftVar = "a";
+  public static readonly MatchRightVar = "b";
 
   private readonly stagedNodes: Node[] = [];
   private readonly stagedAttrs: StagedAttr[] = [];
@@ -282,6 +288,16 @@ export class Builder
     this.stagedNodes.push(this.makeNode(id, Tier.Ontology, { metaKind: MetaKind.Identity }));
     this.stagedAttrs.push({ id, name: Builder.IdentityConceptAttr, value: concept });
     this.stagedAttrs.push({ id, name: Builder.IdentityKeyAttr, value: key });
+    return this;
+  }
+
+  /** Define a match node (Ontology-tier) carrying `concept`'s match rules as a JSON
+   *  `string[][]` (each inner array one rule's sorted agree-on field names). */
+  defineMatch(id: NodeId, concept: NodeId, rulesJson: string): this
+  {
+    this.stagedNodes.push(this.makeNode(id, Tier.Ontology, { metaKind: MetaKind.Match }));
+    this.stagedAttrs.push({ id, name: Builder.MatchConceptAttr, value: concept });
+    this.stagedAttrs.push({ id, name: Builder.MatchRulesAttr, value: rulesJson });
     return this;
   }
 
