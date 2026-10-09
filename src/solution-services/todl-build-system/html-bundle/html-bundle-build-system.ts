@@ -12,6 +12,8 @@ import { EmitEntryAction } from "./emit-entry-action.js";
 import { CompileMuralAction } from "./compile-mural-action.js";
 import { BundleAppAction } from "./bundle-app-action.js";
 import { EmitBundledHostAction } from "./emit-bundled-host-action.js";
+import { TypeCheckAction } from "./type-check-action.js";
+import { TypeCheckerKey, type ITypeChecker } from "../../build-system-core/type-checker.js";
 
 // Builds a self-contained single-page HTML app for an ARCHITECTURE project: resolve bases
 // -> compile the full closure -> emit index.html with the model shards + mural host bundle inlined.
@@ -48,7 +50,7 @@ export class HtmlBundleBuildSystem implements IBuildSystem<TodlBuildContext, Pro
     // entry -> compile mural (reading src/app.mu required above) -> bundle -> emit.
     private readonly actions: readonly IBuildAction<TodlBuildContext>[];
 
-    constructor(bundler: IBundler)
+    constructor(bundler: IBundler, typeChecker: ITypeChecker)
     {
         this.actions = [
             new ResolveBasesAction(),
@@ -56,6 +58,7 @@ export class HtmlBundleBuildSystem implements IBuildSystem<TodlBuildContext, Pro
             new EmitEntryAction(),
             new CompileMuralAction(),
             new BundleAppAction(bundler),
+            new TypeCheckAction(typeChecker),
             new EmitBundledHostAction(),
         ];
     }
@@ -63,7 +66,7 @@ export class HtmlBundleBuildSystem implements IBuildSystem<TodlBuildContext, Pro
     public static Register(container: IServiceContainer): void
     {
         const provider = container as unknown as ServiceProvider;
-        container.register(HtmlBundleBuildSystem, (p) => new HtmlBundleBuildSystem(p.getRequired(BundlerKey)));
+        container.register(HtmlBundleBuildSystem, (p) => new HtmlBundleBuildSystem(p.getRequired(BundlerKey), p.getRequired(TypeCheckerKey)));
         provider.getRequired(BuildSystemRegistryKey).RegisterResolved(provider.getRequired(HtmlBundleBuildSystem));
     }
 

@@ -15,6 +15,7 @@ import { ProjectBuildStatus } from "../../../build-system-core/build-result.js";
 import { TodlBuildSystemRegistry } from "../../todl-build-system-registry.js";
 import { HtmlBundleBuildSystem } from "../html-bundle-build-system.js";
 import { EsbuildBundler } from "../node/esbuild-bundler.js";
+import type { ITypeChecker, TypeCheckResult } from "../../../build-system-core/type-checker.js";
 import { EmitBundledHostAction } from "../emit-bundled-host-action.js";
 import { EmptyPackageSource, libraryManifest } from "../../tests/fakes.js";
 import { parseManifest, ProjectType } from "../../../package-manager/manifest.js";
@@ -61,11 +62,20 @@ function compiledModelFixture(): CompiledPackage
     return outcome.package!;
 }
 
+// Keeps these tests on bundling/emit; type-checking is covered by type-check-action.test.ts.
+class NoopTypeChecker implements ITypeChecker
+{
+    public async Check(): Promise<TypeCheckResult>
+    {
+        return { Diagnostics: [] };
+    }
+}
+
 describe("HtmlBundleBuildSystem", () =>
 {
     test("requires the DTO, data, view-model and app UI content, each naming its generator", () =>
     {
-        const flavor = new HtmlBundleBuildSystem(new EsbuildBundler()).Flavors()[0]!;
+        const flavor = new HtmlBundleBuildSystem(new EsbuildBundler(), new NoopTypeChecker()).Flavors()[0]!;
         assert.deepEqual(flavor.Requires, [
             { Path: "generated/model.ts", GeneratorId: "model-dto" },
             { Path: "generated/data.ts", GeneratorId: "model-data" },
@@ -76,7 +86,7 @@ describe("HtmlBundleBuildSystem", () =>
 
     test("applies to architecture projects only", () =>
     {
-        const system = new HtmlBundleBuildSystem(new EsbuildBundler());
+        const system = new HtmlBundleBuildSystem(new EsbuildBundler(), new NoopTypeChecker());
         assert.equal(system.AppliesTo({ type: "architecture", name: "a", version: 1 } as never), true);
         assert.equal(system.AppliesTo({ type: "meta-model", name: "m", version: 1 } as never), false);
         assert.equal(system.AppliesTo({ type: "library", name: "l", version: 1 } as never), false);
@@ -84,7 +94,7 @@ describe("HtmlBundleBuildSystem", () =>
 
     test("the registry offers html-bundle for architecture, not for meta-model", () =>
     {
-        const registry = new TodlBuildSystemRegistry();
+        const registry = new TodlBuildSystemRegistry(new NoopTypeChecker());
         assert.equal(registry.For({ type: ProjectType.Architecture, name: "a" } as never).some((s) => s.Id === "html-bundle"), true);
         assert.equal(registry.For({ type: ProjectType.MetaModel, name: "m" } as never).some((s) => s.Id === "html-bundle"), false);
     });
@@ -271,7 +281,7 @@ async function buildAndPublishBases(t: TestContext): Promise<{ solution: Solutio
     const provider = new ScratchBuildStorage(scratchRoot);
     const registry = new LocalNpmRegistry(new FakeStorage());
     const client = new PackageRegistryClient(registry);
-    const solution = new SolutionBuildManager(new TodlBuildSystemRegistry(), provider);
+    const solution = new SolutionBuildManager(new TodlBuildSystemRegistry(new NoopTypeChecker()), provider);
 
     const meta = readOnlyFixture(MetaModelFixture);
     const microsoft = readOnlyFixture(MicrosoftLibraryFixture);
@@ -333,7 +343,7 @@ describe("end-to-end: real test_architecture fixture through the new html-bundle
         const scratchRoot = await mkdtemp(join(tmpdir(), "todl-e2e-missing-"));
         t.after(async () => { await rm(scratchRoot, { recursive: true, force: true }); });
         const provider = new ScratchBuildStorage(scratchRoot);
-        const solution = new SolutionBuildManager(new TodlBuildSystemRegistry(), provider);
+        const solution = new SolutionBuildManager(new TodlBuildSystemRegistry(new NoopTypeChecker()), provider);
 
         const architecture = await copiedArchitectureFixture(t);
         const result = await solution.Build({

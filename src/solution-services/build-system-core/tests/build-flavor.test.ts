@@ -68,7 +68,7 @@ describe("built-in systems expose their flavors", () =>
     test("html-bundle flavor mirrors the system output + non-empty pipeline", () =>
     {
         const fakeBundler: IBundler = { BundleApp: async () => ({ Diagnostics: [] }) };
-        const flavors = new HtmlBundleBuildSystem(fakeBundler).Flavors();
+        const flavors = new HtmlBundleBuildSystem(fakeBundler, { Check: async () => ({ Diagnostics: [] }) }).Flavors();
         assert.equal(flavors.length, 1);
         assert.equal(flavors[0]!.OutputName, "html-bundle");
         assert.ok(flavors[0]!.Actions().length > 0);

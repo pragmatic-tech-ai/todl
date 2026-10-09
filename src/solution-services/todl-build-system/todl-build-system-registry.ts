@@ -1,9 +1,11 @@
+import type { ITypeChecker } from "../build-system-core/type-checker.js";
 import { BuildSystemRegistry } from "../build-system-core/build-system-registry.js";
 import type { ProjectManifest } from "../package-manager/manifest.js";
 import type { TodlBuildContext } from "./todl-build-context.js";
 import { NpmPackageBuildSystem } from "./npm/npm-package-build-system.js";
 import { HtmlBundleBuildSystem } from "./html-bundle/html-bundle-build-system.js";
 import { EsbuildBundler } from "./html-bundle/node/esbuild-bundler.js";
+import { TscTypeChecker } from "./html-bundle/node/tsc-type-checker.js";
 import { DefaultPresentationBaker } from "../project-services/core/default-presentation-baker.js";
 
 // The build-system registry todl composes: a BuildSystemRegistry pre-populated with
@@ -19,10 +21,11 @@ import { DefaultPresentationBaker } from "../project-services/core/default-prese
 // provider/service context to resolve one from.
 export class TodlBuildSystemRegistry extends BuildSystemRegistry<TodlBuildContext, ProjectManifest>
 {
-    constructor()
+    // typeChecker defaults to the node tsc gate; a caller may substitute another ITypeChecker.
+    constructor(typeChecker: ITypeChecker = new TscTypeChecker())
     {
         super();
         this.Register(new NpmPackageBuildSystem(new DefaultPresentationBaker()));
-        this.Register(new HtmlBundleBuildSystem(new EsbuildBundler()));
+        this.Register(new HtmlBundleBuildSystem(new EsbuildBundler(), typeChecker));
     }
 }

@@ -10,6 +10,8 @@ import { type IServiceContainer } from "@pragmatic-tech-ai/todl-runtime";
 import { HtmlBundleBuildSystem } from "../../todl-build-system/html-bundle/html-bundle-build-system.js";
 import { EsbuildBundler } from "../../todl-build-system/html-bundle/node/esbuild-bundler.js";
 import { BundlerKey } from "../../build-system-core/bundler.js";
+import { TypeCheckerKey } from "../../build-system-core/type-checker.js";
+import { TscTypeChecker } from "../../todl-build-system/html-bundle/node/tsc-type-checker.js";
 import { ProjectSystemComposer, type ProjectSystemComposerOptions } from "./project-system-composer.js";
 
 export class NodeProjectSystemComposer extends ProjectSystemComposer
@@ -19,6 +21,7 @@ export class NodeProjectSystemComposer extends ProjectSystemComposer
         super.Compose(container, options);
 
         container.registerInstance(BundlerKey, new EsbuildBundler());
+        container.registerInstance(TypeCheckerKey, new TscTypeChecker());
         HtmlBundleBuildSystem.Register(container);
     }
 }
