@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { pascalCase, camelCase, pluralize, allocateNames } from "../naming.js";
+import { pascalCase, camelCase, pluralize, allocateNames, allocateUnique } from "../naming.js";
 
 test("pascalCase splits kebab/underscore/case boundaries and capitalizes each", () => {
   assert.equal(pascalCase("component"), "Component");
@@ -31,4 +31,12 @@ test("allocateNames maps each id and throws on a collision", () => {
   const map = allocateNames(["AppComponent", "Technology"], pascalCase);
   assert.equal(map.get("Technology"), "Technology");
   assert.throws(() => allocateNames(["chatSurface", "chat-surface"], pascalCase), /collision|both map/i);
+});
+
+test("allocateUnique suffixes later duplicates with the smallest free number, in order", () => {
+  assert.deepEqual(allocateUnique(["a", "b", "a", "a", "b"]), ["a", "b", "a2", "a3", "b2"]);
+});
+
+test("allocateUnique is the identity on distinct names", () => {
+  assert.deepEqual(allocateUnique(["x", "y", "z"]), ["x", "y", "z"]);
 });

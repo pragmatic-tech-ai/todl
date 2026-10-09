@@ -75,3 +75,32 @@ test("the generated client materializes through a connector at startup", async (
   const copilot = catalog.technologies[0]!;
   assert.equal(copilot.billing!.label, "Subscription");
 });
+
+test("a concept plural colliding with a taxonomy name is disambiguated, not duplicated", () => {
+  const r = new Repository();
+  const b = r.builder();
+  b.definePrimitive("string");
+  b.defineConcept("actor");
+  b.addField("actor", "label", "string");
+  b.defineTaxonomy("actors", ["actor"], [{ id: "lead", attrs: new Map([["label", "Lead"]]) }]);
+  b.commit();
+  const out = generateReadClient(r, { name: "collide", importSpecifier: "../../../index.js" });
+  assert.equal(out.split("get actors(").length - 1, 1);
+  assert.match(out, /get actors\(\): readonly Actor\[\] \{\s*return this\.instancesOf\("actor"\)/);
+  assert.match(out, /get actors2\(\): readonly Actor\[\] \{\s*return this\.termsOf\("actors"\)/);
+});
+
+test("entity fields whose camelCase names collide get distinct getters", () => {
+  const r = new Repository();
+  const b = r.builder();
+  b.definePrimitive("string");
+  b.defineConcept("thing");
+  b.addField("thing", "my-name", "string");
+  b.addField("thing", "myName", "string");
+  b.commit();
+  const out = generateReadClient(r, { name: "collide2", importSpecifier: "../../../index.js" });
+  assert.equal(out.split("get myName(").length - 1, 1);
+  assert.match(out, /get myName2\(\)/);
+  assert.match(out, /this\.field\("my-name"\)/);
+  assert.match(out, /this\.field\("myName"\)/);
+});

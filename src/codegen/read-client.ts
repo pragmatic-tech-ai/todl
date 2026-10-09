@@ -9,7 +9,7 @@
 import { MetaKind } from "../compiler-services/model/kinds.js";
 import { Cardinality, type NodeId } from "../compiler-services/model/graph.js";
 import { Repository } from "../compiler-services/model/model.js";
-import { pascalCase, camelCase, pluralize, allocateNames } from "./naming.js";
+import { pascalCase, camelCase, pluralize, allocateNames, allocateUnique } from "./naming.js";
 
 export interface ReadClientOptions
 {
@@ -121,16 +121,22 @@ function emitPackageClass(
     `    }\n` +
     `  }`;
 
+  // Concept plurals and taxonomy names share one getter namespace; disambiguate
+  // collisions deterministically (concepts first) instead of emitting duplicates.
+  const getterNames = allocateUnique([
+    ...concepts.map((c) => pluralize(camelCase(c))),
+    ...taxonomies.map((t) => camelCase(t)),
+  ]);
   const conceptGetters = concepts.map(
-    (c) =>
-      `  get ${pluralize(camelCase(c))}(): readonly ${pascalCase(c)}[] {\n` +
+    (c, i) =>
+      `  get ${getterNames[i]}(): readonly ${pascalCase(c)}[] {\n` +
       `    return this.instancesOf("${c}") as readonly ${pascalCase(c)}[];\n` +
       `  }`,
   );
-  const taxonomyGetters = taxonomies.map((t) => {
+  const taxonomyGetters = taxonomies.map((t, i) => {
     const rep = pascalCase(repo.represents(t)[0] ?? t);
     return (
-      `  get ${camelCase(t)}(): readonly ${rep}[] {\n` +
+      `  get ${getterNames[concepts.length + i]}(): readonly ${rep}[] {\n` +
       `    return this.termsOf("${t}") as readonly ${rep}[];\n` +
       `  }`
     );
@@ -223,13 +229,9 @@ function emitEntityClass(concept: NodeId, repo: Repository): string
 {
   const schema = repo.effectiveSchema(concept);
 
-  const scalarGetters = schema.fields
+  const scalarFields = schema.fields
     .filter((f) => !isReferenceType(repo, f.type))
-    .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
-    .map((f) => {
-      const ts = scalarTsType(f.type);
-      return `  get ${camelCase(f.name)}(): ${ts} { return this.field("${f.name}") as ${ts}; }`;
-    });
+    .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 
   const refMembers: RefMember[] = [
     ...schema.fields
@@ -242,11 +244,24 @@ function emitEntityClass(concept: NodeId, repo: Repository): string
     })),
   ].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 
-  const refGetters = refMembers.map((m) =>
-    m.many
-      ? `  get ${camelCase(m.name)}(): readonly ${m.targetPascal}[] { return this.refs("${m.name}") as readonly ${m.targetPascal}[]; }`
-      : `  get ${camelCase(m.name)}(): ${m.targetPascal} | undefined { return this.ref("${m.name}") as ${m.targetPascal} | undefined; }`,
-  );
+  // Scalar fields and refs share one getter namespace; disambiguate collisions
+  // deterministically (scalars first) instead of emitting duplicate getters.
+  const getterNames = allocateUnique([
+    ...scalarFields.map((f) => camelCase(f.name)),
+    ...refMembers.map((m) => camelCase(m.name)),
+  ]);
+
+  const scalarGetters = scalarFields.map((f, i) => {
+    const ts = scalarTsType(f.type);
+    return `  get ${getterNames[i]}(): ${ts} { return this.field("${f.name}") as ${ts}; }`;
+  });
+
+  const refGetters = refMembers.map((m, i) => {
+    const name = getterNames[scalarFields.length + i];
+    return m.many
+      ? `  get ${name}(): readonly ${m.targetPascal}[] { return this.refs("${m.name}") as readonly ${m.targetPascal}[]; }`
+      : `  get ${name}(): ${m.targetPascal} | undefined { return this.ref("${m.name}") as ${m.targetPascal} | undefined; }`;
+  });
 
   const getters = [...scalarGetters, ...refGetters].join("\n");
   return `export class ${pascalCase(concept)} extends ReflectedEntity {\n${getters}\n}`;
