@@ -153,3 +153,65 @@ test("references to an alias are rebound to the canonical", () =>
 
     assert.deepEqual(model.related("n.r", EdgeKind.Relationship, Direction.Out, "points"), ["n.a"]);
 });
+
+function seedWithMatch(rules: string[][]): Repository
+{
+    const model = new Repository();
+    const b = model.builder();
+    b.setNamespace("n").defineConcept("n.C").addField("n.C", "email", "string")
+        .addField("n.C", "tax", "string").addField("n.C", "country", "string");
+    b.commit();
+    const mb = model.builder();
+    mb.setNamespace("n");
+    mb.defineMatch("n.C@match", "n.C", JSON.stringify(rules));
+    mb.commit();
+    return model;
+}
+
+function addRow(model: Repository, id: string, fields: Record<string, string | undefined>)
+{
+    const b = model.builder();
+    b.setNamespace("n").assertInstance("n.C", id);
+    for (const [k, v] of Object.entries(fields)) if (v !== undefined) b.setField(id, k, v);
+    b.commit();
+}
+
+test("two instances matching a rule collapse even with no identity key", () =>
+{
+    const model = seedWithMatch([["email"]]);
+    addRow(model, "n.b", { email: "x@y.z" });
+    addRow(model, "n.a", { email: "x@y.z" });
+    new ResolutionPass(model).Resolve();
+    assert.deepEqual(model.instancesOf("n.C"), ["n.a"]);
+    assert.equal(model.resolve("n.b")!.canonicalId, "n.a");
+});
+
+test("match rules cluster transitively via union-find", () =>
+{
+    const model = seedWithMatch([["email"], ["tax"]]);
+    addRow(model, "n.a", { email: "same@x.z", tax: "T1" });
+    addRow(model, "n.b", { email: "same@x.z", tax: "T2" });
+    addRow(model, "n.c", { email: "other@x.z", tax: "T2" });
+    new ResolutionPass(model).Resolve();
+    assert.deepEqual(model.instancesOf("n.C"), ["n.a"]);
+    assert.equal(model.resolve("n.b")!.canonicalId, "n.a");
+    assert.equal(model.resolve("n.c")!.canonicalId, "n.a");
+});
+
+test("a rule field undefined on one side does not merge", () =>
+{
+    const model = seedWithMatch([["tax", "country"]]);
+    addRow(model, "n.a", { tax: "T", country: "US" });
+    addRow(model, "n.b", { tax: "T" });
+    new ResolutionPass(model).Resolve();
+    assert.deepEqual(model.instancesOf("n.C").sort(), ["n.a", "n.b"]);
+});
+
+test("a multi-field rule requires ALL fields to agree", () =>
+{
+    const model = seedWithMatch([["tax", "country"]]);
+    addRow(model, "n.a", { tax: "T", country: "US" });
+    addRow(model, "n.b", { tax: "T", country: "CA" });
+    new ResolutionPass(model).Resolve();
+    assert.deepEqual(model.instancesOf("n.C").sort(), ["n.a", "n.b"]);
+});
