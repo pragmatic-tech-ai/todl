@@ -26,8 +26,7 @@ export class DataSourceAdapterCatalog
     public static readonly ServiceKey = new ServiceKey<DataSourceAdapterCatalog>("DataSourceAdapterCatalog");
 
     private static readonly NoAdapterMessage = "connector '{0}': no data-source adapter available for kind '{1}'";
-    private static readonly NamePlaceholder = "{0}";
-    private static readonly KindPlaceholder = "{1}";
+    private static readonly PlaceholderPattern = /\{(\d)\}/g;
 
     private readonly factories = new Map<DataSourceKind, IDataSourceAdapterFactory>();
     private readonly opened = new Map<string, Promise<IDataSourceAdapter>>();
@@ -67,19 +66,21 @@ export class DataSourceAdapterCatalog
     {
         const registered = this.factories.get(spec.Kind);
         if (registered) return registered;
+        let cause: unknown;
         if (this.provider)
         {
             try
             {
                 return await this.provider.Resolve(spec.Kind);
             }
-            catch
+            catch (error)
             {
-                // fall through to the connector diagnostic below
+                cause = error;
             }
         }
-        throw new Error(DataSourceAdapterCatalog.NoAdapterMessage
-            .replace(DataSourceAdapterCatalog.NamePlaceholder, spec.Name)
-            .replace(DataSourceAdapterCatalog.KindPlaceholder, spec.Kind));
+        const args: string[] = [spec.Name, spec.Kind];
+        const message = DataSourceAdapterCatalog.NoAdapterMessage.replace(
+            DataSourceAdapterCatalog.PlaceholderPattern, (_match, index: string) => args[Number(index)] ?? "");
+        throw cause === undefined ? new Error(message) : new Error(message, { cause });
     }
 }
