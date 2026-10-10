@@ -99,6 +99,7 @@ export class ConnectorWorkingCopy
         return { Results: results, Diagnostics: diagnostics };
     }
 
+    /** A canonical whose targets resolve to no writable binding (including none matching at all) is treated as read-only and yields connector.read-only. */
     private Record(instanceId: string, kind: WriteOperationKind): Diagnostic | undefined
     {
         const targets = this.writeTargets.get(instanceId) ?? [];

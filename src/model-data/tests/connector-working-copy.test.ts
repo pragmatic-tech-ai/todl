@@ -8,7 +8,7 @@ import type { IDataSourceAdapter } from "../data-source-adapter.js";
 import type { ResolvedConnection } from "../connector-plan.js";
 import { ConnectorWorkingCopy } from "../connector-working-copy.js";
 import { DiagnosticCode } from "../../compiler-services/diagnostics/diagnostic.js";
-import type { JsonNode } from "../../compiler-services/emit/json.js";
+import type { JsonNode, TodlDocument } from "../../compiler-services/emit/json.js";
 import { CountingAdapterFactory, InMemoryAdapterFactory } from "./fakes.js";
 
 class RecordingFactory extends CountingAdapterFactory
@@ -246,10 +246,17 @@ test("Flush fans a merged canonical out to every writable source and reports rea
     const catalog = new DataSourceAdapterCatalog().Register(factory);
     const services = new ServiceProvider();
 
-    const copy = new ConnectorWorkingCopy(plan, { nodes: [node], edges: [] } as never, writeTargets);
+    const document: TodlDocument = { nodes: [node], edges: [] };
+    const copy = new ConnectorWorkingCopy(plan, document, writeTargets);
     assert.equal(copy.MarkDirty(canonicalId), undefined);
     const outcome = await copy.Flush(catalog, services);
 
     assert.equal(outcome.Results.reduce((n, r) => n + r.Applied, 0), 1);
     assert.ok(outcome.Diagnostics.some(d => d.code === DiagnosticCode.ConnectorReadOnly));
+
+    const query = { Fields: ["customer_id", "email"] };
+    const contacts = await factory.Adapter.Query({ ...query, Source: "contacts" } as QueryRequest);
+    const legacy = await factory.Adapter.Query({ ...query, Source: "legacy" } as QueryRequest);
+    assert.deepEqual(contacts, [{ customer_id: "C1", email: "merged@acme.com" }]);
+    assert.deepEqual(legacy, []);
 });
