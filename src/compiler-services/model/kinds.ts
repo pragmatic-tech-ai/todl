@@ -18,6 +18,7 @@ export enum MetaKind
   Operator = "operator",
   Identity = "identity",
   Match = "match",
+  Merge = "merge",
 }
 
 /** Reserved id of the singleton package node that hosts package-level annotations. */

@@ -829,6 +829,60 @@ export function loadInto(
   }
   matchBuilder.commit(undefinedIds);
 
+  // ═══════════════════════ MERGE declarations (entity-identity) ═════════════════════
+  // Lower each `merge <Concept> { prefer ...; }`. Rules accumulate per concept (first
+  // rule per field wins) into ONE `<concept>@merge` node; invalid rules are diagnosed
+  // and dropped while the others survive.
+  const mergeBuilder = model.builder();
+  const mergeRulesByConcept = new Map<NodeId, { field: string; strategy: string; source: string | null }[]>();
+  const mergeConceptOrder: NodeId[] = [];
+  for (const { ns, imports, uri, decl: declaration } of units)
+  {
+    if (declaration.kind !== DeclKind.Merge) continue;
+    mergeBuilder.setNamespace(ns);
+    if (rec !== undefined) rec.current = uri;
+    const resolved = resolveRef(declaration.concept, { ns, imports });
+    const conceptId = resolved.kind === "qualified" ? resolved.flat : declaration.concept;
+    if (resolved.kind === "undefined" || resolved.kind === "unreachable" || model.resolve(conceptId)?.metaKind !== MetaKind.Concept)
+    {
+      diagnostics.push({
+        code: DiagnosticCode.MergeUnknownConcept, severity: Severity.Error,
+        message: `merge references unknown concept "${declaration.concept}"`,
+        span: declaration.conceptSpan ?? declaration.span, node: declaration.concept, path: null,
+      });
+      continue;
+    }
+    const fieldNames = new Set(model.effectiveSchema(conceptId).fields.map((f) => f.name));
+    for (const rule of declaration.rules)
+    {
+      if (!fieldNames.has(rule.field))
+      {
+        diagnostics.push({
+          code: DiagnosticCode.MergeUnknownField, severity: Severity.Error,
+          message: `merge rule field "${rule.field}" is not a field of "${declaration.concept}"`,
+          span: rule.fieldSpan ?? rule.span, node: conceptId, path: rule.field,
+        });
+        continue;
+      }
+      const serialized = { field: rule.field, strategy: rule.strategy as string, source: rule.source };
+      const existing = mergeRulesByConcept.get(conceptId);
+      if (existing === undefined)
+      {
+        mergeRulesByConcept.set(conceptId, [serialized]);
+        mergeConceptOrder.push(conceptId);
+      }
+      else if (!existing.some((r) => r.field === rule.field)) existing.push(serialized);
+    }
+  }
+  for (const conceptId of mergeConceptOrder)
+  {
+    const mergeId = `${conceptId}@merge`;
+    if (model.has(mergeId)) continue;
+    mergeBuilder.defineMerge(mergeId, conceptId, JSON.stringify(mergeRulesByConcept.get(conceptId)!));
+    recordHome(rec, mergeId);
+  }
+  mergeBuilder.commit(undefinedIds);
+
   // ═══════════════════════════ PASS 2b: instances & models ═════════════════════
   // Stage the concrete graph: model containers, their objects, deferred term
   // compositions/values, and reified edges. This is where authored VALUES turn into

@@ -64,6 +64,7 @@ export class Builder
    *  two candidate variable names a `same when` rule may reference. */
   public static readonly MatchConceptAttr = Builder.IdentityConceptAttr;
   public static readonly MatchRulesAttr = "rules";
+  public static readonly MergeRulesAttr = "rules";
   public static readonly MatchLeftVar = "a";
   public static readonly MatchRightVar = "b";
 
@@ -298,6 +299,16 @@ export class Builder
     this.stagedNodes.push(this.makeNode(id, Tier.Ontology, { metaKind: MetaKind.Match }));
     this.stagedAttrs.push({ id, name: Builder.MatchConceptAttr, value: concept });
     this.stagedAttrs.push({ id, name: Builder.MatchRulesAttr, value: rulesJson });
+    return this;
+  }
+
+  /** Define a merge node (Ontology-tier) carrying `concept`'s survivorship rules as a
+   *  JSON array of `{ field, strategy, source }`. */
+  defineMerge(id: NodeId, concept: NodeId, rulesJson: string): this
+  {
+    this.stagedNodes.push(this.makeNode(id, Tier.Ontology, { metaKind: MetaKind.Merge }));
+    this.stagedAttrs.push({ id, name: Builder.MatchConceptAttr, value: concept });
+    this.stagedAttrs.push({ id, name: Builder.MergeRulesAttr, value: rulesJson });
     return this;
   }
 
