@@ -198,6 +198,18 @@ export class Repository
     return this.graph.inEdges(id);
   }
 
+  /** Write one scalar attribute onto node `id`; see {@link Graph.setAttr}. */
+  setAttr(id: NodeId, name: string, value: Scalar): void
+  {
+    this.graph.setAttr(id, name, value);
+  }
+
+  /** Add a relationship edge; see {@link Graph.addEdge}. */
+  addEdge(edge: Edge): void
+  {
+    this.graph.addEdge(edge);
+  }
+
   /** Mark `aliasId` as a duplicate of `canonicalId`; see {@link Graph.alias}. */
   alias(aliasId: NodeId, canonicalId: NodeId): void
   {
