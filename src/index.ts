@@ -62,6 +62,7 @@ export {
     ReflectedRepository,
     ReflectedEntity,
     type EntityReader,
+    type EntityHost,
 } from './reflection-client/index.js';
 
 export { ModelDataSource } from './model-data/model-data-source.js';
@@ -71,7 +72,8 @@ export { BundledModelDataConnector } from './model-data/bundled-model-data-conne
 export { ModelRegistry } from './model-data/model-registry.js';
 export { PopulationBuilder } from './model-data/population-builder.js';
 export { ConnectorWorkingCopy } from './model-data/connector-working-copy.js';
-export { FederatedModelDataConnector } from './model-data/federated-model-data-connector.js';
+export { FederatedModelDataConnector, type IConnectorQueryFilterProvider } from './model-data/federated-model-data-connector.js';
+export type { IInstanceFilter, IInstanceView } from './model-data/instance-filter.js';
 export { ModelShardExtractor } from './model-data/model-shard-extractor.js';
 export { ApplicationRootResolver } from './model-data/application-root-resolver.js';
 export { GenericModelDataSource } from './model-data/generic-model-data-source.js';
@@ -84,6 +86,9 @@ export {
   type ExternalFieldValue,
   type ExternalRecord,
   type QueryRequest,
+  QueryCompareOp,
+  type QueryFilter,
+  type QueryComparison,
   type ResolvedConnection,
   WriteOperationKind,
   type WriteOperation,
@@ -438,3 +443,22 @@ export { TarArchive, type TarEntry, type TarFile } from './solution-services/pac
 export { BuildService, type PublishOutcome as BuildPublishOutcome } from './solution-services/todl-build-system/build-service.js';
 export { InMemoryBuildStorage } from './solution-services/todl-build-system/in-memory-build-storage.js';
 export { ScopeFlatteningStorage } from './solution-services/todl-build-system/scope-flattening-storage.js';
+
+// Policy predicate surface (consumed by the identity bridge)
+export {
+  PolicyNodeKind,
+  PolicyRefRoot,
+  PolicyBoolOp,
+  PolicyCompareOp,
+  PolicyPredicateMembers,
+  type PolicyPredicate,
+  type PolicyRef,
+  type PolicyLiteral,
+  type PolicyOperand,
+  type PolicyCompare,
+  type PolicyMembership,
+  type PolicyBool,
+  type PolicyNot,
+} from './compiler-services/policy/policy-predicate.js';
+export { PolicyPredicateCodec } from './compiler-services/policy/policy-predicate-codec.js';
+export { parsePolicyPredicate, PolicyParseError } from './compiler-services/policy/policy-predicate-parser.js';
