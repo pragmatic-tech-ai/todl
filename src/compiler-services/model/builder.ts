@@ -77,6 +77,7 @@ export class Builder
   public static readonly ConnectorSecretAttr = "secret";
   /** Reserved population-binding attr keys (`fieldMap` is a JSON member->field object). */
   public static readonly BindingConceptAttr = Builder.IdentityConceptAttr;
+  public static readonly BindingModelAttr = "model";
   public static readonly BindingConnectorAttr = "connector";
   public static readonly BindingSourceAttr = "source";
   public static readonly BindingIdKeyAttr = "idKey";
@@ -353,6 +354,7 @@ export class Builder
    *  `source` of `connector` (a connector node id), with a total member->field map. */
   defineBinding(
     id: NodeId,
+    modelId: NodeId,
     concept: NodeId,
     connector: NodeId,
     source: string,
@@ -362,6 +364,7 @@ export class Builder
   ): this
   {
     this.stagedNodes.push(this.makeNode(id, Tier.Ontology, { metaKind: MetaKind.Population }));
+    this.stagedAttrs.push({ id, name: Builder.BindingModelAttr, value: modelId });
     this.stagedAttrs.push({ id, name: Builder.BindingConceptAttr, value: concept });
     this.stagedAttrs.push({ id, name: Builder.BindingConnectorAttr, value: connector });
     this.stagedAttrs.push({ id, name: Builder.BindingSourceAttr, value: source });

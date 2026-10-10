@@ -24,7 +24,7 @@ class Harness
 
     static population(model: ReturnType<typeof load>["model"], concept: string)
     {
-        const attrs = model.resolve(`d.${concept}@populate`)?.attrs;
+        const attrs = model.resolve(`d.m@populate:d.${concept}`)?.attrs;
         assert.ok(attrs, "population node missing");
         return attrs;
     }
@@ -87,4 +87,34 @@ test("connector and population nodes land in the model with expected attrs", () 
     assert.equal(p.get(Builder.BindingWritableAttr), false);
     assert.equal(p.get(Builder.BindingConceptAttr), "d.Customer");
     assert.deepEqual(JSON.parse(String(p.get(Builder.BindingFieldMapAttr))), { id: "id", name: "name" });
+});
+
+test("binding carries its model id; two models populating one concept keep distinct nodes", () =>
+{
+    const { model, diagnostics } = Harness.compile(
+        `connect pg; populate Order;`, `model m2 : d { connect pg; populate Order; }`);
+    assert.deepEqual(diagnostics, []);
+    const ids = model.nodesOfMetaKind(MetaKind.Population);
+    assert.equal(ids.length, 2);
+    assert.equal(new Set(ids).size, 2);
+    const models = ids.map((i) => String(model.resolve(i)!.attrs.get(Builder.BindingModelAttr))).sort();
+    assert.deepEqual(models, ["d.m", "d.m2"]);
+});
+
+test("id member always equals idKey; key clause beats an id override", () =>
+{
+    const { model } = Harness.compile(`connect pg; populate Order key order_id { id = "other"; }`);
+    const a = Harness.population(model, "Order");
+    const map = JSON.parse(String(a.get(Builder.BindingFieldMapAttr)));
+    assert.equal(map[Builder.IdMember], a.get(Builder.BindingIdKeyAttr));
+    assert.equal(map[Builder.IdMember], "order_id");
+});
+
+test("connector from another namespace is unresolved", () =>
+{
+    const { diagnostics } = load([
+        { uri: "o.todl", text: `namespace o { datasource x { kind = sql; } }` },
+        { uri: "d.todl", text: `namespace d { concept Order { total : string; } model m : d { populate Order from x; } }` },
+    ]);
+    assert.ok(diagnostics.some((d) => d.code === DiagnosticCode.ConnectorUnresolvedConnector));
 });
