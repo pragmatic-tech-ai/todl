@@ -42,6 +42,7 @@ export class ConnectionResolver implements IConnectionResolver
 
     private async ResolveSecret(spec: ConnectorSpec, named: ConnectionSpec | undefined, services: IServiceProvider): Promise<string | undefined>
     {
+        // Deliberate: a named secret missing from the store yields no Secret (no throw, no env fallback), mirroring PackageManagerService.ResolveSecret; the adapter surfaces the real failure at connect time.
         if (spec.Secret !== undefined)
         {
             return services.getRequired(SecretStoreKey).Get(spec.Secret);
