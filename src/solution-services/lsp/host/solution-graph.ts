@@ -4,6 +4,8 @@ import { loadInto } from '../../../compiler-services/parse/loader.js';
 import { preludeDocument, preludeNames } from '../../../compiler-services/stdlib/prelude.js';
 import { validate } from '../../../compiler-services/validate/validate.js';
 import { Repository } from '../../../compiler-services/model/model.js';
+import { MetaKind } from '../../../compiler-services/model/kinds.js';
+import { ResolutionPass } from '../../../compiler-services/resolution/resolution-pass.js';
 import { SnowflakeIdGenerator, type IdGenerator } from '../../../compiler-services/model/id-generator.js';
 import { DiagnosticCode, type Diagnostic } from '../../../compiler-services/diagnostics/diagnostic.js';
 import type { SourceFile } from '../../../compiler-services/diagnostics/span.js';
@@ -227,6 +229,26 @@ export class SolutionGraph
         // incremental path below and any repair rebuild honor it.
         const priorSources = [...(state.sourcesOf.get(memberId) ?? [])];
         state.sourcesOf.set(memberId, [...sources]);
+        if (this.HasResolutionRules(state))
+        {
+            // BuildInternal swaps in the fresh state BEFORE emitting. Repair only when the
+            // rebuild failed pre-swap; a post-swap throw (a Changed subscriber) keeps the edit.
+            const prior = this.state;
+            try
+            {
+                this.RebuildFromState();
+            }
+            catch (e)
+            {
+                if (this.state === prior)
+                {
+                    this.RepairFailedReplace(memberId, priorSources);
+                    return;
+                }
+                throw e;
+            }
+            return;
+        }
         const affectedSet = new Set<string>([memberId, ...this.DependentsOf(memberId)]);
         const affected = this.TopoOrder([...state.membersById.values()])
             .filter(m => affectedSet.has(m.id));
@@ -272,6 +294,26 @@ export class SolutionGraph
         const owningId = this.FindOwningMember(state, fileUri);
         const priorSources = [...(state.sourcesOf.get(owningId) ?? [])];
         state.sourcesOf.set(owningId, [...memberSources]);
+        if (this.HasResolutionRules(state))
+        {
+            // BuildInternal swaps in the fresh state BEFORE emitting. Repair only when the
+            // rebuild failed pre-swap; a post-swap throw (a Changed subscriber) keeps the edit.
+            const prior = this.state;
+            try
+            {
+                this.RebuildFromState();
+            }
+            catch (e)
+            {
+                if (this.state === prior)
+                {
+                    this.RepairFailedReplace(owningId, priorSources);
+                    return;
+                }
+                throw e;
+            }
+            return;
+        }
 
         const dependentIds = this.DependentsOf(owningId);
         const dependents = this.TopoOrder([...state.membersById.values()])
@@ -574,7 +616,17 @@ export class SolutionGraph
                 this.AddDiagnostics(state, diags);
             }
         }
+        this.AddDiagnostics(state, new ResolutionPass(state.model, state.provenance).Resolve());
         this.AddDiagnostics(state, validate(state.model));
+    }
+
+    // Resolve() folds attrs/edges onto canonicals; a single member/file strip-and-reload cannot
+    // undo that, so incremental edits fall back to a full rebuild when rules are present.
+    private HasResolutionRules(state: GraphState): boolean
+    {
+        return state.model.nodesOfMetaKind(MetaKind.Identity).length > 0
+            || state.model.nodesOfMetaKind(MetaKind.Match).length > 0
+            || state.model.nodesOfMetaKind(MetaKind.Merge).length > 0;
     }
 
     private AddDiagnostics(state: GraphState, diags: readonly Diagnostic[]): void
