@@ -50,3 +50,33 @@ test("an unsupported rule shape is reported but other clauses still lower", () =
     const rules = JSON.parse(String(node.attrs.get(Builder.MatchRulesAttr))) as string[][];
     assert.deepEqual(rules, [["tax"]]);
 });
+
+test("rules from two match blocks for the same concept union into one node", () =>
+{
+    const { model, diagnostics } = Harness.compile(
+        `namespace n { concept C { email : string; tax : string; }
+         match C { same when a.email == b.email; }
+         match C { same when a.tax == b.tax; } }`);
+    assert.deepEqual(diagnostics, []);
+    const ids = model.nodesOfMetaKind(MetaKind.Match);
+    assert.equal(ids.length, 1);
+    const rules = JSON.parse(String(model.resolve(ids[0]!)!.attrs.get(Builder.MatchRulesAttr))) as string[][];
+    assert.deepEqual(rules, [["email"], ["tax"]]);
+});
+
+test("duplicate rules collapse to one", () =>
+{
+    const { model } = Harness.compile(
+        `namespace n { concept C { email : string; }
+         match C { same when a.email == b.email; same when b.email == a.email; } }`);
+    const rules = JSON.parse(String(model.resolve(model.nodesOfMetaKind(MetaKind.Match)[0]!)!.attrs.get(Builder.MatchRulesAttr))) as string[][];
+    assert.deepEqual(rules, [["email"]]);
+});
+
+test("a block with only invalid clauses defines no match node", () =>
+{
+    const { model, diagnostics } = Harness.compile(
+        `namespace n { concept C { x : string; } match C { same when a.x == "lit"; } }`);
+    assert.ok(diagnostics.some((d) => d.code === DiagnosticCode.MatchUnsupportedRule));
+    assert.deepEqual(model.nodesOfMetaKind(MetaKind.Match), []);
+});

@@ -33,3 +33,12 @@ test("an empty match body parses with no rules and no diagnostics", () =>
     assert.ok(m);
     assert.equal(m!.rules.length, 0);
 });
+
+test("a malformed match clause is diagnosed while a following clause still parses", () =>
+{
+    const result = parse(`namespace n { concept C { x : string; } match C { same foo; same when a.x == b.x; } }`);
+    assert.ok(result.diagnostics.length > 0, "expected a diagnostic for the malformed clause");
+    const m = result.namespace.declarations.find((x) => x.kind === DeclKind.Match) as { rules: unknown[] } | undefined;
+    assert.ok(m);
+    assert.equal(m!.rules.length, 1);
+});

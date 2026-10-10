@@ -1,4 +1,3 @@
-
 /** A disjoint-set (union-find) with path compression. Used by the resolution
  * pass to cluster instances that are the same entity under identity-key equality
  * and match rules, then collapse each cluster to a canonical node. */

@@ -34,7 +34,11 @@ export class ResolutionPass
             const concept = node?.attrs.get(Builder.MatchConceptAttr);
             const rulesRaw = node?.attrs.get(Builder.MatchRulesAttr);
             if (typeof concept !== "string" || typeof rulesRaw !== "string") continue;
-            rulesOf.set(concept, JSON.parse(rulesRaw) as string[][]);
+            let rules: unknown;
+            try { rules = JSON.parse(rulesRaw); }
+            catch { continue; }
+            if (!Array.isArray(rules)) continue;
+            rulesOf.set(concept, rules as string[][]);
         }
 
         const concepts = new Set<NodeId>([...keyOf.keys(), ...rulesOf.keys()]);

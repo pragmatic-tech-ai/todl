@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import { Repository } from "../../model/model.js";
 import { Direction, EdgeKind } from "../../model/graph.js";
+import { Builder } from "../../model/builder.js";
 import { ResolutionPass } from "../resolution-pass.js";
 
 function seed(): Repository
@@ -168,7 +169,7 @@ function seedWithMatch(rules: string[][]): Repository
     return model;
 }
 
-function addRow(model: Repository, id: string, fields: Record<string, string | undefined>)
+function addRow(model: Repository, id: string, fields: Record<string, string | number | undefined>)
 {
     const b = model.builder();
     b.setNamespace("n").assertInstance("n.C", id);
@@ -214,4 +215,54 @@ test("a multi-field rule requires ALL fields to agree", () =>
     addRow(model, "n.b", { tax: "T", country: "CA" });
     new ResolutionPass(model).Resolve();
     assert.deepEqual(model.instancesOf("n.C").sort(), ["n.a", "n.b"]);
+});
+
+test("two instances both missing a rule field do not merge on an undefined signature", () =>
+{
+    const model = seedWithMatch([["tax", "country"]]);
+    addRow(model, "n.a", { tax: "T" });
+    addRow(model, "n.b", { tax: "T" });
+    new ResolutionPass(model).Resolve();
+    assert.deepEqual(model.instancesOf("n.C").sort(), ["n.a", "n.b"]);
+});
+
+test("a number and a string with the same text do not merge (typeof-prefixed signature)", () =>
+{
+    const model = seedWithMatch([["tax"]]);
+    addRow(model, "n.a", { tax: 1 });
+    addRow(model, "n.b", { tax: "1" });
+    addRow(model, "n.c", { tax: 1 });
+    new ResolutionPass(model).Resolve();
+    assert.deepEqual(model.instancesOf("n.C").sort(), ["n.a", "n.b"]);
+    assert.equal(model.resolve("n.c")!.canonicalId, "n.a");
+});
+
+test("a corrupt match rules attribute is skipped rather than throwing", () =>
+{
+    const model = seedWithMatch([["email"]]);
+    model.resolve("n.C@match")!.attrs.set(Builder.MatchRulesAttr, "{not json");
+    addRow(model, "n.a", { email: "x" });
+    addRow(model, "n.b", { email: "x" });
+    new ResolutionPass(model).Resolve();
+    assert.deepEqual(model.instancesOf("n.C").sort(), ["n.a", "n.b"]);
+});
+
+test("identity key and match rule chain: a~b by key, b~c by rule, one canonical", () =>
+{
+    const model = new Repository();
+    const b = model.builder();
+    b.setNamespace("n").defineConcept("n.C").addField("n.C", "email", "string").addField("n.C", "tax", "string");
+    b.commit();
+    const ib = model.builder();
+    ib.setNamespace("n");
+    ib.defineIdentity("n.C@identity", "n.C", "email");
+    ib.defineMatch("n.C@match", "n.C", JSON.stringify([["tax"]]));
+    ib.commit();
+    addRow(model, "n.a", { email: "e1", tax: "T1" });
+    addRow(model, "n.b", { email: "e1", tax: "T2" });
+    addRow(model, "n.c", { email: "e3", tax: "T2" });
+    new ResolutionPass(model).Resolve();
+    assert.deepEqual(model.instancesOf("n.C"), ["n.a"]);
+    assert.equal(model.resolve("n.b")!.canonicalId, "n.a");
+    assert.equal(model.resolve("n.c")!.canonicalId, "n.a");
 });

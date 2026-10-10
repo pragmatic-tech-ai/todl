@@ -817,7 +817,7 @@ export function loadInto(
         matchRulesByConcept.set(conceptId, [normalized]);
         matchConceptOrder.push(conceptId);
       }
-      else existing.push(normalized);
+      else if (!existing.some((r) => r.join(",") === normalized.join(","))) existing.push(normalized);
     }
   }
   for (const conceptId of matchConceptOrder)

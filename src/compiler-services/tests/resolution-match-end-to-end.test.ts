@@ -24,9 +24,9 @@ namespace shop
     public static readonly Uri = "shop.todl";
     public static readonly CustomerConcept = "shop.Customer";
 
-    public static Check()
+    public static Check(source: string = ResolutionMatchEndToEndFixture.Source): ReturnType<typeof check>
     {
-        return check([{ uri: ResolutionMatchEndToEndFixture.Uri, text: ResolutionMatchEndToEndFixture.Source }]);
+        return check([{ uri: ResolutionMatchEndToEndFixture.Uri, text: source }]);
     }
 }
 
@@ -36,4 +36,13 @@ test("identity key and match rule fuse transitively into one canonical", () =>
     assert.deepEqual(diagnostics.filter((d) => d.severity === Severity.Error), []);
     // a~b via tax match; b~c via email key; so {a,b,c} is one entity.
     assert.equal(model.instancesOf(ResolutionMatchEndToEndFixture.CustomerConcept).length, 1);
+});
+
+test("without the match rule the same fixture leaves two Customers", () =>
+{
+    const source = ResolutionMatchEndToEndFixture.Source.replace(/^\s*match Customer.*$/m, "");
+    assert.ok(!source.includes("match Customer"));
+    const { model } = ResolutionMatchEndToEndFixture.Check(source);
+    // b~c by email key only; a stays separate.
+    assert.equal(model.instancesOf(ResolutionMatchEndToEndFixture.CustomerConcept).length, 2);
 });

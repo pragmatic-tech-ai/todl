@@ -105,3 +105,16 @@ test("'not' binds tightly and negates a parenthesised comparison", () => {
   assert.equal(satisfies(serviceTask(null), predicate("not (this.assignee != none)"), "t1"), true);
   assert.equal(satisfies(serviceTask("x"), predicate("not (this.assignee != none)"), "t1"), false);
 });
+
+test("'not a == b' is '(not a) == b'", () => {
+  assert.deepEqual(predicate("not a == b"), predicate("(not a) == b"));
+});
+
+test("'not not x' is a double Not over the name", () => {
+  const expr = predicate("not not x");
+  assert.equal(expr.kind, ExprKind.Unary);
+  assert.equal(expr.op, UnaryOp.Not);
+  assert.equal(expr.operand.kind, ExprKind.Unary);
+  assert.equal(expr.operand.op, UnaryOp.Not);
+  assert.deepEqual(expr.operand.operand, predicate("x"));
+});

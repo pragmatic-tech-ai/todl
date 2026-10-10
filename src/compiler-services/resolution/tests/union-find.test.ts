@@ -21,6 +21,13 @@ test("Clusters groups transitively and is order-independent", () =>
     const clusters = ds.Clusters().map((c) => [...c].sort());
     clusters.sort((p, q) => (p[0]! < q[0]! ? -1 : 1));
     assert.deepEqual(clusters, [["a"], ["m", "z"]]);
+
+    const reversed = new DisjointSet<string>();
+    for (const x of ["m", "a", "z"]) reversed.Add(x);
+    reversed.Union("z", "m");
+    const other = reversed.Clusters().map((c) => [...c].sort());
+    other.sort((p, q) => (p[0]! < q[0]! ? -1 : 1));
+    assert.deepEqual(other, clusters);
 });
 
 test("Union on an un-added element adds it", () =>
@@ -28,4 +35,12 @@ test("Union on an un-added element adds it", () =>
     const ds = new DisjointSet<string>();
     ds.Union("x", "y");
     assert.equal(ds.Find("x"), ds.Find("y"));
+});
+
+test("an element added only via Union still appears in Clusters", () =>
+{
+    const ds = new DisjointSet<string>();
+    ds.Union("x", "y");
+    const clusters = ds.Clusters().map((c) => [...c].sort());
+    assert.deepEqual(clusters, [["x", "y"]]);
 });
