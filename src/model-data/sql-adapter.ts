@@ -1,4 +1,4 @@
-import { WriteOperationKind } from "./connector-plan.js";
+import { QueryCompareOp, WriteOperationKind } from "./connector-plan.js";
 import type { ExternalFieldValue, ExternalRecord, QueryRequest, WriteBatch, WriteConflict, WriteOperation, WriteResult } from "./connector-plan.js";
 import type { IDataSourceAdapter } from "./data-source-adapter.js";
 import type { ISqlSession, SqlRow } from "./sql-session.js";
@@ -9,6 +9,11 @@ export class SqlQueryTranslator
     private static readonly SelectKeyword = "SELECT ";
     private static readonly FromKeyword = " FROM ";
     private static readonly ListSeparator = ", ";
+    private static readonly WhereKeyword = " WHERE ";
+    private static readonly AndKeyword = " AND ";
+    private static readonly EqualsOperator = " = ";
+    private static readonly NotEqualsOperator = " <> ";
+    private static readonly PlaceholderPrefix = "$";
     private static readonly IdentQuote = "\"";
     private static readonly EscapedIdentQuote = "\"\"";
 
@@ -26,12 +31,30 @@ export class SqlQueryTranslator
 
     public async Query(request: QueryRequest): Promise<readonly ExternalRecord[]>
     {
-        const sql = SqlQueryTranslator.SelectKeyword
+        let sql = SqlQueryTranslator.SelectKeyword
             + request.Fields.map((f) => SqlQueryTranslator.QuoteIdent(f)).join(SqlQueryTranslator.ListSeparator)
             + SqlQueryTranslator.FromKeyword
             + SqlQueryTranslator.QuoteIdent(request.Source);
-        const rows = await this.session.Query(sql, []);
+        const params: ExternalFieldValue[] = [];
+        if (request.Where !== undefined && request.Where.All.length > 0)
+        {
+            const terms: string[] = [];
+            for (const comparison of request.Where.All)
+            {
+                params.push(comparison.Value);
+                terms.push(SqlQueryTranslator.QuoteIdent(comparison.Field)
+                    + SqlQueryTranslator.OperatorSql(comparison.Op)
+                    + SqlQueryTranslator.PlaceholderPrefix + params.length);
+            }
+            sql += SqlQueryTranslator.WhereKeyword + terms.join(SqlQueryTranslator.AndKeyword);
+        }
+        const rows = await this.session.Query(sql, params);
         return rows.map(row => SqlQueryTranslator.ToRecord(row));
+    }
+
+    private static OperatorSql(op: QueryCompareOp): string
+    {
+        return op === QueryCompareOp.Neq ? SqlQueryTranslator.NotEqualsOperator : SqlQueryTranslator.EqualsOperator;
     }
 
     private static ToRecord(row: SqlRow): ExternalRecord
