@@ -44,6 +44,8 @@ export class DocumentSymbolProvider
                 return null; // a match declaration has no name of its own to surface
             case DeclKind.Merge:
                 return null; // a merge declaration has no name of its own to surface
+            case DeclKind.Policy:
+                return null; // a policy declaration has no name of its own to surface
             case DeclKind.Connector:
                 return this.leaf(decl.name, LspSymbolKind.Interface, range, this.nameRange(decl.nameSpan, range));
         }

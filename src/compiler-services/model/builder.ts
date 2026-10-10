@@ -65,6 +65,9 @@ export class Builder
   public static readonly MatchConceptAttr = Builder.IdentityConceptAttr;
   public static readonly MatchRulesAttr = "rules";
   public static readonly MergeRulesAttr = "rules";
+  /** Reserved policy-node attr keys (the concept reuses the identity key). */
+  public static readonly PolicyConceptAttr = Builder.IdentityConceptAttr;
+  public static readonly PolicyRulesAttr = "rules";
   /** Reserved connector-node attr keys. `config` is a JSON object of the inline
    *  NON-secret assignments (everything except kind/connection/secret). */
   public static readonly ConnectorNameAttr = "name";
@@ -328,6 +331,16 @@ export class Builder
     this.stagedNodes.push(this.makeNode(id, Tier.Ontology, { metaKind: MetaKind.Merge }));
     this.stagedAttrs.push({ id, name: Builder.MatchConceptAttr, value: concept });
     this.stagedAttrs.push({ id, name: Builder.MergeRulesAttr, value: rulesJson });
+    return this;
+  }
+
+  /** Define a policy node (Ontology-tier) carrying `concept`'s access rules as a
+   *  JSON array of `{ effect, action, predicate }`. */
+  definePolicy(id: NodeId, concept: NodeId, rulesJson: string): this
+  {
+    this.stagedNodes.push(this.makeNode(id, Tier.Ontology, { metaKind: MetaKind.Policy }));
+    this.stagedAttrs.push({ id, name: Builder.PolicyConceptAttr, value: concept });
+    this.stagedAttrs.push({ id, name: Builder.PolicyRulesAttr, value: rulesJson });
     return this;
   }
 
