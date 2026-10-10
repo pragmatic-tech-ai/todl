@@ -141,3 +141,23 @@ export class ConnectorPlanProjection
         return result;
     }
 }
+
+/** Single home for resolving a binding's connector name to its spec within a plan. */
+export class ConnectorLookup
+{
+    private static readonly UnknownConnectorPrefix = "binding for '";
+    private static readonly UnknownConnectorMiddle = "' references unknown connector '";
+    private static readonly UnknownConnectorSuffix = "'";
+
+    public static Find(connectors: readonly ConnectorSpec[], binding: ConnectorBinding): ConnectorSpec
+    {
+        const spec = connectors.find(candidate => candidate.Name === binding.Connector);
+        if (!spec)
+        {
+            throw new Error(`${ConnectorLookup.UnknownConnectorPrefix}${binding.Concept}`
+                + `${ConnectorLookup.UnknownConnectorMiddle}${binding.Connector}`
+                + ConnectorLookup.UnknownConnectorSuffix);
+        }
+        return spec;
+    }
+}

@@ -1,15 +1,12 @@
 import type { IServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
 import type { JsonNode, TodlDocument } from "../compiler-services/emit/json.js";
-import type { ConnectorBinding, ConnectorSpec, ExternalFieldValue, ModelConnectorPlan, WriteBatch, WriteOperation, WriteResult } from "./connector-plan.js";
-import { WriteOperationKind } from "./connector-plan.js";
+import type { ConnectorBinding, ExternalFieldValue, ModelConnectorPlan, WriteBatch, WriteOperation, WriteResult } from "./connector-plan.js";
+import { ConnectorLookup, WriteOperationKind } from "./connector-plan.js";
 import type { DataSourceAdapterCatalog } from "./data-source-adapter-catalog.js";
 
 /** Tracks edits to populated instances and flushes them to the owning adapters (last-write-wins upsert). */
 export class ConnectorWorkingCopy
 {
-    private static readonly UnknownConnectorPrefix = "binding for '";
-    private static readonly UnknownConnectorMiddle = "' references unknown connector '";
-    private static readonly UnknownConnectorSuffix = "'";
 
     private readonly bindings = new Map<string, ConnectorBinding>();
     private readonly nodes = new Map<string, JsonNode>();
@@ -39,6 +36,8 @@ export class ConnectorWorkingCopy
         {
             const binding = this.BindingOf(instanceId);
             if (!binding || !binding.Writable) continue;
+            // Writing brand-new instances without a source key (insert-with-generated-key) is a v1 limitation / follow-on.
+            if (this.nodes.get(instanceId)!.storageId == null) continue;
             const group = groups.get(binding) ?? [];
             group.push(instanceId);
             groups.set(binding, group);
@@ -49,7 +48,7 @@ export class ConnectorWorkingCopy
         {
             const operations = instanceIds.map(instanceId => this.OperationFor(binding, instanceId));
             const batch: WriteBatch = { Source: binding.Source, IdKey: binding.IdKey, Operations: operations };
-            const adapter = await catalog.Open(this.FindSpec(binding), services);
+            const adapter = await catalog.Open(ConnectorLookup.Find(this.plan.Connectors, binding), services);
             const result = await adapter.Apply(batch);
             results.push(result);
             const conflicted = new Set<ExternalFieldValue>(result.Conflicts.map(conflict => conflict.Key));
@@ -95,18 +94,6 @@ export class ConnectorWorkingCopy
                 fields[external] = value;
             }
         }
-        return { Kind: kind, Key: node.storageId, Fields: fields };
-    }
-
-    private FindSpec(binding: ConnectorBinding): ConnectorSpec
-    {
-        const spec = this.plan.Connectors.find(candidate => candidate.Name === binding.Connector);
-        if (!spec)
-        {
-            throw new Error(`${ConnectorWorkingCopy.UnknownConnectorPrefix}${binding.Concept}`
-                + `${ConnectorWorkingCopy.UnknownConnectorMiddle}${binding.Connector}`
-                + ConnectorWorkingCopy.UnknownConnectorSuffix);
-        }
-        return spec;
+        return { Kind: kind, Key: node.storageId!, Fields: fields };
     }
 }

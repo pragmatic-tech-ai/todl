@@ -6,6 +6,8 @@ import { DataSourceAdapterCatalog } from "../data-source-adapter-catalog.js";
 import { DataSourceKind, WriteOperationKind, type ModelConnectorPlan, type WriteBatch, type WriteResult } from "../connector-plan.js";
 import type { IDataSourceAdapter } from "../data-source-adapter.js";
 import type { ResolvedConnection } from "../connector-plan.js";
+import { ConnectorWorkingCopy } from "../connector-working-copy.js";
+import type { JsonNode } from "../../compiler-services/emit/json.js";
 import { CountingAdapterFactory } from "./fakes.js";
 
 class RecordingFactory extends CountingAdapterFactory
@@ -43,15 +45,18 @@ class WorkingCopyFixture
         this.Services.registerInstance(DataSourceAdapterCatalog.ServiceKey, this.Catalog);
     }
 
-    public Connector(): FederatedModelDataConnector
+    public Plan(): ModelConnectorPlan
     {
-        const plan: ModelConnectorPlan =
-        {
+        return {
             Model: "Sales", Version: "0.0.0",
             Connectors: [{ Name: "pg", Kind: DataSourceKind.Sql, Config: {} }],
             Bindings: [{ Concept: "a.Order", Connector: "pg", Source: "order", IdKey: "order_id", FieldMap: { id: "order_id", label: "display_name" }, Writable: this.Writable }],
         };
-        return new FederatedModelDataConnector(plan, { nodes: [], edges: [] });
+    }
+
+    public Connector(): FederatedModelDataConnector
+    {
+        return new FederatedModelDataConnector(this.Plan(), { nodes: [], edges: [] });
     }
 }
 
@@ -114,9 +119,47 @@ test("conflicted operation stays pending for retry", async () =>
     const wc = connector.WorkingCopy();
     wc.MarkDirty(doc.nodes.find(n => n.storageId === "O-1")!.id);
     fx.Factory.ConflictKey = "O-1";
-    await wc.Flush(fx.Catalog, fx.Services);
+    const first = await wc.Flush(fx.Catalog, fx.Services);
+    assert.equal(first.length, 1);
+    assert.equal(first[0]!.Conflicts[0]!.Key, "O-1");
     fx.Factory.ConflictKey = undefined;
     const retry = await wc.Flush(fx.Catalog, fx.Services);
     assert.equal(retry.length, 1);
     assert.equal(retry[0]!.Applied, 1);
+});
+
+test("MarkDirty of an instance whose concept has no binding is a no-op", async () =>
+{
+    const fx = new WorkingCopyFixture(true);
+    const connector = fx.Connector();
+    const doc = await connector.Prepare(fx.Services);
+    const orphan: JsonNode =
+    {
+        id: "a.Customer#c1", tier: "Instance", type: "a.Customer", metaKind: null, namespace: "a", localId: "Customer#c1",
+        isClass: false, class: null, storageId: "C-1", canonicalId: null, fields: [], attrs: { label: "Hand" },
+    };
+    doc.nodes.push(orphan);
+    const wc = new ConnectorWorkingCopy(fx.Plan(), doc);
+    wc.MarkDirty(orphan.id);
+    const results = await wc.Flush(fx.Catalog, fx.Services);
+    assert.equal(results.length, 0);
+    assert.equal(fx.Factory.Batches.length, 0);
+});
+
+test("dirty instance with no storageId produces no operation", async () =>
+{
+    const fx = new WorkingCopyFixture(true);
+    const connector = fx.Connector();
+    const doc = await connector.Prepare(fx.Services);
+    const fresh: JsonNode =
+    {
+        id: "a.Order#new", tier: "Instance", type: "a.Order", metaKind: null, namespace: "a", localId: "Order#new",
+        isClass: false, class: null, storageId: null, canonicalId: null, fields: [], attrs: { label: "New" },
+    };
+    doc.nodes.push(fresh);
+    const wc = new ConnectorWorkingCopy(fx.Plan(), doc);
+    wc.MarkDirty(fresh.id);
+    const results = await wc.Flush(fx.Catalog, fx.Services);
+    assert.equal(results.length, 0);
+    assert.equal(fx.Factory.Batches.length, 0);
 });

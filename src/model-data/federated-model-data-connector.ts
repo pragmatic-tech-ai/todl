@@ -1,6 +1,6 @@
 import type { IServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
 import type { TodlDocument } from "../compiler-services/emit/json.js";
-import type { ConnectorBinding, ConnectorSpec, ModelConnectorPlan, QueryRequest } from "./connector-plan.js";
+import { ConnectorLookup, type ConnectorBinding, type ModelConnectorPlan, type QueryRequest } from "./connector-plan.js";
 import { ConnectorWorkingCopy } from "./connector-working-copy.js";
 import { DataSourceAdapterCatalog } from "./data-source-adapter-catalog.js";
 import type { IModelDataConnector } from "./model-data-connector.js";
@@ -9,10 +9,6 @@ import { PopulationBuilder } from "./population-builder.js";
 /** Read path: pulls each bound population from its external source and merges it over the hand-authored shard. */
 export class FederatedModelDataConnector implements IModelDataConnector
 {
-    private static readonly UnknownConnectorPrefix = "binding for '";
-    private static readonly UnknownConnectorMiddle = "' references unknown connector '";
-    private static readonly UnknownConnectorSuffix = "'";
-
     private static readonly NotPreparedMessage = "WorkingCopy requires Prepare to have completed";
 
     private pending: Promise<TodlDocument> | undefined;
@@ -40,7 +36,7 @@ export class FederatedModelDataConnector implements IModelDataConnector
         const builder = new PopulationBuilder(this.base);
         for (const binding of this.plan.Bindings)
         {
-            const spec = this.FindSpec(binding);
+            const spec = ConnectorLookup.Find(this.plan.Connectors, binding);
             const adapter = await catalog.Open(spec, services);
             const records = await adapter.Query(FederatedModelDataConnector.RequestFor(binding));
             builder.Add(binding, records);
@@ -55,18 +51,6 @@ export class FederatedModelDataConnector implements IModelDataConnector
         if (!this.built) throw new Error(FederatedModelDataConnector.NotPreparedMessage);
         this.workingCopy ??= new ConnectorWorkingCopy(this.plan, this.built);
         return this.workingCopy;
-    }
-
-    private FindSpec(binding: ConnectorBinding): ConnectorSpec
-    {
-        const spec = this.plan.Connectors.find(candidate => candidate.Name === binding.Connector);
-        if (!spec)
-        {
-            throw new Error(`${FederatedModelDataConnector.UnknownConnectorPrefix}${binding.Concept}`
-                + `${FederatedModelDataConnector.UnknownConnectorMiddle}${binding.Connector}`
-                + FederatedModelDataConnector.UnknownConnectorSuffix);
-        }
-        return spec;
     }
 
     private static RequestFor(binding: ConnectorBinding): QueryRequest
