@@ -58,6 +58,7 @@ import { MatchRuleNormalizer } from "./match-rule-normalizer.js";
 import { ApplicationRootPass } from "./application-root-pass.js";
 import { Repository } from "../model/model.js";
 import { Builder, type TermInput } from "../model/builder.js";
+import { type ConnectionPolicy, ConnectionPolicies } from "../connectors/connection-policy.js";
 import type { Expr } from "../predicate/ast.js";
 import {
   DeclKind,
@@ -187,6 +188,7 @@ export function loadInto(
   reserved: ReadonlySet<string> = new Set(),
   idGenerator: IdGenerator = new SnowflakeIdGenerator(),
   provenance?: Map<string, string>,
+  policy: ConnectionPolicy = ConnectionPolicies.Default,
 ): Diagnostic[]
 {
   const diagnostics: Diagnostic[] = [];
@@ -890,10 +892,9 @@ export function loadInto(
   // (`<model>@populate:<concept>`, one per model+concept) whose FieldMap is TOTAL: convention
   // expansion maps every schema field to the same-named external field, then
   // explicit overrides are applied.
-  // DEFERRED (Plan 2): deployment-policy validation (inline config forbidden, model
-  // provider forbidden). Plan 1 accepts inline connector config unconditionally.
+  // The deployment `policy` rejects inline config / a model `provider` here.
   const connectorBuilder = model.builder();
-  const connectorReservedKeys = new Set<string>([Builder.ConnectorKindAttr, Builder.ConnectorConnectionAttr, Builder.ConnectorSecretAttr]);
+  const connectorReservedKeys = new Set<string>([Builder.ConnectorKindAttr, Builder.ConnectorConnectionAttr, Builder.ConnectorSecretAttr, Builder.ConnectorProviderAttr]);
   for (const { ns, uri, decl: declaration } of units)
   {
     if (declaration.kind !== DeclKind.Connector) continue;
@@ -915,9 +916,26 @@ export function loadInto(
         span: declaration.nameSpan ?? declaration.span, node: connectorId, path: null,
       });
     }
+    const providerValue = find(Builder.ConnectorProviderAttr);
+    if (!policy.InlineAllowed && Object.keys(config).length > 0)
+    {
+      diagnostics.push({
+        code: DiagnosticCode.ConnectorInlineForbidden, severity: Severity.Error,
+        message: `datasource "${declaration.name}" declares inline connection config (${Object.keys(config).join(", ")}), which the deployment policy forbids`,
+        span: declaration.nameSpan ?? declaration.span, node: connectorId, path: null,
+      });
+    }
+    if (providerValue !== null && !policy.ProviderAllowed)
+    {
+      diagnostics.push({
+        code: DiagnosticCode.ConnectorProviderForbidden, severity: Severity.Error,
+        message: `datasource "${declaration.name}" declares a provider, which the deployment policy forbids`,
+        span: declaration.nameSpan ?? declaration.span, node: connectorId, path: null,
+      });
+    }
     connectorBuilder.defineConnector(
       connectorId, declaration.name, find(Builder.ConnectorKindAttr), JSON.stringify(config),
-      find(Builder.ConnectorConnectionAttr), find(Builder.ConnectorSecretAttr));
+      find(Builder.ConnectorConnectionAttr), find(Builder.ConnectorSecretAttr), providerValue);
     recordHome(rec, connectorId);
   }
   connectorBuilder.commit(undefinedIds);

@@ -1,4 +1,5 @@
 import { loadInto } from "./parse/loader.js";
+import { type ConnectionPolicy, ConnectionPolicies } from "./connectors/connection-policy.js";
 import { type IdGenerator, SnowflakeIdGenerator } from "./model/id-generator.js";
 import { validate } from "./validate/validate.js";
 import { ResolutionPass } from "./resolution/resolution-pass.js";
@@ -38,9 +39,9 @@ import { preludeDocument, preludeNames } from "./stdlib/prelude.js";
  * model.instancesOf("Component");     // ["web", "api"]
  * ```
  */
-export function check(sources: SourceFile[], idGenerator?: IdGenerator): { model: Repository; diagnostics: Diagnostic[]; provenance: Map<string, string> }
+export function check(sources: SourceFile[], idGenerator?: IdGenerator, policy?: ConnectionPolicy): { model: Repository; diagnostics: Diagnostic[]; provenance: Map<string, string> }
 {
-  return checkAgainst([], sources, idGenerator);
+  return checkAgainst([], sources, idGenerator, policy);
 }
 
 /**
@@ -80,11 +81,12 @@ export function checkAgainst(
   bases: TodlDocument[],
   sources: SourceFile[],
   idGenerator: IdGenerator = new SnowflakeIdGenerator(),
+  policy: ConnectionPolicy = ConnectionPolicies.Default,
 ): { model: Repository; diagnostics: Diagnostic[]; provenance: Map<string, string> }
 {
   const model = new Repository(mergeBases([preludeDocument(), ...bases]));
   const provenance = new Map<string, string>();
-  const diagnostics = loadInto(model, sources, preludeNames(), idGenerator, provenance);
+  const diagnostics = loadInto(model, sources, preludeNames(), idGenerator, provenance, policy);
   const resolutionDiagnostics = new ResolutionPass(model, provenance).Resolve();
   return { model, diagnostics: [...diagnostics, ...resolutionDiagnostics, ...validate(model)], provenance };
 }
