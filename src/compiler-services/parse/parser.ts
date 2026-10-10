@@ -118,6 +118,11 @@ class ParseError extends Error
  */
 class Parser
 {
+  private static readonly ReadOnlyMember = "read-only";
+  private static readonly Hyphen = "-";
+  private static readonly ExpectedValueMessage = "expected a string or identifier value";
+  private static readonly ExpectedFieldMessage = "expected a field name";
+
   /** Index of the next UNCONSUMED token — the whole parser's only mutable state. */
   private pos = 0;
 
@@ -217,7 +222,7 @@ class Parser
       this.checkKeyword("model") || this.checkKeyword("annotation") ||
       this.checkKeyword("package") || this.checkKeyword("operator") ||
       this.checkKeyword("identity") || this.checkKeyword("match") ||
-      this.checkKeyword("merge") || this.checkKeyword("connector") ||
+      this.checkKeyword("merge") || this.checkKeyword("datasource") ||
       this.checkKeyword("class") || this.checkKeyword("internal") || this.checkKeyword("sealed")
     )
     {
@@ -365,7 +370,7 @@ class Parser
     if (this.checkKeyword("identity")) return this.parseIdentity(start);
     if (this.checkKeyword("match")) return this.parseMatch(start);
     if (this.checkKeyword("merge")) return this.parseMerge(start);
-    if (this.checkKeyword("connector")) return this.parseConnector(start);
+    if (this.checkKeyword("datasource")) return this.parseConnector(start);
     if (this.checkKeyword("class"))
     {
       this.advance(); // class modifier
@@ -763,7 +768,8 @@ class Parser
   }
 
   /** Consume an identifier optionally extended by directly-adjacent `-ident`
-   *  segments (`placed-on`, `read-only`, `warehouse-ro`) and return the joined text. */
+   *  segments (`placed-on`, `read-only`, `warehouse-ro`) and return the joined text.
+   *  Only a `-ident` segment DIRECTLY adjacent (no intervening whitespace) to the previous identifier is joined. */
   private parseHyphenatedName(): string
   {
     let last = this.expect(TokenKind.Identifier);
@@ -772,21 +778,30 @@ class Parser
     {
       const dash = this.current();
       const next = this.tokens[this.pos + 1];
-      if (!this.checkSymbol("-") || next === undefined || next.kind !== TokenKind.Identifier) break;
+      if (!this.checkSymbol(Parser.Hyphen) || next === undefined || next.kind !== TokenKind.Identifier) break;
       if (dash.line !== last.endLine || dash.column !== last.endColumn) break;
       if (next.line !== dash.endLine || next.column !== dash.endColumn) break;
       this.advance();
       last = this.advance();
-      name += "-" + last.value;
+      name += Parser.Hyphen + last.value;
     }
     return name;
   }
 
-  /** `connector <name> { <name> = <string|ident>; ... }` — an external data
+  /** A string / raw-string literal's text, or a (possibly hyphenated) bare identifier;
+   *  otherwise a parse error carrying `message`. */
+  private parseNameOrString(message: string): string
+  {
+    if (this.check(TokenKind.String) || this.check(TokenKind.RawString)) return this.advance().value;
+    if (this.check(TokenKind.Identifier)) return this.parseHyphenatedName();
+    throw this.error(message);
+  }
+
+  /** `datasource <name> { <name> = <string|ident>; ... }` — an external data
    *  connection; values are captured as raw text. Namespace scope only. */
   private parseConnector(start: Token): ConnectorDecl
   {
-    this.expectKeyword("connector");
+    this.expectKeyword("datasource");
     const nameTok = this.expect(TokenKind.Identifier);
     const assignments: ConnectorAssignment[] = [];
     this.expect(TokenKind.LBrace);
@@ -795,19 +810,7 @@ class Parser
       const aStart = this.current();
       const nameTokA = this.expect(TokenKind.Identifier);
       this.expect(TokenKind.Equals);
-      let value: string;
-      if (this.check(TokenKind.String) || this.check(TokenKind.RawString))
-      {
-        value = this.advance().value;
-      }
-      else if (this.check(TokenKind.Identifier))
-      {
-        value = this.parseHyphenatedName();
-      }
-      else
-      {
-        throw this.error("expected a string or identifier value");
-      }
+      const value = this.parseNameOrString(Parser.ExpectedValueMessage);
       this.expect(TokenKind.Semicolon);
       const assignment: ConnectorAssignment = { name: nameTokA.value, value };
       assignment.span = this.spanFrom(aStart);
@@ -860,32 +863,20 @@ class Parser
       this.parseBodyMembers(() =>
       {
         const mStart = this.current();
-        const memberTok = this.current();
         const memberName = this.parseHyphenatedName();
+        const memberSpan = this.spanFrom(mStart);
         if (this.check(TokenKind.Semicolon))
         {
-          if (memberName !== "read-only") throw this.error("expected read-only or member = field");
+          if (memberName !== Parser.ReadOnlyMember) throw this.error("expected read-only or member = field");
           this.advance();
           readOnly = true;
           return;
         }
         this.expect(TokenKind.Equals);
-        let field: string;
-        if (this.check(TokenKind.String) || this.check(TokenKind.RawString))
-        {
-          field = this.advance().value;
-        }
-        else if (this.check(TokenKind.Identifier))
-        {
-          field = this.parseHyphenatedName();
-        }
-        else
-        {
-          throw this.error("expected a field name");
-        }
+        const field = this.parseNameOrString(Parser.ExpectedFieldMessage);
         this.expect(TokenKind.Semicolon);
         const override: PopulateOverride = { member: memberName, field, span: this.spanFrom(mStart) };
-        override.memberSpan = tokenSpan(memberTok, this.uri);
+        override.memberSpan = memberSpan;
         overrides.push(override);
       });
       this.expect(TokenKind.RBrace);

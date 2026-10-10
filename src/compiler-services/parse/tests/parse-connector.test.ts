@@ -14,11 +14,11 @@ class Harness
     }
 }
 
-test("connector declaration parses named and inline forms", () =>
+test("datasource declaration parses named and inline forms", () =>
 {
     const src = `namespace n {
-        connector pg { kind = sql; connection = "crm-postgres"; }
-        connector wh { host = "db.example.com"; database = "wh"; secret = warehouse-ro; }
+        datasource pg { kind = sql; connection = "crm-postgres"; }
+        datasource wh { host = "db.example.com"; database = "wh"; secret = warehouse-ro; }
     }`;
     const cs = Harness.decls(src).filter((d) => d.kind === DeclKind.Connector) as ConnectorDecl[];
     assert.equal(cs.length, 2);
