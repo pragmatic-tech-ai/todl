@@ -35,6 +35,7 @@ test("unknown concept and unknown entity field are diagnosed; rule dropped", () 
 
     const badField = check([{ uri: "b.todl", text: `namespace s { concept C { a : string; } policy C { allow read when entity.notAField == "y"; } }` }]);
     assert.ok(badField.diagnostics.some((d) => d.code === "policy.unknown-field"));
+    assert.equal(badField.model.resolve("s.C@policy"), undefined);
 });
 
 test("a malformed predicate drops the rule (policy.unsupported-rule) and does not silently lower", () =>
@@ -43,4 +44,22 @@ test("a malformed predicate drops the rule (policy.unsupported-rule) and does no
     assert.ok(bad.diagnostics.some((d) => d.code === "policy.unsupported-rule"));
     assert.ok(bad.diagnostics.length >= 2);
     assert.equal(bad.model.resolve("s.C@policy"), undefined);
+});
+
+test("a valid rule survives while unknown-field and malformed siblings are dropped", () =>
+{
+    const src = `namespace s { concept C { region : string; } policy C {
+        allow read when principal.region == entity.region;
+        deny read when entity.notAField == "x";
+        deny write when entity.region @@ "x";
+    } }`;
+    const { model, diagnostics } = check([{ uri: "p.todl", text: src }]);
+    const node = model.resolve("s.C@policy");
+    assert.ok(node !== undefined);
+    const rules = JSON.parse(node!.attrs.get(Builder.PolicyRulesAttr) as string);
+    assert.equal(rules.length, 1);
+    assert.equal(rules[0].effect, "allow");
+    assert.equal(rules[0].action, "read");
+    assert.ok(diagnostics.some((d) => d.code === "policy.unknown-field"));
+    assert.ok(diagnostics.some((d) => d.code === "policy.unsupported-rule"));
 });

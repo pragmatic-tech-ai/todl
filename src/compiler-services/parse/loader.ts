@@ -920,11 +920,11 @@ export function loadInto(
       {
         predicate = parsePolicyPredicate(rule.predicate);
       }
-      catch
+      catch (error)
       {
         diagnostics.push({
           code: DiagnosticCode.PolicyUnsupportedRule, severity: Severity.Error,
-          message: `policy rule is not a valid predicate`,
+          message: `policy rule is not a valid predicate: ${(error as Error).message}`,
           span: rule.span, node: conceptId, path: null,
         });
         continue;
