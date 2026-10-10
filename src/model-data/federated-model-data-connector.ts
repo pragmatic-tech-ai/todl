@@ -1,6 +1,7 @@
 import type { IServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
 import type { TodlDocument } from "../compiler-services/emit/json.js";
 import type { ConnectorBinding, ConnectorSpec, ModelConnectorPlan, QueryRequest } from "./connector-plan.js";
+import { ConnectorWorkingCopy } from "./connector-working-copy.js";
 import { DataSourceAdapterCatalog } from "./data-source-adapter-catalog.js";
 import type { IModelDataConnector } from "./model-data-connector.js";
 import { PopulationBuilder } from "./population-builder.js";
@@ -12,7 +13,11 @@ export class FederatedModelDataConnector implements IModelDataConnector
     private static readonly UnknownConnectorMiddle = "' references unknown connector '";
     private static readonly UnknownConnectorSuffix = "'";
 
+    private static readonly NotPreparedMessage = "WorkingCopy requires Prepare to have completed";
+
     private pending: Promise<TodlDocument> | undefined;
+    private built: TodlDocument | undefined;
+    private workingCopy: ConnectorWorkingCopy | undefined;
 
     public constructor(private readonly plan: ModelConnectorPlan, private readonly base: TodlDocument)
     {
@@ -40,7 +45,16 @@ export class FederatedModelDataConnector implements IModelDataConnector
             const records = await adapter.Query(FederatedModelDataConnector.RequestFor(binding));
             builder.Add(binding, records);
         }
-        return builder.Build();
+        this.built = builder.Build();
+        return this.built;
+    }
+
+    /** Lazily creates the write-back working copy over the built document; requires a completed Prepare. */
+    public WorkingCopy(): ConnectorWorkingCopy
+    {
+        if (!this.built) throw new Error(FederatedModelDataConnector.NotPreparedMessage);
+        this.workingCopy ??= new ConnectorWorkingCopy(this.plan, this.built);
+        return this.workingCopy;
     }
 
     private FindSpec(binding: ConnectorBinding): ConnectorSpec
