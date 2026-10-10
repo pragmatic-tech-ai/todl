@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { ServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
 import { FederatedModelDataConnector } from "../federated-model-data-connector.js";
 import { DataSourceAdapterCatalog } from "../data-source-adapter-catalog.js";
-import { DataSourceKind, WriteOperationKind, type ModelConnectorPlan, type WriteBatch, type WriteResult } from "../connector-plan.js";
+import { DataSourceKind, WriteOperationKind, type ModelConnectorPlan, type WriteBatch, type WriteResult, type ExternalRecord, type QueryRequest } from "../connector-plan.js";
 import type { IDataSourceAdapter } from "../data-source-adapter.js";
 import type { ResolvedConnection } from "../connector-plan.js";
 import { ConnectorWorkingCopy } from "../connector-working-copy.js";
@@ -44,6 +44,12 @@ class WorkingCopyFixture
     {
         this.Factory.Seed("order", [this.Versioned ? { order_id: "O-1", display_name: "Acme", ver: 2 } : { order_id: "O-1", display_name: "Acme" }]);
         this.Services.registerInstance(DataSourceAdapterCatalog.ServiceKey, this.Catalog);
+    }
+
+    public async Rows(source: string): Promise<readonly ExternalRecord[]>
+    {
+        const adapter = await this.Factory.Open({ Kind: DataSourceKind.Sql, Config: {} } as ResolvedConnection);
+        return adapter.Query({ Source: source, Fields: ["order_id", "display_name", "ver"] } as QueryRequest);
     }
 
     public Plan(): ModelConnectorPlan
@@ -191,7 +197,7 @@ test("VersionField: stale version yields write-conflict diagnostic, row unchange
     assert.equal(first.Diagnostics.length, 1);
     assert.equal(first.Diagnostics[0]!.code, DiagnosticCode.ConnectorWriteConflict);
     assert.match(first.Diagnostics[0]!.message, /O-1/);
-    const stored = await fx.Factory.Open({} as ResolvedConnection).then(a => a.Query({ Source: "order", Fields: ["display_name", "ver"] } as never));
+    const stored = await fx.Rows("order");
     assert.equal(stored[0]!["display_name"], "Acme");
     node.attrs["version"] = 2;
     const retry = await wc.Flush(fx.Catalog, fx.Services);

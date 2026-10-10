@@ -67,7 +67,7 @@ export class ConnectorWorkingCopy
             results.push(result);
             for (const conflict of result.Conflicts)
             {
-                diagnostics.push(this.Diag(DiagnosticCode.ConnectorWriteConflict,
+                diagnostics.push(this.BuildDiagnostic(DiagnosticCode.ConnectorWriteConflict,
                     `${ConnectorWorkingCopy.ConflictMessage} ${binding.Concept} ${String(conflict.Key)}: ${conflict.Reason}`, null));
             }
             const conflicted = new Set<ExternalFieldValue>(result.Conflicts.map(conflict => conflict.Key));
@@ -85,16 +85,16 @@ export class ConnectorWorkingCopy
         if (!binding) return undefined;
         if (!binding.Writable)
         {
-            return this.Diag(DiagnosticCode.ConnectorReadOnly,
+            return this.BuildDiagnostic(DiagnosticCode.ConnectorReadOnly,
                 `${ConnectorWorkingCopy.ReadOnlyMessage} ${binding.Concept} (${instanceId})`, instanceId);
         }
         this.pending.set(instanceId, kind);
         return undefined;
     }
 
-    private Diag(code: DiagnosticCode, message: string, node: string | null): Diagnostic
+    private BuildDiagnostic(code: DiagnosticCode, message: string, node: Diagnostic["node"]): Diagnostic
     {
-        return { code, severity: Severity.Error, message, span: null, node: node as Diagnostic["node"], path: null };
+        return { code, severity: Severity.Error, message, span: null, node, path: null };
     }
 
     private BindingOf(instanceId: string): ConnectorBinding | undefined
