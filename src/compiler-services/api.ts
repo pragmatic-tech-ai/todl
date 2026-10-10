@@ -85,8 +85,8 @@ export function checkAgainst(
   const model = new Repository(mergeBases([preludeDocument(), ...bases]));
   const provenance = new Map<string, string>();
   const diagnostics = loadInto(model, sources, preludeNames(), idGenerator, provenance);
-  new ResolutionPass(model).Resolve();
-  return { model, diagnostics: [...diagnostics, ...validate(model)], provenance };
+  const resolutionDiagnostics = new ResolutionPass(model, provenance).Resolve();
+  return { model, diagnostics: [...diagnostics, ...resolutionDiagnostics, ...validate(model)], provenance };
 }
 
 /**

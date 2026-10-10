@@ -12,6 +12,7 @@ namespace shop
     concept Customer { email : string; tax : string; }
     identity Customer key email;
     match Customer { same when a.tax == b.tax; }
+    merge Customer { prefer latest for email; prefer latest for tax; }
 
     model Book : shop
     {
