@@ -54,6 +54,7 @@ export enum DeclKind
   Operator,
   Identity,
   Match,
+  Merge,
 }
 
 /** The kind of an authored VALUE (the right-hand side of `name = …`, an array
@@ -317,6 +318,34 @@ export interface MatchDecl
   conceptSpan?: SourceSpan;
 }
 
+/** Survivorship strategy for one merge rule. */
+export enum MergeStrategy
+{
+  Source = "source",
+  Latest = "latest",
+}
+
+/** One `prefer …` clause of a merge block. */
+export interface MergeRule
+{
+  strategy: MergeStrategy;
+  field: string;
+  source: string | null;   // the named source for `prefer source "x"`, else null
+  span: SourceSpan;
+  fieldSpan?: SourceSpan;
+}
+
+/** A `merge <Concept> { prefer … for <field>; }` declaration — attribute
+ * survivorship for entity resolution. */
+export interface MergeDecl
+{
+  kind: DeclKind.Merge;
+  concept: string;
+  rules: MergeRule[];
+  span: SourceSpan;
+  conceptSpan?: SourceSpan;
+}
+
 /** An `identity <Concept> key <attr>;` declaration — names the attribute whose
  * value identifies an instance of the concept for entity-resolution. */
 export interface IdentityDecl
@@ -472,7 +501,7 @@ export interface PrimitiveDecl
  * {@link DeclKind}). This is what a {@link NamespaceNode} holds. */
 export type Declaration =
   | ConceptDecl | TaxonomyDecl | ViewpointDecl | PrimitiveDecl | InstanceDecl | ModelDecl
-  | AnnotationDecl | PackageDecl | OperatorDecl | IdentityDecl | MatchDecl;
+  | AnnotationDecl | PackageDecl | OperatorDecl | IdentityDecl | MatchDecl | MergeDecl;
 
 // ═══════════════════════════════ FILE ROOT ════════════════════════════════════
 

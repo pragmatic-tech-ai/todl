@@ -42,6 +42,8 @@ export class DocumentSymbolProvider
                 return null; // an identity declaration has no name of its own to surface
             case DeclKind.Match:
                 return null; // a match declaration has no name of its own to surface
+            case DeclKind.Merge:
+                return null; // a merge declaration has no name of its own to surface
         }
     }
 
