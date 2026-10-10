@@ -37,6 +37,16 @@ export function describeGraphStore(name: string, make: () => GraphStore): void
     assert.throws(() => s.addNode(node("a")), /already exists/);
   });
 
+  test(`${name}: addVariant appends recorded defects in order`, () => {
+    const s = make();
+    s.addNode(node("a"));
+    assert.equal(s.getNode("a")?.variants, undefined);
+    s.addVariant("a", "first");
+    s.addVariant("a", "second");
+    assert.deepEqual(s.getNode("a")?.variants, ["first", "second"]);
+    assert.throws(() => s.addVariant("nope", "x"), /does not exist/);
+  });
+
   test(`${name}: instancesOf indexes by typeOf`, () => {
     const s = make();
     s.addNode(node("a", "component"));

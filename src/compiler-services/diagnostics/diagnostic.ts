@@ -82,6 +82,8 @@ export enum DiagnosticCode
   AnnotationDuplicate = "annotation.duplicate",
   AnnotationUnknownParam = "annotation.unknown-param",
   AnnotationInvalidTarget = "annotation.invalid-target",
+  /** A `variant` stated on a class: variants record defects of concrete instances only. */
+  VariantInvalidTarget = "variant.invalid-target",
   AnnotationBaseNotAnnotation = "annotation.base-not-annotation",
   AnnotationParamRedeclared = "annotation.param-redeclared",
   // Application root selection (Wave 2).

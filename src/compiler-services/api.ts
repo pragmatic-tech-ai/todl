@@ -129,6 +129,7 @@ export function mergeBases(bases: TodlDocument[]): Graph
         storageId: node.storageId ?? null,
         fields: node.fields ?? [],
         attrs: new Map(Object.entries(node.attrs)),
+        ...(node.variants !== undefined && node.variants.length > 0 ? { variants: [...node.variants] } : {}),
       });
     }
   }

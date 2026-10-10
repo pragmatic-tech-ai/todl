@@ -124,6 +124,8 @@ export interface ObjectValue
   children: InstanceDecl[];
   annotations: AnnotationApplication[];
   edges: EdgeApplication[];
+  /** `variant "…";` statements in the object's body. */
+  variants: VariantNode[];
   conceptSpan?: SourceSpan;
   span: SourceSpan;
 }
@@ -146,6 +148,16 @@ export type ValueNode =
   | BooleanValue
   | ObjectValue
   | EdgeValue;
+
+/** A `variant "<text>";` statement in an instance body: a defect of this
+ * instance — what in it breaks a prose invariant of its concept, and why it is so.
+ * Allowed only on concrete instances of a model; the compiler keeps the text and
+ * checks nothing against it. */
+export interface VariantNode
+{
+  text: string;
+  span: SourceSpan;
+}
 
 // ═══════════════════════════ EDGES & ASSIGNMENTS ══════════════════════════════
 
@@ -202,6 +214,9 @@ export interface InstanceDecl
   annotations: AnnotationApplication[];
   /** Edge applications (`a <glyph> b`) in this record's body. */
   edges: EdgeApplication[];
+  /** `variant "…";` statements in this record's body — its recorded defects. On a
+   * class the loader reports `variant.invalid-target`. */
+  variants: VariantNode[];
   span: SourceSpan;
   /** Span of the leading concept identifier (`<concept> <id>`). */
   conceptSpan?: SourceSpan;

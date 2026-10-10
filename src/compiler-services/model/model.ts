@@ -523,6 +523,13 @@ export class Repository
     this.spans.set(key, span);
   }
 
+  /** The recorded defects of an instance — the texts of its `variant "…"`
+   *  statements, in source order; empty when it has none or does not exist. */
+  variantsOf(id: NodeId): readonly string[]
+  {
+    return this.graph.getNode(id)?.variants ?? [];
+  }
+
   /** The span recorded for a node id or member key, or null. */
   spanOf(key: string): SourceSpan | null
   {
