@@ -97,6 +97,9 @@ export enum DiagnosticCode
   MatchUnsupportedRule = "match.unsupported-rule",
   MergeUnknownConcept = "merge.unknown-concept",
   MergeUnknownField = "merge.unknown-field",
+  PolicyUnknownConcept = "policy.unknown-concept",
+  PolicyUnknownField = "policy.unknown-field",
+  PolicyUnsupportedRule = "policy.unsupported-rule",
   // External-data connectors: `populate` must name a real concept, real members, one
   // population per concept per model, and a resolvable connector.
   ConnectorUnknownConcept = "connector.unknown-concept",
