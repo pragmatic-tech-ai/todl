@@ -49,7 +49,7 @@ export class ModelPackageGenerator
             }
         }
 
-        const header = ModelPackageGenerator.EmitHeader(runtimeImport, plans.size > 0);
+        const header = ModelPackageGenerator.EmitHeader(runtimeImport, plans.size > 0, plans.size < models.length);
         const body = generateReadClient(repo, { name: options.name, importSpecifier: runtimeImport, omitHeader: true });
         const shardsCode = models
             .map((m) => `const ${ModelPackageGenerator.SlugFor(m)}: TodlDocument = JSON.parse(${JSON.stringify(JSON.stringify(shards.get(m)))});`)
@@ -68,17 +68,23 @@ export class ModelPackageGenerator
         return sections.join("\n\n") + "\n";
     }
 
-    private static EmitHeader(runtimeImport: string, hasConnectors: boolean): string
+    private static EmitHeader(runtimeImport: string, hasConnectors: boolean, hasBundled: boolean): string
     {
-        const values = hasConnectors
-            ? "ModelDataSource, ReflectedEntity, ModelRegistry, BundledModelDataConnector, FederatedModelDataConnector, DataSourceKind"
-            : "ModelDataSource, ReflectedEntity, ModelRegistry, BundledModelDataConnector";
+        const values = ["ModelDataSource", "ReflectedEntity", "ModelRegistry"];
+        if (hasBundled)
+        {
+            values.push("BundledModelDataConnector");
+        }
+        if (hasConnectors)
+        {
+            values.push("FederatedModelDataConnector", "DataSourceKind");
+        }
         const types = hasConnectors
             ? "EntityReader, IModelDataConnector, InstanceDescriptor, ModelConnectorPlan, NodeId, Scalar, TodlDocument"
             : "EntityReader, IModelDataConnector, InstanceDescriptor, NodeId, Scalar, TodlDocument";
         return (
             ModelPackageGenerator.HeaderComment + "\n" +
-            `import { ${values} } from "${runtimeImport}";\n` +
+            `import { ${values.join(", ")} } from "${runtimeImport}";\n` +
             `import type { ${types} } from "${runtimeImport}";`
         );
     }
