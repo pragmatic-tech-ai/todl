@@ -10,7 +10,7 @@ export class InMemoryAdapter implements IDataSourceAdapter
 
     public Seed(source: string, records: ExternalRecord[]): this
     {
-        this.sources.set(source, records);
+        this.sources.set(source, [...records]);
         return this;
     }
 
@@ -28,6 +28,7 @@ export class InMemoryAdapter implements IDataSourceAdapter
         });
     }
 
+    // Delete is UNCONDITIONAL in v1: the optimistic version guard applies to Upsert only (a delete-guard is a follow-on).
     public async Apply(batch: WriteBatch): Promise<WriteResult>
     {
         const rows = this.sources.get(batch.Source) ?? [];
