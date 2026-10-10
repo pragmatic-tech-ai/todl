@@ -98,3 +98,21 @@ test("a bad edit on a resolution solution repairs to last-good and a later good 
     assert.equal(ids.length, 1);
     assert.equal(g.Model.resolve(ids[0]!)!.attrs.get("updated_at"), "2032");
 });
+
+test("a throwing Changed subscriber on a valid edit does not revert the edit", async () =>
+{
+    const g = new SolutionGraph();
+    await g.Build([MemberFixture.one(MODEL)]);
+    g.Changed.subscribe(() => { throw new Error("subscriber boom"); });
+    try
+    {
+        g.ReplaceFile("shop.todl", [{ uri: "shop.todl", text: MODEL.replace(`"2024"`, `"2040"`) }]);
+    }
+    catch
+    {
+        // the subscriber exception is expected to propagate; the edit must still be applied
+    }
+    const ids = g.Model.instancesOf("shop.Customer");
+    assert.equal(ids.length, 1);
+    assert.equal(g.Model.resolve(ids[0]!)!.attrs.get("updated_at"), "2040");
+});

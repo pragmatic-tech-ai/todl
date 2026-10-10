@@ -231,13 +231,21 @@ export class SolutionGraph
         state.sourcesOf.set(memberId, [...sources]);
         if (this.HasResolutionRules(state))
         {
+            // BuildInternal swaps in the fresh state BEFORE emitting. Repair only when the
+            // rebuild failed pre-swap; a post-swap throw (a Changed subscriber) keeps the edit.
+            const prior = this.state;
             try
             {
                 this.RebuildFromState();
             }
-            catch
+            catch (e)
             {
-                this.RepairFailedReplace(memberId, priorSources);
+                if (this.state === prior)
+                {
+                    this.RepairFailedReplace(memberId, priorSources);
+                    return;
+                }
+                throw e;
             }
             return;
         }
@@ -288,13 +296,21 @@ export class SolutionGraph
         state.sourcesOf.set(owningId, [...memberSources]);
         if (this.HasResolutionRules(state))
         {
+            // BuildInternal swaps in the fresh state BEFORE emitting. Repair only when the
+            // rebuild failed pre-swap; a post-swap throw (a Changed subscriber) keeps the edit.
+            const prior = this.state;
             try
             {
                 this.RebuildFromState();
             }
-            catch
+            catch (e)
             {
-                this.RepairFailedReplace(owningId, priorSources);
+                if (this.state === prior)
+                {
+                    this.RepairFailedReplace(owningId, priorSources);
+                    return;
+                }
+                throw e;
             }
             return;
         }
