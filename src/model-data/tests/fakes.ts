@@ -18,7 +18,12 @@ export class InMemoryAdapter implements IDataSourceAdapter
     {
         const comparisons = request.Where?.All ?? [];
         const rows = (this.sources.get(request.Source) ?? []).filter(row => comparisons.every(c =>
-            c.Op === QueryCompareOp.Neq ? row[c.Field] !== c.Value : row[c.Field] === c.Value));
+        {
+            const fieldValue = row[c.Field];
+            // NULL operand -> SQL UNKNOWN for both = and <> -> row excluded.
+            if (fieldValue === null || fieldValue === undefined || c.Value === null) return false;
+            return c.Op === QueryCompareOp.Neq ? fieldValue !== c.Value : fieldValue === c.Value;
+        }));
         return rows.map(row =>
         {
             const projected: { [field: string]: ExternalRecord[string] } = {};

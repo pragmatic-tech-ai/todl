@@ -49,3 +49,15 @@ test("SqlQueryTranslator numbers multiple comparisons and omits WHERE when absen
     assert.equal(session.calls[1]!.sql, 'SELECT "a" FROM "t"');
     assert.deepEqual(session.calls[1]!.params, []);
 });
+
+test("InMemoryAdapter excludes NULL operands for Eq and Neq (SQL three-valued parity)", async () =>
+{
+    const adapter = new InMemoryAdapter();
+    adapter.Seed("customers", [{ id: "1", region: null }, { id: "2", region: "us" }]);
+    const eq = await adapter.Query({ Source: "customers", Fields: ["id"], Where: { All: [{ Field: "region", Op: QueryCompareOp.Eq, Value: "x" }] } });
+    assert.equal(eq.length, 0);
+    const neq = await adapter.Query({ Source: "customers", Fields: ["id"], Where: { All: [{ Field: "region", Op: QueryCompareOp.Neq, Value: "x" }] } });
+    assert.deepEqual(neq.map(r => r.id), ["2"]);
+    const nullValue = await adapter.Query({ Source: "customers", Fields: ["id"], Where: { All: [{ Field: "region", Op: QueryCompareOp.Eq, Value: null }] } });
+    assert.equal(nullValue.length, 0);
+});

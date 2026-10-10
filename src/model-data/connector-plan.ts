@@ -59,8 +59,8 @@ export interface ExternalRecord
 /** Comparison operator of a push-down filter term. */
 export enum QueryCompareOp
 {
-    Eq,
-    Neq,
+    Eq = "eq",
+    Neq = "neq",
 }
 
 /** One field comparison in a push-down filter. */
