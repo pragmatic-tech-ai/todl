@@ -62,6 +62,7 @@ import type { Expr } from "../predicate/ast.js";
 import {
   DeclKind,
   ValueKind,
+  type MergeStrategy,
   type Declaration,
   type InstanceDecl,
   type ModelDecl,
@@ -834,7 +835,7 @@ export function loadInto(
   // rule per field wins) into ONE `<concept>@merge` node; invalid rules are diagnosed
   // and dropped while the others survive.
   const mergeBuilder = model.builder();
-  const mergeRulesByConcept = new Map<NodeId, { field: string; strategy: string; source: string | null }[]>();
+  const mergeRulesByConcept = new Map<NodeId, { field: string; strategy: `${MergeStrategy}`; source: string | null }[]>();
   const mergeConceptOrder: NodeId[] = [];
   for (const { ns, imports, uri, decl: declaration } of units)
   {
@@ -864,7 +865,7 @@ export function loadInto(
         });
         continue;
       }
-      const serialized = { field: rule.field, strategy: rule.strategy as string, source: rule.source };
+      const serialized = { field: rule.field, strategy: rule.strategy, source: rule.source };
       const existing = mergeRulesByConcept.get(conceptId);
       if (existing === undefined)
       {

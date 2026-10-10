@@ -43,3 +43,26 @@ test("a merge rule field not on the concept is reported, other rules still lower
     const rules = JSON.parse(String(model.resolve(model.nodesOfMetaKind(MetaKind.Merge)[0]!)!.attrs.get(Builder.MergeRulesAttr)));
     assert.deepEqual(rules, [{ field: "label", strategy: "source", source: "crm" }]);
 });
+
+test("within one block the first rule per field wins", () =>
+{
+    const { model } = Harness.compile(
+        `namespace n { concept C { label : string; } merge C { prefer source "a" for label; prefer latest for label; } }`);
+    const rules = JSON.parse(String(model.resolve(model.nodesOfMetaKind(MetaKind.Merge)[0]!)!.attrs.get(Builder.MergeRulesAttr)));
+    assert.deepEqual(rules, [{ field: "label", strategy: "source", source: "a" }]);
+});
+
+test("separate merge blocks on one concept accumulate into one node, first field wins", () =>
+{
+    const { model } = Harness.compile(
+        `namespace n { concept C { updated_at : string; label : string; }
+         merge C { prefer latest for updated_at; }
+         merge C { prefer source "crm" for updated_at; prefer latest for label; } }`);
+    const ids = model.nodesOfMetaKind(MetaKind.Merge);
+    assert.equal(ids.length, 1);
+    const rules = JSON.parse(String(model.resolve(ids[0]!)!.attrs.get(Builder.MergeRulesAttr)));
+    assert.deepEqual(rules, [
+        { field: "updated_at", strategy: "latest", source: null },
+        { field: "label", strategy: "latest", source: null },
+    ]);
+});
