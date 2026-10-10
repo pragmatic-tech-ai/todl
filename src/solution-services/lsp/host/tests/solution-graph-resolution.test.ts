@@ -37,6 +37,8 @@ test("Build resolves the model to one canonical and fires Changed", async () =>
     assert.equal(ids.length, 1);
     assert.equal(g.Model.resolve(ids[0]!)!.attrs.get("updated_at"), "2024");
     assert.equal(g.Model.resolve(ids[0]!)!.attrs.get("label"), "Acme");
+    const all = g.Model.allNodes().filter((n) => n.canonicalId === ids[0]);
+    assert.ok(all.length >= 1, "the merged-away instance is aliased to the canonical");
 });
 
 test("a conflicting field with no rule surfaces resolution.unmerged-conflict in diagnostics", async () =>
@@ -62,8 +64,37 @@ test("ReplaceFile on a resolution solution rebuilds to a correct single canonica
 {
     const g = new SolutionGraph();
     await g.Build([MemberFixture.one(MODEL)]);
+    const emits: { memberIds: readonly string[] }[] = [];
+    g.Changed.subscribe((c) => { emits.push(c); });
     g.ReplaceFile("shop.todl", [{ uri: "shop.todl", text: MODEL.replace(`"2024"`, `"2030"`) }]);
+    assert.equal(emits.length, 1);
+    assert.deepEqual(emits[0]!.memberIds, ["arch"]);
     const ids = g.Model.instancesOf("shop.Customer");
     assert.equal(ids.length, 1);
     assert.equal(g.Model.resolve(ids[0]!)!.attrs.get("updated_at"), "2030");
+});
+
+test("ReplaceMember on a resolution solution rebuilds to one canonical with the edited value", async () =>
+{
+    const g = new SolutionGraph();
+    await g.Build([MemberFixture.one(MODEL)]);
+    g.ReplaceMember("arch", [{ uri: "shop.todl", text: MODEL.replace(`"2024"`, `"2031"`) }]);
+    const ids = g.Model.instancesOf("shop.Customer");
+    assert.equal(ids.length, 1);
+    assert.equal(g.Model.resolve(ids[0]!)!.attrs.get("updated_at"), "2031");
+});
+
+test("a bad edit on a resolution solution repairs to last-good and a later good edit still works", async () =>
+{
+    const g = new SolutionGraph();
+    await g.Build([MemberFixture.one(MODEL)]);
+    const bad = { uri: "shop.todl", text: "namespace shop { concept Dup { } concept Dup { } }" };
+    assert.doesNotThrow(() => g.ReplaceMember("arch", [bad]));
+    let ids = g.Model.instancesOf("shop.Customer");
+    assert.equal(ids.length, 1);
+    assert.equal(g.Model.resolve(ids[0]!)!.attrs.get("updated_at"), "2024");
+    assert.doesNotThrow(() => g.ReplaceFile("shop.todl", [{ uri: "shop.todl", text: MODEL.replace(`"2024"`, `"2032"`) }]));
+    ids = g.Model.instancesOf("shop.Customer");
+    assert.equal(ids.length, 1);
+    assert.equal(g.Model.resolve(ids[0]!)!.attrs.get("updated_at"), "2032");
 });

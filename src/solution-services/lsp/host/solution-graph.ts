@@ -231,7 +231,14 @@ export class SolutionGraph
         state.sourcesOf.set(memberId, [...sources]);
         if (this.HasResolutionRules(state))
         {
-            this.RebuildFromState();
+            try
+            {
+                this.RebuildFromState();
+            }
+            catch
+            {
+                this.RepairFailedReplace(memberId, priorSources);
+            }
             return;
         }
         const affectedSet = new Set<string>([memberId, ...this.DependentsOf(memberId)]);
@@ -281,7 +288,14 @@ export class SolutionGraph
         state.sourcesOf.set(owningId, [...memberSources]);
         if (this.HasResolutionRules(state))
         {
-            this.RebuildFromState();
+            try
+            {
+                this.RebuildFromState();
+            }
+            catch
+            {
+                this.RepairFailedReplace(owningId, priorSources);
+            }
             return;
         }
 
