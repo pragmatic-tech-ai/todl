@@ -43,6 +43,7 @@ test("without the match rule the same fixture leaves two Customers", () =>
 {
     const source = ResolutionMatchEndToEndFixture.Source.replace(/^\s*match Customer.*$/m, "");
     assert.ok(!source.includes("match Customer"));
+    // The merge block stays but is inert here: without a match rule the instances don't fuse. Intentional; do not delete.
     const { model } = ResolutionMatchEndToEndFixture.Check(source);
     // b~c by email key only; a stays separate.
     assert.equal(model.instancesOf(ResolutionMatchEndToEndFixture.CustomerConcept).length, 2);
