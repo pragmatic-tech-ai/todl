@@ -63,6 +63,7 @@ export class SqlAdapter implements IDataSourceAdapter
     private static readonly Values = " VALUES ";
     private static readonly OnConflict = " ON CONFLICT ";
     private static readonly DoUpdateSet = " DO UPDATE SET ";
+    private static readonly DoNothing = " DO NOTHING";
     private static readonly Excluded = "EXCLUDED.";
     private static readonly DeleteFrom = "DELETE FROM ";
     private static readonly Where = " WHERE ";
@@ -70,6 +71,10 @@ export class SqlAdapter implements IDataSourceAdapter
     private static readonly ListSeparator = ", ";
     private static readonly Placeholder = "$";
     private static readonly QualifierDot = ".";
+    private static readonly OpenParen = "(";
+    private static readonly SpacedOpenParen = " (";
+    private static readonly CloseParen = ")";
+    private static readonly FirstParamIndex = "1";
     private static readonly VersionConflictReason = "version mismatch";
 
     private readonly translator: SqlQueryTranslator;
@@ -84,6 +89,10 @@ export class SqlAdapter implements IDataSourceAdapter
         return this.translator.Query(request);
     }
 
+    /**
+     * Applies ops in order. If session.Execute throws mid-batch, ops already applied are not
+     * rolled back (v1: the caller retries; still-pending ops remain in the working copy).
+     */
     public async Apply(batch: WriteBatch): Promise<WriteResult>
     {
         let applied = 0;
@@ -93,7 +102,7 @@ export class SqlAdapter implements IDataSourceAdapter
             if (op.Kind === WriteOperationKind.Delete)
             {
                 // Delete is unconditional in v1: no version guard.
-                await this.session.Execute(this.DeleteSql(batch), [op.Key]);
+                await this.session.Execute(SqlAdapter.DeleteSql(batch), [op.Key]);
                 applied++;
             }
             else if (await this.ApplyUpsert(batch, op))
@@ -114,16 +123,29 @@ export class SqlAdapter implements IDataSourceAdapter
         const fieldNames = Object.keys(op.Fields).filter(name => name !== batch.IdKey);
         const columns = [batch.IdKey, ...fieldNames];
         const params: unknown[] = [op.Key, ...fieldNames.map(name => op.Fields[name])];
-        const quote = (name: string): string => SqlQueryTranslator.QuoteIdent(name);
 
-        let sql = SqlAdapter.InsertInto + quote(batch.Source)
-            + " (" + columns.map(quote).join(SqlAdapter.ListSeparator) + ")"
+        let sql = SqlAdapter.InsertInto + SqlQueryTranslator.QuoteIdent(batch.Source)
+            + SqlAdapter.SpacedOpenParen
+            + columns.map(name => SqlQueryTranslator.QuoteIdent(name)).join(SqlAdapter.ListSeparator)
+            + SqlAdapter.CloseParen
             + SqlAdapter.Values
-            + "(" + columns.map((_, i) => SqlAdapter.Placeholder + (i + 1)).join(SqlAdapter.ListSeparator) + ")"
-            + SqlAdapter.OnConflict + "(" + quote(batch.IdKey) + ")"
-            + SqlAdapter.DoUpdateSet
+            + SqlAdapter.OpenParen
+            + columns.map((_, i) => SqlAdapter.Placeholder + (i + 1)).join(SqlAdapter.ListSeparator)
+            + SqlAdapter.CloseParen
+            + SqlAdapter.OnConflict
+            + SqlAdapter.OpenParen + SqlQueryTranslator.QuoteIdent(batch.IdKey) + SqlAdapter.CloseParen;
+
+        if (fieldNames.length === 0)
+        {
+            // Key-only: nothing to update, so no version guard; DO NOTHING affecting 0 rows is not a conflict.
+            await this.session.Execute(sql + SqlAdapter.DoNothing, params);
+            return true;
+        }
+
+        sql += SqlAdapter.DoUpdateSet
             + fieldNames
-                .map(name => quote(name) + SqlAdapter.Equals + SqlAdapter.Excluded + quote(name))
+                .map(name => SqlQueryTranslator.QuoteIdent(name) + SqlAdapter.Equals
+                    + SqlAdapter.Excluded + SqlQueryTranslator.QuoteIdent(name))
                 .join(SqlAdapter.ListSeparator);
 
         if (batch.VersionField === undefined)
@@ -132,16 +154,18 @@ export class SqlAdapter implements IDataSourceAdapter
             return true;
         }
 
+        // A missing op.Version binds NULL; "= NULL" never matches, so such an op always conflicts.
         params.push(op.Version ?? null);
-        sql += SqlAdapter.Where + quote(batch.Source) + SqlAdapter.QualifierDot + quote(batch.VersionField)
+        sql += SqlAdapter.Where + SqlQueryTranslator.QuoteIdent(batch.Source) + SqlAdapter.QualifierDot
+            + SqlQueryTranslator.QuoteIdent(batch.VersionField)
             + SqlAdapter.Equals + SqlAdapter.Placeholder + params.length;
         return (await this.session.Execute(sql, params)) > 0;
     }
 
-    private DeleteSql(batch: WriteBatch): string
+    private static DeleteSql(batch: WriteBatch): string
     {
         return SqlAdapter.DeleteFrom + SqlQueryTranslator.QuoteIdent(batch.Source)
             + SqlAdapter.Where + SqlQueryTranslator.QuoteIdent(batch.IdKey)
-            + SqlAdapter.Equals + SqlAdapter.Placeholder + "1";
+            + SqlAdapter.Equals + SqlAdapter.Placeholder + SqlAdapter.FirstParamIndex;
     }
 }
