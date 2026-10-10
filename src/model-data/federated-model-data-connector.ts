@@ -12,7 +12,7 @@ import type { Diagnostic } from "../compiler-services/diagnostics/diagnostic.js"
 /** Read path: pulls each bound population from its external source and merges it over the hand-authored shard. */
 export class FederatedModelDataConnector implements IModelDataConnector
 {
-    private static readonly NotPreparedMessage = "WorkingCopy requires Prepare to have completed";
+    private static readonly NotPreparedMessage = "Prepare must complete before accessing connector results";
 
     private pending: Promise<TodlDocument> | undefined;
     private built: TodlDocument | undefined;
@@ -55,7 +55,7 @@ export class FederatedModelDataConnector implements IModelDataConnector
     public WorkingCopy(): ConnectorWorkingCopy
     {
         if (!this.built) throw new Error(FederatedModelDataConnector.NotPreparedMessage);
-        this.workingCopy ??= new ConnectorWorkingCopy(this.plan, this.built);
+        this.workingCopy ??= new ConnectorWorkingCopy(this.plan, this.built, this.resolution!.writeTargets);
         return this.workingCopy;
     }
 
