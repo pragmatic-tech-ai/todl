@@ -69,6 +69,7 @@ export { DocumentModelDataConnector } from './model-data/document-model-data-con
 export { type IModelDataConnector } from './model-data/model-data-connector.js';
 export { BundledModelDataConnector } from './model-data/bundled-model-data-connector.js';
 export { ModelRegistry } from './model-data/model-registry.js';
+export { PopulationBuilder } from './model-data/population-builder.js';
 export { ModelShardExtractor } from './model-data/model-shard-extractor.js';
 export { ApplicationRootResolver } from './model-data/application-root-resolver.js';
 export { GenericModelDataSource } from './model-data/generic-model-data-source.js';
