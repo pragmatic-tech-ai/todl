@@ -1,6 +1,7 @@
 import type { Repository } from "../model/model.js";
 import type { NodeId, Scalar } from "../model/graph.js";
 import { EdgeKind, Direction } from "../model/graph.js";
+import { MergeStrategy } from "../parse/ast.js";
 import { Builder } from "../model/builder.js";
 import { MetaKind } from "../model/kinds.js";
 import { DisjointSet } from "./union-find.js";
@@ -9,7 +10,7 @@ import { type Diagnostic, DiagnosticCode, Severity } from "../diagnostics/diagno
 interface SerializedMergeRule
 {
     field: string;
-    strategy: string;
+    strategy: `${MergeStrategy}`;
     source: string | null;
 }
 
@@ -28,8 +29,6 @@ export class ResolutionPass
 {
     private static readonly StorageKey = Builder.StorageIdKey;
     private static readonly TupleSeparator = "\u0000";
-    private static readonly SourceStrategy = "source";
-    private static readonly LatestStrategy = "latest";
 
     public constructor(
         private readonly model: Repository,
@@ -129,14 +128,14 @@ export class ResolutionPass
             const distinct = new Set(contributions.map((c) => `${typeof c.value}:${String(c.value)}`));
             if (distinct.size === 1)
             {
-                this.model.setAttr(canonical, field, contributions[0]!.value);
+                this.SetIfChanged(canonical, field, contributions[0]!.value);
                 continue;
             }
             const rule = mergeRules.find((r) => r.field === field);
             const resolved = rule === undefined ? undefined : this.ApplyRule(rule, contributions);
             if (resolved !== undefined)
             {
-                this.model.setAttr(canonical, field, resolved);
+                this.SetIfChanged(canonical, field, resolved);
                 continue;
             }
             diagnostics.push({
@@ -152,16 +151,22 @@ export class ResolutionPass
         this.MergeOutgoingEdges(canonical, aliases);
     }
 
+    /** Write only when the canonical does not already hold exactly this value (no redundant change events). */
+    private SetIfChanged(canonical: NodeId, field: string, value: Scalar): void
+    {
+        if (this.model.resolve(canonical)?.attrs.get(field) !== value) this.model.setAttr(canonical, field, value);
+    }
+
     /** The surviving value for a conflicted field, or undefined when the rule does not fire. */
     private ApplyRule(rule: SerializedMergeRule, contributions: readonly Contribution[]): Scalar | undefined
     {
-        if (rule.strategy === ResolutionPass.LatestStrategy)
+        if (rule.strategy === MergeStrategy.Latest)
         {
             let best = contributions[0]!;
             for (const c of contributions) if (ResolutionPass.Greater(c.value, best.value)) best = c;
             return best.value;
         }
-        if (rule.strategy === ResolutionPass.SourceStrategy && rule.source !== null && this.provenance !== undefined)
+        if (rule.strategy === MergeStrategy.Source && rule.source !== null && this.provenance !== undefined)
         {
             return contributions.find((c) => this.provenance!.get(c.member) === rule.source)?.value;
         }

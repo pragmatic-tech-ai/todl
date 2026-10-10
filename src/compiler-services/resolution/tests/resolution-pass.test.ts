@@ -336,3 +336,113 @@ test("merge unions an alias's outgoing relationship onto the canonical", () =>
     new ResolutionPass(model).Resolve();
     assert.deepEqual(model.related("n.a", EdgeKind.Relationship, Direction.Out, "points"), ["n.t"]);
 });
+
+function seedPair(rules: object[] = []): Repository
+{
+    const model = seedWithMerge(rules);
+    addRow(model, "n.a", { email: "x@y.z" });
+    addRow(model, "n.b", { email: "x@y.z" });
+    const rb = model.builder();
+    rb.setNamespace("n").defineConcept("n.T").assertInstance("n.T", "n.t");
+    rb.commit();
+    return model;
+}
+
+test("merge dedupes an edge both canonical and alias already have", () =>
+{
+    const model = seedPair();
+    model.addEdge({ kind: EdgeKind.Relationship, via: "points", from: "n.a", to: "n.t" });
+    model.addEdge({ kind: EdgeKind.Relationship, via: "points", from: "n.b", to: "n.t" });
+    new ResolutionPass(model).Resolve();
+    assert.deepEqual(model.related("n.a", EdgeKind.Relationship, Direction.Out, "points"), ["n.t"]);
+});
+
+test("merge never creates a self-loop from an alias edge to the canonical", () =>
+{
+    const model = seedPair();
+    model.addEdge({ kind: EdgeKind.Relationship, via: "points", from: "n.b", to: "n.a" });
+    new ResolutionPass(model).Resolve();
+    assert.ok(!model.related("n.a", EdgeKind.Relationship, Direction.Out, "points").includes("n.a"));
+});
+
+test("merge does not fold structural edges onto the canonical", () =>
+{
+    const model = seedPair();
+    model.addEdge({ kind: EdgeKind.Derived, via: "d", from: "n.b", to: "n.t" });
+    model.addEdge({ kind: EdgeKind.Narrower, via: null, from: "n.b", to: "n.t" });
+    new ResolutionPass(model).Resolve();
+    assert.deepEqual(model.related("n.a", EdgeKind.Derived, Direction.Out, "d"), []);
+    assert.deepEqual(model.related("n.a", EdgeKind.Narrower, Direction.Out), []);
+});
+
+test("prefer source picks the member whose provenance matches", () =>
+{
+    const model = seedWithMerge([{ field: "label", strategy: "source", source: "crm" }]);
+    addRow(model, "n.a", { email: "x@y.z", label: "A" });
+    addRow(model, "n.b", { email: "x@y.z", label: "B" });
+    const provenance = new Map<string, string>([["n.a", "erp"], ["n.b", "crm"]]);
+    const diags = new ResolutionPass(model, provenance).Resolve();
+    assert.equal(model.resolve("n.a")!.attrs.get("label"), "B");
+    assert.equal(diags.length, 0);
+});
+
+test("prefer source is inert without provenance and falls through to a conflict", () =>
+{
+    const model = seedWithMerge([{ field: "label", strategy: "source", source: "crm" }]);
+    addRow(model, "n.a", { email: "x@y.z", label: "A" });
+    addRow(model, "n.b", { email: "x@y.z", label: "B" });
+    const diags = new ResolutionPass(model).Resolve();
+    assert.ok(diags.some((d) => d.code === DiagnosticCode.ResolutionUnmergedConflict));
+    assert.equal(model.resolve("n.a")!.attrs.get("label"), "A");
+});
+
+test("prefer latest compares numbers numerically (10 beats 9), seeded via the builder", () =>
+{
+    const model = seedWithMerge([{ field: "rank", strategy: "latest", source: null }]);
+    addRow(model, "n.a", { email: "x@y.z", rank: 9 });
+    addRow(model, "n.b", { email: "x@y.z", rank: 10 });
+    const diags = new ResolutionPass(model).Resolve();
+    assert.equal(model.resolve("n.a")!.attrs.get("rank"), 10);
+    assert.equal(diags.length, 0);
+});
+
+test("a number 1 and a string \"1\" conflict rather than silently merge", () =>
+{
+    const model = seedWithMerge([]);
+    addRow(model, "n.a", { email: "x@y.z", rank: 1 });
+    addRow(model, "n.b", { email: "x@y.z", rank: "1" });
+    const diags = new ResolutionPass(model).Resolve();
+    assert.ok(diags.some((d) => d.code === DiagnosticCode.ResolutionUnmergedConflict));
+    assert.equal(model.resolve("n.a")!.attrs.get("rank"), 1);
+});
+
+test("merge reads raw attrs: a class-fixed value is not treated as an authored instance value", () =>
+{
+    const model = seedWithMerge([]);
+    const kb = model.builder();
+    kb.setNamespace("n").assertInstance("n.C", "n.K", true).setField("n.K", "label", "fixed");
+    kb.commit();
+    addRow(model, "n.a", { email: "x@y.z" });
+    addRow(model, "n.b", { email: "x@y.z" });
+    const ib = model.builder();
+    ib.addInstanceOf("n.a", "n.K").addInstanceOf("n.b", "n.K");
+    ib.commit();
+    const diags = new ResolutionPass(model).Resolve();
+    assert.equal(diags.length, 0);
+    assert.equal(model.resolve("n.a")!.attrs.get("label"), undefined);
+    assert.equal(model.effectiveFields("n.a").get("label"), "fixed");
+});
+
+test("a second Resolve returns no diagnostics and leaves attrs and edges unchanged", () =>
+{
+    const model = seedPair();
+    addRow(model, "n.c", { email: "x@y.z", label: "L" });
+    model.addEdge({ kind: EdgeKind.Relationship, via: "points", from: "n.b", to: "n.t" });
+    const pass = new ResolutionPass(model);
+    pass.Resolve();
+    const attrs = [...model.resolve("n.a")!.attrs.entries()];
+    const edges = model.related("n.a", EdgeKind.Relationship, Direction.Out, "points");
+    assert.deepEqual(pass.Resolve(), []);
+    assert.deepEqual([...model.resolve("n.a")!.attrs.entries()], attrs);
+    assert.deepEqual(model.related("n.a", EdgeKind.Relationship, Direction.Out, "points"), edges);
+});
