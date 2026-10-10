@@ -19,6 +19,8 @@ export enum MetaKind
   Identity = "identity",
   Match = "match",
   Merge = "merge",
+  Connector = "connector",
+  Population = "population",
 }
 
 /** Reserved id of the singleton package node that hosts package-level annotations. */
