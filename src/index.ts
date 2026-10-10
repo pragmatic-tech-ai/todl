@@ -84,6 +84,11 @@ export {
   type ExternalRecord,
   type QueryRequest,
   type ResolvedConnection,
+  WriteOperationKind,
+  type WriteOperation,
+  type WriteBatch,
+  type WriteConflict,
+  type WriteResult,
 } from './model-data/connector-plan.js';
 export {
   ConnectionResolverKey,

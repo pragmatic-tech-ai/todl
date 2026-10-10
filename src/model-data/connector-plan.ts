@@ -54,6 +54,46 @@ export interface QueryRequest
     Fields: readonly string[];
 }
 
+/** The kind of write an adapter applies to one record. */
+export enum WriteOperationKind
+{
+    Upsert = "upsert",
+    Delete = "delete",
+}
+
+/** One record write; Fields are already in EXTERNAL field names. */
+export interface WriteOperation
+{
+    Kind: WriteOperationKind;
+    Key: ExternalFieldValue;
+    Fields: Record<string, ExternalFieldValue>;
+    /** Expected prior version (optimistic mode). */
+    Version?: ExternalFieldValue;
+}
+
+/** A group of writes against one external source. */
+export interface WriteBatch
+{
+    Source: string;
+    IdKey: string;
+    Operations: readonly WriteOperation[];
+    VersionField?: string;
+}
+
+/** A write that was refused rather than applied. */
+export interface WriteConflict
+{
+    Key: ExternalFieldValue;
+    Reason: string;
+}
+
+/** Outcome of applying a write batch. */
+export interface WriteResult
+{
+    Applied: number;
+    Conflicts: readonly WriteConflict[];
+}
+
 /** The minimal resolved connection shape handed to an adapter. */
 export interface ResolvedConnection
 {
