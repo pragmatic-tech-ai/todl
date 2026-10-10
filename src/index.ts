@@ -83,6 +83,14 @@ export {
   type QueryRequest,
   type ResolvedConnection,
 } from './model-data/connector-plan.js';
+export {
+  ConnectionResolverKey,
+  type IDataSourceAdapter,
+  type IDataSourceAdapterFactory,
+  type IDataSourceAdapterProvider,
+  type IConnectionResolver,
+} from './model-data/data-source-adapter.js';
+export { DataSourceAdapterCatalog, InlineConnectionResolver } from './model-data/data-source-adapter-catalog.js';
 
 export { ApplicationBootstrapper } from './application/application-bootstrapper.js';
 export { ApplicationEntryPoint } from './application/application-entry-point.js';
