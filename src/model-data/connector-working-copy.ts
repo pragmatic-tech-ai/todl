@@ -61,8 +61,7 @@ export class ConnectorWorkingCopy
                 if (binding === undefined) continue;
                 if (!binding.Writable)
                 {
-                    diagnostics.push(this.BuildDiagnostic(DiagnosticCode.ConnectorReadOnly,
-                        `${ConnectorWorkingCopy.ReadOnlyMessage} ${binding.Concept} (${binding.Source} ${instanceId})`, null));
+                    diagnostics.push(this.ReadOnlyDiagnostic(binding.Concept, binding.Source, instanceId, null));
                     continue;
                 }
                 const operations = batches.get(binding) ?? [];
@@ -107,8 +106,7 @@ export class ConnectorWorkingCopy
         if (targets.length > 0 && !anyWritable)
         {
             const concept = this.nodes.get(instanceId)?.type ?? "";
-            return this.BuildDiagnostic(DiagnosticCode.ConnectorReadOnly,
-                `${ConnectorWorkingCopy.ReadOnlyMessage} ${concept} (${instanceId})`, instanceId);
+            return this.ReadOnlyDiagnostic(concept, null, instanceId, instanceId);
         }
         this.pending.set(instanceId, kind);
         return undefined;
@@ -123,6 +121,13 @@ export class ConnectorWorkingCopy
     private static TargetKey(concept: string, connector: string, source: string, key: ExternalFieldValue): string
     {
         return `${ConnectorWorkingCopy.BindingKey(concept, connector, source)}${ConnectorWorkingCopy.KeySeparator}${String(key)}`;
+    }
+
+    /** Uniform connector.read-only diagnostic: concept, then the source when known, then the instance id. */
+    private ReadOnlyDiagnostic(concept: string, source: string | null, instanceId: string, node: Diagnostic["node"]): Diagnostic
+    {
+        const where = source === null ? instanceId : `${source} ${instanceId}`;
+        return this.BuildDiagnostic(DiagnosticCode.ConnectorReadOnly, `${ConnectorWorkingCopy.ReadOnlyMessage} ${concept} (${where})`, node);
     }
 
     private BuildDiagnostic(code: DiagnosticCode, message: string, node: Diagnostic["node"]): Diagnostic
