@@ -30,3 +30,21 @@ test("preserves the hand-authored base shard alongside pulled instances", () =>
     assert.ok(doc.nodes.some((n) => n.id === "a.Customer#c1"), "base instance retained");
     assert.ok(doc.nodes.some((n) => n.storageId === "O-1"), "pulled instance added");
 });
+
+test("skips records missing the id key but keeps siblings", () =>
+{
+    const binding: ConnectorBinding = { Concept: "a.Order", Connector: "pg", Source: "order", IdKey: "id", FieldMap: { id: "id", label: "name" }, Writable: true };
+    const doc = new PopulationBuilder(EMPTY).Add(binding, [{ name: "no id" }, { id: "O-2", name: "ok" }]).Build();
+    assert.equal(doc.nodes.length, 1);
+    assert.equal(doc.nodes[0]!.storageId, "O-2");
+});
+
+test("dotless concept id yields null namespace", () =>
+{
+    const binding: ConnectorBinding = { Concept: "Order", Connector: "pg", Source: "order", IdKey: "id", FieldMap: { id: "id" }, Writable: true };
+    const node = new PopulationBuilder(EMPTY).Add(binding, [{ id: 7 }]).Build().nodes[0]!;
+    assert.equal(node.namespace, null);
+    assert.equal(node.localId, "Order#7");
+    assert.equal(node.storageId, "7");
+    assert.equal(node.tier, "Instance");
+});

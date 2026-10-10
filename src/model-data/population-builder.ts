@@ -1,11 +1,10 @@
 import type { JsonEdge, JsonNode, TodlDocument } from "../compiler-services/emit/json.js";
-import type { Scalar } from "../compiler-services/model/graph.js";
+import { Tier, type Scalar } from "../compiler-services/model/graph.js";
 import type { ConnectorBinding, ExternalRecord } from "./connector-plan.js";
 
 /** Maps external records onto TODL instance nodes and merges them into a base shard. */
 export class PopulationBuilder
 {
-    private static readonly InstanceTier = "Instance";
     private static readonly IdSeparator = "#";
     private static readonly NamespaceSeparator = ".";
 
@@ -21,6 +20,7 @@ export class PopulationBuilder
     /** Mints one instance node per record, keyed by the binding's id key. */
     public Add(binding: ConnectorBinding, records: readonly ExternalRecord[]): this
     {
+        // External field -> member; if two members map to the same field, the last mapping wins.
         const inverse = new Map<string, string>();
         for (const [member, external] of Object.entries(binding.FieldMap))
         {
@@ -45,7 +45,7 @@ export class PopulationBuilder
             const suffix = `${PopulationBuilder.IdSeparator}${storageId}`;
             this.nodes.push({
                 id: `${binding.Concept}${suffix}`,
-                tier: PopulationBuilder.InstanceTier,
+                tier: Tier[Tier.Instance],
                 type: binding.Concept,
                 metaKind: null,
                 namespace,
