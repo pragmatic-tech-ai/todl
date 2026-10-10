@@ -344,12 +344,12 @@ export class Builder
   ): this
   {
     this.stagedNodes.push(this.makeNode(id, Tier.Ontology, { metaKind: MetaKind.Connector }));
-    if (provider !== null) this.stagedAttrs.push({ id, name: Builder.ConnectorProviderAttr, value: provider });
     this.stagedAttrs.push({ id, name: Builder.ConnectorNameAttr, value: name });
     if (kind !== null) this.stagedAttrs.push({ id, name: Builder.ConnectorKindAttr, value: kind });
     this.stagedAttrs.push({ id, name: Builder.ConnectorConfigAttr, value: configJson });
     if (connection !== null) this.stagedAttrs.push({ id, name: Builder.ConnectorConnectionAttr, value: connection });
     if (secret !== null) this.stagedAttrs.push({ id, name: Builder.ConnectorSecretAttr, value: secret });
+    if (provider !== null) this.stagedAttrs.push({ id, name: Builder.ConnectorProviderAttr, value: provider });
     return this;
   }
 
