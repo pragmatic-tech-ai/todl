@@ -40,6 +40,36 @@ export class InMemoryAdapterFactory implements IDataSourceAdapterFactory
     }
 }
 
+export class CountingAdapterFactory implements IDataSourceAdapterFactory
+{
+    public QueryCount = 0;
+
+    private readonly inner = new InMemoryAdapter();
+    private readonly adapter: IDataSourceAdapter =
+    {
+        Query: async (request: QueryRequest) =>
+        {
+            this.QueryCount++;
+            return this.inner.Query(request);
+        },
+    };
+
+    public constructor(public readonly Kind: DataSourceKind)
+    {
+    }
+
+    public Seed(source: string, records: ExternalRecord[]): this
+    {
+        this.inner.Seed(source, records);
+        return this;
+    }
+
+    public async Open(_connection: ResolvedConnection): Promise<IDataSourceAdapter>
+    {
+        return this.adapter;
+    }
+}
+
 export class RegisteredAdapterProvider implements IDataSourceAdapterProvider
 {
     private static readonly MissingMessage = "no factory registered for kind";
