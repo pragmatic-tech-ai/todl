@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { check } from "../api.js";
 import { EdgeKind, Direction } from "../model/graph.js";
 import { toJSON } from "../emit/json.js";
+import { Repository } from "../model/model.js";
 
 class GoldenFixture
 {
@@ -14,6 +15,8 @@ class GoldenFixture
     public static readonly UpdatedAtKey = "updated_at";
     public static readonly ExpectedUpdatedAt = "2024";
     public static readonly ExpectedLabel = "Acme";
+    public static readonly EmailKey = "email";
+    public static readonly ExpectedEmail = "x@y.z";
 
     public static readonly A = `namespace crm { concept Customer { email : string; label : string; updated_at : string; }
         identity Customer key email;
@@ -30,9 +33,30 @@ class GoldenFixture
         ]);
     }
 
-    public static Serialize(model: Parameters<typeof toJSON>[0]): string
+    public static RunReversed(): ReturnType<typeof check>
+    {
+        return check([
+            { uri: GoldenFixture.UriB, text: GoldenFixture.B },
+            { uri: GoldenFixture.UriA, text: GoldenFixture.A },
+        ]);
+    }
+
+    public static Serialize(model: Repository): string
     {
         return JSON.stringify(toJSON(model));
+    }
+
+    // Order-insensitive projection: nodes sorted by id, attrs sorted by key.
+    public static Normalize(model: Repository): string
+    {
+        const rows = model.allNodes()
+            .map((n) => ({
+                id: n.id,
+                canonicalId: n.canonicalId,
+                attrs: [...n.attrs.entries()].sort((x, y) => (x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : 0)),
+            }))
+            .sort((x, y) => (x.id < y.id ? -1 : x.id > y.id ? 1 : 0));
+        return JSON.stringify(rows);
     }
 }
 
@@ -49,5 +73,21 @@ test("resolving a multi-source fixture is deterministic (byte-stable) and merges
     assert.equal(attrs.get(GoldenFixture.UpdatedAtKey), GoldenFixture.ExpectedUpdatedAt);
     assert.equal(attrs.get(GoldenFixture.LabelKey), GoldenFixture.ExpectedLabel);
     const members = first.model.related(canonical, EdgeKind.SameAs, Direction.In, null);
-    assert.ok(members.length >= 1, "at least one aliased member links by SameAs");
+    assert.equal(attrs.get(GoldenFixture.EmailKey), GoldenFixture.ExpectedEmail);
+    assert.equal(members.length, 1, "exactly one aliased member links by SameAs");
+    assert.notEqual(members[0], canonical);
+    assert.equal(first.model.resolve(members[0]!)!.canonicalId, canonical);
+});
+
+test("resolution outcome is independent of source order", () =>
+{
+    const forward = GoldenFixture.Run();
+    const reversed = GoldenFixture.RunReversed();
+    assert.equal(GoldenFixture.Normalize(forward.model), GoldenFixture.Normalize(reversed.model));
+    const fwdIds = forward.model.instancesOf(GoldenFixture.CustomerConcept);
+    const revIds = reversed.model.instancesOf(GoldenFixture.CustomerConcept);
+    assert.deepEqual(revIds, fwdIds);
+    assert.deepEqual(
+        reversed.model.related(revIds[0]!, EdgeKind.SameAs, Direction.In, null),
+        forward.model.related(fwdIds[0]!, EdgeKind.SameAs, Direction.In, null));
 });
