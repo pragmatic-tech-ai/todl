@@ -75,6 +75,10 @@ import {
   type MatchDecl,
   type MatchRule,
   type MergeDecl,
+  type PolicyDecl,
+  type PolicyRule,
+  PolicyEffect,
+  PolicyAction,
   type MergeRule,
   MergeStrategy,
   type EdgeApplication,
@@ -222,7 +226,7 @@ class Parser
       this.checkKeyword("model") || this.checkKeyword("annotation") ||
       this.checkKeyword("package") || this.checkKeyword("operator") ||
       this.checkKeyword("identity") || this.checkKeyword("match") ||
-      this.checkKeyword("merge") || this.checkKeyword("datasource") ||
+      this.checkKeyword("merge") || this.checkKeyword("policy") || this.checkKeyword("datasource") ||
       this.checkKeyword("class") || this.checkKeyword("internal") || this.checkKeyword("sealed")
     )
     {
@@ -370,6 +374,7 @@ class Parser
     if (this.checkKeyword("identity")) return this.parseIdentity(start);
     if (this.checkKeyword("match")) return this.parseMatch(start);
     if (this.checkKeyword("merge")) return this.parseMerge(start);
+    if (this.checkKeyword("policy")) return this.parsePolicy(start);
     if (this.checkKeyword("datasource")) return this.parseConnector(start);
     if (this.checkKeyword("class"))
     {
@@ -765,6 +770,54 @@ class Parser
     const decl: MergeDecl = { kind: DeclKind.Merge, concept, rules, span: this.spanFrom(start) };
     decl.conceptSpan = conceptSpan;
     return decl;
+  }
+
+  /** `policy <Concept> { allow|deny read|write when <expr>; ... }` — entity-level
+   *  access rules. Each predicate is captured as a raw token slice. Namespace scope only. */
+  private parsePolicy(start: Token): PolicyDecl
+  {
+    this.expectKeyword("policy");
+    const conceptStart = this.current();
+    const concept = this.parseDottedPath();
+    const conceptSpan = this.spanFrom(conceptStart);
+    const rules: PolicyRule[] = [];
+    this.expect(TokenKind.LBrace);
+    this.parseBodyMembers(() =>
+    {
+      const ruleStart = this.current();
+      const effect = this.parseEffect();
+      const action = this.parseAction();
+      this.expectKeyword("when");
+      const predicate = this.collectUntilSemicolon();
+      this.expect(TokenKind.Semicolon);
+      rules.push({ effect, action, predicate, span: this.spanFrom(ruleStart) });
+    });
+    this.expect(TokenKind.RBrace);
+    const decl: PolicyDecl = { kind: DeclKind.Policy, concept, rules, span: this.spanFrom(start) };
+    decl.conceptSpan = conceptSpan;
+    return decl;
+  }
+
+  private parseEffect(): PolicyEffect
+  {
+    if (this.checkKeyword("allow"))
+    {
+      this.advance();
+      return PolicyEffect.Allow;
+    }
+    this.expectKeyword("deny");
+    return PolicyEffect.Deny;
+  }
+
+  private parseAction(): PolicyAction
+  {
+    if (this.checkKeyword("read"))
+    {
+      this.advance();
+      return PolicyAction.Read;
+    }
+    this.expectKeyword("write");
+    return PolicyAction.Write;
   }
 
   /** Consume an identifier optionally extended by directly-adjacent `-ident`
