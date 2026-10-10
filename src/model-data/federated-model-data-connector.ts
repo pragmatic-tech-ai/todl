@@ -1,6 +1,6 @@
 import type { IServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
 import type { TodlDocument } from "../compiler-services/emit/json.js";
-import { ConnectorLookup, type ConnectorBinding, type ModelConnectorPlan, type QueryRequest } from "./connector-plan.js";
+import { ConnectorLookup, type ConnectorBinding, type ModelConnectorPlan, type QueryFilter, type QueryRequest } from "./connector-plan.js";
 import { ConnectorWorkingCopy } from "./connector-working-copy.js";
 import { DataSourceAdapterCatalog } from "./data-source-adapter-catalog.js";
 import type { IModelDataConnector } from "./model-data-connector.js";
@@ -8,6 +8,12 @@ import { PopulationBuilder } from "./population-builder.js";
 import { ConnectorResolutionStep, type ConnectorResolutionResult } from "./connector-resolution-step.js";
 import type { MergeDecision } from "../compiler-services/resolution/resolution-pass.js";
 import type { Diagnostic } from "../compiler-services/diagnostics/diagnostic.js";
+
+/** Supplies an optional per-concept filter that is pushed into the connector's query. */
+export interface IConnectorQueryFilterProvider
+{
+    WhereFor(concept: string): QueryFilter | undefined;
+}
 
 /** Read path: pulls each bound population from its external source and merges it over the hand-authored shard. */
 export class FederatedModelDataConnector implements IModelDataConnector
@@ -17,10 +23,17 @@ export class FederatedModelDataConnector implements IModelDataConnector
     private pending: Promise<TodlDocument> | undefined;
     private built: TodlDocument | undefined;
     private workingCopy: ConnectorWorkingCopy | undefined;
+    private queryFilterProvider: IConnectorQueryFilterProvider | undefined;
     private resolution: ConnectorResolutionResult | undefined;
 
     public constructor(private readonly plan: ModelConnectorPlan, private readonly base: TodlDocument)
     {
+    }
+
+    /** Installs (or clears) the per-concept query-filter provider; call before Prepare. */
+    public UseQueryFilterProvider(provider: IConnectorQueryFilterProvider | undefined): void
+    {
+        this.queryFilterProvider = provider;
     }
 
     public Prepare(services: IServiceProvider): Promise<TodlDocument>
@@ -42,7 +55,7 @@ export class FederatedModelDataConnector implements IModelDataConnector
         {
             const spec = ConnectorLookup.Find(this.plan.Connectors, binding);
             const adapter = await catalog.Open(spec, services);
-            const records = await adapter.Query(FederatedModelDataConnector.RequestFor(binding));
+            const records = await adapter.Query(this.RequestFor(binding));
             builder.Add(binding, records);
         }
         const built = builder.Build();
@@ -71,9 +84,10 @@ export class FederatedModelDataConnector implements IModelDataConnector
         return this.resolution.diagnostics;
     }
 
-    private static RequestFor(binding: ConnectorBinding): QueryRequest
+    private RequestFor(binding: ConnectorBinding): QueryRequest
     {
         const fields = [...new Set(Object.values(binding.FieldMap))].sort();
-        return { Source: binding.Source, Fields: fields };
+        const where = this.queryFilterProvider?.WhereFor(binding.Concept);
+        return where === undefined ? { Source: binding.Source, Fields: fields } : { Source: binding.Source, Fields: fields, Where: where };
     }
 }

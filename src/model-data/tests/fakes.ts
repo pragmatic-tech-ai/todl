@@ -1,4 +1,4 @@
-import { WriteOperationKind } from "../connector-plan.js";
+import { QueryCompareOp, WriteOperationKind } from "../connector-plan.js";
 import type { DataSourceKind, ExternalRecord, QueryRequest, ResolvedConnection, WriteBatch, WriteConflict, WriteResult } from "../connector-plan.js";
 import type { IDataSourceAdapter, IDataSourceAdapterFactory, IDataSourceAdapterProvider } from "../data-source-adapter.js";
 
@@ -16,7 +16,14 @@ export class InMemoryAdapter implements IDataSourceAdapter
 
     public async Query(request: QueryRequest): Promise<readonly ExternalRecord[]>
     {
-        const rows = this.sources.get(request.Source) ?? [];
+        const comparisons = request.Where?.All ?? [];
+        const rows = (this.sources.get(request.Source) ?? []).filter(row => comparisons.every(c =>
+        {
+            const fieldValue = row[c.Field];
+            // NULL operand -> SQL UNKNOWN for both = and <> -> row excluded.
+            if (fieldValue === null || fieldValue === undefined || c.Value === null) return false;
+            return c.Op === QueryCompareOp.Neq ? fieldValue !== c.Value : fieldValue === c.Value;
+        }));
         return rows.map(row =>
         {
             const projected: { [field: string]: ExternalRecord[string] } = {};

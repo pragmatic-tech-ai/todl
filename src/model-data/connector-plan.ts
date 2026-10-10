@@ -56,11 +56,33 @@ export interface ExternalRecord
     readonly [field: string]: ExternalFieldValue;
 }
 
+/** Comparison operator of a push-down filter term. */
+export enum QueryCompareOp
+{
+    Eq = "eq",
+    Neq = "neq",
+}
+
+/** One field comparison in a push-down filter. */
+export interface QueryComparison
+{
+    Field: string;
+    Op: QueryCompareOp;
+    Value: ExternalFieldValue;
+}
+
+/** A conjunction of comparisons (the push-down-eligible subset of a filter). */
+export interface QueryFilter
+{
+    All: readonly QueryComparison[];
+}
+
 /** A read request against a source. */
 export interface QueryRequest
 {
     Source: string;
     Fields: readonly string[];
+    Where?: QueryFilter;
 }
 
 /** The kind of write an adapter applies to one record. */
