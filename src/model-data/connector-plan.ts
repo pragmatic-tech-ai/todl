@@ -170,3 +170,11 @@ export class ConnectorLookup
         return spec;
     }
 }
+
+/** One source a merged canonical must write back to: the external record key + the datasource/source that owns it. */
+export interface WriteTarget
+{
+    readonly StorageId: string;
+    readonly Connector: string;
+    readonly Source: string;
+}

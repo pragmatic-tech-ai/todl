@@ -5,6 +5,9 @@ import { ConnectorWorkingCopy } from "./connector-working-copy.js";
 import { DataSourceAdapterCatalog } from "./data-source-adapter-catalog.js";
 import type { IModelDataConnector } from "./model-data-connector.js";
 import { PopulationBuilder } from "./population-builder.js";
+import { ConnectorResolutionStep, type ConnectorResolutionResult } from "./connector-resolution-step.js";
+import type { MergeDecision } from "../compiler-services/resolution/resolution-pass.js";
+import type { Diagnostic } from "../compiler-services/diagnostics/diagnostic.js";
 
 /** Read path: pulls each bound population from its external source and merges it over the hand-authored shard. */
 export class FederatedModelDataConnector implements IModelDataConnector
@@ -14,6 +17,7 @@ export class FederatedModelDataConnector implements IModelDataConnector
     private pending: Promise<TodlDocument> | undefined;
     private built: TodlDocument | undefined;
     private workingCopy: ConnectorWorkingCopy | undefined;
+    private resolution: ConnectorResolutionResult | undefined;
 
     public constructor(private readonly plan: ModelConnectorPlan, private readonly base: TodlDocument)
     {
@@ -41,7 +45,9 @@ export class FederatedModelDataConnector implements IModelDataConnector
             const records = await adapter.Query(FederatedModelDataConnector.RequestFor(binding));
             builder.Add(binding, records);
         }
-        this.built = builder.Build();
+        const built = builder.Build();
+        this.resolution = new ConnectorResolutionStep().Resolve(built, builder.Sources());
+        this.built = this.resolution.document;
         return this.built;
     }
 
@@ -51,6 +57,18 @@ export class FederatedModelDataConnector implements IModelDataConnector
         if (!this.built) throw new Error(FederatedModelDataConnector.NotPreparedMessage);
         this.workingCopy ??= new ConnectorWorkingCopy(this.plan, this.built);
         return this.workingCopy;
+    }
+
+    public Decisions(): readonly MergeDecision[]
+    {
+        if (!this.resolution) throw new Error(FederatedModelDataConnector.NotPreparedMessage);
+        return this.resolution.decisions;
+    }
+
+    public Diagnostics(): readonly Diagnostic[]
+    {
+        if (!this.resolution) throw new Error(FederatedModelDataConnector.NotPreparedMessage);
+        return this.resolution.diagnostics;
     }
 
     private static RequestFor(binding: ConnectorBinding): QueryRequest
