@@ -20,6 +20,15 @@ interface Contribution
     value: Scalar;
 }
 
+export interface MergeDecision
+{
+    readonly canonical: NodeId;
+    readonly member: string;
+    readonly source: string;
+    readonly winningNode: NodeId;
+    readonly strategy?: MergeStrategy | undefined;
+}
+
 /** Collapses instances that are the same entity — by declared identity key value
  * and/or declarative match rules, clustered transitively — into one canonical node
  * (the lexicographically smallest NodeId), aliasing the rest, then folds the members'
@@ -30,11 +39,31 @@ export class ResolutionPass
     private static readonly StorageKey = Builder.StorageIdKey;
     private static readonly TupleSeparator = "\u0000";
 
+    private readonly decisions: MergeDecision[] = [];
+
     public constructor(
         private readonly model: Repository,
         private readonly provenance?: ReadonlyMap<string, string>,
     )
     {
+    }
+
+    /** Per-merged-field audit: which contribution (and source) won each canonical field. Additive; empty if no merges folded. */
+    public Decisions(): readonly MergeDecision[]
+    {
+        return this.decisions;
+    }
+
+    private RecordDecision(canonical: NodeId, member: string, winner: Contribution, strategy?: MergeStrategy): void
+    {
+        this.decisions.push(
+        {
+            canonical,
+            member,
+            source: this.provenance?.get(winner.member) ?? "",
+            winningNode: winner.member,
+            strategy,
+        });
     }
 
     public Resolve(): Diagnostic[]
@@ -129,13 +158,15 @@ export class ResolutionPass
             if (distinct.size === 1)
             {
                 this.SetIfChanged(canonical, field, contributions[0]!.value);
+                this.RecordDecision(canonical, field, contributions[0]!);
                 continue;
             }
             const rule = mergeRules.find((r) => r.field === field);
-            const resolved = rule === undefined ? undefined : this.ApplyRule(rule, contributions);
-            if (resolved !== undefined)
+            const chosen = rule === undefined ? undefined : this.ApplyRule(rule, contributions);
+            if (chosen !== undefined)
             {
-                this.SetIfChanged(canonical, field, resolved);
+                this.SetIfChanged(canonical, field, chosen.value);
+                this.RecordDecision(canonical, field, chosen, rule!.strategy as MergeStrategy);
                 continue;
             }
             diagnostics.push({
@@ -157,18 +188,18 @@ export class ResolutionPass
         if (this.model.resolve(canonical)?.attrs.get(field) !== value) this.model.setAttr(canonical, field, value);
     }
 
-    /** The surviving value for a conflicted field, or undefined when the rule does not fire. */
-    private ApplyRule(rule: SerializedMergeRule, contributions: readonly Contribution[]): Scalar | undefined
+    /** The winning contribution for a conflicted field, or undefined when the rule does not fire. */
+    private ApplyRule(rule: SerializedMergeRule, contributions: readonly Contribution[]): Contribution | undefined
     {
         if (rule.strategy === MergeStrategy.Latest)
         {
             let best = contributions[0]!;
             for (const c of contributions) if (ResolutionPass.Greater(c.value, best.value)) best = c;
-            return best.value;
+            return best;
         }
         if (rule.strategy === MergeStrategy.Source && rule.source !== null && this.provenance !== undefined)
         {
-            return contributions.find((c) => this.provenance!.get(c.member) === rule.source)?.value;
+            return contributions.find((c) => this.provenance!.get(c.member) === rule.source);
         }
         return undefined;
     }
