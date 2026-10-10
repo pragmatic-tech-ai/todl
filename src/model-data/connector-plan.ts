@@ -28,6 +28,8 @@ export interface ConnectorBinding
     IdKey: string;
     FieldMap: Record<string, string>;
     Writable: boolean;
+    /** External version/etag column guarding optimistic writes; absent = last-write-wins. */
+    VersionField?: string;
 }
 
 /** The complete connector plan emitted for a model. */

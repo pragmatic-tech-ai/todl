@@ -7,6 +7,7 @@ import { DataSourceKind, WriteOperationKind, type ModelConnectorPlan, type Write
 import type { IDataSourceAdapter } from "../data-source-adapter.js";
 import type { ResolvedConnection } from "../connector-plan.js";
 import { ConnectorWorkingCopy } from "../connector-working-copy.js";
+import { DiagnosticCode } from "../../compiler-services/diagnostics/diagnostic.js";
 import type { JsonNode } from "../../compiler-services/emit/json.js";
 import { CountingAdapterFactory } from "./fakes.js";
 
@@ -39,9 +40,9 @@ class WorkingCopyFixture
     public readonly Catalog = new DataSourceAdapterCatalog().Register(this.Factory);
     public readonly Services = new ServiceProvider();
 
-    public constructor(public readonly Writable: boolean)
+    public constructor(public readonly Writable: boolean, public readonly Versioned: boolean = false)
     {
-        this.Factory.Seed("order", [{ order_id: "O-1", display_name: "Acme" }]);
+        this.Factory.Seed("order", [this.Versioned ? { order_id: "O-1", display_name: "Acme", ver: 2 } : { order_id: "O-1", display_name: "Acme" }]);
         this.Services.registerInstance(DataSourceAdapterCatalog.ServiceKey, this.Catalog);
     }
 
@@ -50,7 +51,7 @@ class WorkingCopyFixture
         return {
             Model: "Sales", Version: "0.0.0",
             Connectors: [{ Name: "pg", Kind: DataSourceKind.Sql, Config: {} }],
-            Bindings: [{ Concept: "a.Order", Connector: "pg", Source: "order", IdKey: "order_id", FieldMap: { id: "order_id", label: "display_name" }, Writable: this.Writable }],
+            Bindings: [{ Concept: "a.Order", Connector: "pg", Source: "order", IdKey: "order_id", FieldMap: this.Versioned ? { id: "order_id", label: "display_name", version: "ver" } : { id: "order_id", label: "display_name" }, Writable: this.Writable, ...(this.Versioned ? { VersionField: "ver" } : {}) }],
         };
     }
 
@@ -75,7 +76,7 @@ test("Flush upserts dirty instance with external fields and clears the mark", as
     const wc = connector.WorkingCopy();
     assert.equal(connector.WorkingCopy(), wc);
     wc.MarkDirty(node.id);
-    const results = await wc.Flush(fx.Catalog, fx.Services);
+    const { Results: results } = await wc.Flush(fx.Catalog, fx.Services);
     assert.equal(results.length, 1);
     assert.equal(results[0]!.Applied, 1);
     assert.equal(fx.Factory.Batches.length, 1);
@@ -105,8 +106,10 @@ test("read-only binding: MarkDirty + Flush sends no batch", async () =>
     const connector = fx.Connector();
     const doc = await connector.Prepare(fx.Services);
     const wc = connector.WorkingCopy();
-    wc.MarkDirty(doc.nodes.find(n => n.storageId === "O-1")!.id);
-    const results = await wc.Flush(fx.Catalog, fx.Services);
+    const diagnostic = wc.MarkDirty(doc.nodes.find(n => n.storageId === "O-1")!.id);
+    assert.equal(diagnostic?.code, DiagnosticCode.ConnectorReadOnly);
+    assert.match(diagnostic!.message, /a\.Order/);
+    const { Results: results } = await wc.Flush(fx.Catalog, fx.Services);
     assert.equal(results.length, 0);
     assert.equal(fx.Factory.Batches.length, 0);
 });
@@ -119,11 +122,11 @@ test("conflicted operation stays pending for retry", async () =>
     const wc = connector.WorkingCopy();
     wc.MarkDirty(doc.nodes.find(n => n.storageId === "O-1")!.id);
     fx.Factory.ConflictKey = "O-1";
-    const first = await wc.Flush(fx.Catalog, fx.Services);
+    const { Results: first } = await wc.Flush(fx.Catalog, fx.Services);
     assert.equal(first.length, 1);
     assert.equal(first[0]!.Conflicts[0]!.Key, "O-1");
     fx.Factory.ConflictKey = undefined;
-    const retry = await wc.Flush(fx.Catalog, fx.Services);
+    const { Results: retry } = await wc.Flush(fx.Catalog, fx.Services);
     assert.equal(retry.length, 1);
     assert.equal(retry[0]!.Applied, 1);
 });
@@ -141,7 +144,7 @@ test("MarkDirty of an instance whose concept has no binding is a no-op", async (
     doc.nodes.push(orphan);
     const wc = new ConnectorWorkingCopy(fx.Plan(), doc);
     wc.MarkDirty(orphan.id);
-    const results = await wc.Flush(fx.Catalog, fx.Services);
+    const { Results: results } = await wc.Flush(fx.Catalog, fx.Services);
     assert.equal(results.length, 0);
     assert.equal(fx.Factory.Batches.length, 0);
 });
@@ -159,7 +162,54 @@ test("dirty instance with no storageId produces no operation", async () =>
     doc.nodes.push(fresh);
     const wc = new ConnectorWorkingCopy(fx.Plan(), doc);
     wc.MarkDirty(fresh.id);
-    const results = await wc.Flush(fx.Catalog, fx.Services);
+    const { Results: results } = await wc.Flush(fx.Catalog, fx.Services);
     assert.equal(results.length, 0);
     assert.equal(fx.Factory.Batches.length, 0);
+});
+
+test("writable MarkDirty returns no diagnostic", async () =>
+{
+    const fx = new WorkingCopyFixture(true);
+    const connector = fx.Connector();
+    const doc = await connector.Prepare(fx.Services);
+    assert.equal(connector.WorkingCopy().MarkDirty(doc.nodes.find(n => n.storageId === "O-1")!.id), undefined);
+});
+
+test("VersionField: stale version yields write-conflict diagnostic, row unchanged, stays pending", async () =>
+{
+    const fx = new WorkingCopyFixture(true, true);
+    const connector = fx.Connector();
+    const doc = await connector.Prepare(fx.Services);
+    const node = doc.nodes.find(n => n.storageId === "O-1")!;
+    node.attrs["label"] = "Changed";
+    node.attrs["version"] = 1;
+    const wc = connector.WorkingCopy();
+    wc.MarkDirty(node.id);
+    const first = await wc.Flush(fx.Catalog, fx.Services);
+    assert.equal(fx.Factory.Batches[0]!.VersionField, "ver");
+    assert.equal(fx.Factory.Batches[0]!.Operations[0]!.Version, 1);
+    assert.equal(first.Diagnostics.length, 1);
+    assert.equal(first.Diagnostics[0]!.code, DiagnosticCode.ConnectorWriteConflict);
+    assert.match(first.Diagnostics[0]!.message, /O-1/);
+    const stored = await fx.Factory.Open({} as ResolvedConnection).then(a => a.Query({ Source: "order", Fields: ["display_name", "ver"] } as never));
+    assert.equal(stored[0]!["display_name"], "Acme");
+    node.attrs["version"] = 2;
+    const retry = await wc.Flush(fx.Catalog, fx.Services);
+    assert.equal(retry.Diagnostics.length, 0);
+    assert.equal(retry.Results[0]!.Applied, 1);
+});
+
+test("no VersionField: same edit upserts last-write-wins without conflict", async () =>
+{
+    const fx = new WorkingCopyFixture(true);
+    const connector = fx.Connector();
+    const doc = await connector.Prepare(fx.Services);
+    const node = doc.nodes.find(n => n.storageId === "O-1")!;
+    node.attrs["label"] = "Changed";
+    const wc = connector.WorkingCopy();
+    wc.MarkDirty(node.id);
+    const outcome = await wc.Flush(fx.Catalog, fx.Services);
+    assert.equal(outcome.Diagnostics.length, 0);
+    assert.equal(outcome.Results[0]!.Applied, 1);
+    assert.equal(fx.Factory.Batches[0]!.VersionField, undefined);
 });

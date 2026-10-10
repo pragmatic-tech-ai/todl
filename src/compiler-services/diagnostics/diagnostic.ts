@@ -106,6 +106,8 @@ export enum DiagnosticCode
   ConnectorUnknownKind = "connector.unknown-kind",
   ConnectorInlineForbidden = "connector.inline-forbidden",
   ConnectorProviderForbidden = "connector.provider-forbidden",
+  ConnectorReadOnly = "connector.read-only",
+  ConnectorWriteConflict = "connector.write-conflict",
   ResolutionUnmergedConflict = "resolution.unmerged-conflict",
   // Solution composition phase (SPEC-06): a member/dependency package could not
   // be resolved or loaded into the composed Domain.
