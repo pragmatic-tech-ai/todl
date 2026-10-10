@@ -118,3 +118,23 @@ test("connector from another namespace is unresolved", () =>
     ]);
     assert.ok(diagnostics.some((d) => d.code === DiagnosticCode.ConnectorUnresolvedConnector));
 });
+
+test("datasource with no kind emits connector.unknown-kind", () =>
+{
+    const { diagnostics } = load([{ uri: "k.todl", text: `namespace k { datasource pg { connection = "x"; } }` }]);
+    assert.ok(diagnostics.some((d) => d.code === DiagnosticCode.ConnectorUnknownKind));
+});
+
+test("datasource with an unrecognized kind emits connector.unknown-kind", () =>
+{
+    const { diagnostics } = load([{ uri: "k.todl", text: `namespace k { datasource pg { kind = bogus; } }` }]);
+    const found = diagnostics.filter((d) => d.code === DiagnosticCode.ConnectorUnknownKind);
+    assert.equal(found.length, 1);
+    assert.match(found[0]!.message, /pg.*bogus/);
+});
+
+test("datasource with a valid kind emits no connector.unknown-kind", () =>
+{
+    const { diagnostics } = load([{ uri: "k.todl", text: `namespace k { datasource pg { kind = sql; } }` }]);
+    assert.ok(!diagnostics.some((d) => d.code === DiagnosticCode.ConnectorUnknownKind));
+});

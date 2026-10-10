@@ -48,3 +48,12 @@ test("dotless concept id yields null namespace", () =>
     assert.equal(node.storageId, "7");
     assert.equal(node.tier, "Instance");
 });
+
+test("does not stamp the id member as an attr; storageId carries it", () =>
+{
+    const binding: ConnectorBinding = { Concept: "a.Order", Connector: "pg", Source: "order", IdKey: "order_id", FieldMap: { id: "order_id", label: "display_name" }, Writable: true };
+    const node = new PopulationBuilder(EMPTY).Add(binding, [{ order_id: "O-9", display_name: "Nine" }]).Build().nodes[0]!;
+    assert.equal(node.storageId, "O-9");
+    assert.equal(node.attrs["label"], "Nine");
+    assert.ok(!("id" in node.attrs), "no spurious id attr");
+});

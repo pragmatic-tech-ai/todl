@@ -24,6 +24,8 @@ export class PopulationBuilder
         const inverse = new Map<string, string>();
         for (const [member, external] of Object.entries(binding.FieldMap))
         {
+            // The id member's value is carried by storageId, not stamped as an attr.
+            if (external === binding.IdKey) continue;
             inverse.set(external, member);
         }
         const split = binding.Concept.lastIndexOf(PopulationBuilder.NamespaceSeparator);

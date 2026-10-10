@@ -904,6 +904,17 @@ export function loadInto(
     const config: Record<string, string> = {};
     for (const a of declaration.assignments) if (!connectorReservedKeys.has(a.name) && !(a.name in config)) config[a.name] = a.value;
     const find = (key: string) => declaration.assignments.find((a) => a.name === key)?.value ?? null;
+    const kindValue = find(Builder.ConnectorKindAttr);
+    if (kindValue === null || !CONNECTOR_KINDS.has(kindValue))
+    {
+      diagnostics.push({
+        code: DiagnosticCode.ConnectorUnknownKind, severity: Severity.Error,
+        message: kindValue === null
+          ? `datasource "${declaration.name}" declares no "kind" (expected one of: ${[...CONNECTOR_KINDS].join(", ")})`
+          : `datasource "${declaration.name}" has unknown kind "${kindValue}" (expected one of: ${[...CONNECTOR_KINDS].join(", ")})`,
+        span: declaration.nameSpan ?? declaration.span, node: connectorId, path: null,
+      });
+    }
     connectorBuilder.defineConnector(
       connectorId, declaration.name, find(Builder.ConnectorKindAttr), JSON.stringify(config),
       find(Builder.ConnectorConnectionAttr), find(Builder.ConnectorSecretAttr));
@@ -1260,6 +1271,8 @@ function termToInstanceDecl(taxonomy: string, t: Term, normalize: (name: string 
 
 
 /** File-level grouping keywords that wrap records but are not themselves records. */
+// mirrors DataSourceKind in model-data (cannot import upward across the layer boundary)
+const CONNECTOR_KINDS: ReadonlySet<string> = new Set(["sql", "rest", "cypher", "document"]);
 const WRAPPER_CONCEPTS = new Set(["technology-library"]);
 
 /**

@@ -103,6 +103,7 @@ export enum DiagnosticCode
   ConnectorUnknownField = "connector.unknown-field",
   ConnectorDuplicatePopulate = "connector.duplicate-populate",
   ConnectorUnresolvedConnector = "connector.unresolved-connector",
+  ConnectorUnknownKind = "connector.unknown-kind",
   ResolutionUnmergedConflict = "resolution.unmerged-conflict",
   // Solution composition phase (SPEC-06): a member/dependency package could not
   // be resolved or loaded into the composed Domain.
