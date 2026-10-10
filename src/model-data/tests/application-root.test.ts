@@ -66,8 +66,8 @@ test("Resolve throws on a malformed document with more than one marked model", (
 {
     const doc = appDoc();
     // Fabricate a second marked model: a model node + an entrypoint app node + Annotated edge.
-    doc.nodes.push({ id: "app2", tier: "Instance", type: null, metaKind: MetaKind.Model, namespace: null, localId: "app2", isClass: false, class: null, storageId: null, fields: [], attrs: {} });
-    doc.nodes.push({ id: "app2@todl.entrypoint", tier: "Ontology", type: "todl.entrypoint", metaKind: null, namespace: null, localId: null, isClass: false, class: null, storageId: null, fields: [], attrs: {} });
+    doc.nodes.push({ id: "app2", tier: "Instance", type: null, metaKind: MetaKind.Model, namespace: null, localId: "app2", isClass: false, class: null, storageId: null, canonicalId: null, fields: [], attrs: {} });
+    doc.nodes.push({ id: "app2@todl.entrypoint", tier: "Ontology", type: "todl.entrypoint", metaKind: null, namespace: null, localId: null, isClass: false, class: null, storageId: null, canonicalId: null, fields: [], attrs: {} });
     doc.edges.push({ kind: "Annotated", via: null, from: "app2", to: "app2@todl.entrypoint" });
     assert.throws(() => ApplicationRootResolver.Resolve(doc), /more than one entrypoint-marked model/);
 });

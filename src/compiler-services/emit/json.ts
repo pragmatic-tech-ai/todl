@@ -55,6 +55,7 @@ export interface JsonNode
   isClass: boolean;
   class: NodeId | null;
   storageId: string | null;
+  canonicalId: string | null;
   fields: FieldDecl[];
   attrs: Record<string, Scalar>;
   debug?: NodeDebug;
@@ -122,6 +123,7 @@ function emitNode(model: Repository, node: Node, options?: EmitOptions): JsonNod
     isClass: node.isClass,
     class: node.class,
     storageId: node.storageId,
+    canonicalId: node.canonicalId,
     fields: node.fields,
     attrs: Object.fromEntries(node.attrs),
   };
@@ -197,6 +199,7 @@ export function graphFromJSON(doc: TodlDocument): Graph
       isClass: node.isClass ?? false,
       class: node.class ?? null,
       storageId: node.storageId ?? null,
+      canonicalId: node.canonicalId ?? null,
       fields: node.fields ?? [],
       attrs: new Map(Object.entries(node.attrs)),
     });

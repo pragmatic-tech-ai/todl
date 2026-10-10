@@ -28,7 +28,7 @@ function pkgWithResources(): CompiledPackage
 
 function pkg(): CompiledPackage
 {
-  const document = { nodes: [{ id: "ms.a", tier: "Instance", type: "t", metaKind: null, namespace: null, localId: "a", isClass: false, class: null, storageId: null, fields: [], attrs: {} }], edges: [] };
+  const document = { nodes: [{ id: "ms.a", tier: "Instance", type: "t", metaKind: null, namespace: null, localId: "a", isClass: false, class: null, storageId: null, canonicalId: null, fields: [], attrs: {} }], edges: [] };
   return {
     id: "ms",
     version: "1.0.0",

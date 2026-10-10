@@ -66,6 +66,12 @@ import {
   type AnnotationApplication,
   type PackageDecl,
   type OperatorDecl,
+  type IdentityDecl,
+  type MatchDecl,
+  type MatchRule,
+  type MergeDecl,
+  type MergeRule,
+  MergeStrategy,
   type EdgeApplication,
   type AssignmentNode,
   type ValueNode,
@@ -205,6 +211,8 @@ class Parser
       this.checkKeyword("viewpoint") || this.checkKeyword("concept") ||
       this.checkKeyword("model") || this.checkKeyword("annotation") ||
       this.checkKeyword("package") || this.checkKeyword("operator") ||
+      this.checkKeyword("identity") || this.checkKeyword("match") ||
+      this.checkKeyword("merge") ||
       this.checkKeyword("class") || this.checkKeyword("internal") || this.checkKeyword("sealed")
     )
     {
@@ -349,6 +357,9 @@ class Parser
     if (this.checkKeyword("annotation")) return this.parseAnnotation(start);
     if (this.checkKeyword("package")) return this.parsePackage(start);
     if (this.checkKeyword("operator")) return this.parseOperator(start);
+    if (this.checkKeyword("identity")) return this.parseIdentity(start);
+    if (this.checkKeyword("match")) return this.parseMatch(start);
+    if (this.checkKeyword("merge")) return this.parseMerge(start);
     if (this.checkKeyword("class"))
     {
       this.advance(); // class modifier
@@ -649,6 +660,93 @@ class Parser
     };
     decl.glyphSpan = tokenSpan(glyphTok, this.uri);
     decl.conceptSpan = this.spanFrom(conceptStart);
+    return decl;
+  }
+
+  /** `identity <Concept> key <attr>;` — names the attribute that identifies an
+   *  instance of the concept for entity resolution. Namespace scope only. */
+  private parseIdentity(start: Token): IdentityDecl
+  {
+    this.expectKeyword("identity");
+    const conceptStart = this.current();
+    const concept = this.parseDottedPath();            // concept may be ns-qualified
+    const conceptSpan = this.spanFrom(conceptStart);
+    this.expectKeyword("key");
+    const keyTok = this.expect(TokenKind.Identifier);
+    this.expect(TokenKind.Semicolon);
+    const decl: IdentityDecl = { kind: DeclKind.Identity, concept, key: keyTok.value, span: this.spanFrom(start) };
+    decl.conceptSpan = conceptSpan;
+    decl.keySpan = tokenSpan(keyTok, this.uri);
+    return decl;
+  }
+
+  /** `match <Concept> { same when <expr>; ... }` — declarative cross-record
+   *  equivalence rules. Each predicate is captured as a raw token slice (parsed
+   *  later by the loader). Namespace scope only. */
+  private parseMatch(start: Token): MatchDecl
+  {
+    this.expectKeyword("match");
+    const conceptStart = this.current();
+    const concept = this.parseDottedPath();
+    const conceptSpan = this.spanFrom(conceptStart);
+    const rules: MatchRule[] = [];
+    this.expect(TokenKind.LBrace);
+    this.parseBodyMembers(() =>
+    {
+      const ruleStart = this.current();
+      this.expectKeyword("same");
+      this.expectKeyword("when");
+      const predicate = this.collectUntilSemicolon();
+      this.expect(TokenKind.Semicolon);
+      rules.push({ predicate, span: this.spanFrom(ruleStart) });
+    });
+    this.expect(TokenKind.RBrace);
+    const decl: MatchDecl = { kind: DeclKind.Match, concept, rules, span: this.spanFrom(start) };
+    decl.conceptSpan = conceptSpan;
+    return decl;
+  }
+
+  /** `merge <Concept> { prefer source "x" for f; prefer latest for g; }` —
+   *  attribute survivorship rules for entity resolution. Namespace scope only. */
+  private parseMerge(start: Token): MergeDecl
+  {
+    this.expectKeyword("merge");
+    const conceptStart = this.current();
+    const concept = this.parseDottedPath();
+    const conceptSpan = this.spanFrom(conceptStart);
+    const rules: MergeRule[] = [];
+    this.expect(TokenKind.LBrace);
+    this.parseBodyMembers(() =>
+    {
+      const ruleStart = this.current();
+      this.expectKeyword("prefer");
+      let strategy: MergeStrategy;
+      let source: string | null = null;
+      if (this.checkKeyword("source"))
+      {
+        this.expectKeyword("source");
+        if (!this.check(TokenKind.String) && !this.check(TokenKind.RawString))
+        {
+          throw this.error("expected a source name string");
+        }
+        source = this.advance().value;
+        strategy = MergeStrategy.Source;
+      }
+      else
+      {
+        this.expectKeyword("latest");
+        strategy = MergeStrategy.Latest;
+      }
+      this.expectKeyword("for");
+      const fieldTok = this.expect(TokenKind.Identifier);
+      this.expect(TokenKind.Semicolon);
+      const rule: MergeRule = { strategy, field: fieldTok.value, source, span: this.spanFrom(ruleStart) };
+      rule.fieldSpan = tokenSpan(fieldTok, this.uri);
+      rules.push(rule);
+    });
+    this.expect(TokenKind.RBrace);
+    const decl: MergeDecl = { kind: DeclKind.Merge, concept, rules, span: this.spanFrom(start) };
+    decl.conceptSpan = conceptSpan;
     return decl;
   }
 

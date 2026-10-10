@@ -164,6 +164,7 @@ export class ModelDraft
       isClass: false,
       class: null,
       storageId: null,
+      canonicalId: null,
       fields: [],
       attrs: {},
     });

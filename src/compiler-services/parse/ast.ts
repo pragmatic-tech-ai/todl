@@ -52,6 +52,9 @@ export enum DeclKind
   Annotation,
   Package,
   Operator,
+  Identity,
+  Match,
+  Merge,
 }
 
 /** The kind of an authored VALUE (the right-hand side of `name = …`, an array
@@ -296,6 +299,65 @@ export interface OperatorDecl
   span: SourceSpan;
 }
 
+/** One `same when <expr>;` clause of a match block. The predicate is the raw
+ * token slice between `when` and `;`, parsed later by the loader via parsePredicate. */
+export interface MatchRule
+{
+  predicate: Token[];
+  span: SourceSpan;
+}
+
+/** A `match <Concept> { same when <expr>; ... }` declaration — declarative
+ * cross-record equivalence rules beyond the identity key. Clauses OR together. */
+export interface MatchDecl
+{
+  kind: DeclKind.Match;
+  concept: string;
+  rules: MatchRule[];
+  span: SourceSpan;
+  conceptSpan?: SourceSpan;
+}
+
+/** Survivorship strategy for one merge rule. */
+export enum MergeStrategy
+{
+  Source = "source",
+  Latest = "latest",
+}
+
+/** One `prefer …` clause of a merge block. */
+export interface MergeRule
+{
+  strategy: MergeStrategy;
+  field: string;
+  source: string | null;   // the named source for `prefer source "x"`, else null
+  span: SourceSpan;
+  fieldSpan?: SourceSpan;
+}
+
+/** A `merge <Concept> { prefer … for <field>; }` declaration — attribute
+ * survivorship for entity resolution. */
+export interface MergeDecl
+{
+  kind: DeclKind.Merge;
+  concept: string;
+  rules: MergeRule[];
+  span: SourceSpan;
+  conceptSpan?: SourceSpan;
+}
+
+/** An `identity <Concept> key <attr>;` declaration — names the attribute whose
+ * value identifies an instance of the concept for entity-resolution. */
+export interface IdentityDecl
+{
+  kind: DeclKind.Identity;
+  concept: string;
+  key: string;
+  span: SourceSpan;
+  conceptSpan?: SourceSpan;
+  keySpan?: SourceSpan;
+}
+
 // ── Concept members (fields, relationships, invariants) ────────────────────────
 // The building blocks of a ConceptDecl body. Also reused elsewhere: FieldDecl
 // doubles as an annotation's typed param.
@@ -439,7 +501,7 @@ export interface PrimitiveDecl
  * {@link DeclKind}). This is what a {@link NamespaceNode} holds. */
 export type Declaration =
   | ConceptDecl | TaxonomyDecl | ViewpointDecl | PrimitiveDecl | InstanceDecl | ModelDecl
-  | AnnotationDecl | PackageDecl | OperatorDecl;
+  | AnnotationDecl | PackageDecl | OperatorDecl | IdentityDecl | MatchDecl | MergeDecl;
 
 // ═══════════════════════════════ FILE ROOT ════════════════════════════════════
 

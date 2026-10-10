@@ -16,6 +16,7 @@ function node(id: NodeId, type = "thing", attrs: Record<string, string> = {}): N
     isClass: false,
     class: null,
     storageId: null,
+    canonicalId: null,
     fields: [],
     attrs: new Map(Object.entries(attrs)),
   };
@@ -52,7 +53,7 @@ test("mutations record the mapped Cypher ops (applied to the working copy first)
     cypher:
       "CREATE (n:Node {id: $id}) SET n.tier = $tier, n.type = $type, n.metaKind = $metaKind, " +
       "n.namespace = $namespace, n.localId = $localId, n.isClass = $isClass, n.class = $class, " +
-      "n.storageId = $storageId, n.fields = $fields, n += $attrs",
+      "n.storageId = $storageId, n.canonicalId = $canonicalId, n.fields = $fields, n += $attrs",
     params: {
       id: "copilot",
       tier: "Instance",
@@ -63,6 +64,7 @@ test("mutations record the mapped Cypher ops (applied to the working copy first)
       isClass: false,
       class: null,
       storageId: null,
+      canonicalId: null,
       fields: "[]",
       attrs: { label: "Copilot" },
     },
@@ -134,3 +136,16 @@ test("load rebuilds the working copy from DB rows", async () => {
 
 // Same contract as InMemoryGraphStore — the seam is proven against both back-ends.
 describeGraphStore("CypherGraphStore", () => new CypherGraphStore());
+
+test("removeEdge detaches the edge from the working copy and records a REMOVE_EDGE op", () => {
+  const s = new CypherGraphStore();
+  s.addNode(node("a"));
+  s.addNode(node("b"));
+  s.addEdge(edge("a", "b", "rel"));
+  s.removeEdge(EdgeKind.Relationship, "rel", "a", "b");
+  assert.equal(s.outEdges("a").length, 0);
+  assert.equal(s.inEdges("b").length, 0);
+  const last = s.pendingCypher()[s.pendingCypher().length - 1]!;
+  assert.match(last.cypher, /DELETE r/);
+  assert.deepEqual(last.params, { from: "a", to: "b", kind: "Relationship", via: "rel" });
+});

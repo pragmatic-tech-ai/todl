@@ -54,13 +54,15 @@
 
 import { parse } from "./parser.js";
 import { parsePredicate } from "./predicate-parser.js";
+import { MatchRuleNormalizer } from "./match-rule-normalizer.js";
 import { ApplicationRootPass } from "./application-root-pass.js";
 import { Repository } from "../model/model.js";
-import type { Builder, TermInput } from "../model/builder.js";
+import { Builder, type TermInput } from "../model/builder.js";
 import type { Expr } from "../predicate/ast.js";
 import {
   DeclKind,
   ValueKind,
+  type MergeStrategy,
   type Declaration,
   type InstanceDecl,
   type ModelDecl,
@@ -705,6 +707,182 @@ export function loadInto(
 
   // Operator glyphs can now be checked against the concept schemas they reference.
   validateOperators(model, units, diagnostics);
+
+  // ═══════════════════════ IDENTITY declarations (entity-identity) ═════════════════
+  // Lower each `identity <Concept> key <field>;` to an identity node. It runs once
+  // concept members are committed, so the key can be checked against the concept's
+  // effective (inherited) schema. The concept is resolved here (not in the reference
+  // pre-pass) so an unknown one yields `identity.unknown-concept` alone.
+  const identityBuilder = model.builder();
+  const stagedIdentities = new Set<string>();
+  for (const { ns, imports, uri, decl: declaration } of units)
+  {
+    if (declaration.kind !== DeclKind.Identity) continue;
+    identityBuilder.setNamespace(ns);
+    if (rec !== undefined) rec.current = uri;
+    const resolved = resolveRef(declaration.concept, { ns, imports });
+    const conceptId = resolved.kind === "qualified" ? resolved.flat : declaration.concept;
+    if (resolved.kind === "undefined" || resolved.kind === "unreachable" || model.resolve(conceptId)?.metaKind !== MetaKind.Concept)
+    {
+      diagnostics.push({
+        code: DiagnosticCode.IdentityUnknownConcept, severity: Severity.Error,
+        message: `identity references unknown concept "${declaration.concept}"`,
+        span: declaration.conceptSpan ?? declaration.span, node: declaration.concept, path: null,
+      });
+      continue;
+    }
+    const known = declaration.key === Builder.StorageIdKey
+      || model.effectiveSchema(conceptId).fields.some((f) => f.name === declaration.key);
+    if (!known)
+    {
+      diagnostics.push({
+        code: DiagnosticCode.IdentityUnknownKey, severity: Severity.Error,
+        message: `identity key "${declaration.key}" is not a field of "${declaration.concept}"`,
+        span: declaration.keySpan ?? declaration.span, node: conceptId, path: declaration.key,
+      });
+      continue;
+    }
+    const identityId = `${conceptId}@identity`;
+    // A second identity for the same concept would collide on the node id: dropped.
+    if (model.has(identityId) || stagedIdentities.has(identityId)) continue;
+    stagedIdentities.add(identityId);
+    identityBuilder.defineIdentity(identityId, conceptId, declaration.key);
+    recordHome(rec, identityId);
+  }
+  identityBuilder.commit(undefinedIds);
+
+  // ═══════════════════════ MATCH declarations (entity-identity) ═════════════════════
+  // Lower each `match <Concept> { same when <pred>; ... }`. Every clause is parsed and
+  // normalized to the sorted field set both candidates must agree on; invalid clauses
+  // are diagnosed and dropped while the others survive. Rules UNION per concept (across
+  // clauses and across multiple blocks) into ONE `<concept>@match` node.
+  const matchBuilder = model.builder();
+  const matchRulesByConcept = new Map<NodeId, string[][]>();
+  const matchConceptOrder: NodeId[] = [];
+  for (const { ns, imports, uri, decl: declaration } of units)
+  {
+    if (declaration.kind !== DeclKind.Match) continue;
+    matchBuilder.setNamespace(ns);
+    if (rec !== undefined) rec.current = uri;
+    const resolved = resolveRef(declaration.concept, { ns, imports });
+    const conceptId = resolved.kind === "qualified" ? resolved.flat : declaration.concept;
+    if (resolved.kind === "undefined" || resolved.kind === "unreachable" || model.resolve(conceptId)?.metaKind !== MetaKind.Concept)
+    {
+      diagnostics.push({
+        code: DiagnosticCode.MatchUnknownConcept, severity: Severity.Error,
+        message: `match references unknown concept "${declaration.concept}"`,
+        span: declaration.conceptSpan ?? declaration.span, node: declaration.concept, path: null,
+      });
+      continue;
+    }
+    const fieldNames = new Set(model.effectiveSchema(conceptId).fields.map((f) => f.name));
+    for (const rule of declaration.rules)
+    {
+      let expr: Expr;
+      try
+      {
+        expr = parsePredicate(rule.predicate);
+      }
+      catch
+      {
+        diagnostics.push({
+          code: DiagnosticCode.MatchUnsupportedRule, severity: Severity.Error,
+          message: `match rule is not a valid expression`,
+          span: rule.span, node: conceptId, path: null,
+        });
+        continue;
+      }
+      const normalized = MatchRuleNormalizer.Normalize(expr, Builder.MatchLeftVar, Builder.MatchRightVar);
+      if (normalized === null)
+      {
+        diagnostics.push({
+          code: DiagnosticCode.MatchUnsupportedRule, severity: Severity.Error,
+          message: `match rule must be a conjunction of "${Builder.MatchLeftVar}.F == ${Builder.MatchRightVar}.F" field equalities`,
+          span: rule.span, node: conceptId, path: null,
+        });
+        continue;
+      }
+      const unknown = normalized.find((f) => !fieldNames.has(f));
+      if (unknown !== undefined)
+      {
+        diagnostics.push({
+          code: DiagnosticCode.MatchUnknownField, severity: Severity.Error,
+          message: `match rule field "${unknown}" is not a field of "${declaration.concept}"`,
+          span: rule.span, node: conceptId, path: unknown,
+        });
+        continue;
+      }
+      const existing = matchRulesByConcept.get(conceptId);
+      if (existing === undefined)
+      {
+        matchRulesByConcept.set(conceptId, [normalized]);
+        matchConceptOrder.push(conceptId);
+      }
+      else if (!existing.some((r) => r.join(",") === normalized.join(","))) existing.push(normalized);
+    }
+  }
+  for (const conceptId of matchConceptOrder)
+  {
+    const matchId = `${conceptId}@match`;
+    if (model.has(matchId)) continue;
+    matchBuilder.defineMatch(matchId, conceptId, JSON.stringify(matchRulesByConcept.get(conceptId)!));
+    recordHome(rec, matchId);
+  }
+  matchBuilder.commit(undefinedIds);
+
+  // ═══════════════════════ MERGE declarations (entity-identity) ═════════════════════
+  // Lower each `merge <Concept> { prefer ...; }`. Rules accumulate per concept (first
+  // rule per field wins) into ONE `<concept>@merge` node; invalid rules are diagnosed
+  // and dropped while the others survive.
+  const mergeBuilder = model.builder();
+  const mergeRulesByConcept = new Map<NodeId, { field: string; strategy: `${MergeStrategy}`; source: string | null }[]>();
+  const mergeConceptOrder: NodeId[] = [];
+  for (const { ns, imports, uri, decl: declaration } of units)
+  {
+    if (declaration.kind !== DeclKind.Merge) continue;
+    mergeBuilder.setNamespace(ns);
+    if (rec !== undefined) rec.current = uri;
+    const resolved = resolveRef(declaration.concept, { ns, imports });
+    const conceptId = resolved.kind === "qualified" ? resolved.flat : declaration.concept;
+    if (resolved.kind === "undefined" || resolved.kind === "unreachable" || model.resolve(conceptId)?.metaKind !== MetaKind.Concept)
+    {
+      diagnostics.push({
+        code: DiagnosticCode.MergeUnknownConcept, severity: Severity.Error,
+        message: `merge references unknown concept "${declaration.concept}"`,
+        span: declaration.conceptSpan ?? declaration.span, node: declaration.concept, path: null,
+      });
+      continue;
+    }
+    const fieldNames = new Set(model.effectiveSchema(conceptId).fields.map((f) => f.name));
+    for (const rule of declaration.rules)
+    {
+      if (!fieldNames.has(rule.field))
+      {
+        diagnostics.push({
+          code: DiagnosticCode.MergeUnknownField, severity: Severity.Error,
+          message: `merge rule field "${rule.field}" is not a field of "${declaration.concept}"`,
+          span: rule.fieldSpan ?? rule.span, node: conceptId, path: rule.field,
+        });
+        continue;
+      }
+      const serialized = { field: rule.field, strategy: rule.strategy, source: rule.source };
+      const existing = mergeRulesByConcept.get(conceptId);
+      if (existing === undefined)
+      {
+        mergeRulesByConcept.set(conceptId, [serialized]);
+        mergeConceptOrder.push(conceptId);
+      }
+      else if (!existing.some((r) => r.field === rule.field)) existing.push(serialized);
+    }
+  }
+  for (const conceptId of mergeConceptOrder)
+  {
+    const mergeId = `${conceptId}@merge`;
+    if (model.has(mergeId)) continue;
+    mergeBuilder.defineMerge(mergeId, conceptId, JSON.stringify(mergeRulesByConcept.get(conceptId)!));
+    recordHome(rec, mergeId);
+  }
+  mergeBuilder.commit(undefinedIds);
 
   // ═══════════════════════════ PASS 2b: instances & models ═════════════════════
   // Stage the concrete graph: model containers, their objects, deferred term

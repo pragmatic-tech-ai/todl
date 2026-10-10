@@ -41,6 +41,7 @@ export enum EdgeKind
   Annotated, // concept | package -> annotation application node
   Frames, // viewpoint -> the concept it frames
   Targets, // relationship-schema node -> a target concept node (one per union member)
+  SameAs, // alias instance -> canonical instance (entity-identity resolution)
 }
 
 /** Which way to walk an edge from a node. */
@@ -107,6 +108,8 @@ export interface Node
 
   /** Reserved dedicated persistence id (#3). DEFERRED — a typed slot only. */
   storageId: string | null;
+  /** The canonical instance this node was resolved into (entity-identity), or null. */
+  canonicalId: NodeId | null;
 
   /** Declared scalar/field schema of a concept or annotation (SPEC-01 #4). Carried
    *  here instead of as `HasField` member nodes; empty for non-schema-owning nodes. */
@@ -210,6 +213,53 @@ export class Graph
     const property =
       edge.kind === EdgeKind.Relationship || edge.kind === EdgeKind.Derived ? edge.via : null;
     this.changed.emit({ kind: GraphChangeKind.EdgeAdded, node: edge.from, property, target: edge.to });
+  }
+
+  /**
+   * Remove one edge from both adjacency directions, emitting
+   * {@link GraphChangeKind.EdgeRemoved}. No-op (no event) when the edge is absent.
+   */
+  removeEdge(kind: EdgeKind, via: NodeId | null, from: NodeId, to: NodeId): void
+  {
+    const present = this.store.outEdges(from).some(
+      (e) => e.kind === kind && e.via === via && e.to === to);
+    if (!present) return;
+    this.store.removeEdge(kind, via, from, to);
+    const property = kind === EdgeKind.Relationship || kind === EdgeKind.Derived ? via : null;
+    this.changed.emit({ kind: GraphChangeKind.EdgeRemoved, node: from, property, target: to });
+  }
+
+  /**
+   * Mark `aliasId` as a duplicate of `canonicalId`: sets `alias.canonicalId`, adds a
+   * single `SameAs` edge alias -> canonical, and redirects every incoming edge of the
+   * alias (except the `SameAs` marker) to the canonical. Idempotent; a self-alias or
+   * an absent node on either side is a no-op.
+   */
+  alias(aliasId: NodeId, canonicalId: NodeId): void
+  {
+    if (aliasId === canonicalId) return;
+    const node = this.getNode(aliasId);
+    if (node === undefined || !this.hasNode(canonicalId)) return;
+    if (node.canonicalId === canonicalId) return;
+
+    node.canonicalId = canonicalId;
+    if (this.related(aliasId, EdgeKind.SameAs, Direction.Out).indexOf(canonicalId) < 0)
+    {
+      this.addEdge({ kind: EdgeKind.SameAs, via: null, from: aliasId, to: canonicalId });
+    }
+
+    for (const edge of [...this.inEdges(aliasId)])
+    {
+      if (edge.kind === EdgeKind.SameAs) continue;
+      this.removeEdge(edge.kind, edge.via, edge.from, edge.to);
+      if (edge.from === canonicalId) continue;
+      const duplicate = this.outEdges(edge.from).some(
+        (e) => e.kind === edge.kind && e.via === edge.via && e.to === canonicalId);
+      if (!duplicate)
+      {
+        this.addEdge({ kind: edge.kind, via: edge.via, from: edge.from, to: canonicalId });
+      }
+    }
   }
 
   /** Append a declared field to a concept/annotation node's schema (SPEC-01 #4). */

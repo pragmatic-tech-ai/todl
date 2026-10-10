@@ -26,16 +26,21 @@ export interface CypherSession
 }
 
 const NODE_COLUMNS = "n.type = $type, n.metaKind = $metaKind, n.namespace = $namespace, " +
-  "n.localId = $localId, n.isClass = $isClass, n.class = $class, n.storageId = $storageId, n.fields = $fields";
+  "n.localId = $localId, n.isClass = $isClass, n.class = $class, n.storageId = $storageId, n.canonicalId = $canonicalId, n.fields = $fields";
 const ADD_NODE = `CREATE (n:Node {id: $id}) SET n.tier = $tier, ${NODE_COLUMNS}, n += $attrs`;
 const ADD_EDGE =
   "MATCH (a:Node {id: $from}), (b:Node {id: $to}) CREATE (a)-[:REL {kind: $kind, via: $via}]->(b)";
+// Null `via` (structural edges) is stored as an absent property, and `= null` never matches in Cypher,
+// so the null case is matched explicitly.
+const REMOVE_EDGE =
+  "MATCH (a:Node {id: $from})-[r:REL {kind: $kind}]->(b:Node {id: $to}) " +
+  "WHERE r.via = $via OR (r.via IS NULL AND $via IS NULL) DELETE r";
 const SET_ATTR = "MATCH (n:Node {id: $id}) SET n += $delta";
 const SET_FIELDS = "MATCH (n:Node {id: $id}) SET n.fields = $fields";
 const REMOVE = "MATCH (n:Node {id: $id}) DETACH DELETE n";
 const LOAD_NODES = "MATCH (n:Node) RETURN n.id AS id, n.tier AS tier, n.type AS type, " +
   "n.metaKind AS metaKind, n.namespace AS namespace, n.localId AS localId, n.isClass AS isClass, " +
-  "n.class AS class, n.storageId AS storageId, n.fields AS fields, properties(n) AS props";
+  "n.class AS class, n.storageId AS storageId, n.canonicalId AS canonicalId, n.fields AS fields, properties(n) AS props";
 const LOAD_EDGES = "MATCH (a:Node)-[r:REL]->(b:Node) RETURN a.id AS from, b.id AS to, r.kind AS kind, r.via AS via";
 
 export class CypherGraphStore implements GraphStore
@@ -55,7 +60,7 @@ export class CypherGraphStore implements GraphStore
     for (const row of await session.run(LOAD_NODES))
     {
       const props = { ...(row.props as Record<string, Scalar>) };
-      for (const col of ["id", "tier", "type", "metaKind", "namespace", "localId", "isClass", "class", "storageId", "fields"])
+      for (const col of ["id", "tier", "type", "metaKind", "namespace", "localId", "isClass", "class", "storageId", "canonicalId", "fields"])
         delete props[col];
       inner.addNode({
         id: row.id as NodeId,
@@ -67,6 +72,7 @@ export class CypherGraphStore implements GraphStore
         isClass: (row.isClass as boolean | null) ?? false,
         class: (row.class as NodeId | null) ?? null,
         storageId: (row.storageId as string | null) ?? null,
+        canonicalId: (row.canonicalId as NodeId | null) ?? null,
         fields: typeof row.fields === "string" ? (JSON.parse(row.fields) as FieldDecl[]) : [],
         attrs: new Map(Object.entries(props)),
       });
@@ -133,6 +139,7 @@ export class CypherGraphStore implements GraphStore
         isClass: node.isClass,
         class: node.class,
         storageId: node.storageId,
+        canonicalId: node.canonicalId,
         fields: JSON.stringify(node.fields),
         attrs: Object.fromEntries(node.attrs),
       },
@@ -145,6 +152,15 @@ export class CypherGraphStore implements GraphStore
     this.pending.push({
       cypher: ADD_EDGE,
       params: { from: edge.from, to: edge.to, kind: EdgeKind[edge.kind], via: edge.via },
+    });
+  }
+
+  removeEdge(kind: EdgeKind, via: NodeId | null, from: NodeId, to: NodeId): void
+  {
+    this.inner.removeEdge(kind, via, from, to);
+    this.pending.push({
+      cypher: REMOVE_EDGE,
+      params: { from, to, kind: EdgeKind[kind], via },
     });
   }
 
