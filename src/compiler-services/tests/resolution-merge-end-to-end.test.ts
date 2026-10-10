@@ -11,12 +11,10 @@ class ResolutionMergeEndToEndFixture
     public static readonly LabelKey = "label";
     public static readonly UpdatedAtKey = "updated_at";
 
-    // `label` is optional: validate() still checks merged-away aliased instances
-    // (deferred to Plan 4), so a required field would trip cardinality.required-missing on instance b.
     public static readonly GapFillSource = `
 namespace shop
 {
-    concept Customer { email : string; label : string?; updated_at : string; }
+    concept Customer { email : string; label : string; updated_at : string; }
     identity Customer key email;
     merge Customer { prefer latest for updated_at; }
 
