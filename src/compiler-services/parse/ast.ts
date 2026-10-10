@@ -55,6 +55,7 @@ export enum DeclKind
   Identity,
   Match,
   Merge,
+  Connector,
 }
 
 /** The kind of an authored VALUE (the right-hand side of `name = …`, an array
@@ -231,6 +232,10 @@ export interface ModelDecl
   edges: EdgeApplication[];
   /** Model-level annotation applications (`annotate <Ann> { … }`). */
   annotations: AnnotationApplication[];
+  /** `connect <connector>;` statements — external connectors this model uses. */
+  connects: ConnectEntry[];
+  /** `populate <Concept> …;` statements — external-data population requests. */
+  populations: PopulateDecl[];
   /** The viewpoint this model conforms to (`… conforms <viewpoint>`), or null. */
   conforms: string | null;
   span: SourceSpan;
@@ -356,6 +361,56 @@ export interface IdentityDecl
   span: SourceSpan;
   conceptSpan?: SourceSpan;
   keySpan?: SourceSpan;
+}
+
+/** One `name = value;` assignment in a connector body; the value is the raw
+ * string-literal contents or bare identifier text. */
+export interface ConnectorAssignment
+{
+  name: string;
+  value: string;
+  span?: SourceSpan;
+}
+
+/** A `connector <name> { name = value; ... }` declaration — an external data
+ * connection (named or inline form). */
+export interface ConnectorDecl
+{
+  kind: DeclKind.Connector;
+  name: string;
+  assignments: ConnectorAssignment[];
+  span: SourceSpan;
+  nameSpan?: SourceSpan;
+}
+
+/** A model-body `connect <connector>;` statement. */
+export interface ConnectEntry
+{
+  connector: string;
+  span: SourceSpan;
+  connectorSpan?: SourceSpan;
+}
+
+/** One `<member> = "<field>";` override in a populate body. */
+export interface PopulateOverride
+{
+  member: string;
+  field: string;
+  span: SourceSpan;
+  memberSpan?: SourceSpan;
+}
+
+/** A model-body `populate <Concept> [from <connector>[.<source>]] [key <field>] [{ ... }];`. */
+export interface PopulateDecl
+{
+  concept: string;
+  connector: string | null;
+  source: string | null;
+  idKey: string | null;
+  overrides: PopulateOverride[];
+  readOnly: boolean;
+  span: SourceSpan;
+  conceptSpan?: SourceSpan;
 }
 
 // ── Concept members (fields, relationships, invariants) ────────────────────────
@@ -501,7 +556,7 @@ export interface PrimitiveDecl
  * {@link DeclKind}). This is what a {@link NamespaceNode} holds. */
 export type Declaration =
   | ConceptDecl | TaxonomyDecl | ViewpointDecl | PrimitiveDecl | InstanceDecl | ModelDecl
-  | AnnotationDecl | PackageDecl | OperatorDecl | IdentityDecl | MatchDecl | MergeDecl;
+  | AnnotationDecl | PackageDecl | OperatorDecl | IdentityDecl | MatchDecl | MergeDecl | ConnectorDecl;
 
 // ═══════════════════════════════ FILE ROOT ════════════════════════════════════
 
