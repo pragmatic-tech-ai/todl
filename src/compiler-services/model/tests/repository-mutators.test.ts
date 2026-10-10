@@ -17,15 +17,13 @@ class RepositoryMutatorFixture
     }
 }
 
-test("setAttr writes a scalar onto an existing node", () =>
-{
+test("setAttr writes a scalar onto an existing node", () => {
     const model = RepositoryMutatorFixture.Seeded();
     model.setAttr("n.a", "label", "hello");
     assert.equal(model.resolve("n.a")!.attrs.get("label"), "hello");
 });
 
-test("addEdge adds a relationship edge", () =>
-{
+test("addEdge adds a relationship edge", () => {
     const model = RepositoryMutatorFixture.Seeded();
     model.addEdge({ kind: EdgeKind.Relationship, via: "rel", from: "n.a", to: "n.b" });
     assert.deepEqual(model.related("n.a", EdgeKind.Relationship, Direction.Out, "rel"), ["n.b"]);
