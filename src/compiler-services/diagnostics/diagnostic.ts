@@ -97,6 +97,12 @@ export enum DiagnosticCode
   MatchUnsupportedRule = "match.unsupported-rule",
   MergeUnknownConcept = "merge.unknown-concept",
   MergeUnknownField = "merge.unknown-field",
+  // External-data connectors: `populate` must name a real concept, real members, one
+  // population per concept per model, and a resolvable connector.
+  ConnectorUnknownConcept = "connector.unknown-concept",
+  ConnectorUnknownField = "connector.unknown-field",
+  ConnectorDuplicatePopulate = "connector.duplicate-populate",
+  ConnectorUnresolvedConnector = "connector.unresolved-connector",
   ResolutionUnmergedConflict = "resolution.unmerged-conflict",
   // Solution composition phase (SPEC-06): a member/dependency package could not
   // be resolved or loaded into the composed Domain.

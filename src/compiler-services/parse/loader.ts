@@ -884,6 +884,113 @@ export function loadInto(
   }
   mergeBuilder.commit(undefinedIds);
 
+  // ═══════════════════ CONNECTORS + POPULATIONS (external data) ═════════════════
+  // `datasource` decls lower to namespace-scoped Connector nodes
+  // (`<ns>@connector:<name>`); each model's `populate` lowers to one Population node
+  // (`<concept>@populate`, first model wins) whose FieldMap is TOTAL: convention
+  // expansion maps every schema field to the same-named external field, then
+  // explicit overrides are applied.
+  // DEFERRED (Plan 2): deployment-policy validation (inline config forbidden, model
+  // provider forbidden). Plan 1 accepts inline connector config unconditionally.
+  const connectorBuilder = model.builder();
+  const connectorReservedKeys = new Set<string>([Builder.ConnectorKindAttr, Builder.ConnectorConnectionAttr, Builder.ConnectorSecretAttr]);
+  for (const { ns, uri, decl: declaration } of units)
+  {
+    if (declaration.kind !== DeclKind.Connector) continue;
+    connectorBuilder.setNamespace(ns);
+    if (rec !== undefined) rec.current = uri;
+    const connectorId = `${ns}@connector:${declaration.name}`;
+    if (model.has(connectorId)) continue;
+    const config: Record<string, string> = {};
+    for (const a of declaration.assignments) if (!connectorReservedKeys.has(a.name) && !(a.name in config)) config[a.name] = a.value;
+    const find = (key: string) => declaration.assignments.find((a) => a.name === key)?.value ?? null;
+    connectorBuilder.defineConnector(
+      connectorId, declaration.name, find(Builder.ConnectorKindAttr), JSON.stringify(config),
+      find(Builder.ConnectorConnectionAttr), find(Builder.ConnectorSecretAttr));
+    recordHome(rec, connectorId);
+  }
+  connectorBuilder.commit(undefinedIds);
+
+  const populateBuilder = model.builder();
+  for (const { ns, imports, uri, decl: declaration } of units)
+  {
+    if (declaration.kind !== DeclKind.Model) continue;
+    populateBuilder.setNamespace(ns);
+    if (rec !== undefined) rec.current = uri;
+    const defaultConnector = declaration.connects[0]?.connector ?? null;
+    const seenConcepts = new Set<NodeId>();
+    for (const populate of declaration.populations)
+    {
+      const resolved = resolveRef(populate.concept, { ns, imports });
+      const conceptId = resolved.kind === "qualified" ? resolved.flat : populate.concept;
+      if (resolved.kind === "undefined" || resolved.kind === "unreachable" || model.resolve(conceptId)?.metaKind !== MetaKind.Concept)
+      {
+        diagnostics.push({
+          code: DiagnosticCode.ConnectorUnknownConcept, severity: Severity.Error,
+          message: `populate references unknown concept "${populate.concept}"`,
+          span: populate.conceptSpan ?? populate.span, node: populate.concept, path: null,
+        });
+        continue;
+      }
+      if (seenConcepts.has(conceptId))
+      {
+        diagnostics.push({
+          code: DiagnosticCode.ConnectorDuplicatePopulate, severity: Severity.Error,
+          message: `concept "${populate.concept}" is populated more than once in model "${declaration.id}"`,
+          span: populate.conceptSpan ?? populate.span, node: conceptId, path: null,
+        });
+        continue;
+      }
+      seenConcepts.add(conceptId);
+      const connectorName = populate.connector ?? defaultConnector;
+      let connectorId: NodeId | null = null;
+      if (connectorName !== null)
+      {
+        const scoped = `${ns}@connector:${connectorName}`;
+        if (model.has(scoped)) connectorId = scoped;
+        else
+        {
+          const byName = model.nodesOfMetaKind(MetaKind.Connector).filter((c) => c.endsWith(`@connector:${connectorName}`));
+          if (byName.length === 1) connectorId = byName[0]!;
+        }
+      }
+      if (connectorId === null)
+      {
+        diagnostics.push({
+          code: DiagnosticCode.ConnectorUnresolvedConnector, severity: Severity.Error,
+          message: connectorName === null
+            ? `populate "${populate.concept}" has no "from" connector and the model declares no "connect"`
+            : `populate "${populate.concept}" references unknown connector "${connectorName}"`,
+          span: populate.span, node: conceptId, path: null,
+        });
+        continue;
+      }
+      const idKey = populate.idKey ?? Builder.DefaultIdKey;
+      const fieldNames = model.effectiveSchema(conceptId).fields.map((f) => f.name);
+      const fieldMap: Record<string, string> = { [Builder.IdMember]: idKey };
+      for (const name of fieldNames) if (!(name in fieldMap)) fieldMap[name] = name;
+      for (const o of populate.overrides)
+      {
+        if (o.member !== Builder.IdMember && !fieldNames.includes(o.member))
+        {
+          diagnostics.push({
+            code: DiagnosticCode.ConnectorUnknownField, severity: Severity.Error,
+            message: `populate override member "${o.member}" is not a field of "${populate.concept}"`,
+            span: o.memberSpan ?? o.span, node: conceptId, path: o.member,
+          });
+          continue;
+        }
+        fieldMap[o.member] = o.field;
+      }
+      const bindingId = `${conceptId}@populate`;
+      if (model.has(bindingId)) continue;
+      const source = populate.source ?? conceptId.slice(conceptId.lastIndexOf(".") + 1);
+      populateBuilder.defineBinding(bindingId, conceptId, connectorId, source, idKey, JSON.stringify(fieldMap), !populate.readOnly);
+      recordHome(rec, bindingId);
+    }
+  }
+  populateBuilder.commit(undefinedIds);
+
   // ═══════════════════════════ PASS 2b: instances & models ═════════════════════
   // Stage the concrete graph: model containers, their objects, deferred term
   // compositions/values, and reified edges. This is where authored VALUES turn into
