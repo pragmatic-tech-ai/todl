@@ -454,10 +454,11 @@ export class Repository
     return this.effectiveRelationships(id).get(member) ?? [];
   }
 
-  /** Inbound reference sources (reverse adjacency), optionally filtered by member. */
+  /** Inbound reference sources (reverse adjacency), optionally filtered by member; excludes merged-away aliased sources (returns the canonical). */
   referrers(id: NodeId, member?: string): NodeId[]
   {
-    return this.related(id, EdgeKind.Relationship, Direction.In, member ?? null);
+    return this.related(id, EdgeKind.Relationship, Direction.In, member ?? null)
+      .filter((from) => this.resolve(from)?.canonicalId == null);
   }
 
   /** Every relationship edge whose target node is absent (bulk dangling report). */
