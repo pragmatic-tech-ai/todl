@@ -1,6 +1,6 @@
 import type { JsonEdge, JsonNode, TodlDocument } from "../compiler-services/emit/json.js";
 import { Tier, type Scalar } from "../compiler-services/model/graph.js";
-import type { ConnectorBinding, ExternalRecord } from "./connector-plan.js";
+import type { ConnectorBinding, ExternalRecord, SourceRef } from "./connector-plan.js";
 
 /** Maps external records onto TODL instance nodes and merges them into a base shard. */
 export class PopulationBuilder
@@ -10,6 +10,7 @@ export class PopulationBuilder
 
     private readonly nodes: JsonNode[];
     private readonly edges: JsonEdge[];
+    private readonly sources = new Map<string, SourceRef>();
 
     public constructor(base: TodlDocument)
     {
@@ -44,9 +45,11 @@ export class PopulationBuilder
                 if (member === undefined || value === null || value === undefined) continue;
                 attrs[member] = value;
             }
-            const suffix = `${PopulationBuilder.IdSeparator}${storageId}`;
+            const sourceTag = `${binding.Connector}${PopulationBuilder.NamespaceSeparator}${binding.Source}`;
+            const suffix = `${PopulationBuilder.IdSeparator}${sourceTag}${PopulationBuilder.IdSeparator}${storageId}`;
+            const nodeId = `${binding.Concept}${suffix}`;
             this.nodes.push({
-                id: `${binding.Concept}${suffix}`,
+                id: nodeId,
                 tier: Tier[Tier.Instance],
                 type: binding.Concept,
                 metaKind: null,
@@ -59,8 +62,15 @@ export class PopulationBuilder
                 fields: [],
                 attrs,
             });
+            this.sources.set(nodeId, { Connector: binding.Connector, Source: binding.Source });
         }
         return this;
+    }
+
+    /** Minted instance node id -> the datasource/source it was populated from. Drives source-provenance and write fan-out. */
+    public Sources(): ReadonlyMap<string, SourceRef>
+    {
+        return this.sources;
     }
 
     public Build(): TodlDocument

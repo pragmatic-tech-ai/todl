@@ -6,6 +6,7 @@ import { Direction, EdgeKind } from "../../model/graph.js";
 import { Builder } from "../../model/builder.js";
 import { ResolutionPass } from "../resolution-pass.js";
 import { DiagnosticCode } from "../../diagnostics/diagnostic.js";
+import { MergeStrategy } from "../../parse/ast.js";
 
 function seed(): Repository
 {
@@ -445,4 +446,37 @@ test("a second Resolve returns no diagnostics and leaves attrs and edges unchang
     assert.deepEqual(pass.Resolve(), []);
     assert.deepEqual([...model.resolve("n.a")!.attrs.entries()], attrs);
     assert.deepEqual(model.related("n.a", EdgeKind.Relationship, Direction.Out, "points"), edges);
+});
+
+test("Decisions records the winning source and node per merged field", () =>
+{
+    const model = seedWithMerge([{ field: "label", strategy: "source", source: "crm" }]);
+    addRow(model, "n.a", { email: "x@y.z", label: "A" });
+    addRow(model, "n.b", { email: "x@y.z", label: "B" });
+    const provenance = new Map<string, string>([["n.a", "erp"], ["n.b", "crm"]]);
+    const pass = new ResolutionPass(model, provenance);
+    pass.Resolve();
+    const decisions = pass.Decisions();
+    const label = decisions.find((d) => d.member === "label");
+    assert.ok(label !== undefined);
+    assert.equal(label!.source, "crm");
+    assert.equal(label!.winningNode, "n.b");
+    assert.equal(label!.strategy, MergeStrategy.Source);
+    const email = decisions.find((d) => d.member === "email");
+    assert.ok(email !== undefined);
+    assert.equal(email!.strategy, undefined);
+});
+
+test("Decisions audit reflects one run when Resolve is called twice", () =>
+{
+    const model = seedWithMerge([{ field: "label", strategy: "source", source: "crm" }]);
+    addRow(model, "n.a", { email: "x@y.z", label: "A" });
+    addRow(model, "n.b", { email: "x@y.z", label: "B" });
+    const pass = new ResolutionPass(model, new Map<string, string>([["n.a", "erp"], ["n.b", "crm"]]));
+    pass.Resolve();
+    const first = pass.Decisions().length;
+    assert.ok(first > 0);
+    pass.Resolve();
+    // the second run folds nothing (aliases already collapsed), so the audit reflects that run only: never doubled
+    assert.equal(pass.Decisions().length, 0);
 });

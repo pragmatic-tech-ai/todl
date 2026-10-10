@@ -44,7 +44,7 @@ test("dotless concept id yields null namespace", () =>
     const binding: ConnectorBinding = { Concept: "Order", Connector: "pg", Source: "order", IdKey: "id", FieldMap: { id: "id" }, Writable: true };
     const node = new PopulationBuilder(EMPTY).Add(binding, [{ id: 7 }]).Build().nodes[0]!;
     assert.equal(node.namespace, null);
-    assert.equal(node.localId, "Order#7");
+    assert.equal(node.localId, "Order#pg.order#7");
     assert.equal(node.storageId, "7");
     assert.equal(node.tier, "Instance");
 });
@@ -56,4 +56,18 @@ test("does not stamp the id member as an attr; storageId carries it", () =>
     assert.equal(node.storageId, "O-9");
     assert.equal(node.attrs["label"], "Nine");
     assert.ok(!("id" in node.attrs), "no spurious id attr");
+});
+
+test("Sources maps each minted node id to its binding connector and source", () =>
+{
+    const base = { nodes: [], edges: [] };
+    const builder = new PopulationBuilder(base);
+    const contacts = { Concept: "shop.Customer", Connector: "opsdb", Source: "contacts", IdKey: "customer_id", FieldMap: { customer_id: "customer_id", email: "email" }, Writable: true };
+    const crm = { Concept: "shop.Customer", Connector: "opsdb", Source: "crm_accounts", IdKey: "customer_id", FieldMap: { customer_id: "customer_id", email: "email" }, Writable: true };
+    builder.Add(contacts, [{ customer_id: "C1", email: "new@acme.com" }]);
+    builder.Add(crm, [{ customer_id: "C1", email: "old@acme.com" }]);
+    const sources = builder.Sources();
+    assert.deepEqual(sources.get("shop.Customer#opsdb.contacts#C1"), { Connector: "opsdb", Source: "contacts" });
+    assert.deepEqual(sources.get("shop.Customer#opsdb.crm_accounts#C1"), { Connector: "opsdb", Source: "crm_accounts" });
+    assert.equal(sources.size, 2);
 });

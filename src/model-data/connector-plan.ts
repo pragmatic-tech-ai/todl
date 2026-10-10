@@ -32,6 +32,13 @@ export interface ConnectorBinding
     VersionField?: string;
 }
 
+/** The datasource + bound source (table/endpoint) a connector-minted instance node came from. */
+export interface SourceRef
+{
+    readonly Connector: string;
+    readonly Source: string;
+}
+
 /** The complete connector plan emitted for a model. */
 export interface ModelConnectorPlan
 {
@@ -162,4 +169,12 @@ export class ConnectorLookup
         }
         return spec;
     }
+}
+
+/** One source a merged canonical must write back to: the external record key + the datasource/source that owns it. */
+export interface WriteTarget
+{
+    readonly StorageId: string;
+    readonly Connector: string;
+    readonly Source: string;
 }

@@ -8,8 +8,8 @@ import type { IDataSourceAdapter } from "../data-source-adapter.js";
 import type { ResolvedConnection } from "../connector-plan.js";
 import { ConnectorWorkingCopy } from "../connector-working-copy.js";
 import { DiagnosticCode } from "../../compiler-services/diagnostics/diagnostic.js";
-import type { JsonNode } from "../../compiler-services/emit/json.js";
-import { CountingAdapterFactory } from "./fakes.js";
+import type { JsonNode, TodlDocument } from "../../compiler-services/emit/json.js";
+import { CountingAdapterFactory, InMemoryAdapterFactory } from "./fakes.js";
 
 class RecordingFactory extends CountingAdapterFactory
 {
@@ -148,7 +148,7 @@ test("MarkDirty of an instance whose concept has no binding is a no-op", async (
         isClass: false, class: null, storageId: "C-1", canonicalId: null, fields: [], attrs: { label: "Hand" },
     };
     doc.nodes.push(orphan);
-    const wc = new ConnectorWorkingCopy(fx.Plan(), doc);
+    const wc = new ConnectorWorkingCopy(fx.Plan(), doc, new Map([[orphan.id, [{ StorageId: "C-1", Connector: "pg", Source: "order" }]]]));
     wc.MarkDirty(orphan.id);
     const { Results: results } = await wc.Flush(fx.Catalog, fx.Services);
     assert.equal(results.length, 0);
@@ -166,7 +166,7 @@ test("dirty instance with no storageId produces no operation", async () =>
         isClass: false, class: null, storageId: null, canonicalId: null, fields: [], attrs: { label: "New" },
     };
     doc.nodes.push(fresh);
-    const wc = new ConnectorWorkingCopy(fx.Plan(), doc);
+    const wc = new ConnectorWorkingCopy(fx.Plan(), doc, new Map());
     wc.MarkDirty(fresh.id);
     const { Results: results } = await wc.Flush(fx.Catalog, fx.Services);
     assert.equal(results.length, 0);
@@ -218,4 +218,45 @@ test("no VersionField: same edit upserts last-write-wins without conflict", asyn
     assert.equal(outcome.Diagnostics.length, 0);
     assert.equal(outcome.Results[0]!.Applied, 1);
     assert.equal(fx.Factory.Batches[0]!.VersionField, undefined);
+});
+
+test("Flush fans a merged canonical out to every writable source and reports read-only ones", async () =>
+{
+    const field = { customer_id: "customer_id", email: "email" };
+    const plan: ModelConnectorPlan =
+    {
+        Model: "shop", Version: "1",
+        Connectors: [{ Name: "opsdb", Kind: DataSourceKind.Sql, Config: {} }],
+        Bindings: [
+            { Concept: "shop.Customer", Connector: "opsdb", Source: "contacts", IdKey: "customer_id", FieldMap: field, Writable: true },
+            { Concept: "shop.Customer", Connector: "opsdb", Source: "legacy", IdKey: "customer_id", FieldMap: field, Writable: false },
+        ],
+    };
+    const canonicalId = "shop.Customer#opsdb.contacts#C1";
+    const node: JsonNode =
+    {
+        id: canonicalId, tier: "Instance", type: "shop.Customer", metaKind: null, namespace: "shop", localId: "Customer#opsdb.contacts#C1",
+        isClass: false, class: null, storageId: "C1", canonicalId: null, fields: [], attrs: { email: "merged@acme.com" },
+    };
+    const writeTargets = new Map([[canonicalId, [
+        { StorageId: "C1", Connector: "opsdb", Source: "contacts" },
+        { StorageId: "C1", Connector: "opsdb", Source: "legacy" },
+    ]]]);
+    const factory = new InMemoryAdapterFactory(DataSourceKind.Sql);
+    const catalog = new DataSourceAdapterCatalog().Register(factory);
+    const services = new ServiceProvider();
+
+    const document: TodlDocument = { nodes: [node], edges: [] };
+    const copy = new ConnectorWorkingCopy(plan, document, writeTargets);
+    assert.equal(copy.MarkDirty(canonicalId), undefined);
+    const outcome = await copy.Flush(catalog, services);
+
+    assert.equal(outcome.Results.reduce((n, r) => n + r.Applied, 0), 1);
+    assert.ok(outcome.Diagnostics.some(d => d.code === DiagnosticCode.ConnectorReadOnly));
+
+    const query = { Fields: ["customer_id", "email"] };
+    const contacts = await factory.Adapter.Query({ ...query, Source: "contacts" } as QueryRequest);
+    const legacy = await factory.Adapter.Query({ ...query, Source: "legacy" } as QueryRequest);
+    assert.deepEqual(contacts, [{ customer_id: "C1", email: "merged@acme.com" }]);
+    assert.deepEqual(legacy, []);
 });
