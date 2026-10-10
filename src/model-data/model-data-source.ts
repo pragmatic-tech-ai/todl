@@ -14,6 +14,7 @@ import { Manifest, type TaxonomyInfo } from "../manifest/reflection/reflection.j
 import { PackageManifestBridge } from "../solution-services/package-manager/package-manifest-bridge.js";
 import { ReflectedEntity, MirrorReader, TermReader, type EntityReader, type EntityHost } from "../reflection-client/reflected-entity.js";
 import type { IModelDataConnector } from "./model-data-connector.js";
+import type { IInstanceFilter, IInstanceView } from "./instance-filter.js";
 
 export abstract class ModelDataSource implements EntityHost
 {
@@ -24,6 +25,8 @@ export abstract class ModelDataSource implements EntityHost
     private graph!: FrozenGraph;
     private query!: GraphQuery;
     private readonly entities = new Map<string, ReflectedEntity>();
+
+    private instanceFilter: IInstanceFilter | undefined;
 
     protected modelName = "";
     protected modelVersion = "";
@@ -59,7 +62,10 @@ export abstract class ModelDataSource implements EntityHost
 
     protected instancesOf(concept: string): readonly ReflectedEntity[]
     {
-        return this.query.InstancesOf(concept).map((m) => this.entityFor(new MirrorReader(m)));
+        return this.query.InstancesOf(concept)
+            .map((m) => new MirrorReader(m))
+            .filter((reader) => this.admits(reader))
+            .map((reader) => this.entityFor(reader));
     }
 
     protected termsOf(taxonomy: string): readonly ReflectedEntity[]
@@ -82,11 +88,25 @@ export abstract class ModelDataSource implements EntityHost
 
     public entity(id: string): ReflectedEntity | undefined
     {
-        const cached = this.entities.get(id);
-        if (cached !== undefined) return cached;
         const node = this.graph.getNode(id);
         if (node === undefined) return undefined;
-        return this.entityFor(new MirrorReader(this.graph.reflect(node)));
+        const reader = new MirrorReader(this.graph.reflect(node));
+        if (!this.admits(reader)) return undefined;
+        return this.entityFor(reader);
+    }
+
+    /** Install (or clear, with undefined) the access filter applied to Instances and entity(id). */
+    public UseInstanceFilter(filter: IInstanceFilter | undefined): void
+    {
+        this.instanceFilter = filter;
+    }
+
+    private admits(reader: EntityReader): boolean
+    {
+        const filter = this.instanceFilter;
+        if (filter === undefined) return true;
+        const view: IInstanceView = { Concept: reader.concept, Field: (name) => reader.field(name) };
+        return filter.Keep(view);
     }
 
     protected createEntity(reader: EntityReader): ReflectedEntity
