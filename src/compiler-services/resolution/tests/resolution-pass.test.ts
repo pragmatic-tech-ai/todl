@@ -5,6 +5,7 @@ import { Repository } from "../../model/model.js";
 import { Direction, EdgeKind } from "../../model/graph.js";
 import { Builder } from "../../model/builder.js";
 import { ResolutionPass } from "../resolution-pass.js";
+import { DiagnosticCode } from "../../diagnostics/diagnostic.js";
 
 function seed(): Repository
 {
@@ -265,4 +266,73 @@ test("identity key and match rule chain: a~b by key, b~c by rule, one canonical"
     assert.deepEqual(model.instancesOf("n.C"), ["n.a"]);
     assert.equal(model.resolve("n.b")!.canonicalId, "n.a");
     assert.equal(model.resolve("n.c")!.canonicalId, "n.a");
+});
+
+function seedWithMerge(rules: object[]): Repository
+{
+    const model = new Repository();
+    const b = model.builder();
+    b.setNamespace("n").defineConcept("n.C").addField("n.C", "email", "string")
+        .addField("n.C", "label", "string").addField("n.C", "updated_at", "string");
+    b.commit();
+    const ib = model.builder();
+    ib.setNamespace("n");
+    ib.defineIdentity("n.C@identity", "n.C", "email");
+    ib.defineMerge("n.C@merge", "n.C", JSON.stringify(rules));
+    ib.commit();
+    return model;
+}
+
+test("merge gap-fills: canonical gains a field only the alias had", () =>
+{
+    const model = seedWithMerge([]);
+    addRow(model, "n.a", { email: "x@y.z", label: "A" });
+    addRow(model, "n.b", { email: "x@y.z", updated_at: "T2" });
+    new ResolutionPass(model).Resolve();
+    assert.deepEqual(model.instancesOf("n.C"), ["n.a"]);
+    assert.equal(model.resolve("n.a")!.attrs.get("label"), "A");
+    assert.equal(model.resolve("n.a")!.attrs.get("updated_at"), "T2");
+});
+
+test("merge passes agreeing values through with no diagnostic", () =>
+{
+    const model = seedWithMerge([]);
+    addRow(model, "n.a", { email: "x@y.z", label: "same" });
+    addRow(model, "n.b", { email: "x@y.z", label: "same" });
+    const diags = new ResolutionPass(model).Resolve();
+    assert.equal(model.resolve("n.a")!.attrs.get("label"), "same");
+    assert.equal(diags.length, 0);
+});
+
+test("a conflict with no rule yields unmerged-conflict and keeps the canonical value", () =>
+{
+    const model = seedWithMerge([]);
+    addRow(model, "n.a", { email: "x@y.z", label: "A" });
+    addRow(model, "n.b", { email: "x@y.z", label: "B" });
+    const diags = new ResolutionPass(model).Resolve();
+    assert.ok(diags.some((d) => d.code === DiagnosticCode.ResolutionUnmergedConflict));
+    assert.equal(model.resolve("n.a")!.attrs.get("label"), "A");
+});
+
+test("prefer latest picks the greatest value, no diagnostic", () =>
+{
+    const model = seedWithMerge([{ field: "updated_at", strategy: "latest", source: null }]);
+    addRow(model, "n.a", { email: "x@y.z", updated_at: "2020" });
+    addRow(model, "n.b", { email: "x@y.z", updated_at: "2024" });
+    const diags = new ResolutionPass(model).Resolve();
+    assert.equal(model.resolve("n.a")!.attrs.get("updated_at"), "2024");
+    assert.equal(diags.filter((d) => d.code === DiagnosticCode.ResolutionUnmergedConflict).length, 0);
+});
+
+test("merge unions an alias's outgoing relationship onto the canonical", () =>
+{
+    const model = seedWithMerge([]);
+    addRow(model, "n.a", { email: "x@y.z" });
+    addRow(model, "n.b", { email: "x@y.z" });
+    const rb = model.builder();
+    rb.setNamespace("n").defineConcept("n.T").assertInstance("n.T", "n.t");
+    rb.commit();
+    model.addEdge({ kind: EdgeKind.Relationship, via: "points", from: "n.b", to: "n.t" });
+    new ResolutionPass(model).Resolve();
+    assert.deepEqual(model.related("n.a", EdgeKind.Relationship, Direction.Out, "points"), ["n.t"]);
 });

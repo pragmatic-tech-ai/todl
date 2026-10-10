@@ -1,25 +1,48 @@
 import type { Repository } from "../model/model.js";
 import type { NodeId, Scalar } from "../model/graph.js";
+import { EdgeKind, Direction } from "../model/graph.js";
 import { Builder } from "../model/builder.js";
 import { MetaKind } from "../model/kinds.js";
 import { DisjointSet } from "./union-find.js";
+import { type Diagnostic, DiagnosticCode, Severity } from "../diagnostics/diagnostic.js";
+
+interface SerializedMergeRule
+{
+    field: string;
+    strategy: string;
+    source: string | null;
+}
+
+interface Contribution
+{
+    member: NodeId;
+    value: Scalar;
+}
 
 /** Collapses instances that are the same entity — by declared identity key value
  * and/or declarative match rules, clustered transitively — into one canonical node
- * (the lexicographically smallest NodeId), aliasing the rest. Deterministic and idempotent. */
+ * (the lexicographically smallest NodeId), aliasing the rest, then folds the members'
+ * attribute values and outgoing relationships onto the canonical under the declared
+ * merge rules. Deterministic and idempotent. */
 export class ResolutionPass
 {
     private static readonly StorageKey = Builder.StorageIdKey;
     private static readonly TupleSeparator = "\u0000";
+    private static readonly SourceStrategy = "source";
+    private static readonly LatestStrategy = "latest";
 
-    public constructor(private readonly model: Repository)
+    public constructor(
+        private readonly model: Repository,
+        private readonly provenance?: ReadonlyMap<string, string>,
+    )
     {
     }
 
-    public Resolve(): void
+    public Resolve(): Diagnostic[]
     {
         const keyOf = new Map<NodeId, string>();
         const rulesOf = new Map<NodeId, string[][]>();
+        const mergeOf = new Map<NodeId, SerializedMergeRule[]>();
 
         for (const id of this.model.nodesOfMetaKind(MetaKind.Identity))
         {
@@ -40,15 +63,29 @@ export class ResolutionPass
             if (!Array.isArray(rules)) continue;
             rulesOf.set(concept, rules as string[][]);
         }
+        for (const id of this.model.nodesOfMetaKind(MetaKind.Merge))
+        {
+            const node = this.model.resolve(id);
+            const concept = node?.attrs.get(Builder.MatchConceptAttr);
+            const rulesRaw = node?.attrs.get(Builder.MergeRulesAttr);
+            if (typeof concept !== "string" || typeof rulesRaw !== "string") continue;
+            let rules: unknown;
+            try { rules = JSON.parse(rulesRaw); }
+            catch { continue; }
+            if (!Array.isArray(rules)) continue;
+            mergeOf.set(concept, rules as SerializedMergeRule[]);
+        }
 
-        const concepts = new Set<NodeId>([...keyOf.keys(), ...rulesOf.keys()]);
+        const diagnostics: Diagnostic[] = [];
+        const concepts = new Set<NodeId>([...keyOf.keys(), ...rulesOf.keys(), ...mergeOf.keys()]);
         for (const concept of concepts)
         {
-            this.ResolveConcept(concept, keyOf.get(concept), rulesOf.get(concept) ?? []);
+            this.ResolveConcept(concept, keyOf.get(concept), rulesOf.get(concept) ?? [], mergeOf.get(concept) ?? [], diagnostics);
         }
+        return diagnostics;
     }
 
-    private ResolveConcept(concept: NodeId, key: string | undefined, rules: string[][]): void
+    private ResolveConcept(concept: NodeId, key: string | undefined, rules: string[][], mergeRules: SerializedMergeRule[], diagnostics: Diagnostic[]): void
     {
         const instances = this.model.instancesOf(concept);
         const ds = new DisjointSet<NodeId>();
@@ -62,7 +99,94 @@ export class ResolutionPass
             if (cluster.length < 2) continue;
             const sorted = [...cluster].sort();
             const canonical = sorted[0]!;
-            for (let i = 1; i < sorted.length; i++) this.model.alias(sorted[i]!, canonical);
+            const aliases = sorted.slice(1);
+            for (const alias of aliases) this.model.alias(alias, canonical);
+            this.MergeCluster(canonical, aliases, mergeRules, diagnostics);
+        }
+    }
+
+    /** Fold every alias's authored attrs and outgoing relationships onto the canonical.
+     * Reads raw node attrs (not effectiveFields) so a class-fixed value is not mistaken for an authored instance value. */
+    private MergeCluster(canonical: NodeId, aliases: readonly NodeId[], mergeRules: SerializedMergeRule[], diagnostics: Diagnostic[]): void
+    {
+        const members = [canonical, ...aliases];
+        const fields = new Set<string>();
+        for (const m of members)
+        {
+            const node = this.model.resolve(m);
+            if (node !== undefined) for (const f of node.attrs.keys()) fields.add(f);
+        }
+
+        for (const field of fields)
+        {
+            const contributions: Contribution[] = [];
+            for (const m of members)
+            {
+                const v = this.model.resolve(m)?.attrs.get(field);
+                if (v !== undefined) contributions.push({ member: m, value: v });
+            }
+            if (contributions.length === 0) continue;
+            const distinct = new Set(contributions.map((c) => `${typeof c.value}:${String(c.value)}`));
+            if (distinct.size === 1)
+            {
+                this.model.setAttr(canonical, field, contributions[0]!.value);
+                continue;
+            }
+            const rule = mergeRules.find((r) => r.field === field);
+            const resolved = rule === undefined ? undefined : this.ApplyRule(rule, contributions);
+            if (resolved !== undefined)
+            {
+                this.model.setAttr(canonical, field, resolved);
+                continue;
+            }
+            diagnostics.push({
+                code: DiagnosticCode.ResolutionUnmergedConflict,
+                severity: Severity.Error,
+                message: `entity "${canonical}" has conflicting values for "${field}" and no merge rule resolves it`,
+                span: null,
+                node: canonical,
+                path: field,
+            });
+        }
+
+        this.MergeOutgoingEdges(canonical, aliases);
+    }
+
+    /** The surviving value for a conflicted field, or undefined when the rule does not fire. */
+    private ApplyRule(rule: SerializedMergeRule, contributions: readonly Contribution[]): Scalar | undefined
+    {
+        if (rule.strategy === ResolutionPass.LatestStrategy)
+        {
+            let best = contributions[0]!;
+            for (const c of contributions) if (ResolutionPass.Greater(c.value, best.value)) best = c;
+            return best.value;
+        }
+        if (rule.strategy === ResolutionPass.SourceStrategy && rule.source !== null && this.provenance !== undefined)
+        {
+            return contributions.find((c) => this.provenance!.get(c.member) === rule.source)?.value;
+        }
+        return undefined;
+    }
+
+    private static Greater(a: Scalar, b: Scalar): boolean
+    {
+        if (typeof a === "number" && typeof b === "number") return a > b;
+        return String(a) > String(b);
+    }
+
+    /** Fold each alias's outgoing Relationship edges onto the canonical (deduped, no self-loop). */
+    private MergeOutgoingEdges(canonical: NodeId, aliases: readonly NodeId[]): void
+    {
+        for (const alias of aliases)
+        {
+            for (const edge of this.model.outEdges(alias))
+            {
+                if (edge.kind !== EdgeKind.Relationship) continue;
+                if (edge.to === canonical) continue;
+                const already = this.model.related(canonical, EdgeKind.Relationship, Direction.Out, edge.via);
+                if (already.indexOf(edge.to) >= 0) continue;
+                this.model.addEdge({ kind: EdgeKind.Relationship, via: edge.via, from: canonical, to: edge.to });
+            }
         }
     }
 

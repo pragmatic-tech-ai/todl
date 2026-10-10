@@ -97,6 +97,7 @@ export enum DiagnosticCode
   MatchUnsupportedRule = "match.unsupported-rule",
   MergeUnknownConcept = "merge.unknown-concept",
   MergeUnknownField = "merge.unknown-field",
+  ResolutionUnmergedConflict = "resolution.unmerged-conflict",
   // Solution composition phase (SPEC-06): a member/dependency package could not
   // be resolved or loaded into the composed Domain.
   PackageUnresolved = "package.unresolved",
