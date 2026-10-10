@@ -32,6 +32,13 @@ export interface ConnectorBinding
     VersionField?: string;
 }
 
+/** The datasource + bound source (table/endpoint) a connector-minted instance node came from. */
+export interface SourceRef
+{
+    readonly Connector: string;
+    readonly Source: string;
+}
+
 /** The complete connector plan emitted for a model. */
 export interface ModelConnectorPlan
 {
