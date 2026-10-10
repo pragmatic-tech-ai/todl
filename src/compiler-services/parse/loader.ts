@@ -54,6 +54,9 @@
 
 import { parse } from "./parser.js";
 import { parsePredicate } from "./predicate-parser.js";
+import { parsePolicyPredicate } from "../policy/policy-predicate-parser.js";
+import { PolicyPredicateCodec } from "../policy/policy-predicate-codec.js";
+import { PolicyPredicateMembers, type PolicyPredicate } from "../policy/policy-predicate.js";
 import { MatchRuleNormalizer } from "./match-rule-normalizer.js";
 import { ApplicationRootPass } from "./application-root-pass.js";
 import { Repository } from "../model/model.js";
@@ -885,6 +888,76 @@ export function loadInto(
     recordHome(rec, mergeId);
   }
   mergeBuilder.commit(undefinedIds);
+
+  // ═══════════════════════ POLICY declarations (access rules) ═══════════════════════
+  // Lower each `policy <Concept> { allow|deny <action> when <pred>; ... }`. A malformed
+  // predicate or an unknown `entity.<member>` is diagnosed and the rule DROPPED (never
+  // silently lowered). Rules append per concept, in order, into ONE `<concept>@policy` node.
+  const policyBuilder = model.builder();
+  const policyRulesByConcept = new Map<NodeId, { effect: string; action: string; predicate: unknown }[]>();
+  const policyConceptOrder: NodeId[] = [];
+  for (const { ns, imports, uri, decl: declaration } of units)
+  {
+    if (declaration.kind !== DeclKind.Policy) continue;
+    policyBuilder.setNamespace(ns);
+    if (rec !== undefined) rec.current = uri;
+    const resolved = resolveRef(declaration.concept, { ns, imports });
+    const conceptId = resolved.kind === "qualified" ? resolved.flat : declaration.concept;
+    if (resolved.kind === "undefined" || resolved.kind === "unreachable" || model.resolve(conceptId)?.metaKind !== MetaKind.Concept)
+    {
+      diagnostics.push({
+        code: DiagnosticCode.PolicyUnknownConcept, severity: Severity.Error,
+        message: `policy references unknown concept "${declaration.concept}"`,
+        span: declaration.conceptSpan ?? declaration.span, node: declaration.concept, path: null,
+      });
+      continue;
+    }
+    const fieldNames = new Set(model.effectiveSchema(conceptId).fields.map((f) => f.name));
+    for (const rule of declaration.rules)
+    {
+      let predicate: PolicyPredicate;
+      try
+      {
+        predicate = parsePolicyPredicate(rule.predicate);
+      }
+      catch (error)
+      {
+        diagnostics.push({
+          code: DiagnosticCode.PolicyUnsupportedRule, severity: Severity.Error,
+          message: `policy rule is not a valid predicate: ${(error as Error).message}`,
+          span: rule.span, node: conceptId, path: null,
+        });
+        continue;
+      }
+      // Only entity-rooted members are validated; principal.<x> claims have no schema yet (later phase).
+      const unknown = PolicyPredicateMembers.EntityMembers(predicate).find((m) => m !== Builder.StorageIdKey && !fieldNames.has(m));
+      if (unknown !== undefined)
+      {
+        diagnostics.push({
+          code: DiagnosticCode.PolicyUnknownField, severity: Severity.Error,
+          message: `policy rule field "${unknown}" is not a field of "${declaration.concept}"`,
+          span: rule.span, node: conceptId, path: unknown,
+        });
+        continue;
+      }
+      const serialized = { effect: rule.effect, action: rule.action, predicate: JSON.parse(PolicyPredicateCodec.ToJson(predicate)) as unknown };
+      const existing = policyRulesByConcept.get(conceptId);
+      if (existing === undefined)
+      {
+        policyRulesByConcept.set(conceptId, [serialized]);
+        policyConceptOrder.push(conceptId);
+      }
+      else existing.push(serialized);
+    }
+  }
+  for (const conceptId of policyConceptOrder)
+  {
+    const policyId = `${conceptId}@policy`;
+    if (model.has(policyId)) continue;
+    policyBuilder.definePolicy(policyId, conceptId, JSON.stringify(policyRulesByConcept.get(conceptId)!));
+    recordHome(rec, policyId);
+  }
+  policyBuilder.commit(undefinedIds);
 
   // ═══════════════════ CONNECTORS + POPULATIONS (external data) ═════════════════
   // `datasource` decls lower to namespace-scoped Connector nodes
