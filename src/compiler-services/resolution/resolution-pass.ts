@@ -68,6 +68,7 @@ export class ResolutionPass
 
     public Resolve(): Diagnostic[]
     {
+        this.decisions.length = 0;
         const keyOf = new Map<NodeId, string>();
         const rulesOf = new Map<NodeId, string[][]>();
         const mergeOf = new Map<NodeId, SerializedMergeRule[]>();

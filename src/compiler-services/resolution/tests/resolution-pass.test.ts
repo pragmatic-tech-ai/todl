@@ -466,3 +466,17 @@ test("Decisions records the winning source and node per merged field", () =>
     assert.ok(email !== undefined);
     assert.equal(email!.strategy, undefined);
 });
+
+test("Decisions audit reflects one run when Resolve is called twice", () =>
+{
+    const model = seedWithMerge([{ field: "label", strategy: "source", source: "crm" }]);
+    addRow(model, "n.a", { email: "x@y.z", label: "A" });
+    addRow(model, "n.b", { email: "x@y.z", label: "B" });
+    const pass = new ResolutionPass(model, new Map<string, string>([["n.a", "erp"], ["n.b", "crm"]]));
+    pass.Resolve();
+    const first = pass.Decisions().length;
+    assert.ok(first > 0);
+    pass.Resolve();
+    // the second run folds nothing (aliases already collapsed), so the audit reflects that run only: never doubled
+    assert.equal(pass.Decisions().length, 0);
+});
