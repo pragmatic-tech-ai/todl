@@ -100,7 +100,7 @@ export {
 } from './model-data/data-source-adapter.js';
 export { ConnectionResolver } from './model-data/connection-resolver.js';
 export { type ISqlSession, type SqlRow } from './model-data/sql-session.js';
-export { SqlQueryTranslator } from './model-data/sql-adapter.js';
+export { SqlAdapter, SqlQueryTranslator } from './model-data/sql-adapter.js';
 export { DataSourceAdapterCatalog, InlineConnectionResolver } from './model-data/data-source-adapter-catalog.js';
 
 export { ApplicationBootstrapper } from './application/application-bootstrapper.js';

@@ -34,3 +34,10 @@ test("SqlQueryTranslator doubles embedded quotes in identifiers", async () =>
     assert.equal(session.calls[0]!.sql, 'SELECT "x" FROM "we""ird"');
     assert.equal(SqlQueryTranslator.QuoteIdent('we"ird'), '"we""ird"');
 });
+
+test("SqlQueryTranslator passes NaN and Infinity through as numbers", async () =>
+{
+    const session = new DataSqlSession([{ a: NaN, b: Infinity }]);
+    const [record] = await new SqlQueryTranslator(session).Query({ Source: "t", Fields: ["a", "b"] });
+    assert.deepEqual(record, { a: NaN, b: Infinity });
+});
