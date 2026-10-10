@@ -10,6 +10,8 @@ import type { NodeId } from "../compiler-services/model/graph.js";
 import { ApplicationModelData } from "./application-model-data.js";
 import { generateReadClient } from "./read-client.js";
 import { pascalCase } from "./naming.js";
+import { ConnectorPlanEmitter } from "./connector-plan-emitter.js";
+import type { ModelConnectorPlan } from "../model-data/connector-plan.js";
 
 export interface ModelPackageOptions
 {
@@ -37,22 +39,53 @@ export class ModelPackageGenerator
         const { root: rootId, shards } = ApplicationModelData.Strict(toJSON(repo));
         const models = [...shards.keys()].sort();
 
-        const header = ModelPackageGenerator.EmitHeader(runtimeImport);
+        const plans = new Map<NodeId, ModelConnectorPlan>();
+        for (const m of models)
+        {
+            const plan = ConnectorPlanEmitter.PlanFor(repo, m);
+            if (plan !== undefined)
+            {
+                plans.set(m, plan);
+            }
+        }
+
+        const header = ModelPackageGenerator.EmitHeader(runtimeImport, plans.size > 0, plans.size < models.length);
         const body = generateReadClient(repo, { name: options.name, importSpecifier: runtimeImport, omitHeader: true });
         const shardsCode = models
             .map((m) => `const ${ModelPackageGenerator.SlugFor(m)}: TodlDocument = JSON.parse(${JSON.stringify(JSON.stringify(shards.get(m)))});`)
             .join("\n");
-        const factory = ModelPackageGenerator.EmitFactory(registryClass, accessorClass, models, rootId);
+        const plansCode = [...plans]
+            .map(([m, plan]) => ConnectorPlanEmitter.Emit(plan, ConnectorPlanEmitter.ConstantName(ModelPackageGenerator.SlugFor(m))))
+            .join("\n\n");
+        const factory = ModelPackageGenerator.EmitFactory(registryClass, accessorClass, models, rootId, plans);
 
-        return [header, body.trimEnd(), shardsCode, factory].join("\n\n") + "\n";
+        const sections = [header, body.trimEnd(), shardsCode];
+        if (plansCode !== "")
+        {
+            sections.push(plansCode);
+        }
+        sections.push(factory);
+        return sections.join("\n\n") + "\n";
     }
 
-    private static EmitHeader(runtimeImport: string): string
+    private static EmitHeader(runtimeImport: string, hasConnectors: boolean, hasBundled: boolean): string
     {
+        const values = ["ModelDataSource", "ReflectedEntity", "ModelRegistry"];
+        if (hasBundled)
+        {
+            values.push("BundledModelDataConnector");
+        }
+        if (hasConnectors)
+        {
+            values.push("FederatedModelDataConnector", "DataSourceKind");
+        }
+        const types = hasConnectors
+            ? "EntityReader, IModelDataConnector, InstanceDescriptor, ModelConnectorPlan, NodeId, Scalar, TodlDocument"
+            : "EntityReader, IModelDataConnector, InstanceDescriptor, NodeId, Scalar, TodlDocument";
         return (
             ModelPackageGenerator.HeaderComment + "\n" +
-            `import { ModelDataSource, ReflectedEntity, ModelRegistry, BundledModelDataConnector } from "${runtimeImport}";\n` +
-            `import type { EntityReader, IModelDataConnector, InstanceDescriptor, NodeId, Scalar, TodlDocument } from "${runtimeImport}";`
+            `import { ${values.join(", ")} } from "${runtimeImport}";\n` +
+            `import type { ${types} } from "${runtimeImport}";`
         );
     }
 
@@ -61,10 +94,11 @@ export class ModelPackageGenerator
         accessorClass: string,
         models: readonly NodeId[],
         rootId: NodeId,
+        plans: ReadonlyMap<NodeId, ModelConnectorPlan>,
     ): string
     {
         const registers = models
-            .map((m) => `    registry.Register("${m}", new ${accessorClass}(new BundledModelDataConnector(${ModelPackageGenerator.SlugFor(m)})));`)
+            .map((m) => `    registry.Register("${m}", new ${accessorClass}(${ModelPackageGenerator.ConnectorExpression(m, plans)}));`)
             .join("\n");
         return (
             `export class ${registryClass} {\n` +
@@ -76,6 +110,16 @@ export class ModelPackageGenerator
             `  }\n` +
             `}`
         );
+    }
+
+    private static ConnectorExpression(modelId: NodeId, plans: ReadonlyMap<NodeId, ModelConnectorPlan>): string
+    {
+        const shard = ModelPackageGenerator.SlugFor(modelId);
+        if (plans.has(modelId))
+        {
+            return `new FederatedModelDataConnector(${ConnectorPlanEmitter.ConstantName(shard)}, ${shard})`;
+        }
+        return `new BundledModelDataConnector(${shard})`;
     }
 
     private static SlugFor(modelId: NodeId): string

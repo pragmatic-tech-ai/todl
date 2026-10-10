@@ -66,6 +66,11 @@ import {
   type AnnotationApplication,
   type PackageDecl,
   type OperatorDecl,
+  type ConnectEntry,
+  type ConnectorAssignment,
+  type ConnectorDecl,
+  type PopulateDecl,
+  type PopulateOverride,
   type IdentityDecl,
   type MatchDecl,
   type MatchRule,
@@ -113,6 +118,11 @@ class ParseError extends Error
  */
 class Parser
 {
+  private static readonly ReadOnlyMember = "read-only";
+  private static readonly Hyphen = "-";
+  private static readonly ExpectedValueMessage = "expected a string or identifier value";
+  private static readonly ExpectedFieldMessage = "expected a field name";
+
   /** Index of the next UNCONSUMED token — the whole parser's only mutable state. */
   private pos = 0;
 
@@ -212,7 +222,7 @@ class Parser
       this.checkKeyword("model") || this.checkKeyword("annotation") ||
       this.checkKeyword("package") || this.checkKeyword("operator") ||
       this.checkKeyword("identity") || this.checkKeyword("match") ||
-      this.checkKeyword("merge") ||
+      this.checkKeyword("merge") || this.checkKeyword("datasource") ||
       this.checkKeyword("class") || this.checkKeyword("internal") || this.checkKeyword("sealed")
     )
     {
@@ -360,6 +370,7 @@ class Parser
     if (this.checkKeyword("identity")) return this.parseIdentity(start);
     if (this.checkKeyword("match")) return this.parseMatch(start);
     if (this.checkKeyword("merge")) return this.parseMerge(start);
+    if (this.checkKeyword("datasource")) return this.parseConnector(start);
     if (this.checkKeyword("class"))
     {
       this.advance(); // class modifier
@@ -515,10 +526,14 @@ class Parser
     const instances: InstanceDecl[] = [];
     const edges: EdgeApplication[] = [];
     const annotations: AnnotationApplication[] = [];
+    const connects: ConnectEntry[] = [];
+    const populations: PopulateDecl[] = [];
     this.expect(TokenKind.LBrace);
     while (!this.check(TokenKind.RBrace))
     {
       const memberStart = this.startToken();
+      if (this.checkKeyword("connect")) { connects.push(this.parseConnect(memberStart)); continue; }
+      if (this.checkKeyword("populate")) { populations.push(this.parsePopulate(memberStart)); continue; }
       if (this.checkKeyword("annotate")) { annotations.push(this.parseAnnotationApplication(memberStart)); continue; }
       if (this.edgeApplicationAhead())
       {
@@ -538,6 +553,8 @@ class Parser
       instances,
       edges,
       annotations,
+      connects,
+      populations,
       conforms,
       span: this.spanFrom(start),
     };
@@ -746,6 +763,129 @@ class Parser
     });
     this.expect(TokenKind.RBrace);
     const decl: MergeDecl = { kind: DeclKind.Merge, concept, rules, span: this.spanFrom(start) };
+    decl.conceptSpan = conceptSpan;
+    return decl;
+  }
+
+  /** Consume an identifier optionally extended by directly-adjacent `-ident`
+   *  segments (`placed-on`, `read-only`, `warehouse-ro`) and return the joined text.
+   *  Only a `-ident` segment DIRECTLY adjacent (no intervening whitespace) to the previous identifier is joined. */
+  private parseHyphenatedName(): string
+  {
+    let last = this.expect(TokenKind.Identifier);
+    let name = last.value;
+    for (;;)
+    {
+      const dash = this.current();
+      const next = this.tokens[this.pos + 1];
+      if (!this.checkSymbol(Parser.Hyphen) || next === undefined || next.kind !== TokenKind.Identifier) break;
+      if (dash.line !== last.endLine || dash.column !== last.endColumn) break;
+      if (next.line !== dash.endLine || next.column !== dash.endColumn) break;
+      this.advance();
+      last = this.advance();
+      name += Parser.Hyphen + last.value;
+    }
+    return name;
+  }
+
+  /** A string / raw-string literal's text, or a (possibly hyphenated) bare identifier;
+   *  otherwise a parse error carrying `message`. */
+  private parseNameOrString(message: string): string
+  {
+    if (this.check(TokenKind.String) || this.check(TokenKind.RawString)) return this.advance().value;
+    if (this.check(TokenKind.Identifier)) return this.parseHyphenatedName();
+    throw this.error(message);
+  }
+
+  /** `datasource <name> { <name> = <string|ident>; ... }` — an external data
+   *  connection; values are captured as raw text. Namespace scope only. */
+  private parseConnector(start: Token): ConnectorDecl
+  {
+    this.expectKeyword("datasource");
+    const nameTok = this.expect(TokenKind.Identifier);
+    const assignments: ConnectorAssignment[] = [];
+    this.expect(TokenKind.LBrace);
+    this.parseBodyMembers(() =>
+    {
+      const aStart = this.current();
+      const nameTokA = this.expect(TokenKind.Identifier);
+      this.expect(TokenKind.Equals);
+      const value = this.parseNameOrString(Parser.ExpectedValueMessage);
+      this.expect(TokenKind.Semicolon);
+      const assignment: ConnectorAssignment = { name: nameTokA.value, value };
+      assignment.span = this.spanFrom(aStart);
+      assignments.push(assignment);
+    });
+    this.expect(TokenKind.RBrace);
+    const decl: ConnectorDecl = { kind: DeclKind.Connector, name: nameTok.value, assignments, span: this.spanFrom(start) };
+    decl.nameSpan = tokenSpan(nameTok, this.uri);
+    return decl;
+  }
+
+  /** Model-body `connect <connector>;`. */
+  private parseConnect(start: Token): ConnectEntry
+  {
+    this.expectKeyword("connect");
+    const connTok = this.expect(TokenKind.Identifier);
+    this.expect(TokenKind.Semicolon);
+    const entry: ConnectEntry = { connector: connTok.value, span: this.spanFrom(start) };
+    entry.connectorSpan = tokenSpan(connTok, this.uri);
+    return entry;
+  }
+
+  /** Model-body `populate <Concept> [from <connector>[.<source>]] [key <field>]
+   *  [ { read-only; | <member> = "<field>"; ... } ] ;` — the `;` is omitted after a block. */
+  private parsePopulate(start: Token): PopulateDecl
+  {
+    this.expectKeyword("populate");
+    const conceptStart = this.current();
+    const concept = this.parseDottedPath();
+    const conceptSpan = this.spanFrom(conceptStart);
+    let connector: string | null = null;
+    let source: string | null = null;
+    let idKey: string | null = null;
+    if (this.checkKeyword("from"))
+    {
+      this.advance();
+      connector = this.expectIdentifier();
+      if (this.match(TokenKind.Dot)) source = this.expectIdentifier();
+    }
+    if (this.checkKeyword("key"))
+    {
+      this.advance();
+      idKey = this.expect(TokenKind.Identifier).value;
+    }
+    const overrides: PopulateOverride[] = [];
+    let readOnly = false;
+    if (this.check(TokenKind.LBrace))
+    {
+      this.advance();
+      this.parseBodyMembers(() =>
+      {
+        const mStart = this.current();
+        const memberName = this.parseHyphenatedName();
+        const memberSpan = this.spanFrom(mStart);
+        if (this.check(TokenKind.Semicolon))
+        {
+          if (memberName !== Parser.ReadOnlyMember) throw this.error("expected read-only or member = field");
+          this.advance();
+          readOnly = true;
+          return;
+        }
+        this.expect(TokenKind.Equals);
+        const field = this.parseNameOrString(Parser.ExpectedFieldMessage);
+        this.expect(TokenKind.Semicolon);
+        const override: PopulateOverride = { member: memberName, field, span: this.spanFrom(mStart) };
+        override.memberSpan = memberSpan;
+        overrides.push(override);
+      });
+      this.expect(TokenKind.RBrace);
+    }
+    else
+    {
+      this.expect(TokenKind.Semicolon);
+    }
+    const decl: PopulateDecl = { concept, connector, source, idKey, overrides, readOnly, span: this.spanFrom(start) };
     decl.conceptSpan = conceptSpan;
     return decl;
   }

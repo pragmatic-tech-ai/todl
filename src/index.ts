@@ -69,9 +69,30 @@ export { DocumentModelDataConnector } from './model-data/document-model-data-con
 export { type IModelDataConnector } from './model-data/model-data-connector.js';
 export { BundledModelDataConnector } from './model-data/bundled-model-data-connector.js';
 export { ModelRegistry } from './model-data/model-registry.js';
+export { PopulationBuilder } from './model-data/population-builder.js';
+export { FederatedModelDataConnector } from './model-data/federated-model-data-connector.js';
 export { ModelShardExtractor } from './model-data/model-shard-extractor.js';
 export { ApplicationRootResolver } from './model-data/application-root-resolver.js';
 export { GenericModelDataSource } from './model-data/generic-model-data-source.js';
+export {
+  DataSourceKind,
+  ConnectorPlanProjection,
+  type ConnectorSpec,
+  type ConnectorBinding,
+  type ModelConnectorPlan,
+  type ExternalFieldValue,
+  type ExternalRecord,
+  type QueryRequest,
+  type ResolvedConnection,
+} from './model-data/connector-plan.js';
+export {
+  ConnectionResolverKey,
+  type IDataSourceAdapter,
+  type IDataSourceAdapterFactory,
+  type IDataSourceAdapterProvider,
+  type IConnectionResolver,
+} from './model-data/data-source-adapter.js';
+export { DataSourceAdapterCatalog, InlineConnectionResolver } from './model-data/data-source-adapter-catalog.js';
 
 export { ApplicationBootstrapper } from './application/application-bootstrapper.js';
 export { ApplicationEntryPoint } from './application/application-entry-point.js';
