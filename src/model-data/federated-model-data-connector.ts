@@ -8,9 +8,9 @@ import { PopulationBuilder } from "./population-builder.js";
 /** Read path: pulls each bound population from its external source and merges it over the hand-authored shard. */
 export class FederatedModelDataConnector implements IModelDataConnector
 {
-    private static readonly UnknownConnectorMessage = "binding for '{0}' references unknown connector '{1}'";
-    private static readonly ConceptPlaceholder = "{0}";
-    private static readonly ConnectorPlaceholder = "{1}";
+    private static readonly UnknownConnectorPrefix = "binding for '";
+    private static readonly UnknownConnectorMiddle = "' references unknown connector '";
+    private static readonly UnknownConnectorSuffix = "'";
 
     private pending: Promise<TodlDocument> | undefined;
 
@@ -23,6 +23,7 @@ export class FederatedModelDataConnector implements IModelDataConnector
         if (!this.pending)
         {
             this.pending = this.Build(services);
+            // Reset the cache on failure so a later Prepare can retry.
             this.pending.catch(() => { this.pending = undefined; });
         }
         return this.pending;
@@ -47,9 +48,9 @@ export class FederatedModelDataConnector implements IModelDataConnector
         const spec = this.plan.Connectors.find(candidate => candidate.Name === binding.Connector);
         if (!spec)
         {
-            throw new Error(FederatedModelDataConnector.UnknownConnectorMessage
-                .replace(FederatedModelDataConnector.ConceptPlaceholder, binding.Concept)
-                .replace(FederatedModelDataConnector.ConnectorPlaceholder, binding.Connector));
+            throw new Error(`${FederatedModelDataConnector.UnknownConnectorPrefix}${binding.Concept}`
+                + `${FederatedModelDataConnector.UnknownConnectorMiddle}${binding.Connector}`
+                + FederatedModelDataConnector.UnknownConnectorSuffix);
         }
         return spec;
     }

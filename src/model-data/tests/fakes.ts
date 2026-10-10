@@ -42,7 +42,11 @@ export class InMemoryAdapterFactory implements IDataSourceAdapterFactory
 
 export class CountingAdapterFactory implements IDataSourceAdapterFactory
 {
+    private static readonly FailureMessage = "simulated query failure";
+
     public QueryCount = 0;
+
+    private failNext = false;
 
     private readonly inner = new InMemoryAdapter();
     private readonly adapter: IDataSourceAdapter =
@@ -50,12 +54,24 @@ export class CountingAdapterFactory implements IDataSourceAdapterFactory
         Query: async (request: QueryRequest) =>
         {
             this.QueryCount++;
+            if (this.failNext)
+            {
+                this.failNext = false;
+                throw new Error(CountingAdapterFactory.FailureMessage);
+            }
             return this.inner.Query(request);
         },
     };
 
     public constructor(public readonly Kind: DataSourceKind)
     {
+    }
+
+    /** Makes the next Query throw once. */
+    public FailNext(): this
+    {
+        this.failNext = true;
+        return this;
     }
 
     public Seed(source: string, records: ExternalRecord[]): this
