@@ -83,6 +83,7 @@ export class ConnectorPlanProjection
         };
     }
 
+    // Intentionally code-unit (not locale) ordering: byte-stable output across machines; do not swap in localeCompare.
     private static Compare(a: string, b: string): number
     {
         if (a < b) return -1;
