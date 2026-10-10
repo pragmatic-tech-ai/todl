@@ -28,6 +28,8 @@ export interface ConnectorBinding
     IdKey: string;
     FieldMap: Record<string, string>;
     Writable: boolean;
+    /** External version/etag column guarding optimistic writes; absent = last-write-wins. */
+    VersionField?: string;
 }
 
 /** The complete connector plan emitted for a model. */
@@ -54,11 +56,52 @@ export interface QueryRequest
     Fields: readonly string[];
 }
 
+/** The kind of write an adapter applies to one record. */
+export enum WriteOperationKind
+{
+    Upsert = "upsert",
+    Delete = "delete",
+}
+
+/** One record write; Fields are already in EXTERNAL field names. */
+export interface WriteOperation
+{
+    Kind: WriteOperationKind;
+    Key: ExternalFieldValue;
+    Fields: Record<string, ExternalFieldValue>;
+    /** Expected prior version (optimistic mode). */
+    Version?: ExternalFieldValue;
+}
+
+/** A group of writes against one external source. */
+export interface WriteBatch
+{
+    Source: string;
+    IdKey: string;
+    Operations: readonly WriteOperation[];
+    VersionField?: string;
+}
+
+/** A write that was refused rather than applied. */
+export interface WriteConflict
+{
+    Key: ExternalFieldValue;
+    Reason: string;
+}
+
+/** Outcome of applying a write batch. */
+export interface WriteResult
+{
+    Applied: number;
+    Conflicts: readonly WriteConflict[];
+}
+
 /** The minimal resolved connection shape handed to an adapter. */
 export interface ResolvedConnection
 {
     Kind: DataSourceKind;
     Config: Record<string, string>;
+    /** The RESOLVED secret value handed to the adapter (not the secret's name). */
     Secret?: string;
 }
 
@@ -98,5 +141,25 @@ export class ConnectorPlanProjection
             result[key] = source[key]!;
         }
         return result;
+    }
+}
+
+/** Single home for resolving a binding's connector name to its spec within a plan. */
+export class ConnectorLookup
+{
+    private static readonly UnknownConnectorPrefix = "binding for '";
+    private static readonly UnknownConnectorMiddle = "' references unknown connector '";
+    private static readonly UnknownConnectorSuffix = "'";
+
+    public static Find(connectors: readonly ConnectorSpec[], binding: ConnectorBinding): ConnectorSpec
+    {
+        const spec = connectors.find(candidate => candidate.Name === binding.Connector);
+        if (!spec)
+        {
+            throw new Error(`${ConnectorLookup.UnknownConnectorPrefix}${binding.Concept}`
+                + `${ConnectorLookup.UnknownConnectorMiddle}${binding.Connector}`
+                + ConnectorLookup.UnknownConnectorSuffix);
+        }
+        return spec;
     }
 }

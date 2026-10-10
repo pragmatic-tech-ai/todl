@@ -75,6 +75,7 @@ export class Builder
   public static readonly ConnectorConfigAttr = "config";
   public static readonly ConnectorConnectionAttr = "connection";
   public static readonly ConnectorSecretAttr = "secret";
+  public static readonly ConnectorProviderAttr = "provider";
   /** Reserved population-binding attr keys (`fieldMap` is a JSON member->field object). */
   public static readonly BindingConceptAttr = Builder.IdentityConceptAttr;
   public static readonly BindingModelAttr = "model";
@@ -339,6 +340,7 @@ export class Builder
     configJson: string,
     connection: string | null,
     secret: string | null,
+    provider: string | null = null,
   ): this
   {
     this.stagedNodes.push(this.makeNode(id, Tier.Ontology, { metaKind: MetaKind.Connector }));
@@ -347,6 +349,7 @@ export class Builder
     this.stagedAttrs.push({ id, name: Builder.ConnectorConfigAttr, value: configJson });
     if (connection !== null) this.stagedAttrs.push({ id, name: Builder.ConnectorConnectionAttr, value: connection });
     if (secret !== null) this.stagedAttrs.push({ id, name: Builder.ConnectorSecretAttr, value: secret });
+    if (provider !== null) this.stagedAttrs.push({ id, name: Builder.ConnectorProviderAttr, value: provider });
     return this;
   }
 

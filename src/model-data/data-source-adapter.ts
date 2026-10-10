@@ -1,11 +1,12 @@
 import { ServiceKey } from "@pragmatic-tech-ai/todl-runtime";
 import type { IServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
-import type { ConnectorSpec, DataSourceKind, ExternalRecord, QueryRequest, ResolvedConnection } from "./connector-plan.js";
+import type { ConnectorSpec, DataSourceKind, ExternalRecord, QueryRequest, ResolvedConnection, WriteBatch, WriteResult } from "./connector-plan.js";
 
-/** A live connection to one external data source (read side). */
+/** A live connection to one external data source. */
 export interface IDataSourceAdapter
 {
     Query(request: QueryRequest): Promise<readonly ExternalRecord[]>;
+    Apply(batch: WriteBatch): Promise<WriteResult>;
 }
 
 /** Opens adapters for one kind of data source. */

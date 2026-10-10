@@ -1,13 +1,16 @@
-import type { DataSourceKind, ExternalRecord, QueryRequest, ResolvedConnection } from "../connector-plan.js";
+import { WriteOperationKind } from "../connector-plan.js";
+import type { DataSourceKind, ExternalRecord, QueryRequest, ResolvedConnection, WriteBatch, WriteConflict, WriteResult } from "../connector-plan.js";
 import type { IDataSourceAdapter, IDataSourceAdapterFactory, IDataSourceAdapterProvider } from "../data-source-adapter.js";
 
 export class InMemoryAdapter implements IDataSourceAdapter
 {
+    private static readonly StaleVersionMessage = "stale version on";
+
     private readonly sources = new Map<string, ExternalRecord[]>();
 
     public Seed(source: string, records: ExternalRecord[]): this
     {
-        this.sources.set(source, records);
+        this.sources.set(source, [...records]);
         return this;
     }
 
@@ -23,6 +26,42 @@ export class InMemoryAdapter implements IDataSourceAdapter
             }
             return projected;
         });
+    }
+
+    // Delete is UNCONDITIONAL in v1: the optimistic version guard applies to Upsert only (a delete-guard is a follow-on).
+    public async Apply(batch: WriteBatch): Promise<WriteResult>
+    {
+        const rows = this.sources.get(batch.Source) ?? [];
+        this.sources.set(batch.Source, rows);
+        const conflicts: WriteConflict[] = [];
+        let applied = 0;
+        for (const op of batch.Operations)
+        {
+            const index = rows.findIndex(row => row[batch.IdKey] === op.Key);
+            if (op.Kind === WriteOperationKind.Delete)
+            {
+                if (index >= 0)
+                {
+                    rows.splice(index, 1);
+                    applied++;
+                }
+                continue;
+            }
+            if (batch.VersionField !== undefined && index >= 0)
+            {
+                const stored = rows[index]![batch.VersionField] ?? null;
+                if (stored !== (op.Version ?? null))
+                {
+                    conflicts.push({ Key: op.Key, Reason: `${InMemoryAdapter.StaleVersionMessage} ${batch.VersionField}` });
+                    continue;
+                }
+            }
+            const row: { [field: string]: ExternalRecord[string] } = { ...op.Fields, [batch.IdKey]: op.Key };
+            if (index >= 0) rows[index] = row;
+            else rows.push(row);
+            applied++;
+        }
+        return { Applied: applied, Conflicts: conflicts };
     }
 }
 
@@ -61,6 +100,7 @@ export class CountingAdapterFactory implements IDataSourceAdapterFactory
             }
             return this.inner.Query(request);
         },
+        Apply: async (batch: WriteBatch) => this.inner.Apply(batch),
     };
 
     public constructor(public readonly Kind: DataSourceKind)
