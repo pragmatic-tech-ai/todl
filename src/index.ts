@@ -97,7 +97,8 @@ export {
   type IDataSourceAdapterProvider,
   type IConnectionResolver,
 } from './model-data/data-source-adapter.js';
-export { DataSourceAdapterCatalog, InlineConnectionResolver } from './model-data/data-source-adapter-catalog.js';
+export { ConnectionResolver } from './model-data/connection-resolver.js';
+export { DataSourceAdapterCatalog,InlineConnectionResolver } from './model-data/data-source-adapter-catalog.js';
 
 export { ApplicationBootstrapper } from './application/application-bootstrapper.js';
 export { ApplicationEntryPoint } from './application/application-entry-point.js';

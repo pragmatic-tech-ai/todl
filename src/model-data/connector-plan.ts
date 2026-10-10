@@ -99,6 +99,7 @@ export interface ResolvedConnection
 {
     Kind: DataSourceKind;
     Config: Record<string, string>;
+    /** The RESOLVED secret value handed to the adapter (not the secret's name). */
     Secret?: string;
 }
 
