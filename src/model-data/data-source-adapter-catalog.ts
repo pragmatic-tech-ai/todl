@@ -49,7 +49,10 @@ export class DataSourceAdapterCatalog
         {
             pending = this.OpenCore(spec, services);
             this.opened.set(spec.Name, pending);
-            pending.catch(() => this.opened.delete(spec.Name));
+            pending.catch(() =>
+            {
+                if (this.opened.get(spec.Name) === pending) this.opened.delete(spec.Name);
+            });
         }
         return pending;
     }
@@ -59,8 +62,7 @@ export class DataSourceAdapterCatalog
     {
         const pending = [...this.opened.values()];
         this.opened.clear();
-        await Promise.all(pending.map(async (opening) =>
-        {
+        await Promise.all(pending.map(async (opening) => {
             try
             {
                 const adapter = await opening;

@@ -45,6 +45,29 @@ class SingleAdapterFactory implements IDataSourceAdapterFactory
     }
 }
 
+class RejectingFactory implements IDataSourceAdapterFactory
+{
+    public readonly Kind = DataSourceKind.Sql;
+
+    public async Open(_c: ResolvedConnection): Promise<IDataSourceAdapter>
+    {
+        throw new Error("open failed");
+    }
+}
+
+class FreshAdapterFactory implements IDataSourceAdapterFactory
+{
+    public readonly Kind = DataSourceKind.Sql;
+    public readonly Created: DisposeCountingAdapter[] = [];
+
+    public async Open(_c: ResolvedConnection): Promise<IDataSourceAdapter>
+    {
+        const adapter = new DisposeCountingAdapter();
+        this.Created.push(adapter);
+        return adapter;
+    }
+}
+
 class DisposeSpecs
 {
     public static Of(name: string, kind: DataSourceKind = DataSourceKind.Sql): ConnectorSpec
@@ -69,9 +92,8 @@ test("Dispose disposes every memoized adapter and clears the cache", async () =>
 test("Dispose on an empty catalog resolves and is idempotent", async () =>
 {
     const catalog = new DataSourceAdapterCatalog();
-    await catalog.Dispose();
-    await catalog.Dispose();
-    assert.ok(true);
+    await assert.doesNotReject(() => catalog.Dispose());
+    await assert.doesNotReject(() => catalog.Dispose());
 });
 
 test("one adapter's Dispose throwing does not stop the others or block clearing", async () =>
@@ -87,4 +109,24 @@ test("one adapter's Dispose throwing does not stop the others or block clearing"
     await catalog.Dispose();
     assert.equal(bad.disposed, 1);
     assert.equal(good.disposed, 1);
+});
+
+test("a rejected Open is swallowed by Dispose", async () =>
+{
+    const catalog = new DataSourceAdapterCatalog().Register(new RejectingFactory());
+    await catalog.Open(DisposeSpecs.Of("r"), new ServiceProvider()).catch(() => {});
+    await assert.doesNotReject(() => catalog.Dispose());
+});
+
+test("Open after Dispose yields a fresh working adapter", async () =>
+{
+    const factory = new FreshAdapterFactory();
+    const catalog = new DataSourceAdapterCatalog().Register(factory);
+    const services = new ServiceProvider();
+    const first = await catalog.Open(DisposeSpecs.Of("a"), services);
+    await catalog.Dispose();
+    const second = await catalog.Open(DisposeSpecs.Of("a"), services);
+    assert.notEqual(second, first);
+    assert.equal(factory.Created.length, 2);
+    assert.deepEqual(await second.Query({} as QueryRequest), []);
 });
