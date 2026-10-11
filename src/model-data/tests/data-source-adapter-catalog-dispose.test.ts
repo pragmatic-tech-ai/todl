@@ -47,11 +47,13 @@ class SingleAdapterFactory implements IDataSourceAdapterFactory
 
 class RejectingFactory implements IDataSourceAdapterFactory
 {
+    private static readonly OpenFailedMessage = "open failed";
+
     public readonly Kind = DataSourceKind.Sql;
 
     public async Open(_c: ResolvedConnection): Promise<IDataSourceAdapter>
     {
-        throw new Error("open failed");
+        throw new Error(RejectingFactory.OpenFailedMessage);
     }
 }
 
@@ -114,8 +116,13 @@ test("one adapter's Dispose throwing does not stop the others or block clearing"
 test("a rejected Open is swallowed by Dispose", async () =>
 {
     const catalog = new DataSourceAdapterCatalog().Register(new RejectingFactory());
-    await catalog.Open(DisposeSpecs.Of("r"), new ServiceProvider()).catch(() => {});
-    await assert.doesNotReject(() => catalog.Dispose());
+    // Do NOT await Open: its rejection is asynchronous, so the failed entry is still in the memo
+    // map when Dispose snapshots it. Dispose then awaits that rejecting promise; without the
+    // per-entry try/catch in Dispose this test would fail with the rejection.
+    const opening = catalog.Open(DisposeSpecs.Of("r"), new ServiceProvider());
+    opening.catch(() => {});
+    const disposing = catalog.Dispose();
+    await assert.doesNotReject(() => disposing);
 });
 
 test("Open after Dispose yields a fresh working adapter", async () =>
