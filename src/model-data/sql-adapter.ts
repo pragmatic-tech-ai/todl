@@ -140,6 +140,12 @@ export class SqlAdapter implements IDataSourceAdapter
         return { Applied: applied, Conflicts: conflicts };
     }
 
+    /** Releases the underlying session, if it supports disposal. */
+    public async Dispose(): Promise<void>
+    {
+        await this.session.Dispose?.();
+    }
+
     /** Runs one upsert; returns false when a version-guarded upsert updated no row. */
     private async ApplyUpsert(batch: WriteBatch, op: WriteOperation): Promise<boolean>
     {
