@@ -54,6 +54,26 @@ export class DataSourceAdapterCatalog
         return pending;
     }
 
+    /** Disposes every memoized adapter and clears the cache. Idempotent; per-adapter failures are swallowed. */
+    public async Dispose(): Promise<void>
+    {
+        const pending = [...this.opened.values()];
+        this.opened.clear();
+        await Promise.all(pending.map(async (opening) =>
+        {
+            try
+            {
+                const adapter = await opening;
+                await adapter.Dispose();
+            }
+            catch
+            {
+                // A failed Open produced no adapter, or an adapter's Dispose threw; neither should
+                // prevent the remaining adapters from being disposed.
+            }
+        }));
+    }
+
     private async OpenCore(spec: ConnectorSpec, services: IServiceProvider): Promise<IDataSourceAdapter>
     {
         const factory = await this.ResolveFactory(spec);
