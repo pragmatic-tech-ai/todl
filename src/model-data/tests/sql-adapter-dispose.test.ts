@@ -20,6 +20,5 @@ test("SqlAdapter.Dispose forwards to a session that implements Dispose", async (
 test("SqlAdapter.Dispose is a no-op when the session omits Dispose", async () =>
 {
     // RecordingSqlSession has no Dispose; this must not throw.
-    await new SqlAdapter(new RecordingSqlSession()).Dispose();
-    assert.ok(true);
+    await assert.doesNotReject(() => new SqlAdapter(new RecordingSqlSession()).Dispose());
 });
