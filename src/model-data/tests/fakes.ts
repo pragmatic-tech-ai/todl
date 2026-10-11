@@ -70,6 +70,10 @@ export class InMemoryAdapter implements IDataSourceAdapter
         }
         return { Applied: applied, Conflicts: conflicts };
     }
+
+    public async Dispose(): Promise<void>
+    {
+    }
 }
 
 export class InMemoryAdapterFactory implements IDataSourceAdapterFactory
@@ -108,6 +112,7 @@ export class CountingAdapterFactory implements IDataSourceAdapterFactory
             return this.inner.Query(request);
         },
         Apply: async (batch: WriteBatch) => this.inner.Apply(batch),
+        Dispose: async () => this.inner.Dispose(),
     };
 
     public constructor(public readonly Kind: DataSourceKind)

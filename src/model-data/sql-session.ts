@@ -13,4 +13,6 @@ export interface ISqlSession
     Query(sql: string, params: readonly unknown[]): Promise<readonly SqlRow[]>;
     /** Runs a statement and returns the affected-row count. */
     Execute(sql: string, params: readonly unknown[]): Promise<number>;
+    /** Optional: closes a pool-backed connection. In-memory/recording sessions omit it. */
+    Dispose?(): Promise<void>;
 }

@@ -30,6 +30,7 @@ class RecordingFactory extends CountingAdapterFactory
                 }
                 return inner.Apply(batch);
             },
+            Dispose: () => inner.Dispose(),
         };
     }
 }

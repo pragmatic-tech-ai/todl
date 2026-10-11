@@ -18,6 +18,7 @@ describeDataSourceAdapter("CountingAdapter", () =>
     return {
         Query: async request => (await open()).Query(request),
         Apply: async batch => (await open()).Apply(batch),
+        Dispose: async () => (await open()).Dispose(),
     };
 });
 

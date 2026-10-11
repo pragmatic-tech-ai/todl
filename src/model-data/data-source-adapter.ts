@@ -7,6 +7,8 @@ export interface IDataSourceAdapter
 {
     Query(request: QueryRequest): Promise<readonly ExternalRecord[]>;
     Apply(batch: WriteBatch): Promise<WriteResult>;
+    /** Releases any driver connection/pool held by this adapter. Idempotent. */
+    Dispose(): Promise<void>;
 }
 
 /** Opens adapters for one kind of data source. */
