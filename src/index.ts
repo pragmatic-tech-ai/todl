@@ -188,6 +188,11 @@ export { Severity, DiagnosticCode, type Diagnostic } from './compiler-services/d
 export type { Position, SourceSpan, SourceFile } from './compiler-services/diagnostics/span.js';
 export { check, checkAgainst } from './compiler-services/api.js';
 export { ResolutionPass } from './compiler-services/resolution/resolution-pass.js';
+export type { MergeDecision } from './compiler-services/resolution/resolution-pass.js';
+export { MergeStrategy } from './compiler-services/parse/ast.js';
+export type { WriteTarget } from './model-data/connector-plan.js';
+export { ResolutionAuditSinkKey } from './model-data/resolution-audit-sink.js';
+export type { IResolutionAuditSink, ResolutionAuditEvent } from './model-data/resolution-audit-sink.js';
 
 export {
     toJSON,
