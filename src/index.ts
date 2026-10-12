@@ -72,6 +72,7 @@ export { BundledModelDataConnector } from './model-data/bundled-model-data-conne
 export { ModelRegistry } from './model-data/model-registry.js';
 export { PopulationBuilder } from './model-data/population-builder.js';
 export { ConnectorWorkingCopy } from './model-data/connector-working-copy.js';
+export type { FlushOutcome } from './model-data/connector-working-copy.js';
 export { FederatedModelDataConnector, type IConnectorQueryFilterProvider } from './model-data/federated-model-data-connector.js';
 export type { IInstanceFilter, IInstanceView } from './model-data/instance-filter.js';
 export { ModelShardExtractor } from './model-data/model-shard-extractor.js';
@@ -124,6 +125,7 @@ export {
 } from './codegen/read-client.js';
 
 export { ModelPackageGenerator } from './codegen/model-package.js';
+export { ConnectorPlanEmitter } from './codegen/connector-plan-emitter.js';
 export type { ModelPackageOptions } from './codegen/model-package.js';
 
 export { ModelDraft, type InstanceDescriptor } from './authoring/model-draft.js';
