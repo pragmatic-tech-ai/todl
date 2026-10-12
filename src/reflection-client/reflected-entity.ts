@@ -12,6 +12,7 @@ export interface EntityReader
     readonly concept: string;
     field(name: string): Scalar | undefined;
     targets(member: string): readonly string[];
+    fieldNames(): readonly string[];
 }
 
 /** The identity-mapped entity resolver a ReflectedEntity follows refs through. */
@@ -35,6 +36,19 @@ export class ReflectedEntity
     public get concept(): string
     {
         return this.reader.concept;
+    }
+
+    /** The entity's own scalar fields as a plain name->value map; fields with no value are omitted.
+     *  Carries only the declared field values (no refs, no secrets). */
+    public Snapshot(): Record<string, Scalar>
+    {
+        const out: Record<string, Scalar> = {};
+        for (const name of this.reader.fieldNames())
+        {
+            const value = this.reader.field(name);
+            if (value !== undefined) { out[name] = value; }
+        }
+        return out;
     }
 
     protected field(name: string): Scalar | undefined
@@ -89,6 +103,11 @@ export class MirrorReader implements EntityReader
         // are declared in getRelationships() — node.refs is the uniform source.
         return this.mirror.node.refs?.[member] ?? [];
     }
+
+    public fieldNames(): readonly string[]
+    {
+        return this.mirror.fields().map((view) => view.field.name);
+    }
 }
 
 /** An EntityReader over a taxonomy term (fixed scalar values; term ref-fixing out of scope). */
@@ -117,5 +136,10 @@ export class TermReader implements EntityReader
     public targets(): readonly string[]
     {
         return [];
+    }
+
+    public fieldNames(): readonly string[]
+    {
+        return this.term.concept?.getFields().map((f) => f.name) ?? [];
     }
 }
