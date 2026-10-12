@@ -20,6 +20,11 @@ class FakeReader implements EntityReader
     {
         return this.t[member] ?? [];
     }
+
+    fieldNames(): readonly string[]
+    {
+        return Object.keys(this.f);
+    }
 }
 
 class Probe extends ReflectedEntity
