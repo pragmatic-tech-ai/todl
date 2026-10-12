@@ -38,8 +38,7 @@ export class ReflectedEntity
         return this.reader.concept;
     }
 
-    /** The entity's own scalar fields as a plain name->value map; fields with no value are omitted.
-     *  Carries only the declared field values (no refs, no secrets). */
+    /** The entity's own declared scalar field values as a plain name->value map; fields with no value are omitted. No refs/relationships are included. */
     public Snapshot(): Record<string, Scalar>
     {
         const out: Record<string, Scalar> = {};
