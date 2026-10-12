@@ -6,6 +6,7 @@ import { DataSourceAdapterCatalog } from "./data-source-adapter-catalog.js";
 import type { IModelDataConnector } from "./model-data-connector.js";
 import { PopulationBuilder } from "./population-builder.js";
 import { ConnectorResolutionStep, type ConnectorResolutionResult } from "./connector-resolution-step.js";
+import { ResolutionAuditSinkKey } from "./resolution-audit-sink.js";
 import type { MergeDecision } from "../compiler-services/resolution/resolution-pass.js";
 import type { Diagnostic } from "../compiler-services/diagnostics/diagnostic.js";
 
@@ -61,6 +62,11 @@ export class FederatedModelDataConnector implements IModelDataConnector
         const built = builder.Build();
         this.resolution = new ConnectorResolutionStep().Resolve(built, builder.Sources());
         this.built = this.resolution.document;
+        const auditSink = services.get(ResolutionAuditSinkKey);
+        if (auditSink !== undefined && this.resolution.decisions.length > 0)
+        {
+            await auditSink.Record({ model: this.plan.Model, decisions: this.resolution.decisions });
+        }
         return this.built;
     }
 
