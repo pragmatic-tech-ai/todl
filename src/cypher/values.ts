@@ -4,7 +4,7 @@ import type { EntityReader, EntityHost } from "../reflection-client/index.js";
 import { ReflectedEntity, MirrorReader } from "../reflection-client/index.js";
 import { Snapshot, type MirrorSnapshot } from "../graph-api/index.js";
 
-export type CypherValueDto = MirrorSnapshot | Scalar | null;
+export type CypherValueDto = MirrorSnapshot | Scalar | null | CypherValueDto[] | { [k: string]: CypherValueDto };
 
 export abstract class CypherValue
 {
