@@ -5,7 +5,7 @@ import { CypherSyntaxError } from "./errors.js";
 import { NodePattern, RelPattern, PatternPath } from "./patterns.js";
 import {
     CypherQueryModel, MatchClause, WhereClause, ReadingClause,
-    ProjectionClause, QueryPart, SortItem, ReturnItem,
+    ProjectionClause, QueryPart, UnwindClause, SortItem, ReturnItem,
 } from "./query-model.js";
 import {
     Expression, VariableRef, PropertyAccess, Literal, Parameter,
@@ -15,6 +15,8 @@ import {
 export class CypherParser
 {
     private static readonly KwMatch = "MATCH";
+    private static readonly KwOptional = "OPTIONAL";
+    private static readonly KwUnwind = "UNWIND";
     private static readonly KwWhere = "WHERE";
     private static readonly KwReturn = "RETURN";
     private static readonly KwWith = "WITH";
@@ -66,20 +68,39 @@ export class CypherParser
     private parseReadingClauses(): ReadingClause[]
     {
         const out: ReadingClause[] = [];
-        while (this.peekKeyword(CypherParser.KwMatch))
+        for (;;)
         {
-            out.push(this.parseMatch());
+            if (this.peekKeyword(CypherParser.KwMatch) || this.peekKeyword(CypherParser.KwOptional))
+            {
+                out.push(this.parseMatch());
+            }
+            else if (this.peekKeyword(CypherParser.KwUnwind))
+            {
+                out.push(this.parseUnwind());
+            }
+            else
+            {
+                return out;
+            }
         }
-        return out;
+    }
+
+    private parseUnwind(): UnwindClause
+    {
+        this.expectKeyword(CypherParser.KwUnwind);
+        const expr = this.parseExpression();
+        this.expectKeyword(CypherParser.KwAs);
+        return new UnwindClause(expr, this.expect(TokenKind.Identifier).Text);
     }
 
     private parseMatch(): MatchClause
     {
+        const optional = this.acceptKeyword(CypherParser.KwOptional);
         this.expectKeyword(CypherParser.KwMatch);
         const paths = [this.parsePath()];
         while (this.accept(TokenKind.Comma)) paths.push(this.parsePath());
         const where = this.peekKeyword(CypherParser.KwWhere) ? this.parseWhere() : undefined;
-        return new MatchClause(paths, where, false);
+        return new MatchClause(paths, where, optional);
     }
 
     private parsePath(): PatternPath

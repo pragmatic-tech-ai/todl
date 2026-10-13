@@ -1,7 +1,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { CypherParser } from "../parser.js";
-import { MatchClause } from "../query-model.js";
+import { MatchClause, UnwindClause } from "../query-model.js";
 import { CypherSyntaxError } from "../errors.js";
 import { FunctionCall } from "../expressions.js";
 
@@ -55,5 +55,61 @@ describe("cypher parser SP2 (query-part loop + projection)", () =>
     test("a WITH with no following RETURN is a syntax error", () =>
     {
         assert.throws(() => new CypherParser("MATCH (a) WITH a AS a2").Parse(), CypherSyntaxError);
+    });
+});
+
+describe("cypher parser SP2 (OPTIONAL MATCH, UNWIND, multi-path MATCH)", () =>
+{
+    test("OPTIONAL MATCH yields a MatchClause flagged Optional", () =>
+    {
+        const model = new CypherParser("OPTIONAL MATCH (a)-[:x]->(b) RETURN a, b").Parse();
+        const match = model.Parts[0]!.Reading[0] as MatchClause;
+        assert.ok(match instanceof MatchClause);
+        assert.equal(match.Optional, true);
+        assert.equal(match.Paths[0]!.Rels.length, 1);
+    });
+
+    test("plain MATCH is not Optional", () =>
+    {
+        const match = new CypherParser("MATCH (a) RETURN a").Parse().Parts[0]!.Reading[0] as MatchClause;
+        assert.equal(match.Optional, false);
+    });
+
+    test("UNWIND expr AS v yields an UnwindClause (range() used; list literals are Task 17)", () =>
+    {
+        const model = new CypherParser("UNWIND range(1, 3) AS x RETURN x").Parse();
+        const unwind = model.Parts[0]!.Reading[0] as UnwindClause;
+        assert.ok(unwind instanceof UnwindClause);
+        assert.equal(unwind.Variable, "x");
+        assert.ok(unwind.Expr instanceof FunctionCall);
+    });
+
+    test("MATCH a, b yields one MatchClause with two paths", () =>
+    {
+        const model = new CypherParser("MATCH (a:Service), (b:Service) RETURN a, b").Parse();
+        assert.equal(model.Parts[0]!.Reading.length, 1);
+        assert.equal((model.Parts[0]!.Reading[0] as MatchClause).Paths.length, 2);
+    });
+
+    test("MATCH then OPTIONAL MATCH yields two reading clauses", () =>
+    {
+        const model = new CypherParser("MATCH (a) OPTIONAL MATCH (a)-[:x]->(b) RETURN a, b").Parse();
+        const reading = model.Parts[0]!.Reading;
+        assert.equal(reading.length, 2);
+        assert.equal((reading[0] as MatchClause).Optional, false);
+        assert.equal((reading[1] as MatchClause).Optional, true);
+    });
+
+    test("mixed MATCH / UNWIND sequence", () =>
+    {
+        const model = new CypherParser("MATCH (a) UNWIND range(1, 2) AS x MATCH (b) RETURN a, x, b").Parse();
+        const reading = model.Parts[0]!.Reading;
+        assert.equal(reading.length, 3);
+        assert.ok(reading[1] instanceof UnwindClause);
+    });
+
+    test("OPTIONAL not followed by MATCH is a syntax error", () =>
+    {
+        assert.throws(() => new CypherParser("OPTIONAL (a) RETURN a").Parse(), CypherSyntaxError);
     });
 });

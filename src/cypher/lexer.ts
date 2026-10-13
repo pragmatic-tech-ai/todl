@@ -17,7 +17,7 @@ export class CypherLexer
 {
     private static readonly Keywords = new Set<string>(
         [
-            "MATCH", "WHERE", "RETURN", "AS", "AND", "OR", "NOT", "IS", "NULL", "IN", "TRUE", "FALSE",
+            "MATCH", "OPTIONAL", "UNWIND", "WHERE", "RETURN", "AS", "AND", "OR", "NOT", "IS", "NULL", "IN", "TRUE", "FALSE",
             "WITH", "ORDER", "BY", "ASC", "DESC", "SKIP", "LIMIT", "DISTINCT",
         ],
     );
