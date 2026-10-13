@@ -118,18 +118,24 @@ export class MaxAggregator extends ExtremeAggregator
 
 export class AggregatorFactory
 {
+    private static readonly CountName = "count";
+    private static readonly CollectName = "collect";
+    private static readonly SumName = "sum";
+    private static readonly AvgName = "avg";
+    private static readonly MinName = "min";
+    private static readonly MaxName = "max";
     private static readonly UnknownMessage = "Unknown aggregate function: ";
 
     public static Create(name: string, countStar: boolean): IAggregator
     {
         switch (name.toLowerCase())
         {
-            case "count": return new CountAggregator(countStar);
-            case "collect": return new CollectAggregator();
-            case "sum": return new SumAggregator();
-            case "avg": return new AvgAggregator();
-            case "min": return new MinAggregator();
-            case "max": return new MaxAggregator();
+            case AggregatorFactory.CountName: return new CountAggregator(countStar);
+            case AggregatorFactory.CollectName: return new CollectAggregator();
+            case AggregatorFactory.SumName: return new SumAggregator();
+            case AggregatorFactory.AvgName: return new AvgAggregator();
+            case AggregatorFactory.MinName: return new MinAggregator();
+            case AggregatorFactory.MaxName: return new MaxAggregator();
         }
         throw new CypherSemanticError(AggregatorFactory.UnknownMessage + name);
     }
