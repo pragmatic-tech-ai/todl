@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { FakeStorage, FileChangeKind } from '@pragmatic-tech-ai/todl-runtime';
+import { FakeStorage, FileChangeKind, type FileChange } from '@pragmatic-tech-ai/todl-runtime';
 import { ProjectContentStore } from '../project-content-store.js';
 import { ContentAdded, ContentRemoved, ContentUpdated, type ContentChange } from '../content-change.js';
 
@@ -118,4 +118,52 @@ test('dispose() cancels a pending settle flush — no emit after dispose', async
     await new Promise((r) => setTimeout(r, 60));               // past settleMs
 
     assert.equal(seen.length, beforeDispose);                  // the cancelled flush never emitted
+});
+
+// FakeStorage has no live-watch observable; count arm/close here, and optionally gate List().
+class CountingStorage extends FakeStorage
+{
+    public Live = 0;
+    public Gate: Promise<void> | undefined;
+
+    public override Watch(path: string, sink: (c: FileChange) => void): () => void
+    {
+        const off = super.Watch(path, sink);
+        this.Live++;
+        let closed = false;
+        return () => { if (closed) return; closed = true; this.Live--; off(); };
+    }
+
+    public override async List(path: string)
+    {
+        if (this.Gate !== undefined) await this.Gate;
+        return super.List(path);
+    }
+}
+
+test('a watcher armed while live is closed by dispose()', async () =>
+{
+    const s = new CountingStorage();
+    await s.WriteText('a.todl', '');
+    const store = new ProjectContentStore(s, { settleMs: 0 });
+    store.ObserveChildren(store.Root.Id, () => {});
+    await store.WhenIdle();
+    assert.equal(s.Live, 1);
+    store.dispose();
+    assert.equal(s.Live, 0);
+});
+
+test('dispose() during an in-flight load never arms a watcher', async () =>
+{
+    const s = new CountingStorage();
+    await s.WriteText('a.todl', '');
+    let release!: () => void;
+    s.Gate = new Promise<void>((r) => { release = r; });
+    const store = new ProjectContentStore(s, { settleMs: 0 });
+    store.ObserveChildren(store.Root.Id, () => {});             // load() now parked on List
+    store.dispose();                                           // owner torn down mid-load
+    release();
+    await store.WhenIdle();
+    await tick();
+    assert.equal(s.Live, 0);                                   // no orphaned watcher
 });

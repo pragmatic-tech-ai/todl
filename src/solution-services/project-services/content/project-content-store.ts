@@ -207,6 +207,7 @@ export class ProjectContentStore
             state.children.delete(id)
             this.dropSubtree(id)
         }
+        if (this.disposed) return   // disposed during the awaits above: arming now would orphan a ref'd watcher
         state.loaded = true
         if (isWatchableStorage(this.storage))
         {
@@ -327,7 +328,7 @@ export class ProjectContentStore
         const sub = this.folders.get(id)
         if (sub === undefined) return
         if (sub.watchOff !== undefined) { sub.watchOff(); sub.watchOff = undefined }
-        if (isWatchableStorage(this.storage)) sub.watchOff = this.storage.Watch(newPath, (c) => { void this.onFileChange(sub, c) })
+        if (!this.disposed && isWatchableStorage(this.storage)) sub.watchOff = this.storage.Watch(newPath, (c) => { void this.onFileChange(sub, c) })
         const rewritten = new Map<string, ContentNodeId>()
         for (const [childPath, childId] of sub.byPath)
         {
