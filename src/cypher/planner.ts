@@ -9,6 +9,7 @@ import type { Expression } from "./expressions.js";
 import { Comparison, PropertyAccess, Literal, FunctionCall } from "./expressions.js";
 import { Binding, EvalContext } from "./binding.js";
 import { ScalarValue } from "./values.js";
+import { VarLengthExpand } from "./operators-varlength.js";
 import { IOperator, AllNodesScan, LabelScan, Expand, Filter, Project, SingleRow, BindingRow } from "./operators.js";
 import { Unwind } from "./operators-unwind.js";
 import { CartesianProduct } from "./operators-join.js";
@@ -31,6 +32,7 @@ export class LogicalPlanner
     private static readonly NonNumericLimit = "SKIP/LIMIT must evaluate to a number";
     private static readonly NestedAggregate = "aggregate functions must be a direct call in a projection item";
     private static readonly DefaultMaxVarLength = 15;
+    private static readonly PathVarNeedsVarLength = "a path variable requires a variable-length relationship";
 
     private readonly maxVarLength: number;
 
@@ -151,11 +153,29 @@ export class LogicalPlanner
             if (anchor.Variable !== undefined) bound.add(anchor.Variable);
         }
 
+        // Limitation: a path variable binds the PathValue of the LAST variable-length rel in the path
+        // (exact for the common single-rel case); fixed-only paths cannot bind one yet.
+        let pathVarRel = -1;
+        for (let i = 0; i < path.Rels.length; i++) if (path.Rels[i]!.IsVariableLength) pathVarRel = i;
+        if (path.PathVariable !== undefined && pathVarRel < 0)
+        {
+            throw new CypherSemanticError(LogicalPlanner.PathVarNeedsVarLength);
+        }
+
         for (let i = 0; i < path.Rels.length; i++)
         {
             const rel = path.Rels[i]!;
             const toNode = path.Nodes[i + 1]!;
-            op = new Expand(op, this.graph, names[i]!, names[i + 1]!, rel.RelType, rel.Direction, toNode.Label);
+            if (rel.IsVariableLength)
+            {
+                const pathVar = i === pathVarRel ? path.PathVariable : undefined;
+                op = new VarLengthExpand(op, this.graph, names[i]!, names[i + 1]!, rel.RelType, rel.Direction,
+                    rel.MinHops ?? 1, rel.MaxHops ?? this.maxVarLength, toNode.Label, pathVar);
+            }
+            else
+            {
+                op = new Expand(op, this.graph, names[i]!, names[i + 1]!, rel.RelType, rel.Direction, toNode.Label);
+            }
             op = this.foldNodeProperties(op, toNode, names[i + 1]!);
             if (toNode.Variable !== undefined) bound.add(toNode.Variable);
         }

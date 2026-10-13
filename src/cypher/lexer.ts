@@ -118,7 +118,9 @@ export class CypherLexer
     private readNumber(line: number, column: number): Token
     {
         let value = "";
-        while (this.pos < this.source.length && (this.isDigit(this.current()) || this.current() === CypherLexer.DecimalPoint))
+        // A '.' belongs to the number only when a digit follows, so "1..2" lexes as 1 . . 2.
+        while (this.pos < this.source.length && (this.isDigit(this.current())
+            || (this.current() === CypherLexer.DecimalPoint && this.isDigit(this.source.charAt(this.pos + 1)))))
         {
             value += this.current();
             this.advance(1);

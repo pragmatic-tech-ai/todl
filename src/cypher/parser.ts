@@ -43,6 +43,8 @@ export class CypherParser
     private static readonly MultiplicativeOps: ReadonlyMap<TokenKind, ArithmeticOp> = new Map([
         [TokenKind.Star, ArithmeticOp.Mul], [TokenKind.Slash, ArithmeticOp.Div], [TokenKind.Percent, ArithmeticOp.Mod],
     ]);
+    private static readonly HopCountPattern = /^\d+$/;
+    private static readonly ExpectedHopCount = "expected an integer hop count";
     private static readonly Expected = "expected";
     private static readonly ExpectedProjection = "expected RETURN or WITH";
 
@@ -112,6 +114,12 @@ export class CypherParser
 
     private parsePath(): PatternPath
     {
+        let pathVariable: string | undefined;
+        if (this.peek().Kind === TokenKind.Identifier && this.tokens[this.index + 1]?.Kind === TokenKind.Eq)
+        {
+            pathVariable = this.advance().Text;
+            this.advance();
+        }
         const nodes = [this.parseNode()];
         const rels: RelPattern[] = [];
         while (this.peek().Kind === TokenKind.Dash || this.peek().Kind === TokenKind.ArrowLeft)
@@ -119,7 +127,35 @@ export class CypherParser
             rels.push(this.parseRel());
             nodes.push(this.parseNode());
         }
-        return new PatternPath(nodes, rels);
+        return new PatternPath(nodes, rels, pathVariable);
+    }
+
+    // Parses the text after '*' in a rel bracket: [min] [.. [max]]. Returns [min, max].
+    private parseHops(): [number | undefined, number | undefined]
+    {
+        let min: number | undefined;
+        let max: number | undefined;
+        let ranged = false;
+        if (this.peek().Kind === TokenKind.Number) min = this.parseHopCount();
+        if (this.peek().Kind === TokenKind.Dot)
+        {
+            this.expect(TokenKind.Dot);
+            this.expect(TokenKind.Dot);
+            ranged = true;
+            if (this.peek().Kind === TokenKind.Number) max = this.parseHopCount();
+        }
+        if (!ranged && min !== undefined) max = min;
+        return [min ?? 1, max];
+    }
+
+    private parseHopCount(): number
+    {
+        const text = this.expect(TokenKind.Number).Text;
+        if (!CypherParser.HopCountPattern.test(text))
+        {
+            throw this.error(CypherParser.ExpectedHopCount);
+        }
+        return Number(text);
     }
 
     private parseNode(): NodePattern
@@ -141,10 +177,13 @@ export class CypherParser
         let variable: string | undefined;
         let relType: string | undefined;
         let props = new Map<string, Scalar>();
+        let minHops: number | undefined;
+        let maxHops: number | undefined;
         if (this.accept(TokenKind.LBracket))
         {
             variable = this.peek().Kind === TokenKind.Identifier ? this.advance().Text : undefined;
             relType = this.accept(TokenKind.Colon) ? this.expect(TokenKind.Identifier).Text : undefined;
+            if (this.accept(TokenKind.Star)) [minHops, maxHops] = this.parseHops();
             if (this.peek().Kind === TokenKind.LBrace) props = this.parsePropMap();
             this.expect(TokenKind.RBracket);
         }
@@ -154,7 +193,7 @@ export class CypherParser
         else this.expect(TokenKind.Dash);
 
         const direction = incoming ? RelDirection.Incoming : (outgoing ? RelDirection.Outgoing : RelDirection.Undirected);
-        return new RelPattern(variable, relType, direction, props);
+        return new RelPattern(variable, relType, direction, props, minHops, maxHops);
     }
 
     private parsePropMap(): Map<string, Scalar>

@@ -40,6 +40,7 @@ export class MatchClause extends ReadingClause
         const out = new Set<string>();
         for (const path of this.Paths)
         {
+            if (path.PathVariable !== undefined) out.add(path.PathVariable);
             for (const n of path.Nodes) if (n.Variable !== undefined) out.add(n.Variable);
             for (const r of path.Rels) if (r.Variable !== undefined) out.add(r.Variable);
         }
