@@ -18,6 +18,22 @@ export class Binding
         next.set(variable, value);
         return new Binding(next);
     }
+
+    /** Overlays other onto this; undefined when a shared variable holds different values (by GroupKey). */
+    public Merge(other: Binding): Binding | undefined
+    {
+        const next = new Map(this.values);
+        for (const [variable, value] of other.values)
+        {
+            const existing = next.get(variable);
+            if (existing !== undefined && existing.GroupKey() !== value.GroupKey())
+            {
+                return undefined;
+            }
+            next.set(variable, value);
+        }
+        return new Binding(next);
+    }
 }
 
 export class EvalContext
