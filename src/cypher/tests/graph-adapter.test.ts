@@ -12,7 +12,7 @@ import { CypherSemanticError } from "../errors.js";
 
 class ServiceGraphFixture
 {
-    public static Build(): GraphQuery
+    public static Build(mutual: boolean = false): GraphQuery
     {
         const logical: LogicalManifest = {
             format: "todl-manifest/1", model: "svc", version: "1.0.0", root: "Element",
@@ -36,7 +36,12 @@ class ServiceGraphFixture
             { id: "a", type: "Service", attrs: { name: "checkout" } },
             { id: "b", type: "CoreService", attrs: { name: "ledger" } },
         ];
-        g.BindSeed({ nodes, edges: [{ from: "a", rel: "calls", to: "b" }] }, { model: "svc", version: "1.0.0" });
+        const edges = [{ from: "a", rel: "calls", to: "b" }];
+        if (mutual)
+        {
+            edges.push({ from: "b", rel: "calls", to: "a" });
+        }
+        g.BindSeed({ nodes, edges }, { model: "svc", version: "1.0.0" });
         return new GraphQuery(g);
     }
 }
@@ -63,7 +68,23 @@ describe("GraphQueryAdapter", () =>
         assert.deepEqual(a.Expand("b", "calls", RelDirection.Incoming).map((m) => m.node.id), ["a"]);
         assert.deepEqual(a.Expand("a", "calls", RelDirection.Outgoing).length, 1);
         assert.deepEqual(a.Expand("a", "nomatch", RelDirection.Outgoing), []);
-        assert.deepEqual(a.Expand("a", "calls", RelDirection.Undirected).map((m) => m.node.id), ["b"]);
+    });
+
+    test("undirected Expand de-duplicates a node reachable both ways", () =>
+    {
+        const a = new GraphQueryAdapter(ServiceGraphFixture.Build(true));
+        assert.deepEqual(a.Expand("a", "calls", RelDirection.Outgoing).map((m) => m.node.id), ["b"]);
+        assert.deepEqual(a.Expand("a", "calls", RelDirection.Incoming).map((m) => m.node.id), ["b"]);
+        const ids = a.Expand("a", "calls", RelDirection.Undirected).map((m) => m.node.id);
+        assert.equal(ids.length, 1);
+        assert.deepEqual(ids, ["b"]);
+    });
+
+    test("unlabelled Expand unions the node's relationships, including inherited", () =>
+    {
+        const a = new GraphQueryAdapter(ServiceGraphFixture.Build(true));
+        assert.deepEqual(a.Expand("a", undefined, RelDirection.Outgoing).map((m) => m.node.id), ["b"]);
+        assert.deepEqual(a.Expand("b", undefined, RelDirection.Outgoing).map((m) => m.node.id), ["a"]);
     });
 
     test("HasRelationshipType and IsInstanceOf", () =>
