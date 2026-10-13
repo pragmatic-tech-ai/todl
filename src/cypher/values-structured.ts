@@ -4,9 +4,7 @@ export type RelDto = { from: string; type: string; to: string };
 
 export class ListValue extends CypherValue
 {
-    private static readonly GroupKeyPrefix = "list:[";
-    private static readonly GroupKeySuffix = "]";
-    private static readonly Separator = ",";
+    private static readonly GroupKeyPrefix = "list:";
     private static readonly ListRank = 4;
 
     constructor(public readonly Items: readonly CypherValue[])
@@ -21,7 +19,7 @@ export class ListValue extends CypherValue
 
     public GroupKey(): string
     {
-        return `${ListValue.GroupKeyPrefix}${this.Items.map(i => i.GroupKey()).join(ListValue.Separator)}${ListValue.GroupKeySuffix}`;
+        return ListValue.GroupKeyPrefix + JSON.stringify(this.Items.map(i => i.GroupKey()));
     }
 
     protected TypeRank(): number
@@ -47,10 +45,7 @@ export class ListValue extends CypherValue
 
 export class MapValue extends CypherValue
 {
-    private static readonly GroupKeyPrefix = "map:{";
-    private static readonly GroupKeySuffix = "}";
-    private static readonly Separator = ",";
-    private static readonly PairSeparator = "=";
+    private static readonly GroupKeyPrefix = "map:";
     private static readonly MapRank = 5;
 
     constructor(public readonly Entries: ReadonlyMap<string, CypherValue>)
@@ -75,8 +70,8 @@ export class MapValue extends CypherValue
 
     public GroupKey(): string
     {
-        const parts = this.SortedKeys().map(k => `${JSON.stringify(k)}${MapValue.PairSeparator}${this.Entries.get(k)?.GroupKey() ?? ""}`);
-        return `${MapValue.GroupKeyPrefix}${parts.join(MapValue.Separator)}${MapValue.GroupKeySuffix}`;
+        const entries = this.SortedKeys().map(k => [k, this.Entries.get(k)?.GroupKey() ?? ""]);
+        return MapValue.GroupKeyPrefix + JSON.stringify(entries);
     }
 
     protected TypeRank(): number
@@ -115,7 +110,6 @@ export class MapValue extends CypherValue
 export class RelValue extends CypherValue
 {
     private static readonly GroupKeyPrefix = "rel:";
-    private static readonly Separator = ":";
     private static readonly RelRank = 6;
 
     constructor(
@@ -138,8 +132,7 @@ export class RelValue extends CypherValue
 
     public GroupKey(): string
     {
-        const s = RelValue.Separator;
-        return `${RelValue.GroupKeyPrefix}${this.FromId}${s}${this.Type}${s}${this.ToId}`;
+        return RelValue.GroupKeyPrefix + JSON.stringify([this.FromId, this.Type, this.ToId]);
     }
 
     protected TypeRank(): number
@@ -160,7 +153,6 @@ export class RelValue extends CypherValue
 export class PathValue extends CypherValue
 {
     private static readonly GroupKeyPrefix = "path:";
-    private static readonly Separator = "|";
     private static readonly PathRank = 7;
 
     // Invariant for real paths: Nodes.length === Rels.length + 1.
@@ -186,8 +178,7 @@ export class PathValue extends CypherValue
 
     public GroupKey(): string
     {
-        const parts = [...this.Nodes.map(n => n.GroupKey()), ...this.Rels.map(r => r.GroupKey())];
-        return `${PathValue.GroupKeyPrefix}${parts.join(PathValue.Separator)}`;
+        return PathValue.GroupKeyPrefix + JSON.stringify({ n: this.Nodes.map(n => n.GroupKey()), r: this.Rels.map(r => r.GroupKey()) });
     }
 
     protected TypeRank(): number
