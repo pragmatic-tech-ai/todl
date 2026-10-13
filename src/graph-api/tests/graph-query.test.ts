@@ -130,3 +130,16 @@ describe("GraphQuery: taxonomy", () =>
         assert.deepEqual(q.Ancestors("Comp.Card").map((t) => t.id), ["Comp.Surface"]);
     });
 });
+
+describe("GraphQuery: AllInstances", () =>
+{
+    test("AllInstances returns every owned heap instance regardless of concept", () =>
+    {
+        const g = widgetGraph([
+            { id: "w1", type: "Widget", attrs: { label: "One" } },
+            { id: "s1", type: "SuperWidget", attrs: {} },
+        ]);
+        const ids = new GraphQuery(g).AllInstances().map((m) => m.node.id).sort();
+        assert.deepEqual(ids, ["s1", "w1"]);
+    });
+});
