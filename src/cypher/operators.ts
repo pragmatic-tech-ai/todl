@@ -107,3 +107,11 @@ export class Project implements IOperator
         }
     }
 }
+
+export class SingleRow implements IOperator
+{
+    public *Rows(): Iterable<Binding>
+    {
+        yield new Binding();
+    }
+}
