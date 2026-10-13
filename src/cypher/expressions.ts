@@ -1,8 +1,9 @@
 import type { Scalar } from "../manifest/logical.js";
-import { ComparisonOp, BooleanOp } from "./enums.js";
+import { ComparisonOp, BooleanOp, ArithmeticOp } from "./enums.js";
 import { EvalContext } from "./binding.js";
 import { CypherValue, ScalarValue, NullValue, NodeValue } from "./values.js";
 import { CypherSemanticError } from "./errors.js";
+import { ListValue, MapValue } from "./values-structured.js";
 
 export abstract class Expression
 {
@@ -50,6 +51,7 @@ export class PropertyAccess extends Expression
     public Evaluate(ctx: EvalContext): CypherValue
     {
         const target = ctx.Binding.Get(this.Variable);
+        if (target instanceof MapValue) return target.Get(this.Property) ?? NullValue.Instance;
         if (!(target instanceof NodeValue)) return NullValue.Instance;
         const value = target.Field(this.Property);
         return value === undefined ? NullValue.Instance : new ScalarValue(value);
@@ -244,5 +246,164 @@ export class InExpression extends Expression
     {
         this.operand.CollectVariables(into);
         for (const e of this.list) e.CollectVariables(into);
+    }
+}
+
+export class ArithmeticExpression extends Expression
+{
+    private static readonly Label = "arithmetic";
+
+    constructor(private readonly left: Expression, private readonly op: ArithmeticOp, private readonly right: Expression)
+    {
+        super();
+    }
+
+    public Evaluate(ctx: EvalContext): CypherValue
+    {
+        const l = this.left.Evaluate(ctx);
+        const r = this.right.Evaluate(ctx);
+        if (!(l instanceof ScalarValue) || !(r instanceof ScalarValue)) return NullValue.Instance;
+        const a = l.Value;
+        const b = r.Value;
+        if (typeof a === "number" && typeof b === "number") return ArithmeticExpression.ApplyNumbers(a, this.op, b);
+        if (this.op === ArithmeticOp.Add && typeof a === "string" && typeof b === "string") return new ScalarValue(a + b);
+        return NullValue.Instance;
+    }
+
+    private static ApplyNumbers(a: number, op: ArithmeticOp, b: number): CypherValue
+    {
+        switch (op)
+        {
+            case ArithmeticOp.Add: return new ScalarValue(a + b);
+            case ArithmeticOp.Sub: return new ScalarValue(a - b);
+            case ArithmeticOp.Mul: return new ScalarValue(a * b);
+            case ArithmeticOp.Div: return b === 0 ? NullValue.Instance : new ScalarValue(a / b);
+            case ArithmeticOp.Mod: return b === 0 ? NullValue.Instance : new ScalarValue(a % b);
+        }
+        return NullValue.Instance;
+    }
+
+    public DefaultName(): string
+    {
+        return ArithmeticExpression.Label;
+    }
+
+    public CollectVariables(into: Set<string>): void
+    {
+        this.left.CollectVariables(into);
+        this.right.CollectVariables(into);
+    }
+}
+
+export class UnaryMinus extends Expression
+{
+    private static readonly Label = "negate";
+
+    constructor(private readonly operand: Expression)
+    {
+        super();
+    }
+
+    public Evaluate(ctx: EvalContext): CypherValue
+    {
+        const v = this.operand.Evaluate(ctx);
+        if (v instanceof ScalarValue && typeof v.Value === "number") return new ScalarValue(-v.Value);
+        return NullValue.Instance;
+    }
+
+    public DefaultName(): string
+    {
+        return UnaryMinus.Label;
+    }
+
+    public CollectVariables(into: Set<string>): void
+    {
+        this.operand.CollectVariables(into);
+    }
+}
+
+export class ListLiteral extends Expression
+{
+    private static readonly Label = "list";
+
+    constructor(private readonly items: readonly Expression[])
+    {
+        super();
+    }
+
+    public Evaluate(ctx: EvalContext): CypherValue
+    {
+        return new ListValue(this.items.map((i) => i.Evaluate(ctx)));
+    }
+
+    public DefaultName(): string
+    {
+        return ListLiteral.Label;
+    }
+
+    public CollectVariables(into: Set<string>): void
+    {
+        for (const i of this.items) i.CollectVariables(into);
+    }
+}
+
+export class MapLiteral extends Expression
+{
+    private static readonly Label = "map";
+
+    constructor(private readonly entries: ReadonlyMap<string, Expression>)
+    {
+        super();
+    }
+
+    public Evaluate(ctx: EvalContext): CypherValue
+    {
+        const out = new Map<string, CypherValue>();
+        for (const [k, e] of this.entries) out.set(k, e.Evaluate(ctx));
+        return new MapValue(out);
+    }
+
+    public DefaultName(): string
+    {
+        return MapLiteral.Label;
+    }
+
+    public CollectVariables(into: Set<string>): void
+    {
+        for (const e of this.entries.values()) e.CollectVariables(into);
+    }
+}
+
+export class IndexAccess extends Expression
+{
+    private static readonly Label = "index";
+
+    constructor(private readonly target: Expression, private readonly index: Expression)
+    {
+        super();
+    }
+
+    public Evaluate(ctx: EvalContext): CypherValue
+    {
+        const t = this.target.Evaluate(ctx);
+        const i = this.index.Evaluate(ctx);
+        if (!(i instanceof ScalarValue)) return NullValue.Instance;
+        if (t instanceof ListValue && typeof i.Value === "number" && Number.isInteger(i.Value))
+        {
+            return t.Items[i.Value] ?? NullValue.Instance;
+        }
+        if (t instanceof MapValue && typeof i.Value === "string") return t.Get(i.Value) ?? NullValue.Instance;
+        return NullValue.Instance;
+    }
+
+    public DefaultName(): string
+    {
+        return IndexAccess.Label;
+    }
+
+    public CollectVariables(into: Set<string>): void
+    {
+        this.target.CollectVariables(into);
+        this.index.CollectVariables(into);
     }
 }

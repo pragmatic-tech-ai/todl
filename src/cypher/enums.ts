@@ -11,3 +11,5 @@ export enum RelDirection { Outgoing, Incoming, Undirected }
 export enum ComparisonOp { Eq, Neq, Lt, Lte, Gt, Gte }
 
 export enum BooleanOp { And, Or, Not }
+
+export enum ArithmeticOp { Add, Sub, Mul, Div, Mod }
