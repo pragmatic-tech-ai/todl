@@ -4,6 +4,7 @@ import { EvalContext } from "./binding.js";
 import { CypherValue, ScalarValue, NullValue, NodeValue } from "./values.js";
 import { CypherSemanticError } from "./errors.js";
 import { ListValue, MapValue } from "./values-structured.js";
+import { FunctionRegistry } from "./functions.js";
 
 export abstract class Expression
 {
@@ -405,5 +406,35 @@ export class IndexAccess extends Expression
     {
         this.target.CollectVariables(into);
         this.index.CollectVariables(into);
+    }
+}
+
+export class FunctionCall extends Expression
+{
+    private static readonly AggregateOutside = "aggregate function outside a projection: ";
+    private static readonly UnknownFunction = "unknown function: ";
+
+    constructor(public readonly Name: string, public readonly Args: readonly Expression[], public readonly Distinct: boolean, public readonly Star: boolean)
+    {
+        super();
+    }
+
+    public Evaluate(ctx: EvalContext): CypherValue
+    {
+        const lower = this.Name.toLowerCase();
+        if (FunctionRegistry.IsAggregate(lower)) throw new CypherSemanticError(`${FunctionCall.AggregateOutside}${this.Name}`);
+        const fn = FunctionRegistry.Scalar(lower);
+        if (fn === undefined) throw new CypherSemanticError(`${FunctionCall.UnknownFunction}${this.Name}`);
+        return fn.Invoke(this.Args.map((a) => a.Evaluate(ctx)));
+    }
+
+    public DefaultName(): string
+    {
+        return this.Name;
+    }
+
+    public CollectVariables(into: Set<string>): void
+    {
+        for (const a of this.Args) a.CollectVariables(into);
     }
 }
