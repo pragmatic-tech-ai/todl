@@ -1,6 +1,6 @@
 import type { Scalar } from "../manifest/logical.js";
 import { CypherLexer, Token } from "./lexer.js";
-import { TokenKind, RelDirection, ComparisonOp, BooleanOp } from "./enums.js";
+import { TokenKind, RelDirection, ComparisonOp, BooleanOp, ArithmeticOp } from "./enums.js";
 import { CypherSyntaxError } from "./errors.js";
 import { NodePattern, RelPattern, PatternPath } from "./patterns.js";
 import {
@@ -10,6 +10,7 @@ import {
 import {
     Expression, VariableRef, PropertyAccess, Literal, Parameter,
     Comparison, BooleanExpression, IsNullExpression, InExpression, FunctionCall,
+    ArithmeticExpression, UnaryMinus, ListLiteral, MapLiteral, IndexAccess,
 } from "./expressions.js";
 
 export class CypherParser
@@ -36,6 +37,12 @@ export class CypherParser
     private static readonly KwSkip = "SKIP";
     private static readonly KwLimit = "LIMIT";
     private static readonly KwDistinct = "DISTINCT";
+    private static readonly AdditiveOps: ReadonlyMap<TokenKind, ArithmeticOp> = new Map([
+        [TokenKind.Plus, ArithmeticOp.Add], [TokenKind.Dash, ArithmeticOp.Sub],
+    ]);
+    private static readonly MultiplicativeOps: ReadonlyMap<TokenKind, ArithmeticOp> = new Map([
+        [TokenKind.Star, ArithmeticOp.Mul], [TokenKind.Slash, ArithmeticOp.Div], [TokenKind.Percent, ArithmeticOp.Mod],
+    ]);
     private static readonly Expected = "expected";
     private static readonly ExpectedProjection = "expected RETURN or WITH";
 
@@ -243,9 +250,9 @@ export class CypherParser
 
     private parsePredicate(): Expression
     {
-        const left = this.parsePrimary();
+        const left = this.parseAdditive();
         const cmp = this.tryComparisonOp();
-        if (cmp !== undefined) return new Comparison(left, cmp, this.parsePrimary());
+        if (cmp !== undefined) return new Comparison(left, cmp, this.parseAdditive());
         if (this.acceptKeyword(CypherParser.KwIs))
         {
             const negated = this.acceptKeyword(CypherParser.KwNot);
@@ -272,9 +279,75 @@ export class CypherParser
         return list;
     }
 
+    private parseAdditive(): Expression
+    {
+        let left = this.parseMultiplicative();
+        for (;;)
+        {
+            const op = this.tryArithmeticOp(CypherParser.AdditiveOps);
+            if (op === undefined) return left;
+            left = new ArithmeticExpression(left, op, this.parseMultiplicative());
+        }
+    }
+
+    private parseMultiplicative(): Expression
+    {
+        let left = this.parseUnary();
+        for (;;)
+        {
+            const op = this.tryArithmeticOp(CypherParser.MultiplicativeOps);
+            if (op === undefined) return left;
+            left = new ArithmeticExpression(left, op, this.parseUnary());
+        }
+    }
+
+    private parseUnary(): Expression
+    {
+        if (this.accept(TokenKind.Dash)) return new UnaryMinus(this.parseUnary());
+        return this.parsePostfix();
+    }
+
+    private parsePostfix(): Expression
+    {
+        let expr = this.parsePrimary();
+        for (;;)
+        {
+            if (this.accept(TokenKind.LBracket))
+            {
+                const index = this.parseExpression();
+                this.expect(TokenKind.RBracket);
+                expr = new IndexAccess(expr, index);
+            }
+            else if (this.accept(TokenKind.Dot))
+            {
+                expr = new IndexAccess(expr, new Literal(this.expect(TokenKind.Identifier).Text));
+            }
+            else
+            {
+                return expr;
+            }
+        }
+    }
+
+    private tryArithmeticOp(ops: ReadonlyMap<TokenKind, ArithmeticOp>): ArithmeticOp | undefined
+    {
+        const op = ops.get(this.peek().Kind);
+        if (op !== undefined) this.advance();
+        return op;
+    }
+
     private parsePrimary(): Expression
     {
         if (this.accept(TokenKind.Dollar)) return new Parameter(this.expect(TokenKind.Identifier).Text);
+        if (this.accept(TokenKind.LParen))
+        {
+            const inner = this.parseExpression();
+            this.expect(TokenKind.RParen);
+            return inner;
+        }
+        if (this.peek().Kind === TokenKind.LBracket) return this.parseListLiteral();
+        if (this.peek().Kind === TokenKind.LBrace) return this.parseMapLiteral();
+        if (this.acceptKeyword(CypherParser.KwNull)) return new Literal(null);
         if (this.peek().Kind === TokenKind.Identifier)
         {
             const name = this.advance().Text;
@@ -283,6 +356,40 @@ export class CypherParser
             return new VariableRef(name);
         }
         return new Literal(this.parseScalarLiteral());
+    }
+
+    private parseListLiteral(): ListLiteral
+    {
+        this.expect(TokenKind.LBracket);
+        const items: Expression[] = [];
+        if (this.peek().Kind !== TokenKind.RBracket)
+        {
+            do
+            {
+                items.push(this.parseExpression());
+            }
+            while (this.accept(TokenKind.Comma));
+        }
+        this.expect(TokenKind.RBracket);
+        return new ListLiteral(items);
+    }
+
+    private parseMapLiteral(): MapLiteral
+    {
+        this.expect(TokenKind.LBrace);
+        const entries = new Map<string, Expression>();
+        if (this.peek().Kind !== TokenKind.RBrace)
+        {
+            do
+            {
+                const key = this.expect(TokenKind.Identifier).Text;
+                this.expect(TokenKind.Colon);
+                entries.set(key, this.parseExpression());
+            }
+            while (this.accept(TokenKind.Comma));
+        }
+        this.expect(TokenKind.RBrace);
+        return new MapLiteral(entries);
     }
 
     private parseCallArguments(name: string): FunctionCall

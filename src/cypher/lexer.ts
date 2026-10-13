@@ -31,6 +31,7 @@ export class CypherLexer
         ["{", TokenKind.LBrace], ["}", TokenKind.RBrace],
         [":", TokenKind.Colon], [",", TokenKind.Comma], [".", TokenKind.Dot],
         ["$", TokenKind.Dollar], ["-", TokenKind.Dash], ["*", TokenKind.Star],
+        ["+", TokenKind.Plus], ["/", TokenKind.Slash], ["%", TokenKind.Percent],
         ["=", TokenKind.Eq], ["<", TokenKind.Lt], [">", TokenKind.Gt],
     ]);
     private static readonly Quote = "'";
