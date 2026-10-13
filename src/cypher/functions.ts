@@ -1,6 +1,6 @@
 import type { Scalar } from "../manifest/logical.js";
 import { CypherValue, ScalarValue, NullValue } from "./values.js";
-import { ListValue, MapValue } from "./values-structured.js";
+import { ListValue, MapValue, PathValue } from "./values-structured.js";
 
 export interface IScalarFunction
 {
@@ -194,6 +194,33 @@ class ReplaceFunction extends FunctionBase
     }
 }
 
+class PathLengthFunction extends FunctionBase
+{
+    public Invoke(args: readonly CypherValue[]): CypherValue
+    {
+        const p = args[0];
+        return p instanceof PathValue ? new ScalarValue(p.Length()) : NullValue.Instance;
+    }
+}
+
+class PathNodesFunction extends FunctionBase
+{
+    public Invoke(args: readonly CypherValue[]): CypherValue
+    {
+        const p = args[0];
+        return p instanceof PathValue ? new ListValue([...p.Nodes]) : NullValue.Instance;
+    }
+}
+
+class PathRelationshipsFunction extends FunctionBase
+{
+    public Invoke(args: readonly CypherValue[]): CypherValue
+    {
+        const p = args[0];
+        return p instanceof PathValue ? new ListValue([...p.Rels]) : NullValue.Instance;
+    }
+}
+
 export class FunctionRegistry
 {
     private static readonly Aggregates: ReadonlySet<string> = new Set(["count", "collect", "sum", "avg", "min", "max"]);
@@ -215,6 +242,9 @@ export class FunctionRegistry
         ["trim", new TrimFunction()],
         ["substring", new SubstringFunction()],
         ["replace", new ReplaceFunction()],
+        ["length", new PathLengthFunction()],
+        ["nodes", new PathNodesFunction()],
+        ["relationships", new PathRelationshipsFunction()],
     ]);
 
     public static Scalar(name: string): IScalarFunction | undefined

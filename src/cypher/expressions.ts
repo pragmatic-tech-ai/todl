@@ -87,6 +87,30 @@ export class Literal extends Expression
     }
 }
 
+export class ValueLiteral extends Expression
+{
+    private static readonly Label = "value";
+
+    constructor(private readonly value: CypherValue)
+    {
+        super();
+    }
+
+    public Evaluate(): CypherValue
+    {
+        return this.value;
+    }
+
+    public DefaultName(): string
+    {
+        return ValueLiteral.Label;
+    }
+
+    public CollectVariables(): void
+    {
+    }
+}
+
 export class Parameter extends Expression
 {
     private static readonly MissingPrefix = "parameter $";
