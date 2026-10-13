@@ -3,10 +3,13 @@ import { CypherLexer, Token } from "./lexer.js";
 import { TokenKind, RelDirection, ComparisonOp, BooleanOp } from "./enums.js";
 import { CypherSyntaxError } from "./errors.js";
 import { NodePattern, RelPattern, PatternPath } from "./patterns.js";
-import { CypherQueryModel, MatchClause, WhereClause, ReturnClause, ReturnItem } from "./query-model.js";
+import {
+    CypherQueryModel, MatchClause, WhereClause, ReadingClause,
+    ProjectionClause, QueryPart, SortItem, ReturnItem,
+} from "./query-model.js";
 import {
     Expression, VariableRef, PropertyAccess, Literal, Parameter,
-    Comparison, BooleanExpression, IsNullExpression, InExpression,
+    Comparison, BooleanExpression, IsNullExpression, InExpression, FunctionCall,
 } from "./expressions.js";
 
 export class CypherParser
@@ -14,6 +17,7 @@ export class CypherParser
     private static readonly KwMatch = "MATCH";
     private static readonly KwWhere = "WHERE";
     private static readonly KwReturn = "RETURN";
+    private static readonly KwWith = "WITH";
     private static readonly KwAs = "AS";
     private static readonly KwAnd = "AND";
     private static readonly KwOr = "OR";
@@ -23,7 +27,15 @@ export class CypherParser
     private static readonly KwIn = "IN";
     private static readonly KwTrue = "TRUE";
     private static readonly KwFalse = "FALSE";
+    private static readonly KwOrder = "ORDER";
+    private static readonly KwBy = "BY";
+    private static readonly KwAsc = "ASC";
+    private static readonly KwDesc = "DESC";
+    private static readonly KwSkip = "SKIP";
+    private static readonly KwLimit = "LIMIT";
+    private static readonly KwDistinct = "DISTINCT";
     private static readonly Expected = "expected";
+    private static readonly ExpectedProjection = "expected RETURN or WITH";
 
     private readonly tokens: Token[];
     private index = 0;
@@ -35,11 +47,30 @@ export class CypherParser
 
     public Parse(): CypherQueryModel
     {
-        const match = this.parseMatch();
-        const where = this.peekKeyword(CypherParser.KwWhere) ? this.parseWhere() : undefined;
-        const ret = this.parseReturn();
+        const parts: QueryPart[] = [];
+        for (;;)
+        {
+            const reading = this.parseReadingClauses();
+            const projection = this.parseProjection();
+            parts.push(new QueryPart(reading, projection));
+            if (projection.IsReturn)
+            {
+                break;
+            }
+            // A WITH must be followed by at least one more query part ending in RETURN.
+        }
         this.expect(TokenKind.Eof);
-        return new CypherQueryModel(match, where, ret);
+        return new CypherQueryModel(parts);
+    }
+
+    private parseReadingClauses(): ReadingClause[]
+    {
+        const out: ReadingClause[] = [];
+        while (this.peekKeyword(CypherParser.KwMatch))
+        {
+            out.push(this.parseMatch());
+        }
+        return out;
     }
 
     private parseMatch(): MatchClause
@@ -47,7 +78,8 @@ export class CypherParser
         this.expectKeyword(CypherParser.KwMatch);
         const paths = [this.parsePath()];
         while (this.accept(TokenKind.Comma)) paths.push(this.parsePath());
-        return new MatchClause(paths);
+        const where = this.peekKeyword(CypherParser.KwWhere) ? this.parseWhere() : undefined;
+        return new MatchClause(paths, where, false);
     }
 
     private parsePath(): PatternPath
@@ -121,12 +153,39 @@ export class CypherParser
         return new WhereClause(this.parseExpression());
     }
 
-    private parseReturn(): ReturnClause
+    private parseProjection(): ProjectionClause
     {
-        this.expectKeyword(CypherParser.KwReturn);
+        let isReturn: boolean;
+        if (this.acceptKeyword(CypherParser.KwReturn)) isReturn = true;
+        else if (this.acceptKeyword(CypherParser.KwWith)) isReturn = false;
+        else throw this.error(CypherParser.ExpectedProjection);
+
+        const distinct = this.acceptKeyword(CypherParser.KwDistinct);
         const items = [this.parseReturnItem()];
         while (this.accept(TokenKind.Comma)) items.push(this.parseReturnItem());
-        return new ReturnClause(items);
+
+        const orderBy = this.peekKeyword(CypherParser.KwOrder) ? this.parseOrderBy() : undefined;
+        const skip = this.acceptKeyword(CypherParser.KwSkip) ? this.parseExpression() : undefined;
+        const limit = this.acceptKeyword(CypherParser.KwLimit) ? this.parseExpression() : undefined;
+        return new ProjectionClause(items, distinct, orderBy, skip, limit, isReturn);
+    }
+
+    private parseOrderBy(): SortItem[]
+    {
+        this.expectKeyword(CypherParser.KwOrder);
+        this.expectKeyword(CypherParser.KwBy);
+        const items = [this.parseSortItem()];
+        while (this.accept(TokenKind.Comma)) items.push(this.parseSortItem());
+        return items;
+    }
+
+    private parseSortItem(): SortItem
+    {
+        const expr = this.parseExpression();
+        let descending = false;
+        if (this.acceptKeyword(CypherParser.KwDesc)) descending = true;
+        else this.acceptKeyword(CypherParser.KwAsc);
+        return new SortItem(expr, descending);
     }
 
     private parseReturnItem(): ReturnItem
@@ -199,9 +258,31 @@ export class CypherParser
         {
             const name = this.advance().Text;
             if (this.accept(TokenKind.Dot)) return new PropertyAccess(name, this.expect(TokenKind.Identifier).Text);
+            if (this.accept(TokenKind.LParen)) return this.parseCallArguments(name);
             return new VariableRef(name);
         }
         return new Literal(this.parseScalarLiteral());
+    }
+
+    private parseCallArguments(name: string): FunctionCall
+    {
+        if (this.accept(TokenKind.Star))
+        {
+            this.expect(TokenKind.RParen);
+            return new FunctionCall(name, [], false, true);
+        }
+        const distinct = this.acceptKeyword(CypherParser.KwDistinct);
+        const args: Expression[] = [];
+        if (this.peek().Kind !== TokenKind.RParen)
+        {
+            do
+            {
+                args.push(this.parseExpression());
+            }
+            while (this.accept(TokenKind.Comma));
+        }
+        this.expect(TokenKind.RParen);
+        return new FunctionCall(name, args, distinct, false);
     }
 
     private parseScalarLiteral(): Scalar

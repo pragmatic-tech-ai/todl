@@ -35,14 +35,15 @@ class PlannerHarness
     {
         const model = new CypherParser(text).Parse();
         const plan = new LogicalPlanner(new FakeGraph(), new Map()).Plan(model);
+        const columns = model.FinalColumns();
         const out: Map<string, unknown>[] = [];
         for (const binding of plan.Rows())
         {
             const row = new Map<string, unknown>();
-            for (const item of model.Return.Items)
+            for (const column of columns)
             {
-                const v = binding.Get(item.ColumnName());
-                row.set(item.ColumnName(), v instanceof NodeValue ? v.Id : (v as ScalarValue).Value);
+                const v = binding.Get(column);
+                row.set(column, v instanceof NodeValue ? v.Id : (v as ScalarValue).Value);
             }
             out.push(row);
         }
@@ -63,9 +64,10 @@ describe("cypher planner", () =>
         assert.throws(() => PlannerHarness.PlanRows("MATCH (a:Service) RETURN b"), CypherSemanticError);
     });
 
-    test("multiple comma paths are rejected in SP1", () =>
+    test("multiple comma paths cartesian-join into one segment (SP2)", () =>
     {
-        assert.throws(() => PlannerHarness.PlanRows("MATCH (a:Service), (b:Service) RETURN a"), CypherSemanticError);
+        const rows = PlannerHarness.PlanRows("MATCH (a:Service), (b:Service) RETURN a");
+        assert.deepEqual(rows.map((r) => r.get("a")).sort(), ["a", "a", "b", "b"]);
     });
 
     test("unknown relationship type raises CypherSemanticError", () =>

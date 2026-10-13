@@ -34,6 +34,17 @@ export class MatchClause extends ReadingClause
     {
         super();
     }
+
+    public DeclaredVariables(): Set<string>
+    {
+        const out = new Set<string>();
+        for (const path of this.Paths)
+        {
+            for (const n of path.Nodes) if (n.Variable !== undefined) out.add(n.Variable);
+            for (const r of path.Rels) if (r.Variable !== undefined) out.add(r.Variable);
+        }
+        return out;
+    }
 }
 
 export class UnwindClause extends ReadingClause
@@ -72,31 +83,16 @@ export class QueryPart
     }
 }
 
-export class ReturnClause
-{
-    constructor(public readonly Items: readonly ReturnItem[])
-    {
-    }
-}
-
 export class CypherQueryModel
 {
-    constructor(
-        public readonly Match: MatchClause,
-        public readonly Where: WhereClause | undefined,
-        public readonly Return: ReturnClause,
-    )
+    constructor(public readonly Parts: readonly QueryPart[])
     {
     }
 
-    public DeclaredVariables(): Set<string>
+    public FinalColumns(): string[]
     {
-        const out = new Set<string>();
-        for (const path of this.Match.Paths)
-        {
-            for (const n of path.Nodes) if (n.Variable !== undefined) out.add(n.Variable);
-            for (const r of path.Rels) if (r.Variable !== undefined) out.add(r.Variable);
-        }
-        return out;
+        // Parse/fluent invariants guarantee at least one part whose final projection is a RETURN.
+        const last = this.Parts[this.Parts.length - 1]!;
+        return last.Projection.Items.map((i) => i.ColumnName());
     }
 }

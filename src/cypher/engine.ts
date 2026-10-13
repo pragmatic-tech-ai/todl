@@ -5,6 +5,7 @@ import { GraphQueryAdapter } from "./graph.js";
 import { CypherParser } from "./parser.js";
 import { CypherQuery } from "./fluent.js";
 import { LogicalPlanner } from "./planner.js";
+import type { PlannerOptions } from "./planner.js";
 import { CypherValue, NullValue } from "./values.js";
 import { CypherResult } from "./result.js";
 import type { CypherResultDto } from "./result.js";
@@ -13,20 +14,20 @@ export class CypherEngine
 {
     private static readonly EmptyParams: ReadonlyMap<string, Scalar> = new Map();
 
-    constructor(private readonly graph: ICypherGraph)
+    constructor(private readonly graph: ICypherGraph, private readonly options?: PlannerOptions)
     {
     }
 
-    public static OverQuery(query: IGraphQuery): CypherEngine
+    public static OverQuery(query: IGraphQuery, options?: PlannerOptions): CypherEngine
     {
-        return new CypherEngine(new GraphQueryAdapter(query));
+        return new CypherEngine(new GraphQueryAdapter(query), options);
     }
 
     public Execute(source: string | CypherQuery, parameters: ReadonlyMap<string, Scalar> = CypherEngine.EmptyParams): CypherResult
     {
         const model = typeof source === "string" ? new CypherParser(source).Parse() : source.ToModel();
-        const plan = new LogicalPlanner(this.graph, parameters).Plan(model);
-        const columns = model.Return.Items.map((i) => i.ColumnName());
+        const plan = new LogicalPlanner(this.graph, parameters, this.options).Plan(model);
+        const columns = model.FinalColumns();
         const rows: CypherValue[][] = [];
         for (const binding of plan.Rows())
         {

@@ -15,6 +15,12 @@ export abstract class Expression
     {
         // Leaf expressions with no variables override nothing.
     }
+
+    public ContainsAggregate(): boolean
+    {
+        // Leaf and non-composite expressions carry no aggregate by default.
+        return false;
+    }
 }
 
 export class VariableRef extends Expression
@@ -176,6 +182,11 @@ export class Comparison extends Expression
         this.left.CollectVariables(into);
         this.right.CollectVariables(into);
     }
+
+    public override ContainsAggregate(): boolean
+    {
+        return this.left.ContainsAggregate() || this.right.ContainsAggregate();
+    }
 }
 
 export class BooleanExpression extends Expression
@@ -213,6 +224,11 @@ export class BooleanExpression extends Expression
     {
         for (const o of this.operands) o.CollectVariables(into);
     }
+
+    public override ContainsAggregate(): boolean
+    {
+        return this.operands.some((o) => o.ContainsAggregate());
+    }
 }
 
 export class IsNullExpression extends Expression
@@ -238,6 +254,11 @@ export class IsNullExpression extends Expression
     public CollectVariables(into: Set<string>): void
     {
         this.operand.CollectVariables(into);
+    }
+
+    public override ContainsAggregate(): boolean
+    {
+        return this.operand.ContainsAggregate();
     }
 }
 
@@ -271,6 +292,11 @@ export class InExpression extends Expression
     {
         this.operand.CollectVariables(into);
         for (const e of this.list) e.CollectVariables(into);
+    }
+
+    public override ContainsAggregate(): boolean
+    {
+        return this.operand.ContainsAggregate() || this.list.some((e) => e.ContainsAggregate());
     }
 }
 
@@ -318,6 +344,11 @@ export class ArithmeticExpression extends Expression
         this.left.CollectVariables(into);
         this.right.CollectVariables(into);
     }
+
+    public override ContainsAggregate(): boolean
+    {
+        return this.left.ContainsAggregate() || this.right.ContainsAggregate();
+    }
 }
 
 export class UnaryMinus extends Expression
@@ -345,6 +376,11 @@ export class UnaryMinus extends Expression
     {
         this.operand.CollectVariables(into);
     }
+
+    public override ContainsAggregate(): boolean
+    {
+        return this.operand.ContainsAggregate();
+    }
 }
 
 export class ListLiteral extends Expression
@@ -369,6 +405,11 @@ export class ListLiteral extends Expression
     public CollectVariables(into: Set<string>): void
     {
         for (const i of this.items) i.CollectVariables(into);
+    }
+
+    public override ContainsAggregate(): boolean
+    {
+        return this.items.some((i) => i.ContainsAggregate());
     }
 }
 
@@ -396,6 +437,12 @@ export class MapLiteral extends Expression
     public CollectVariables(into: Set<string>): void
     {
         for (const e of this.entries.values()) e.CollectVariables(into);
+    }
+
+    public override ContainsAggregate(): boolean
+    {
+        for (const e of this.entries.values()) if (e.ContainsAggregate()) return true;
+        return false;
     }
 }
 
@@ -431,6 +478,11 @@ export class IndexAccess extends Expression
         this.target.CollectVariables(into);
         this.index.CollectVariables(into);
     }
+
+    public override ContainsAggregate(): boolean
+    {
+        return this.target.ContainsAggregate() || this.index.ContainsAggregate();
+    }
 }
 
 export class FunctionCall extends Expression
@@ -460,5 +512,10 @@ export class FunctionCall extends Expression
     public CollectVariables(into: Set<string>): void
     {
         for (const a of this.Args) a.CollectVariables(into);
+    }
+
+    public override ContainsAggregate(): boolean
+    {
+        return FunctionRegistry.IsAggregate(this.Name.toLowerCase()) || this.Args.some((a) => a.ContainsAggregate());
     }
 }

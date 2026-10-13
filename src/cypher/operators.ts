@@ -115,3 +115,15 @@ export class SingleRow implements IOperator
         yield new Binding();
     }
 }
+
+export class BindingRow implements IOperator
+{
+    constructor(private readonly row: Binding)
+    {
+    }
+
+    public *Rows(): Iterable<Binding>
+    {
+        yield this.row;
+    }
+}

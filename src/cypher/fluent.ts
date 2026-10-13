@@ -1,7 +1,7 @@
 import type { Scalar } from "../manifest/logical.js";
 import { RelDirection, ComparisonOp } from "./enums.js";
 import { NodePattern, RelPattern, PatternPath } from "./patterns.js";
-import { CypherQueryModel, MatchClause, WhereClause, ReturnClause, ReturnItem } from "./query-model.js";
+import { CypherQueryModel, MatchClause, WhereClause, ProjectionClause, QueryPart, ReturnItem } from "./query-model.js";
 import { Expression, VariableRef, PropertyAccess, Literal, Comparison } from "./expressions.js";
 
 class PendingRel
@@ -134,7 +134,7 @@ export class CypherQuery
     private static readonly MissingReturnMessage = "CypherQuery requires a Return clause";
 
     private whereClause: WhereClause | undefined;
-    private returnClause: ReturnClause | undefined;
+    private returnItems: readonly ReturnItem[] | undefined;
 
     private constructor(private readonly paths: readonly PatternPath[])
     {
@@ -153,13 +153,15 @@ export class CypherQuery
 
     public Return(...items: ReturnItem[]): CypherQuery
     {
-        this.returnClause = new ReturnClause(items);
+        this.returnItems = items;
         return this;
     }
 
     public ToModel(): CypherQueryModel
     {
-        if (this.returnClause === undefined) throw new Error(CypherQuery.MissingReturnMessage);
-        return new CypherQueryModel(new MatchClause(this.paths), this.whereClause, this.returnClause);
+        if (this.returnItems === undefined) throw new Error(CypherQuery.MissingReturnMessage);
+        const match = new MatchClause(this.paths, this.whereClause, false);
+        const projection = new ProjectionClause(this.returnItems, false, undefined, undefined, undefined, true);
+        return new CypherQueryModel([new QueryPart([match], projection)]);
     }
 }

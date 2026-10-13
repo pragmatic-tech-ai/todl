@@ -16,7 +16,10 @@ export class Token
 export class CypherLexer
 {
     private static readonly Keywords = new Set<string>(
-        ["MATCH", "WHERE", "RETURN", "AS", "AND", "OR", "NOT", "IS", "NULL", "IN", "TRUE", "FALSE"],
+        [
+            "MATCH", "WHERE", "RETURN", "AS", "AND", "OR", "NOT", "IS", "NULL", "IN", "TRUE", "FALSE",
+            "WITH", "ORDER", "BY", "ASC", "DESC", "SKIP", "LIMIT", "DISTINCT",
+        ],
     );
     private static readonly TwoCharKinds: ReadonlyMap<string, TokenKind> = new Map([
         ["->", TokenKind.ArrowRight], ["<-", TokenKind.ArrowLeft],
@@ -27,7 +30,7 @@ export class CypherLexer
         ["[", TokenKind.LBracket], ["]", TokenKind.RBracket],
         ["{", TokenKind.LBrace], ["}", TokenKind.RBrace],
         [":", TokenKind.Colon], [",", TokenKind.Comma], [".", TokenKind.Dot],
-        ["$", TokenKind.Dollar], ["-", TokenKind.Dash],
+        ["$", TokenKind.Dollar], ["-", TokenKind.Dash], ["*", TokenKind.Star],
         ["=", TokenKind.Eq], ["<", TokenKind.Lt], [">", TokenKind.Gt],
     ]);
     private static readonly Quote = "'";

@@ -2,6 +2,7 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { CypherQuery, Pattern, Expr, Return } from "../fluent.js";
 import { CypherParser } from "../parser.js";
+import { MatchClause } from "../query-model.js";
 import { RelDirection } from "../enums.js";
 
 describe("cypher fluent builder", () =>
@@ -17,14 +18,19 @@ describe("cypher fluent builder", () =>
             "MATCH (a:Service)-[:calls]->(b:Service) WHERE a.name = 'checkout' RETURN b, b.name AS n",
         ).Parse();
 
-        assert.equal(built.Match.Paths.length, parsed.Match.Paths.length);
-        const bp = built.Match.Paths[0]!;
-        const pp = parsed.Match.Paths[0]!;
+        const builtMatch = built.Parts[0]!.Reading[0] as MatchClause;
+        const parsedMatch = parsed.Parts[0]!.Reading[0] as MatchClause;
+        assert.equal(builtMatch.Paths.length, parsedMatch.Paths.length);
+        const bp = builtMatch.Paths[0]!;
+        const pp = parsedMatch.Paths[0]!;
         assert.equal(bp.Nodes[0]!.Label, pp.Nodes[0]!.Label);
         assert.equal(bp.Nodes[0]!.Variable, pp.Nodes[0]!.Variable);
         assert.equal(bp.Rels[0]!.RelType, pp.Rels[0]!.RelType);
         assert.equal(bp.Rels[0]!.Direction, RelDirection.Outgoing);
-        assert.equal(built.Return.Items[1]!.ColumnName(), parsed.Return.Items[1]!.ColumnName());
-        assert.ok(built.Where !== undefined && parsed.Where !== undefined);
+        assert.equal(
+            built.Parts[0]!.Projection.Items[1]!.ColumnName(),
+            parsed.Parts[0]!.Projection.Items[1]!.ColumnName(),
+        );
+        assert.ok(builtMatch.Where !== undefined && parsedMatch.Where !== undefined);
     });
 });
