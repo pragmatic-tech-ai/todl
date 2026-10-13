@@ -469,25 +469,4 @@ export {
 } from './compiler-services/policy/policy-predicate.js';
 export { PolicyPredicateCodec } from './compiler-services/policy/policy-predicate-codec.js';
 export { parsePolicyPredicate, PolicyParseError } from './compiler-services/policy/policy-predicate-parser.js';
-export {
-    CypherEngine,
-    CypherResult,
-    CypherParser,
-    CypherQuery,
-    Pattern,
-    Return,
-    NodeBuilder,
-    ExprBuilder,
-    CypherValue,
-    ScalarValue,
-    NullValue,
-    NodeValue,
-    GraphQueryAdapter,
-    RelDirection,
-    ComparisonOp,
-    BooleanOp,
-    CypherError,
-    CypherSyntaxError,
-    CypherSemanticError,
-} from './cypher/index.js';
-export type { CypherResultDto, CypherValueDto, ICypherGraph } from './cypher/index.js';
+export * as Cypher from './cypher/index.js';
