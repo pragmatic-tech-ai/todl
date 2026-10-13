@@ -13,6 +13,7 @@ export interface IGraphQuery
     Refs(id: string, member: string): InstanceMirror[];
     Referrers(id: string, member?: string): InstanceMirror[];
     Search(text: string): InstanceMirror[];
+    AllInstances(): InstanceMirror[];
     Term(id: string): TermInfo | undefined;
     Narrower(termId: string): TermInfo[];
     Broader(termId: string): TermInfo[];

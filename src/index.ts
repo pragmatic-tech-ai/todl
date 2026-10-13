@@ -469,3 +469,4 @@ export {
 } from './compiler-services/policy/policy-predicate.js';
 export { PolicyPredicateCodec } from './compiler-services/policy/policy-predicate-codec.js';
 export { parsePolicyPredicate, PolicyParseError } from './compiler-services/policy/policy-predicate-parser.js';
+export * as Cypher from './cypher/index.js';
