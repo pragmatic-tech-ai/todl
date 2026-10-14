@@ -269,7 +269,11 @@ export class LogicalPlanner
         return op;
     }
 
-    // WITH ... WHERE runs over the projected rows, so (like ORDER BY) it may only reference projected output columns.
+    // WITH ... WHERE runs over the projected rows, so it may only reference projected output columns by NAME/alias.
+    // Deliberate asymmetry with ORDER BY: resolveOrderBy rewrites a sort expression that structurally matches a
+    // projected expression, but WITH ... WHERE does not rewrite matched sub-expressions inside the predicate
+    // (that recursive rewrite is a filed follow-up). Workaround: alias the expression in the WITH and filter the
+    // alias, e.g. `WITH a.name AS n WHERE n = 'x'` rather than `WHERE a.name = 'x'`.
     private checkWithWhereColumns(projection: ProjectionClause): void
     {
         const columns = new Set<string>(projection.Items.map((i) => i.ColumnName()));
