@@ -461,6 +461,20 @@ describe("CypherEngine SP2 WITH ... WHERE", () =>
         assert.deepEqual(Sp2Fixture.Col(r, 0), [1, 2, 3]);
     });
 
+    test("fluent Expr.Param executes end-to-end", () =>
+    {
+        const q = CypherQuery.Unwind(Expr.Param("xs"), "x").Return(Return.Node("x"));
+        assert.deepEqual(Sp2Fixture.Col(e.Execute(q, new Map([["xs", [1, 2, 3]]])), 0), [1, 2, 3]);
+    });
+
+    test("fluent relationship variable binds and executes", () =>
+    {
+        const q = CypherQuery.Match(Pattern.Node("a").Label("Service").Out("calls", Pattern.Node("b").Label("Service"), undefined, "r"))
+            .Return(Fn.Count().As("n"));
+        const text = e.Execute("MATCH (a:Service)-[r:calls]->(b:Service) RETURN count(*) AS n");
+        assert.deepEqual(Sp2Fixture.Col(e.Execute(q), 0), Sp2Fixture.Col(text, 0));
+    });
+
     test("list parameter indexing", () =>
     {
         const r = e.Execute("RETURN $xs[1] AS second", new Map([["xs", [10, 20, 30]]]));

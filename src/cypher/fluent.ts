@@ -3,7 +3,7 @@ import { CypherSemanticError } from "./errors.js";
 import { RelDirection, ComparisonOp, ArithmeticOp } from "./enums.js";
 import { NodePattern, RelPattern, PatternPath } from "./patterns.js";
 import { CypherQueryModel, MatchClause, WhereClause, ProjectionClause, QueryPart, ReturnItem, ReadingClause, UnwindClause, SortItem } from "./query-model.js";
-import { Expression, VariableRef, PropertyAccess, Literal, Comparison, FunctionCall, ListLiteral, MapLiteral, IndexAccess, ArithmeticExpression } from "./expressions.js";
+import { Expression, Parameter, VariableRef, PropertyAccess, Literal, Comparison, FunctionCall, ListLiteral, MapLiteral, IndexAccess, ArithmeticExpression } from "./expressions.js";
 
 // Variable-length relationship bounds.
 export class Hops
@@ -47,6 +47,7 @@ class PendingRel
         public readonly Direction: RelDirection,
         public readonly Target: NodeBuilder,
         public readonly Length: Hops | undefined,
+        public readonly RelVar: string | undefined,
     )
     {
     }
@@ -75,21 +76,21 @@ export class NodeBuilder
         return this;
     }
 
-    public Out(relType: string, target: NodeBuilder, length?: Hops): NodeBuilder
+    public Out(relType: string, target: NodeBuilder, length?: Hops, relVar?: string): NodeBuilder
     {
-        this.rels.push(new PendingRel(relType, RelDirection.Outgoing, target, length));
+        this.rels.push(new PendingRel(relType, RelDirection.Outgoing, target, length, relVar));
         return this;
     }
 
-    public In(relType: string, target: NodeBuilder, length?: Hops): NodeBuilder
+    public In(relType: string, target: NodeBuilder, length?: Hops, relVar?: string): NodeBuilder
     {
-        this.rels.push(new PendingRel(relType, RelDirection.Incoming, target, length));
+        this.rels.push(new PendingRel(relType, RelDirection.Incoming, target, length, relVar));
         return this;
     }
 
-    public Undirected(relType: string, target: NodeBuilder, length?: Hops): NodeBuilder
+    public Undirected(relType: string, target: NodeBuilder, length?: Hops, relVar?: string): NodeBuilder
     {
-        this.rels.push(new PendingRel(relType, RelDirection.Undirected, target, length));
+        this.rels.push(new PendingRel(relType, RelDirection.Undirected, target, length, relVar));
         return this;
     }
 
@@ -110,7 +111,7 @@ export class NodeBuilder
             nodes.push(new NodePattern(cursor.variable, cursor.label, cursor.props));
             const step = cursor.rels[0];
             if (step === undefined) break;
-            rels.push(new RelPattern(undefined, step.RelType, step.Direction, new Map(), step.Length?.Min, step.Length?.Max));
+            rels.push(new RelPattern(step.RelVar, step.RelType, step.Direction, new Map(), step.Length?.Min, step.Length?.Max));
             cursor = step.Target;
         }
         return new PatternPath(nodes, rels, this.pathVariable);
@@ -216,6 +217,12 @@ export class Expr
     public static Var(variable: string): ExprBuilder
     {
         return new ExprBuilder(new VariableRef(variable));
+    }
+
+    // A query parameter reference ($name), supplied at Execute time.
+    public static Param(name: string): ExprBuilder
+    {
+        return new ExprBuilder(new Parameter(name));
     }
 
     public static Lit(value: Scalar): ExprBuilder

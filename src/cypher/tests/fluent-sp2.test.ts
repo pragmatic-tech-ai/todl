@@ -201,4 +201,38 @@ describe("cypher fluent SP2 read-plus", () =>
         assert.throws(() => open.Where(Expr.Var("a").Eq(2)), /already specified for this With/);
         assert.throws(() => CypherQuery.Match(Pattern.Node("a")).Return(Return.Node("a")).Where(Expr.Var("a").Eq(1)), /directly follow a Match/);
     });
+
+    test("fluent relationship variable matches the text parser", () =>
+    {
+        const built = CypherQuery
+            .Match(Pattern.Node("a").Label("Service").Out("calls", Pattern.Node("b").Label("Service"), undefined, "r"))
+            .Return(Return.Node("a"), Return.Node("r"))
+            .ToModel();
+        const parsed = new CypherParser("MATCH (a:Service)-[r:calls]->(b:Service) RETURN a, r").Parse();
+        assert.deepStrictEqual(built, parsed);
+        assert.equal((built.Parts[0]!.Reading[0] as MatchClause).Paths[0]!.Rels[0]!.Variable, "r");
+        const inc = CypherQuery.Match(Pattern.Node("a").In("calls", Pattern.Node("b"), Hops.Range(1, 2), "r")).Return(Return.Node("r")).ToModel();
+        assert.deepStrictEqual(inc, new CypherParser("MATCH (a)<-[r:calls*1..2]-(b) RETURN r").Parse());
+        const und = CypherQuery.Match(Pattern.Node("a").Undirected("calls", Pattern.Node("b"), undefined, "r")).Return(Return.Node("r")).ToModel();
+        assert.deepStrictEqual(und, new CypherParser("MATCH (a)-[r:calls]-(b) RETURN r").Parse());
+    });
+
+    test("Expr.Param matches the text parser in WHERE, projection and UNWIND", () =>
+    {
+        const where = CypherQuery.Match(Pattern.Node("a").Label("Service"))
+            .Where(Expr.Prop("a", "name").Eq("x")).Return(Expr.Param("x").As("p")).ToModel();
+        assert.deepStrictEqual(where, new CypherParser("MATCH (a:Service) WHERE a.name = 'x' RETURN $x AS p").Parse());
+        const idx = CypherQuery.Unwind(Expr.Param("xs"), "x").Return(Expr.Param("xs").At(Expr.Lit(1)).As("second")).ToModel();
+        assert.deepStrictEqual(idx, new CypherParser("UNWIND $xs AS x RETURN $xs[1] AS second").Parse());
+    });
+
+    test("consecutive WITH builds an empty middle reading like the parser", () =>
+    {
+        const built = CypherQuery.Match(Pattern.Node("a").Label("Service"))
+            .With(Return.Node("a")).With(Return.Node("a")).Return(Return.Node("a")).ToModel();
+        const parsed = new CypherParser("MATCH (a:Service) WITH a WITH a RETURN a").Parse();
+        assert.deepStrictEqual(built, parsed);
+        assert.equal(built.Parts.length, 3);
+        assert.equal(built.Parts[1]!.Reading.length, 0);
+    });
 });
