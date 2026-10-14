@@ -42,8 +42,6 @@ class OptionalMatchPlan implements IOptionalPlan
 
 export class LogicalPlanner
 {
-    private static readonly VariableTag = "var";
-    private static readonly PropertyTag = "prop";
     private static readonly AnonPrefix = "__n";
     private static readonly RelPropsUnsupported = "relationship properties are not supported";
     private static readonly UnknownRelType = "unknown relationship type";
@@ -283,16 +281,16 @@ export class LogicalPlanner
         }
     }
 
-    // Sort runs over the projected rows. A sort expression equal to a projected property access
-    // (RETURN a.x ORDER BY a.x) is rewritten to read that output column; any other sort expression may only
+    // Sort runs over the projected rows. A sort expression structurally equal to ANY projected expression
+    // (RETURN a.x + 1 ORDER BY a.x + 1) is rewritten to read that output column; any other sort expression may only
     // reference projected output columns, else it is an unknown ORDER BY column.
     private resolveOrderBy(projection: ProjectionClause): SortItem[]
     {
         const columns = new Set<string>(projection.Items.map((i) => i.ColumnName()));
         return projection.OrderBy!.map((sort) =>
         {
-            const sortKey = LogicalPlanner.IdentityKey(sort.Expr);
-            const match = sortKey === undefined ? undefined : projection.Items.find((i) => LogicalPlanner.IdentityKey(i.Expr) === sortKey);
+            const sortKey = sort.Expr.StructuralKey();
+            const match = projection.Items.find((i) => i.Expr.StructuralKey() === sortKey);
             if (match !== undefined) return new SortItem(new VariableRef(match.ColumnName()), sort.Descending);
             const referenced = new Set<string>();
             sort.Expr.CollectVariables(referenced);
@@ -302,24 +300,6 @@ export class LogicalPlanner
             }
             return sort;
         });
-    }
-
-    // Canonical identity for expressions that can be matched structurally: variables, property accesses and
-    // function calls over such expressions. DefaultName() is a display label and is lossy for most expression
-    // types (a FunctionCall's is just its name), so it cannot serve as a general key. Undefined = not matchable.
-    private static IdentityKey(expr: Expression): string | undefined
-    {
-        if (expr instanceof VariableRef) return `${LogicalPlanner.VariableTag}:${expr.DefaultName()}`;
-        if (expr instanceof PropertyAccess) return `${LogicalPlanner.PropertyTag}:${expr.DefaultName()}`;
-        if (!(expr instanceof FunctionCall)) return undefined;
-        const args: string[] = [];
-        for (const arg of expr.Args)
-        {
-            const key = LogicalPlanner.IdentityKey(arg);
-            if (key === undefined) return undefined;
-            args.push(key);
-        }
-        return JSON.stringify([expr.Name.toLowerCase(), expr.Distinct, expr.Star, args]);
     }
 
     private aggregateCall(item: ReturnItem): FunctionCall

@@ -10,6 +10,8 @@ export abstract class Expression
 {
     public abstract Evaluate(ctx: EvalContext): CypherValue;
     public abstract DefaultName(): string;
+    // Canonical, prefix-tagged, recursive identity: equal keys iff structurally the same expression.
+    public abstract StructuralKey(): string;
 
     public CollectVariables(into: Set<string>): void
     {
@@ -33,6 +35,11 @@ export class VariableRef extends Expression
     public Evaluate(ctx: EvalContext): CypherValue
     {
         return ctx.Binding.Get(this.Variable) ?? NullValue.Instance;
+    }
+
+    public StructuralKey(): string
+    {
+        return `var:${this.Variable}`;
     }
 
     public DefaultName(): string
@@ -64,6 +71,11 @@ export class PropertyAccess extends Expression
         return value === undefined ? NullValue.Instance : new ScalarValue(value);
     }
 
+    public StructuralKey(): string
+    {
+        return `prop:${this.Variable}.${this.Property}`;
+    }
+
     public DefaultName(): string
     {
         return `${this.Variable}${PropertyAccess.Separator}${this.Property}`;
@@ -87,6 +99,11 @@ export class Literal extends Expression
         return this.value === null ? NullValue.Instance : new ScalarValue(this.value);
     }
 
+    public StructuralKey(): string
+    {
+        return `lit:${JSON.stringify(this.value)}`;
+    }
+
     public DefaultName(): string
     {
         return String(this.value);
@@ -105,6 +122,11 @@ export class ValueLiteral extends Expression
     public Evaluate(): CypherValue
     {
         return this.value;
+    }
+
+    public StructuralKey(): string
+    {
+        return `val:${this.value.GroupKey()}`;
     }
 
     public DefaultName(): string
@@ -131,6 +153,11 @@ export class Parameter extends Expression
         const value = ctx.Parameters.get(this.Name);
         if (value === undefined) throw new CypherSemanticError(`${Parameter.MissingPrefix}${this.Name} not supplied`);
         return new ScalarValue(value);
+    }
+
+    public StructuralKey(): string
+    {
+        return `param:${this.Name}`;
     }
 
     public DefaultName(): string
@@ -170,6 +197,11 @@ export class Comparison extends Expression
             case ComparisonOp.Gte: return l >= r;
         }
         throw new Error(Comparison.UnknownOp);
+    }
+
+    public StructuralKey(): string
+    {
+        return `cmp:${this.op}(${this.left.StructuralKey()},${this.right.StructuralKey()})`;
     }
 
     public DefaultName(): string
@@ -215,6 +247,11 @@ export class BooleanExpression extends Expression
         return v instanceof ScalarValue && v.Value === true;
     }
 
+    public StructuralKey(): string
+    {
+        return `bool:${this.op}(${this.operands.map((o) => o.StructuralKey()).join(",")})`;
+    }
+
     public DefaultName(): string
     {
         return BooleanExpression.Label;
@@ -244,6 +281,11 @@ export class IsNullExpression extends Expression
     {
         const isNull = this.operand.Evaluate(ctx) instanceof NullValue;
         return new ScalarValue(this.negated ? !isNull : isNull);
+    }
+
+    public StructuralKey(): string
+    {
+        return `isnull:${this.negated}(${this.operand.StructuralKey()})`;
     }
 
     public DefaultName(): string
@@ -281,6 +323,11 @@ export class InExpression extends Expression
             return x instanceof ScalarValue && x.Value === v.Value;
         });
         return new ScalarValue(found);
+    }
+
+    public StructuralKey(): string
+    {
+        return `in:(${this.operand.StructuralKey()},[${this.list.map((e) => e.StructuralKey()).join(",")}])`;
     }
 
     public DefaultName(): string
@@ -334,6 +381,11 @@ export class ArithmeticExpression extends Expression
         return NullValue.Instance;
     }
 
+    public StructuralKey(): string
+    {
+        return `arith:${this.op}(${this.left.StructuralKey()},${this.right.StructuralKey()})`;
+    }
+
     public DefaultName(): string
     {
         return ArithmeticExpression.Label;
@@ -367,6 +419,11 @@ export class UnaryMinus extends Expression
         return NullValue.Instance;
     }
 
+    public StructuralKey(): string
+    {
+        return `neg:(${this.operand.StructuralKey()})`;
+    }
+
     public DefaultName(): string
     {
         return UnaryMinus.Label;
@@ -395,6 +452,11 @@ export class ListLiteral extends Expression
     public Evaluate(ctx: EvalContext): CypherValue
     {
         return new ListValue(this.items.map((i) => i.Evaluate(ctx)));
+    }
+
+    public StructuralKey(): string
+    {
+        return `list:[${this.items.map((i) => i.StructuralKey()).join(",")}]`;
     }
 
     public DefaultName(): string
@@ -427,6 +489,11 @@ export class MapLiteral extends Expression
         const out = new Map<string, CypherValue>();
         for (const [k, e] of this.entries) out.set(k, e.Evaluate(ctx));
         return new MapValue(out);
+    }
+
+    public StructuralKey(): string
+    {
+        return `map:{${[...this.entries].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([k, v]) => `${JSON.stringify(k)}:${v.StructuralKey()}`).join(",")}}`;
     }
 
     public DefaultName(): string
@@ -468,6 +535,11 @@ export class IndexAccess extends Expression
         return NullValue.Instance;
     }
 
+    public StructuralKey(): string
+    {
+        return `index:(${this.target.StructuralKey()},${this.index.StructuralKey()})`;
+    }
+
     public DefaultName(): string
     {
         return IndexAccess.Label;
@@ -502,6 +574,11 @@ export class FunctionCall extends Expression
         const fn = FunctionRegistry.Scalar(lower);
         if (fn === undefined) throw new CypherSemanticError(`${FunctionCall.UnknownFunction}${this.Name}`);
         return fn.Invoke(this.Args.map((a) => a.Evaluate(ctx)));
+    }
+
+    public StructuralKey(): string
+    {
+        return `fn:${this.Name.toLowerCase()}:${this.Distinct}:${this.Star}:[${this.Args.map((a) => a.StructuralKey()).join(",")}]`;
     }
 
     public DefaultName(): string
