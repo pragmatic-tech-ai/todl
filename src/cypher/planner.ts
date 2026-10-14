@@ -258,8 +258,7 @@ export class LogicalPlanner
 
         if (projection.Distinct) op = new Distinct(op, projection.Items.map((i) => i.ColumnName()));
         // HAVING-style: WITH ... WHERE filters the projected/aggregated rows, then ORDER BY/SKIP/LIMIT paginate the filtered set.
-        if (projection.Where !== undefined) this.checkWithWhereColumns(projection);
-        if (projection.Where !== undefined) op = new Filter(op, projection.Where.Predicate, this.parameters);
+        if (projection.Where !== undefined) op = new Filter(op, this.resolveWithWhere(projection), this.parameters);
         if (projection.OrderBy !== undefined)
         {
             op = new Sort(op, this.resolveOrderBy(projection), this.parameters);
@@ -269,20 +268,31 @@ export class LogicalPlanner
         return op;
     }
 
-    // WITH ... WHERE runs over the projected rows, so it may only reference projected output columns by NAME/alias.
-    // Deliberate asymmetry with ORDER BY: resolveOrderBy rewrites a sort expression that structurally matches a
-    // projected expression, but WITH ... WHERE does not rewrite matched sub-expressions inside the predicate
-    // (that recursive rewrite is a filed follow-up). Workaround: alias the expression in the WITH and filter the
-    // alias, e.g. `WITH a.name AS n WHERE n = 'x'` rather than `WHERE a.name = 'x'`.
-    private checkWithWhereColumns(projection: ProjectionClause): void
+    // WITH ... WHERE runs over the projected rows. Symmetric with ORDER BY: any predicate sub-expression structurally
+    // equal to a projected expression (WITH a.name AS n WHERE a.name = 'x') is rewritten to read that output column.
+    // Whatever remains must reference projected output columns by NAME/alias, else it is an unknown WHERE column.
+    private resolveWithWhere(projection: ProjectionClause): Expression
     {
         const columns = new Set<string>(projection.Items.map((i) => i.ColumnName()));
+        const byKey = new Map<string, string>();
+        // First projected item wins for duplicate projections (identical values).
+        for (const item of projection.Items)
+        {
+            const key = item.Expr.StructuralKey();
+            if (!byKey.has(key)) byKey.set(key, item.ColumnName());
+        }
+        const rewritten = projection.Where!.Predicate.Rewrite((e) =>
+        {
+            const column = byKey.get(e.StructuralKey());
+            return column === undefined ? undefined : new VariableRef(column);
+        });
         const referenced = new Set<string>();
-        projection.Where!.Predicate.CollectVariables(referenced);
+        rewritten.CollectVariables(referenced);
         for (const v of referenced)
         {
             if (!columns.has(v)) throw new CypherSemanticError(`${LogicalPlanner.UnknownWhereColumn}: "${v}"`);
         }
+        return rewritten;
     }
 
     // Sort runs over the projected rows. A sort expression structurally equal to ANY projected expression

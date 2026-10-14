@@ -12,6 +12,9 @@ export abstract class Expression
     public abstract DefaultName(): string;
     // Canonical, prefix-tagged, recursive identity: equal keys iff structurally the same expression.
     public abstract StructuralKey(): string;
+    // Top-down structural rewrite: replacer(node) wins (returned as-is, not recursed into); otherwise a NEW node of the
+    // same type is built with each child rewritten. Never mutates.
+    public abstract Rewrite(replacer: (e: Expression) => Expression | undefined): Expression;
 
     public CollectVariables(into: Set<string>): void
     {
@@ -40,6 +43,11 @@ export class VariableRef extends Expression
     public StructuralKey(): string
     {
         return `var:${JSON.stringify(this.Variable)}`;
+    }
+
+    public Rewrite(replacer: (e: Expression) => Expression | undefined): Expression
+    {
+        return replacer(this) ?? this;
     }
 
     public DefaultName(): string
@@ -76,6 +84,11 @@ export class PropertyAccess extends Expression
         return `prop:${JSON.stringify(this.Variable)}.${JSON.stringify(this.Property)}`;
     }
 
+    public Rewrite(replacer: (e: Expression) => Expression | undefined): Expression
+    {
+        return replacer(this) ?? this;
+    }
+
     public DefaultName(): string
     {
         return `${this.Variable}${PropertyAccess.Separator}${this.Property}`;
@@ -106,6 +119,11 @@ export class Literal extends Expression
         return `lit:${JSON.stringify(this.value)}`;
     }
 
+    public Rewrite(replacer: (e: Expression) => Expression | undefined): Expression
+    {
+        return replacer(this) ?? this;
+    }
+
     public DefaultName(): string
     {
         return String(this.value);
@@ -129,6 +147,11 @@ export class ValueLiteral extends Expression
     public StructuralKey(): string
     {
         return `val:${this.value.GroupKey()}`;
+    }
+
+    public Rewrite(replacer: (e: Expression) => Expression | undefined): Expression
+    {
+        return replacer(this) ?? this;
     }
 
     public DefaultName(): string
@@ -160,6 +183,11 @@ export class Parameter extends Expression
     public StructuralKey(): string
     {
         return `param:${JSON.stringify(this.Name)}`;
+    }
+
+    public Rewrite(replacer: (e: Expression) => Expression | undefined): Expression
+    {
+        return replacer(this) ?? this;
     }
 
     public DefaultName(): string
@@ -204,6 +232,11 @@ export class Comparison extends Expression
     public StructuralKey(): string
     {
         return `cmp:${this.op}(${this.left.StructuralKey()},${this.right.StructuralKey()})`;
+    }
+
+    public Rewrite(replacer: (e: Expression) => Expression | undefined): Expression
+    {
+        return replacer(this) ?? new Comparison(this.left.Rewrite(replacer), this.op, this.right.Rewrite(replacer));
     }
 
     public DefaultName(): string
@@ -254,6 +287,11 @@ export class BooleanExpression extends Expression
         return `bool:${this.op}(${this.operands.map((o) => o.StructuralKey()).join(",")})`;
     }
 
+    public Rewrite(replacer: (e: Expression) => Expression | undefined): Expression
+    {
+        return replacer(this) ?? new BooleanExpression(this.op, this.operands.map((o) => o.Rewrite(replacer)));
+    }
+
     public DefaultName(): string
     {
         return BooleanExpression.Label;
@@ -288,6 +326,11 @@ export class IsNullExpression extends Expression
     public StructuralKey(): string
     {
         return `isnull:${this.negated}(${this.operand.StructuralKey()})`;
+    }
+
+    public Rewrite(replacer: (e: Expression) => Expression | undefined): Expression
+    {
+        return replacer(this) ?? new IsNullExpression(this.operand.Rewrite(replacer), this.negated);
     }
 
     public DefaultName(): string
@@ -330,6 +373,11 @@ export class InExpression extends Expression
     public StructuralKey(): string
     {
         return `in:(${this.operand.StructuralKey()},[${this.list.map((e) => e.StructuralKey()).join(",")}])`;
+    }
+
+    public Rewrite(replacer: (e: Expression) => Expression | undefined): Expression
+    {
+        return replacer(this) ?? new InExpression(this.operand.Rewrite(replacer), this.list.map((e) => e.Rewrite(replacer)));
     }
 
     public DefaultName(): string
@@ -388,6 +436,11 @@ export class ArithmeticExpression extends Expression
         return `arith:${this.op}(${this.left.StructuralKey()},${this.right.StructuralKey()})`;
     }
 
+    public Rewrite(replacer: (e: Expression) => Expression | undefined): Expression
+    {
+        return replacer(this) ?? new ArithmeticExpression(this.left.Rewrite(replacer), this.op, this.right.Rewrite(replacer));
+    }
+
     public DefaultName(): string
     {
         return ArithmeticExpression.Label;
@@ -426,6 +479,11 @@ export class UnaryMinus extends Expression
         return `neg:(${this.operand.StructuralKey()})`;
     }
 
+    public Rewrite(replacer: (e: Expression) => Expression | undefined): Expression
+    {
+        return replacer(this) ?? new UnaryMinus(this.operand.Rewrite(replacer));
+    }
+
     public DefaultName(): string
     {
         return UnaryMinus.Label;
@@ -459,6 +517,11 @@ export class ListLiteral extends Expression
     public StructuralKey(): string
     {
         return `list:[${this.items.map((i) => i.StructuralKey()).join(",")}]`;
+    }
+
+    public Rewrite(replacer: (e: Expression) => Expression | undefined): Expression
+    {
+        return replacer(this) ?? new ListLiteral(this.items.map((i) => i.Rewrite(replacer)));
     }
 
     public DefaultName(): string
@@ -496,6 +559,11 @@ export class MapLiteral extends Expression
     public StructuralKey(): string
     {
         return `map:{${[...this.entries].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([k, v]) => `${JSON.stringify(k)}:${v.StructuralKey()}`).join(",")}}`;
+    }
+
+    public Rewrite(replacer: (e: Expression) => Expression | undefined): Expression
+    {
+        return replacer(this) ?? new MapLiteral(new Map([...this.entries].map(([k, e]) => [k, e.Rewrite(replacer)] as [string, Expression])));
     }
 
     public DefaultName(): string
@@ -542,6 +610,11 @@ export class IndexAccess extends Expression
         return `index:(${this.target.StructuralKey()},${this.index.StructuralKey()})`;
     }
 
+    public Rewrite(replacer: (e: Expression) => Expression | undefined): Expression
+    {
+        return replacer(this) ?? new IndexAccess(this.target.Rewrite(replacer), this.index.Rewrite(replacer));
+    }
+
     public DefaultName(): string
     {
         return IndexAccess.Label;
@@ -581,6 +654,11 @@ export class FunctionCall extends Expression
     public StructuralKey(): string
     {
         return `fn:${JSON.stringify(this.Name.toLowerCase())}:${this.Distinct}:${this.Star}:[${this.Args.map((a) => a.StructuralKey()).join(",")}]`;
+    }
+
+    public Rewrite(replacer: (e: Expression) => Expression | undefined): Expression
+    {
+        return replacer(this) ?? new FunctionCall(this.Name, this.Args.map((a) => a.Rewrite(replacer)), this.Distinct, this.Star);
     }
 
     public DefaultName(): string

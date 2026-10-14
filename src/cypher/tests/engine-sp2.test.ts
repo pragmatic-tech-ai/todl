@@ -446,13 +446,44 @@ describe("CypherEngine SP2 WITH ... WHERE", () =>
     test("WITH ... WHERE referencing a non-projected name is a semantic error", () =>
     {
         assert.throws(() => e.Execute("MATCH (a:Service) WITH a.name AS n WHERE zzz > 1 RETURN n"), CypherSemanticError);
-        assert.throws(() => e.Execute("MATCH (a:Service) WITH a.name AS n WHERE a.name = 'x' RETURN n"), CypherSemanticError);
+        assert.throws(() => e.Execute("MATCH (a:Service) WITH a.name AS n WHERE a.kind = 'x' RETURN n"), CypherSemanticError);
     });
 
     test("WHERE on an aggregate alias works as HAVING", () =>
     {
         const r = e.Execute("MATCH (a:Service)-[:calls]->(b:Service) WITH b.name AS n, count(*) AS c WHERE c > 1 RETURN n, c");
         assert.deepEqual(Sp2Fixture.Pairs(r), [["ledger", 2]]);
+    });
+
+    test("WITH ... WHERE matches a projected expression structurally (ORDER BY symmetry)", () =>
+    {
+        const r = e.Execute("MATCH (a:Service) WITH a.name AS n WHERE a.name = 'checkout' RETURN n");
+        assert.deepEqual(Sp2Fixture.Col(r, 0), ["checkout"]);
+    });
+
+    test("WITH ... WHERE alias form still works", () =>
+    {
+        const r = e.Execute("MATCH (a:Service) WITH a.name AS n WHERE n = 'checkout' RETURN n");
+        assert.deepEqual(Sp2Fixture.Col(r, 0), ["checkout"]);
+    });
+
+    test("WITH ... WHERE matches a projected aggregate expression", () =>
+    {
+        const byAlias = e.Execute("MATCH (a:Service)-[:calls]->(b:Service) WITH b.name AS n, count(*) AS c WHERE c > 1 RETURN n, c");
+        const byExpr = e.Execute("MATCH (a:Service)-[:calls]->(b:Service) WITH b.name AS n, count(*) AS c WHERE count(*) > 1 RETURN n, c");
+        assert.deepEqual(Sp2Fixture.Pairs(byExpr), [["ledger", 2]]);
+        assert.deepEqual(Sp2Fixture.Pairs(byExpr), Sp2Fixture.Pairs(byAlias));
+    });
+
+    test("WITH ... WHERE mixed predicate rewrites only the matched part", () =>
+    {
+        const r = e.Execute(`${base} WHERE a.name = 'billing' AND c > 0 RETURN n, c`);
+        assert.deepEqual(Sp2Fixture.Pairs(r), [["billing", 2]]);
+    });
+
+    test("WITH ... WHERE unmatched expression over a non-projected property is still an error", () =>
+    {
+        assert.throws(() => e.Execute("MATCH (a:Service) WITH a.name AS n WHERE a.name = 'x' AND zzz > 1 RETURN n"), CypherSemanticError);
     });
 
     test("list parameter in UNWIND", () =>

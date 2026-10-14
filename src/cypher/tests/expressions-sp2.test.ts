@@ -1,7 +1,8 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { ArithmeticExpression, UnaryMinus, Literal, ListLiteral, MapLiteral, IndexAccess, PropertyAccess, VariableRef } from "../expressions.js";
-import { ArithmeticOp } from "../enums.js";
+import { ArithmeticOp, ComparisonOp, BooleanOp } from "../enums.js";
+import { Comparison, BooleanExpression, IsNullExpression, InExpression, FunctionCall, Parameter, ValueLiteral } from "../expressions.js";
 import { Binding, EvalContext } from "../binding.js";
 import { ScalarValue, NullValue } from "../values.js";
 import { ListValue, MapValue } from "../values-structured.js";
@@ -80,5 +81,44 @@ describe("sp2 expressions", () =>
             new ListLiteral([new ArithmeticExpression(new VariableRef("x"), ArithmeticOp.Add, new UnaryMinus(new VariableRef("y")))]),
             new MapLiteral(new Map([["k", new VariableRef("z")]]))).CollectVariables(into);
         assert.deepEqual([...into].sort(), ["x", "y", "z"]);
+    });
+
+    test("Rewrite replaces matching sub-expressions, preserves structure, never mutates", () =>
+    {
+        const original = new ArithmeticExpression(new PropertyAccess("a", "x"), ArithmeticOp.Add, new Literal(1));
+        const target = new PropertyAccess("a", "x").StructuralKey();
+        const rewritten = original.Rewrite((e) => (e.StructuralKey() === target ? new VariableRef("col") : undefined));
+        assert.equal(rewritten.StructuralKey(), new ArithmeticExpression(new VariableRef("col"), ArithmeticOp.Add, new Literal(1)).StructuralKey());
+        assert.equal(original.StructuralKey(), new ArithmeticExpression(new PropertyAccess("a", "x"), ArithmeticOp.Add, new Literal(1)).StructuralKey());
+        assert.notEqual(rewritten, original);
+        assert.equal(original.Rewrite(() => undefined).StructuralKey(), original.StructuralKey());
+    });
+
+    test("Rewrite reaches children of every composite subtype", () =>
+    {
+        const x = new PropertyAccess("a", "x");
+        const key = x.StructuralKey();
+        const swap = (e: { StructuralKey(): string }) => (e.StructuralKey() === key ? new VariableRef("c") : undefined);
+        const v = new VariableRef("c");
+        const cases: [import("../expressions.js").Expression, import("../expressions.js").Expression][] = [
+            [new Comparison(x, ComparisonOp.Gt, new Literal(1)), new Comparison(v, ComparisonOp.Gt, new Literal(1))],
+            [new BooleanExpression(BooleanOp.And, [x, new Literal(true)]), new BooleanExpression(BooleanOp.And, [v, new Literal(true)])],
+            [new IsNullExpression(x, true), new IsNullExpression(v, true)],
+            [new InExpression(x, [x, new Literal(2)]), new InExpression(v, [v, new Literal(2)])],
+            [new UnaryMinus(x), new UnaryMinus(v)],
+            [new ListLiteral([x]), new ListLiteral([v])],
+            [new MapLiteral(new Map([["k", x]])), new MapLiteral(new Map([["k", v]]))],
+            [new IndexAccess(x, x), new IndexAccess(v, v)],
+            [new FunctionCall("Count", [x], true, false), new FunctionCall("Count", [v], true, false)],
+        ];
+        for (const [input, expected] of cases)
+        {
+            assert.equal(input.Rewrite(swap).StructuralKey(), expected.StructuralKey());
+            assert.equal(input.Rewrite(() => undefined).StructuralKey(), input.StructuralKey());
+        }
+        for (const leaf of [new Literal(1), new Parameter("p"), new ValueLiteral(NullValue.Instance), new VariableRef("q")])
+        {
+            assert.equal(leaf.Rewrite(() => undefined), leaf);
+        }
     });
 });
