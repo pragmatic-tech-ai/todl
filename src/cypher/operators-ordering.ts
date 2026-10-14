@@ -2,6 +2,8 @@ import type { IOperator } from "./operators.js";
 import type { SortItem } from "./query-model.js";
 import { Binding, EvalContext } from "./binding.js";
 import { CypherValue } from "./values.js";
+import { CancelProbe } from "./execution-limits.js";
+import type { ICancellation } from "./execution-limits.js";
 
 class SortEntry
 {
@@ -16,6 +18,7 @@ export class Sort implements IOperator
         private readonly child: IOperator,
         private readonly keys: readonly SortItem[],
         private readonly parameters: ReadonlyMap<string, CypherValue>,
+        private readonly cancel?: ICancellation,
     )
     {
     }
@@ -23,8 +26,11 @@ export class Sort implements IOperator
     public *Rows(): Iterable<Binding>
     {
         const buffered: SortEntry[] = [];
+        const probe = new CancelProbe(this.cancel);
+        probe.Begin();
         for (const row of this.child.Rows())
         {
+            probe.Tick();
             const ctx = new EvalContext(row, this.parameters);
             buffered.push(new SortEntry(row, this.keys.map((k) => k.Expr.Evaluate(ctx))));
         }
@@ -100,15 +106,18 @@ export class Distinct implements IOperator
 {
     private static readonly MissingKey = "undefined";
 
-    constructor(private readonly child: IOperator, private readonly columns: readonly string[])
+    constructor(private readonly child: IOperator, private readonly columns: readonly string[], private readonly cancel?: ICancellation)
     {
     }
 
     public *Rows(): Iterable<Binding>
     {
         const seen = new Set<string>();
+        const probe = new CancelProbe(this.cancel);
+        probe.Begin();
         for (const row of this.child.Rows())
         {
+            probe.Tick();
             // JSON-encode the per-column keys so a key containing any separator cannot merge distinct rows.
             const key = JSON.stringify(this.columns.map((c) => row.Get(c)?.GroupKey() ?? Distinct.MissingKey));
             if (!seen.has(key))

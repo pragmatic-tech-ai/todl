@@ -12,7 +12,8 @@ import { CypherEngine } from "../engine.js";
 import { CypherQuery, Pattern, Expr, Return, Sort, Fn } from "../fluent.js";
 import { CypherValue, NodeValue, ScalarValue, NullValue } from "../values.js";
 import { ListValue, MapValue, PathValue, RelValue } from "../values-structured.js";
-import { CypherSemanticError } from "../errors.js";
+import { CypherSemanticError, CypherTimeout } from "../errors.js";
+import { Deadline } from "../execution-limits.js";
 import type { CypherResult } from "../result.js";
 import type { PlannerOptions } from "../planner.js";
 
@@ -662,5 +663,50 @@ describe("Execute limits", () =>
         assert.equal(capped.Truncated, true);
         assert.equal(all.Truncated, false);
         assert.equal(CypherEngine.ToDto(capped).Truncated, true);
+    });
+
+    test("RowCap equal to the row count keeps every row and is not flagged Truncated", () =>
+    {
+        const engine = Sp2Fixture.Engine();
+        const all = engine.Execute("MATCH (a:Service) RETURN a.name");
+        const capped = engine.Execute("MATCH (a:Service) RETURN a.name", undefined, { RowCap: all.Rows.length });
+        assert.equal(capped.Rows.length, all.Rows.length);
+        assert.equal(capped.Truncated, false);
+    });
+
+    test("an expired deadline aborts inside a buffering operator (Sort/Cartesian)", () =>
+    {
+        const engine = Sp2Fixture.Engine();
+        const expired = { Expired: () => true };
+        assert.throws(
+            () => engine.Execute("MATCH (a:Service), (b:Service) RETURN a.name ORDER BY a.name", undefined, { Cancel: expired }),
+            (e) => e instanceof CypherTimeout);
+    });
+
+    test("an expired deadline aborts Distinct, Aggregate and VarLengthExpand", () =>
+    {
+        const engine = Sp2Fixture.Engine();
+        const expired = { Expired: () => true };
+        const queries = [
+            "MATCH (a:Service) RETURN DISTINCT a.kind",
+            "MATCH (a:Service) RETURN count(a)",
+            "MATCH (a:Service)-[:calls*1..3]->(b:Service) RETURN b.name",
+        ];
+        for (const q of queries)
+        {
+            assert.throws(() => engine.Execute(q, undefined, { Cancel: expired }), (e) => e instanceof CypherTimeout, q);
+        }
+    });
+
+    test("a non-expired deadline lets the query complete with unchanged rows", () =>
+    {
+        const engine = Sp2Fixture.Engine();
+        const q = "MATCH (a:Service), (b:Service) RETURN a.name ORDER BY a.name";
+        const plain = engine.Execute(q);
+        const live = engine.Execute(q, undefined, { Cancel: Deadline.After(60000) });
+        const stub = engine.Execute(q, undefined, { Cancel: { Expired: () => false } });
+        assert.equal(live.Rows.length, plain.Rows.length);
+        assert.equal(stub.Rows.length, plain.Rows.length);
+        assert.equal(live.Truncated, false);
     });
 });

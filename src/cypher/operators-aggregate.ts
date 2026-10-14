@@ -5,6 +5,8 @@ import { Binding, EvalContext } from "./binding.js";
 import { CypherValue, NullValue } from "./values.js";
 import { AggregatorFactory } from "./aggregators.js";
 import type { IAggregator } from "./aggregators.js";
+import { CancelProbe } from "./execution-limits.js";
+import type { ICancellation } from "./execution-limits.js";
 
 export interface AggregateItem
 {
@@ -33,6 +35,7 @@ export class Aggregate implements IOperator
         private readonly groupingItems: readonly ReturnItem[],
         private readonly aggregateItems: readonly AggregateItem[],
         private readonly parameters: ReadonlyMap<string, CypherValue>,
+        private readonly cancel?: ICancellation,
     )
     {
     }
@@ -40,8 +43,11 @@ export class Aggregate implements IOperator
     public *Rows(): Iterable<Binding>
     {
         const groups = new Map<string, GroupState>();
+        const probe = new CancelProbe(this.cancel);
+        probe.Begin();
         for (const row of this.child.Rows())
         {
+            probe.Tick();
             const ctx = new EvalContext(row, this.parameters);
             const values = this.groupingItems.map((i) => i.Expr.Evaluate(ctx));
             const key = JSON.stringify(values.map((v) => v.GroupKey()));

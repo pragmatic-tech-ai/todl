@@ -6,6 +6,8 @@ import { Binding } from "./binding.js";
 import { NodeValue } from "./values.js";
 import { ListValue, PathValue, RelValue } from "./values-structured.js";
 import { RelDirection } from "./enums.js";
+import { CancelProbe } from "./execution-limits.js";
+import type { ICancellation } from "./execution-limits.js";
 
 /**
  * Variable-length expand. Walks repeated single-hop graph.Expand calls, never repeating a
@@ -29,23 +31,28 @@ export class VarLengthExpand implements IOperator
         private readonly toLabel: string | undefined,
         private readonly pathVar: string | undefined,
         private readonly relVar: string | undefined = undefined,
+        private readonly cancel?: ICancellation,
     )
     {
     }
 
     public *Rows(): Iterable<Binding>
     {
+        const probe = new CancelProbe(this.cancel);
+        probe.Begin();
         for (const row of this.child.Rows())
         {
+            probe.Tick();
             const from = row.Get(this.fromVar);
             if (!(from instanceof NodeValue)) continue;
             const mirrors = this.graph.Reflect(from.Id);
-            yield* this.Walk(row, from, mirrors, [from], [], new Set<string>());
+            yield* this.Walk(probe, row, from, mirrors, [from], [], new Set<string>());
         }
     }
 
-    private *Walk(row: Binding, current: NodeValue, currentMirror: InstanceMirror | undefined, nodes: NodeValue[], rels: RelValue[], used: Set<string>): Iterable<Binding>
+    private *Walk(probe: CancelProbe, row: Binding, current: NodeValue, currentMirror: InstanceMirror | undefined, nodes: NodeValue[], rels: RelValue[], used: Set<string>): Iterable<Binding>
     {
+        probe.Tick();
         const depth = rels.length;
         if (depth >= this.min && this.LabelOk(currentMirror))
         {
@@ -71,7 +78,7 @@ export class VarLengthExpand implements IOperator
             used.add(key);
             nodes.push(next);
             rels.push(RelOrientation.Oriented(this.direction, this.relType, current.Id, next.Id));
-            yield* this.Walk(row, next, target, nodes, rels, used);
+            yield* this.Walk(probe, row, next, target, nodes, rels, used);
             rels.pop();
             nodes.pop();
             used.delete(key);

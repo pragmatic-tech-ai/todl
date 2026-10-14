@@ -15,6 +15,16 @@ export class CypherSyntaxError extends CypherError
     }
 }
 
+export class CypherTimeout extends CypherError
+{
+    private static readonly Message = "query exceeded its execution deadline";
+
+    constructor()
+    {
+        super(CypherTimeout.Message);
+    }
+}
+
 export class CypherSemanticError extends CypherError
 {
     constructor(message: string)

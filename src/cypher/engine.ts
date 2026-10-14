@@ -10,6 +10,7 @@ import type { ParameterValue } from "./values.js";
 import { ParameterBinder } from "./parameter-binder.js";
 import { CypherResult } from "./result.js";
 import type { CypherResultDto } from "./result.js";
+import { CancelProbe } from "./execution-limits.js";
 import type { ExecutionLimits } from "./execution-limits.js";
 
 export class CypherEngine
@@ -28,12 +29,15 @@ export class CypherEngine
     public Execute(source: string | CypherQuery, parameters: ReadonlyMap<string, ParameterValue> = CypherEngine.EmptyParams, limits?: ExecutionLimits): CypherResult
     {
         const model = typeof source === "string" ? new CypherParser(source).Parse() : source.ToModel();
-        const plan = new LogicalPlanner(this.graph, ParameterBinder.FromInputMap(parameters), this.options).Plan(model);
+        const plan = new LogicalPlanner(this.graph, ParameterBinder.FromInputMap(parameters), this.options, limits?.Cancel).Plan(model);
         const columns = model.FinalColumns();
         const rows: CypherValue[][] = [];
         let truncated = false;
+        const probe = new CancelProbe(limits?.Cancel);
+        probe.Begin();
         for (const binding of plan.Rows())
         {
+            probe.Tick();
             if (limits?.RowCap !== undefined && rows.length >= limits.RowCap)
             {
                 truncated = true;

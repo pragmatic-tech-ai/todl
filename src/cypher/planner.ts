@@ -17,6 +17,7 @@ import { OptionalApply } from "./operators-optional.js";
 import type { IOptionalPlan } from "./operators-optional.js";
 import { Aggregate } from "./operators-aggregate.js";
 import type { AggregateItem } from "./operators-aggregate.js";
+import type { ICancellation } from "./execution-limits.js";
 import { Sort, Skip, Limit, Distinct } from "./operators-ordering.js";
 
 export interface PlannerOptions
@@ -65,6 +66,7 @@ export class LogicalPlanner
         private readonly graph: ICypherGraph,
         private readonly parameters: ReadonlyMap<string, CypherValue>,
         options?: PlannerOptions,
+        private readonly cancel?: ICancellation,
     )
     {
         // Variable-length wiring lands in a later task; the cap is accepted and carried now.
@@ -205,7 +207,7 @@ export class LogicalPlanner
         else
         {
             const scan = this.anchor(anchor, names[0]!);
-            op = input === undefined ? scan : new CartesianProduct(input, scan);
+            op = input === undefined ? scan : new CartesianProduct(input, scan, this.cancel);
             op = this.foldNodeProperties(op, anchor, names[0]!);
             if (anchor.Variable !== undefined) bound.add(anchor.Variable);
         }
@@ -231,7 +233,7 @@ export class LogicalPlanner
                 if (targetBound) throw new CypherSemanticError(LogicalPlanner.VarLengthIntoBoundUnsupported);
                 const pathVar = i === pathVarRel ? path.PathVariable : undefined;
                 op = new VarLengthExpand(op, this.graph, names[i]!, names[i + 1]!, rel.RelType, rel.Direction,
-                    rel.MinHops ?? 1, rel.MaxHops ?? this.maxVarLength, toNode.Label, pathVar, rel.Variable);
+                    rel.MinHops ?? 1, rel.MaxHops ?? this.maxVarLength, toNode.Label, pathVar, rel.Variable, this.cancel);
             }
             else if (targetBound)
             {
@@ -284,15 +286,15 @@ export class LogicalPlanner
         }
 
         let op: IOperator = aggregateItems.length > 0
-            ? new Aggregate(input, groupingItems, aggregateItems, this.parameters)
+            ? new Aggregate(input, groupingItems, aggregateItems, this.parameters, this.cancel)
             : new Project(input, projection.Items, this.parameters);
 
-        if (projection.Distinct) op = new Distinct(op, projection.Items.map((i) => i.ColumnName()));
+        if (projection.Distinct) op = new Distinct(op, projection.Items.map((i) => i.ColumnName()), this.cancel);
         // HAVING-style: WITH ... WHERE filters the projected/aggregated rows, then ORDER BY/SKIP/LIMIT paginate the filtered set.
         if (projection.Where !== undefined) op = new Filter(op, this.resolveWithWhere(projection), this.parameters);
         if (projection.OrderBy !== undefined)
         {
-            op = new Sort(op, this.resolveOrderBy(projection), this.parameters);
+            op = new Sort(op, this.resolveOrderBy(projection), this.parameters, this.cancel);
         }
         if (projection.Skip !== undefined) op = new Skip(op, this.evalCount(projection.Skip));
         if (projection.Limit !== undefined) op = new Limit(op, this.evalCount(projection.Limit));
