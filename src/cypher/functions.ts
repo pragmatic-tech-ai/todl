@@ -239,28 +239,54 @@ class PathRelationshipsFunction extends FunctionBase
 
 export class FunctionRegistry
 {
-    private static readonly Aggregates: ReadonlySet<string> = new Set(["count", "collect", "sum", "avg", "min", "max"]);
+    private static readonly CoalesceName = "coalesce";
+    private static readonly ToStringName = "tostring";
+    private static readonly ToIntegerName = "tointeger";
+    private static readonly ToFloatName = "tofloat";
+    private static readonly SizeName = "size";
+    private static readonly HeadName = "head";
+    private static readonly LastName = "last";
+    private static readonly TailName = "tail";
+    private static readonly ReverseName = "reverse";
+    private static readonly RangeName = "range";
+    private static readonly KeysName = "keys";
+    private static readonly ToUpperName = "toupper";
+    private static readonly ToLowerName = "tolower";
+    private static readonly TrimName = "trim";
+    private static readonly SubstringName = "substring";
+    private static readonly ReplaceName = "replace";
+    private static readonly LengthName = "length";
+    private static readonly NodesName = "nodes";
+    private static readonly RelationshipsName = "relationships";
+    private static readonly CountName = "count";
+    private static readonly CollectName = "collect";
+    private static readonly SumName = "sum";
+    private static readonly AvgName = "avg";
+    private static readonly MinName = "min";
+    private static readonly MaxName = "max";
+
+    private static readonly Aggregates: ReadonlySet<string> = new Set([FunctionRegistry.CountName, FunctionRegistry.CollectName, FunctionRegistry.SumName, FunctionRegistry.AvgName, FunctionRegistry.MinName, FunctionRegistry.MaxName]);
 
     private static readonly Scalars: ReadonlyMap<string, IScalarFunction> = new Map<string, IScalarFunction>([
-        ["coalesce", new CoalesceFunction()],
-        ["tostring", new ToStringFunction()],
-        ["tointeger", new ToIntegerFunction()],
-        ["tofloat", new ToFloatFunction()],
-        ["size", new SizeFunction()],
-        ["head", new HeadFunction()],
-        ["last", new LastFunction()],
-        ["tail", new TailFunction()],
-        ["reverse", new ReverseFunction()],
-        ["range", new RangeFunction()],
-        ["keys", new KeysFunction()],
-        ["toupper", new ToUpperFunction()],
-        ["tolower", new ToLowerFunction()],
-        ["trim", new TrimFunction()],
-        ["substring", new SubstringFunction()],
-        ["replace", new ReplaceFunction()],
-        ["length", new PathLengthFunction()],
-        ["nodes", new PathNodesFunction()],
-        ["relationships", new PathRelationshipsFunction()],
+        [FunctionRegistry.CoalesceName, new CoalesceFunction()],
+        [FunctionRegistry.ToStringName, new ToStringFunction()],
+        [FunctionRegistry.ToIntegerName, new ToIntegerFunction()],
+        [FunctionRegistry.ToFloatName, new ToFloatFunction()],
+        [FunctionRegistry.SizeName, new SizeFunction()],
+        [FunctionRegistry.HeadName, new HeadFunction()],
+        [FunctionRegistry.LastName, new LastFunction()],
+        [FunctionRegistry.TailName, new TailFunction()],
+        [FunctionRegistry.ReverseName, new ReverseFunction()],
+        [FunctionRegistry.RangeName, new RangeFunction()],
+        [FunctionRegistry.KeysName, new KeysFunction()],
+        [FunctionRegistry.ToUpperName, new ToUpperFunction()],
+        [FunctionRegistry.ToLowerName, new ToLowerFunction()],
+        [FunctionRegistry.TrimName, new TrimFunction()],
+        [FunctionRegistry.SubstringName, new SubstringFunction()],
+        [FunctionRegistry.ReplaceName, new ReplaceFunction()],
+        [FunctionRegistry.LengthName, new PathLengthFunction()],
+        [FunctionRegistry.NodesName, new PathNodesFunction()],
+        [FunctionRegistry.RelationshipsName, new PathRelationshipsFunction()],
     ]);
 
     public static Scalar(name: string): IScalarFunction | undefined

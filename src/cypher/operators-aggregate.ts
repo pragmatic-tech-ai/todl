@@ -27,6 +27,8 @@ class GroupState
 
 export class Aggregate implements IOperator
 {
+    private static readonly EmptyGroupKey = "";
+
     constructor(
         private readonly child: IOperator,
         private readonly groupingItems: readonly ReturnItem[],
@@ -54,7 +56,7 @@ export class Aggregate implements IOperator
         }
         if (groups.size === 0 && this.groupingItems.length === 0)
         {
-            groups.set("", new GroupState([], this.aggregateItems));
+            groups.set(Aggregate.EmptyGroupKey, new GroupState([], this.aggregateItems));
         }
         for (const state of groups.values())
         {

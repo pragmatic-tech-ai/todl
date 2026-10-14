@@ -26,6 +26,10 @@ export abstract class CypherValue
 
 export class ScalarValue extends CypherValue
 {
+    private static readonly NumberRank = 0;
+    private static readonly StringRank = 1;
+    private static readonly OtherRank = 2;
+
     constructor(public readonly Value: Scalar)
     {
         super();
@@ -43,9 +47,9 @@ export class ScalarValue extends CypherValue
 
     protected TypeRank(): number
     {
-        if (typeof this.Value === "number") return 0;
-        if (typeof this.Value === "string") return 1;
-        return 2;
+        if (typeof this.Value === "number") return ScalarValue.NumberRank;
+        if (typeof this.Value === "string") return ScalarValue.StringRank;
+        return ScalarValue.OtherRank;
     }
 
     protected CompareSameType(other: CypherValue): number
