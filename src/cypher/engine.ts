@@ -10,6 +10,7 @@ import type { ParameterValue } from "./values.js";
 import { ParameterBinder } from "./parameter-binder.js";
 import { CypherResult } from "./result.js";
 import type { CypherResultDto } from "./result.js";
+import type { ExecutionLimits } from "./execution-limits.js";
 
 export class CypherEngine
 {
@@ -24,17 +25,23 @@ export class CypherEngine
         return new CypherEngine(new GraphQueryAdapter(query), options);
     }
 
-    public Execute(source: string | CypherQuery, parameters: ReadonlyMap<string, ParameterValue> = CypherEngine.EmptyParams): CypherResult
+    public Execute(source: string | CypherQuery, parameters: ReadonlyMap<string, ParameterValue> = CypherEngine.EmptyParams, limits?: ExecutionLimits): CypherResult
     {
         const model = typeof source === "string" ? new CypherParser(source).Parse() : source.ToModel();
         const plan = new LogicalPlanner(this.graph, ParameterBinder.FromInputMap(parameters), this.options).Plan(model);
         const columns = model.FinalColumns();
         const rows: CypherValue[][] = [];
+        let truncated = false;
         for (const binding of plan.Rows())
         {
+            if (limits?.RowCap !== undefined && rows.length >= limits.RowCap)
+            {
+                truncated = true;
+                break;
+            }
             rows.push(columns.map((c) => binding.Get(c) ?? NullValue.Instance));
         }
-        return new CypherResult(columns, rows);
+        return new CypherResult(columns, rows, truncated);
     }
 
     public static ToDto(result: CypherResult): CypherResultDto
@@ -42,6 +49,7 @@ export class CypherEngine
         return {
             Columns: [...result.Columns],
             Rows: result.Rows.map((row) => row.map((v) => v.ToDto())),
+            Truncated: result.Truncated,
         };
     }
 }

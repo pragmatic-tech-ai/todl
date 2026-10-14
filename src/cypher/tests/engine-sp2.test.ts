@@ -649,3 +649,18 @@ describe("CypherEngine strict WITH-segment scope (opt-in)", () =>
         assert.ok(r.Rows.length > 0);
     });
 });
+
+describe("Execute limits", () =>
+{
+    test("Execute RowCap truncates and flags Truncated", () =>
+    {
+        const engine = Sp2Fixture.Engine();
+        const all = engine.Execute("MATCH (a:Service) RETURN a.name");
+        assert.ok(all.Rows.length >= 3);
+        const capped = engine.Execute("MATCH (a:Service) RETURN a.name", undefined, { RowCap: 2 });
+        assert.equal(capped.Rows.length, 2);
+        assert.equal(capped.Truncated, true);
+        assert.equal(all.Truncated, false);
+        assert.equal(CypherEngine.ToDto(capped).Truncated, true);
+    });
+});
