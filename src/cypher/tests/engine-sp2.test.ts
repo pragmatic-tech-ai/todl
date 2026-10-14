@@ -490,6 +490,19 @@ describe("CypherEngine SP2 WITH ... WHERE", () =>
         assert.equal(r.Rows[0]![0], NullValue.Instance);
     });
 
+    test("scalar parameter returned directly", () =>
+    {
+        const r = e.Execute("RETURN $one AS x", new Map([["one", 5]]));
+        assert.equal(r.Rows.length, 1);
+        assert.equal((r.Rows[0]![0] as ScalarValue).Value, 5);
+    });
+
+    test("non-plain-object parameter is rejected", () =>
+    {
+        const bad = new Map([["d", new Date() as unknown as null]]);
+        assert.throws(() => e.Execute("RETURN $d AS d", bad), CypherSemanticError);
+    });
+
     test("scalar parameter back-compat and missing parameter", () =>
     {
         assert.deepEqual(Sp2Fixture.Col(e.Execute("UNWIND $one AS x RETURN x", new Map([["one", 5]])), 0), [5]);
