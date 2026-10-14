@@ -290,6 +290,7 @@ export class LogicalPlanner
         return projection.OrderBy!.map((sort) =>
         {
             const sortKey = sort.Expr.StructuralKey();
+            // find takes the first projected item with a matching key; harmless for duplicate projections (identical values).
             const match = projection.Items.find((i) => i.Expr.StructuralKey() === sortKey);
             if (match !== undefined) return new SortItem(new VariableRef(match.ColumnName()), sort.Descending);
             const referenced = new Set<string>();

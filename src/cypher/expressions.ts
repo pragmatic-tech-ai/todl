@@ -39,7 +39,7 @@ export class VariableRef extends Expression
 
     public StructuralKey(): string
     {
-        return `var:${this.Variable}`;
+        return `var:${JSON.stringify(this.Variable)}`;
     }
 
     public DefaultName(): string
@@ -73,7 +73,7 @@ export class PropertyAccess extends Expression
 
     public StructuralKey(): string
     {
-        return `prop:${this.Variable}.${this.Property}`;
+        return `prop:${JSON.stringify(this.Variable)}.${JSON.stringify(this.Property)}`;
     }
 
     public DefaultName(): string
@@ -101,6 +101,8 @@ export class Literal extends Expression
 
     public StructuralKey(): string
     {
+        // JSON.stringify renders NaN/+-Infinity as null, which would collide with the null literal.
+        if (typeof this.value === "number" && !Number.isFinite(this.value)) return `lit:num:${String(this.value)}`;
         return `lit:${JSON.stringify(this.value)}`;
     }
 
@@ -157,7 +159,7 @@ export class Parameter extends Expression
 
     public StructuralKey(): string
     {
-        return `param:${this.Name}`;
+        return `param:${JSON.stringify(this.Name)}`;
     }
 
     public DefaultName(): string
@@ -578,7 +580,7 @@ export class FunctionCall extends Expression
 
     public StructuralKey(): string
     {
-        return `fn:${this.Name.toLowerCase()}:${this.Distinct}:${this.Star}:[${this.Args.map((a) => a.StructuralKey()).join(",")}]`;
+        return `fn:${JSON.stringify(this.Name.toLowerCase())}:${this.Distinct}:${this.Star}:[${this.Args.map((a) => a.StructuralKey()).join(",")}]`;
     }
 
     public DefaultName(): string

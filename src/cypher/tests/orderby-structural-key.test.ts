@@ -7,7 +7,8 @@ import { ManifestWriter } from "../../manifest/manifest-writer.js";
 import type { LogicalManifest } from "../../manifest/logical.js";
 import type { ReflectedNode } from "../../manifest/reflection/reflection.js";
 import { CypherEngine } from "../engine.js";
-import { ScalarValue } from "../values.js";
+import { ScalarValue, NodeValue } from "../values.js";
+import { ListValue } from "../values-structured.js";
 import { CypherSemanticError } from "../errors.js";
 import { ComparisonOp, BooleanOp, ArithmeticOp } from "../enums.js";
 import {
@@ -120,6 +121,21 @@ describe("Expression.StructuralKey", () =>
         assert.notEqual(new ValueLiteral(new ScalarValue(1)).StructuralKey(), new ValueLiteral(new ScalarValue(2)).StructuralKey());
     });
 
+    test("dotted names cannot forge a colliding property key", () =>
+    {
+        assert.notEqual(new PropertyAccess("a.b", "c").StructuralKey(), new PropertyAccess("a", "b.c").StructuralKey());
+        assert.notEqual(
+            new Comparison(new VariableRef("b,var:c"), ComparisonOp.Eq, OrderByFixture.Lit(1)).StructuralKey(),
+            new Comparison(new VariableRef("b"), ComparisonOp.Eq, new VariableRef("c")).StructuralKey(),
+        );
+    });
+
+    test("non-finite number literals do not collide with null or each other", () =>
+    {
+        const keys = [new Literal(null), new Literal(NaN), new Literal(Infinity), new Literal(-Infinity)].map((l) => l.StructuralKey());
+        assert.equal(new Set(keys).size, 4);
+    });
+
     test("remaining subtypes produce recursive, discriminating keys", () =>
     {
         const x = OrderByFixture.AX();
@@ -168,7 +184,7 @@ describe("ORDER BY matches any projected expression", () =>
         const idx = OrderByFixture.Col(e, "MATCH (a:Service) RETURN [a.name, 1][0] AS first ORDER BY [a.name, 1][0]", 0);
         assert.deepEqual(idx, ["audit", "checkout", "ledger"]);
         const r = e.Execute("MATCH (a:Service) RETURN [a.name, 1] AS l ORDER BY [a.name, 1]");
-        assert.equal(r.Rows.length, 3);
+        assert.deepEqual(r.Rows.map((row) => ((row[0] as ListValue).Items[0] as ScalarValue).Value), ["audit", "checkout", "ledger"]);
     });
 
     test("must not regress: a.name projected and ordered", () =>
@@ -181,7 +197,7 @@ describe("ORDER BY matches any projected expression", () =>
     test("must not regress: RETURN a AS a ORDER BY a.name still sorts via the projected variable", () =>
     {
         const result = OrderByFixture.Engine().Execute("MATCH (a:Service) RETURN a AS a ORDER BY a.name");
-        assert.equal(result.Rows.length, 3);
+        assert.deepEqual(result.Rows.map((row) => (row[0] as NodeValue).Field("name")), ["audit", "checkout", "ledger"]);
     });
 
     test("must not regress: unknown ORDER BY column still throws", () =>
