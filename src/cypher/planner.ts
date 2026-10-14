@@ -42,6 +42,8 @@ class OptionalMatchPlan implements IOptionalPlan
 
 export class LogicalPlanner
 {
+    private static readonly VariableTag = "var";
+    private static readonly PropertyTag = "prop";
     private static readonly AnonPrefix = "__n";
     private static readonly RelPropsUnsupported = "relationship properties are not supported";
     private static readonly UnknownRelType = "unknown relationship type";
@@ -278,7 +280,8 @@ export class LogicalPlanner
     // types (a FunctionCall's is just its name), so it cannot serve as a general key. Undefined = not matchable.
     private static IdentityKey(expr: Expression): string | undefined
     {
-        if (expr instanceof VariableRef || expr instanceof PropertyAccess) return `${expr.constructor.name}:${expr.DefaultName()}`;
+        if (expr instanceof VariableRef) return `${LogicalPlanner.VariableTag}:${expr.DefaultName()}`;
+        if (expr instanceof PropertyAccess) return `${LogicalPlanner.PropertyTag}:${expr.DefaultName()}`;
         if (!(expr instanceof FunctionCall)) return undefined;
         const args: string[] = [];
         for (const arg of expr.Args)
