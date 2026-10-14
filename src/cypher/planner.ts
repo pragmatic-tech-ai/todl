@@ -14,6 +14,7 @@ import { IOperator, AllNodesScan, LabelScan, Expand, Filter, Project, SingleRow,
 import { Unwind } from "./operators-unwind.js";
 import { CartesianProduct } from "./operators-join.js";
 import { OptionalApply } from "./operators-optional.js";
+import type { IOptionalPlan } from "./operators-optional.js";
 import { Aggregate } from "./operators-aggregate.js";
 import type { AggregateItem } from "./operators-aggregate.js";
 import { Sort, Skip, Limit, Distinct } from "./operators-ordering.js";
@@ -23,11 +24,28 @@ export interface PlannerOptions
     readonly MaxVarLength?: number;
 }
 
+class OptionalMatchPlan implements IOptionalPlan
+{
+    constructor(
+        private readonly planner: LogicalPlanner,
+        private readonly inner: MatchClause,
+        private readonly outerBound: ReadonlySet<string>,
+    )
+    {
+    }
+
+    public Build(row: Binding): IOperator
+    {
+        return this.planner.CompileInner(row, this.inner, this.outerBound);
+    }
+}
+
 export class LogicalPlanner
 {
     private static readonly AnonPrefix = "__n";
     private static readonly RelPropsUnsupported = "relationship properties are not supported";
     private static readonly UnknownRelType = "unknown relationship type";
+    private static readonly UnknownOrderByColumn = "unknown ORDER BY column";
     private static readonly UnboundVariable = "variable not in scope";
     private static readonly NonNumericLimit = "SKIP/LIMIT must evaluate to a number";
     private static readonly NestedAggregate = "aggregate functions must be a direct call in a projection item";
@@ -106,6 +124,12 @@ export class LogicalPlanner
         }
     }
 
+    // Planner-internal entry for OptionalMatchPlan (TypeScript has no friend access).
+    public CompileInner(row: Binding, inner: MatchClause, outerBound: ReadonlySet<string>): IOperator
+    {
+        return this.compileMatch(new BindingRow(row), inner, new Set<string>(outerBound));
+    }
+
     private compileMatch(input: IOperator | undefined, match: MatchClause, bound: Set<string>): IOperator
     {
         if (match.Optional)
@@ -128,9 +152,9 @@ export class LogicalPlanner
         const outerBound = new Set<string>(bound);
         const optionalVars = [...match.DeclaredVariables()].filter((v) => !outerBound.has(v));
         const inner = new MatchClause(match.Paths, match.Where, false);
-        const build = (row: Binding): IOperator => this.compileMatch(new BindingRow(row), inner, new Set<string>(outerBound));
+        const plan = new OptionalMatchPlan(this, inner, outerBound);
         for (const v of optionalVars) bound.add(v);
-        return new OptionalApply(source, build, optionalVars);
+        return new OptionalApply(source, plan, optionalVars);
     }
 
     private compilePath(input: IOperator | undefined, path: PatternPath, bound: Set<string>): IOperator
@@ -218,10 +242,26 @@ export class LogicalPlanner
             : new Project(input, projection.Items, this.parameters);
 
         if (projection.Distinct) op = new Distinct(op, projection.Items.map((i) => i.ColumnName()));
-        if (projection.OrderBy !== undefined) op = new Sort(op, projection.OrderBy, this.parameters);
+        if (projection.OrderBy !== undefined)
+        {
+            this.validateOrderBy(projection);
+            op = new Sort(op, projection.OrderBy, this.parameters);
+        }
         if (projection.Skip !== undefined) op = new Skip(op, this.evalCount(projection.Skip));
         if (projection.Limit !== undefined) op = new Limit(op, this.evalCount(projection.Limit));
         return op;
+    }
+
+    // Sort runs over the projected rows, so ORDER BY may only reference projected output columns.
+    private validateOrderBy(projection: ProjectionClause): void
+    {
+        const columns = new Set<string>(projection.Items.map((i) => i.ColumnName()));
+        const referenced = new Set<string>();
+        for (const sort of projection.OrderBy!) sort.Expr.CollectVariables(referenced);
+        for (const v of referenced)
+        {
+            if (!columns.has(v)) throw new CypherSemanticError(`${LogicalPlanner.UnknownOrderByColumn}: "${v}"`);
+        }
     }
 
     private aggregateCall(item: ReturnItem): FunctionCall

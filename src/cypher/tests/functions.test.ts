@@ -42,6 +42,23 @@ describe("functions", () =>
         assert.equal((H.Fn("toInteger", "42").Evaluate(H.Ctx()) as ScalarValue).Value, 42);
         assert.ok(H.Fn("toUpper", 5).Evaluate(H.Ctx()) instanceof NullValue);
     });
+    test("toInteger returns null for non-finite and non-decimal strings", () =>
+    {
+        for (const bad of ["Infinity", "-Infinity", "0x10", "NaN", "1e999"])
+        {
+            assert.ok(H.Fn("toInteger", bad).Evaluate(H.Ctx()) instanceof NullValue, bad);
+        }
+        assert.ok(H.Fn("toInteger", Number.POSITIVE_INFINITY).Evaluate(H.Ctx()) instanceof NullValue);
+        assert.equal((H.Fn("toInteger", " 3.9 ").Evaluate(H.Ctx()) as ScalarValue).Value, 3);
+        assert.equal((H.Fn("toInteger", "1e2").Evaluate(H.Ctx()) as ScalarValue).Value, 100);
+    });
+    test("range rejects non-finite or absurdly large spans", () =>
+    {
+        assert.throws(() => H.Fn("range", 0, Number.POSITIVE_INFINITY).Evaluate(H.Ctx()), CypherSemanticError);
+        assert.throws(() => H.Fn("range", Number.NEGATIVE_INFINITY, 0).Evaluate(H.Ctx()), CypherSemanticError);
+        assert.throws(() => H.Fn("range", 0, 10, Number.POSITIVE_INFINITY).Evaluate(H.Ctx()), CypherSemanticError);
+        assert.throws(() => H.Fn("range", 0, 1e12).Evaluate(H.Ctx()), CypherSemanticError);
+    });
     test("unknown function throws CypherSemanticError", () =>
     {
         assert.throws(() => H.Fn("bogus", 1).Evaluate(H.Ctx()), CypherSemanticError);

@@ -89,6 +89,28 @@ describe("cypher fluent SP2 read-plus", () =>
         assert.throws(() => CypherQuery.Match(Pattern.Node("a")).With(Return.Node("a")).ToModel());
     });
 
+    test("a second Where on the same Match throws instead of replacing the first", () =>
+    {
+        const q = CypherQuery.Match(Pattern.Node("a")).Where(Expr.Prop("a", "name").Eq("x"));
+        assert.throws(() => q.Where(Expr.Prop("a", "name").Eq("y")));
+    });
+
+    test("Hops.Range throws when min exceeds max", () =>
+    {
+        assert.throws(() => Hops.Range(3, 1));
+        assert.doesNotThrow(() => Hops.Range(2, 2));
+    });
+
+    test("ToModel returns a defensive copy of the reading clauses", () =>
+    {
+        const q = CypherQuery.Match(Pattern.Node("a")).Return(Return.Node("a"));
+        const model = q.ToModel();
+        const before = model.Parts[0]!.Reading.length;
+        // Simulate later mutation of the builder's internal reading list.
+        (q as unknown as { reading: unknown[] }).reading.push(new UnwindClause(Expr.Lit(1) as never, "x"));
+        assert.equal(model.Parts[0]!.Reading.length, before);
+    });
+
     test("variable-length helpers match parser hop defaults", () =>
     {
         ParityChecker.CheckHops(Hops.Any(), "*");

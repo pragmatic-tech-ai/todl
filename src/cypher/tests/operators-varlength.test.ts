@@ -32,10 +32,10 @@ class VarFixtures
         return new SeedRow(id);
     }
 
-    public static Run(graph: FakeGraph, start: string, min: number, max: number, pathVar?: string): Binding[]
+    public static Run(graph: FakeGraph, start: string, min: number, max: number, pathVar?: string, direction: RelDirection = RelDirection.Outgoing): Binding[]
     {
         const op = new VarLengthExpand(VarFixtures.Seed(start), graph, VarFixtures.From, VarFixtures.To,
-            VarFixtures.Rel, RelDirection.Outgoing, min, max, undefined, pathVar);
+            VarFixtures.Rel, direction, min, max, undefined, pathVar);
         return [...op.Rows()];
     }
 
@@ -130,6 +130,25 @@ describe("VarLengthExpand", () =>
     {
         const loop = new FakeGraph({ a: ["a"] });
         assert.deepEqual(VarFixtures.Ends(VarFixtures.Run(loop, "a", 1, 1000)), ["a"]);
+    });
+
+    test("undirected walk does not re-use the same physical edge back and forth", () =>
+    {
+        // One physical edge a-b; an undirected Expand reports it from both ends.
+        const single = new FakeGraph({ a: ["b"], b: ["a"] });
+        const rows = VarFixtures.Run(single, "a", 1, 1000, undefined, RelDirection.Undirected);
+        assert.deepEqual(VarFixtures.Ends(rows), ["b"]);
+    });
+
+    test("incoming walk orients RelValue by the real edge direction", () =>
+    {
+        // Real edge b->c; walking Incoming from c reaches b.
+        const incoming = new FakeGraph({ c: ["b"] });
+        const rows = VarFixtures.Run(incoming, "c", 1, 1, VarFixtures.PathVar, RelDirection.Incoming);
+        assert.equal(rows.length, 1);
+        const rel = (rows[0].Get(VarFixtures.PathVar) as PathValue).Rels[0];
+        assert.equal(rel.FromId, "b");
+        assert.equal(rel.ToId, "c");
     });
 
     test("binds PathValue with correct length", () =>

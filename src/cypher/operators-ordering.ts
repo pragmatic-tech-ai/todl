@@ -52,8 +52,12 @@ export class Sort implements IOperator
 
 export class Skip implements IOperator
 {
-    constructor(private readonly child: IOperator, private readonly count: number)
+    private readonly count: number;
+
+    constructor(private readonly child: IOperator, count: number)
     {
+        // Clamp to a non-negative integer; NaN skips nothing.
+        this.count = Number.isNaN(count) ? 0 : Math.max(0, Math.trunc(count));
     }
 
     public *Rows(): Iterable<Binding>
@@ -95,7 +99,6 @@ export class Limit implements IOperator
 
 export class Distinct implements IOperator
 {
-    private static readonly KeySeparator = "\u0000";
     private static readonly MissingKey = "undefined";
 
     constructor(private readonly child: IOperator, private readonly columns: readonly string[])
@@ -107,7 +110,8 @@ export class Distinct implements IOperator
         const seen = new Set<string>();
         for (const row of this.child.Rows())
         {
-            const key = this.columns.map((c) => row.Get(c)?.GroupKey() ?? Distinct.MissingKey).join(Distinct.KeySeparator);
+            // JSON-encode the per-column keys so a key containing any separator cannot merge distinct rows.
+            const key = JSON.stringify(this.columns.map((c) => row.Get(c)?.GroupKey() ?? Distinct.MissingKey));
             if (!seen.has(key))
             {
                 seen.add(key);

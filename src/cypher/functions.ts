@@ -1,6 +1,7 @@
 import type { Scalar } from "../manifest/logical.js";
 import { CypherValue, ScalarValue, NullValue } from "./values.js";
 import { ListValue, MapValue, PathValue } from "./values-structured.js";
+import { CypherSemanticError } from "./errors.js";
 
 export interface IScalarFunction
 {
@@ -52,12 +53,15 @@ class ToStringFunction extends FunctionBase
 
 class ToIntegerFunction extends FunctionBase
 {
+    // Decimal notation only: rejects "Infinity", "0x10", "0b1", etc.
+    private static readonly DecimalPattern = /^\s*[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?\s*$/;
+
     public Invoke(args: readonly CypherValue[]): CypherValue
     {
         const a = args[0];
         if (!(a instanceof ScalarValue)) return NullValue.Instance;
-        const n = typeof a.Value === "number" ? a.Value : typeof a.Value === "string" && a.Value.trim() !== "" ? Number(a.Value) : Number.NaN;
-        return Number.isNaN(n) ? NullValue.Instance : new ScalarValue(Math.trunc(n));
+        const n = typeof a.Value === "number" ? a.Value : typeof a.Value === "string" && ToIntegerFunction.DecimalPattern.test(a.Value) ? Number(a.Value) : Number.NaN;
+        return Number.isFinite(n) ? new ScalarValue(Math.trunc(n)) : NullValue.Instance;
     }
 }
 
@@ -120,12 +124,24 @@ class ReverseFunction extends FunctionBase
 
 class RangeFunction extends FunctionBase
 {
+    private static readonly NonFiniteBound = "range() bounds and step must be finite numbers";
+    private static readonly TooLarge = "range() would produce too many elements";
+    private static readonly MaxElements = 10_000_000;
+
     public Invoke(args: readonly CypherValue[]): CypherValue
     {
         const a = FunctionBase.Num(args[0]);
         const b = FunctionBase.Num(args[1]);
         const step = args.length > 2 ? FunctionBase.Num(args[2]) : 1;
         if (a === undefined || b === undefined || step === undefined || step === 0) return NullValue.Instance;
+        if (!Number.isFinite(a) || !Number.isFinite(b) || !Number.isFinite(step))
+        {
+            throw new CypherSemanticError(RangeFunction.NonFiniteBound);
+        }
+        if (Math.abs((b - a) / step) >= RangeFunction.MaxElements)
+        {
+            throw new CypherSemanticError(RangeFunction.TooLarge);
+        }
         const out: CypherValue[] = [];
         for (let i = a; step > 0 ? i <= b : i >= b; i += step) out.push(new ScalarValue(i));
         return new ListValue(out);

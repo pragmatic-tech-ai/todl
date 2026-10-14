@@ -50,4 +50,21 @@ describe("ordering operators", () =>
         const op = new Distinct(Rows.Of("x", [1, 1, 2, 2, 2, 3]), ["x"]);
         assert.deepEqual(Rows.Values(op.Rows()), [1, 2, 3]);
     });
+
+    test("Distinct keeps rows whose column keys differ only by the separator character", () =>
+    {
+        const sep = String.fromCharCode(0);
+        const row1 = new Binding().With("x", new ScalarValue("a" + sep + "string:b")).With("y", new ScalarValue("c"));
+        const row2 = new Binding().With("x", new ScalarValue("a")).With("y", new ScalarValue("b" + sep + "string:c"));
+        const out = [...new Distinct(new Rows([row1, row2]), ["x", "y"]).Rows()];
+        assert.equal(out.length, 2);
+    });
+
+    test("Skip(0) skips nothing; negative and NaN clamp to zero", () =>
+    {
+        assert.deepEqual(Rows.Values(new Skip(Rows.Of("x", [1, 2, 3]), 0).Rows()), [1, 2, 3]);
+        assert.deepEqual(Rows.Values(new Skip(Rows.Of("x", [1, 2, 3]), -5).Rows()), [1, 2, 3]);
+        assert.deepEqual(Rows.Values(new Skip(Rows.Of("x", [1, 2, 3]), Number.NaN).Rows()), [1, 2, 3]);
+        assert.deepEqual(Rows.Values(new Skip(Rows.Of("x", [1, 2, 3]), 1.9).Rows()), [2, 3]);
+    });
 });

@@ -7,6 +7,8 @@ import { Expression, VariableRef, PropertyAccess, Literal, Comparison, FunctionC
 // Variable-length relationship bounds.
 export class Hops
 {
+    private static readonly InvalidRangeMessage = "Hops.Range requires min <= max";
+
     private constructor(public readonly Min: number, public readonly Max: number | undefined)
     {
     }
@@ -14,6 +16,7 @@ export class Hops
     // Explicit bounds, like *min..max.
     public static Range(min: number, max: number): Hops
     {
+        if (min > max) throw new Error(`${Hops.InvalidRangeMessage}: ${min}..${max}`);
         return new Hops(min, max);
     }
 
@@ -346,6 +349,8 @@ export class CypherQuery
     private static readonly NoProjectionMessage = "projection modifier requires a preceding With or Return";
     private static readonly WhereNeedsMatchMessage = "Where must directly follow a Match or OptionalMatch";
 
+    private static readonly DuplicateWhereMessage = "Where was already specified for this Match";
+
     private readonly parts: QueryPart[] = [];
     private reading: ReadingClause[] = [];
     private projection: PendingProjection | undefined;
@@ -388,6 +393,7 @@ export class CypherQuery
     {
         const last = this.reading[this.reading.length - 1];
         if (this.projection !== undefined || !(last instanceof MatchClause)) throw new Error(CypherQuery.WhereNeedsMatchMessage);
+        if (last.Where !== undefined) throw new Error(CypherQuery.DuplicateWhereMessage);
         this.reading[this.reading.length - 1] = new MatchClause(last.Paths, new WhereClause(ExprBuilder.Unwrap(expr)), last.Optional);
         return this;
     }
@@ -434,7 +440,7 @@ export class CypherQuery
     public ToModel(): CypherQueryModel
     {
         if (this.projection === undefined || !this.projection.IsReturn) throw new Error(CypherQuery.MissingReturnMessage);
-        return new CypherQueryModel([...this.parts, new QueryPart(this.reading, this.projection.Build())]);
+        return new CypherQueryModel([...this.parts, new QueryPart([...this.reading], this.projection.Build())]);
     }
 
     private AddReading(clause: ReadingClause): CypherQuery

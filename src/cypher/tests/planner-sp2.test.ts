@@ -101,6 +101,22 @@ describe("cypher planner SP2 (segment pipeline)", () =>
         assert.deepEqual(rows, ["ledger"]);
     });
 
+    test("ORDER BY on a name that is not a projected column raises CypherSemanticError", () =>
+    {
+        assert.throws(
+            () => Sp2Fixture.Engine().Execute("MATCH (a:Service) RETURN a.name AS n ORDER BY nope"),
+            CypherSemanticError,
+        );
+    });
+
+    test("variable-length min greater than max raises CypherSemanticError", () =>
+    {
+        assert.throws(
+            () => Sp2Fixture.Engine().Execute("MATCH (a:Service)-[:calls*3..1]->(b:Service) RETURN b.name AS n"),
+            CypherSemanticError,
+        );
+    });
+
     test("referencing a variable dropped by WITH raises CypherSemanticError", () =>
     {
         assert.throws(

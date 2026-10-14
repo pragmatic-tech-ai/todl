@@ -1,5 +1,6 @@
 import type { Scalar } from "../manifest/logical.js";
 import { RelDirection } from "./enums.js";
+import { CypherSemanticError } from "./errors.js";
 
 export class NodePattern
 {
@@ -14,6 +15,8 @@ export class NodePattern
 
 export class RelPattern
 {
+    private static readonly InvalidHopRange = "variable-length minimum exceeds maximum";
+
     constructor(
         public readonly Variable: string | undefined,
         public readonly RelType: string | undefined,
@@ -25,6 +28,10 @@ export class RelPattern
         public readonly MaxHops: number | undefined = undefined,
     )
     {
+        if (MinHops !== undefined && MaxHops !== undefined && MinHops > MaxHops)
+        {
+            throw new CypherSemanticError(`${RelPattern.InvalidHopRange}: *${MinHops}..${MaxHops}`);
+        }
     }
 
     public get IsVariableLength(): boolean
