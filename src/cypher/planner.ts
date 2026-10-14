@@ -2,11 +2,11 @@ import type { Scalar } from "../manifest/logical.js";
 import type { ICypherGraph } from "./graph.js";
 import type { NodePattern, PatternPath } from "./patterns.js";
 import type { CypherQueryModel, QueryPart, ProjectionClause, ReturnItem } from "./query-model.js";
-import { MatchClause, UnwindClause } from "./query-model.js";
+import { MatchClause, UnwindClause, SortItem } from "./query-model.js";
 import { CypherSemanticError } from "./errors.js";
 import { ComparisonOp } from "./enums.js";
 import type { Expression } from "./expressions.js";
-import { Comparison, PropertyAccess, Literal, FunctionCall } from "./expressions.js";
+import { Comparison, PropertyAccess, VariableRef, Literal, FunctionCall } from "./expressions.js";
 import { Binding, EvalContext } from "./binding.js";
 import { ScalarValue } from "./values.js";
 import { VarLengthExpand } from "./operators-varlength.js";
@@ -125,6 +125,7 @@ export class LogicalPlanner
     }
 
     // Planner-internal entry for OptionalMatchPlan (TypeScript has no friend access).
+    // Public only so OptionalMatchPlan (a separate class in this file) can call it; not part of the planner API.
     public CompileInner(row: Binding, inner: MatchClause, outerBound: ReadonlySet<string>): IOperator
     {
         return this.compileMatch(new BindingRow(row), inner, new Set<string>(outerBound));
@@ -244,24 +245,33 @@ export class LogicalPlanner
         if (projection.Distinct) op = new Distinct(op, projection.Items.map((i) => i.ColumnName()));
         if (projection.OrderBy !== undefined)
         {
-            this.validateOrderBy(projection);
-            op = new Sort(op, projection.OrderBy, this.parameters);
+            op = new Sort(op, this.resolveOrderBy(projection), this.parameters);
         }
         if (projection.Skip !== undefined) op = new Skip(op, this.evalCount(projection.Skip));
         if (projection.Limit !== undefined) op = new Limit(op, this.evalCount(projection.Limit));
         return op;
     }
 
-    // Sort runs over the projected rows, so ORDER BY may only reference projected output columns.
-    private validateOrderBy(projection: ProjectionClause): void
+    // Sort runs over the projected rows. A sort expression equal to a projected property access
+    // (RETURN a.x ORDER BY a.x) is rewritten to read that output column; any other sort expression may only
+    // reference projected output columns, else it is an unknown ORDER BY column.
+    private resolveOrderBy(projection: ProjectionClause): SortItem[]
     {
         const columns = new Set<string>(projection.Items.map((i) => i.ColumnName()));
-        const referenced = new Set<string>();
-        for (const sort of projection.OrderBy!) sort.Expr.CollectVariables(referenced);
-        for (const v of referenced)
+        return projection.OrderBy!.map((sort) =>
         {
-            if (!columns.has(v)) throw new CypherSemanticError(`${LogicalPlanner.UnknownOrderByColumn}: "${v}"`);
-        }
+            const match = sort.Expr instanceof PropertyAccess
+                ? projection.Items.find((i) => i.Expr instanceof PropertyAccess && i.Expr.DefaultName() === sort.Expr.DefaultName())
+                : undefined;
+            if (match !== undefined) return new SortItem(new VariableRef(match.ColumnName()), sort.Descending);
+            const referenced = new Set<string>();
+            sort.Expr.CollectVariables(referenced);
+            for (const v of referenced)
+            {
+                if (!columns.has(v)) throw new CypherSemanticError(`${LogicalPlanner.UnknownOrderByColumn}: "${v}"`);
+            }
+            return sort;
+        });
     }
 
     private aggregateCall(item: ReturnItem): FunctionCall

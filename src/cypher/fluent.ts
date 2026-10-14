@@ -1,4 +1,5 @@
 import type { Scalar } from "../manifest/logical.js";
+import { CypherSemanticError } from "./errors.js";
 import { RelDirection, ComparisonOp, ArithmeticOp } from "./enums.js";
 import { NodePattern, RelPattern, PatternPath } from "./patterns.js";
 import { CypherQueryModel, MatchClause, WhereClause, ProjectionClause, QueryPart, ReturnItem, ReadingClause, UnwindClause, SortItem } from "./query-model.js";
@@ -16,7 +17,7 @@ export class Hops
     // Explicit bounds, like *min..max.
     public static Range(min: number, max: number): Hops
     {
-        if (min > max) throw new Error(`${Hops.InvalidRangeMessage}: ${min}..${max}`);
+        if (min > max) throw new CypherSemanticError(`${Hops.InvalidRangeMessage}: ${min}..${max}`);
         return new Hops(min, max);
     }
 

@@ -1,6 +1,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { CypherQuery, Pattern, Expr, Return, Fn, Sort, Hops } from "../fluent.js";
+import { CypherSemanticError } from "../errors.js";
 import { CypherParser } from "../parser.js";
 import { MatchClause, UnwindClause, CypherQueryModel } from "../query-model.js";
 
@@ -97,7 +98,7 @@ describe("cypher fluent SP2 read-plus", () =>
 
     test("Hops.Range throws when min exceeds max", () =>
     {
-        assert.throws(() => Hops.Range(3, 1));
+        assert.throws(() => Hops.Range(3, 1), CypherSemanticError);
         assert.doesNotThrow(() => Hops.Range(2, 2));
     });
 

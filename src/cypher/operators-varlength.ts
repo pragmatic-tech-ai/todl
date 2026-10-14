@@ -74,6 +74,7 @@ export class VarLengthExpand implements IOperator
     }
 
     // Undirected: canonicalize endpoints so A-B and B-A are the same physical edge within one path.
+    // As with directed steps, parallel same-typed edges between the same two nodes collapse to one step.
     private StepKey(currentId: string, type: string, nextId: string): string
     {
         const ends = this.direction === RelDirection.Undirected ? [currentId, nextId].sort() : [currentId, nextId];

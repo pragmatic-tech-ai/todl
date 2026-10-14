@@ -109,6 +109,34 @@ describe("cypher planner SP2 (segment pipeline)", () =>
         );
     });
 
+    test("RETURN a.name ORDER BY a.name sorts without throwing", () =>
+    {
+        const rows = Sp2Fixture.Scalars(Sp2Fixture.Engine(), "MATCH (a:Service) RETURN a.name ORDER BY a.name DESC");
+        assert.deepEqual(rows, ["ledger", "checkout", "audit"]);
+    });
+
+    test("aliased projection can ORDER BY the original property expression", () =>
+    {
+        const rows = Sp2Fixture.Scalars(Sp2Fixture.Engine(), "MATCH (a:Service) RETURN a.name AS n ORDER BY a.name");
+        assert.deepEqual(rows, ["audit", "checkout", "ledger"]);
+    });
+
+    test("ORDER BY a property of a projected variable works", () =>
+    {
+        const result = Sp2Fixture.Engine().Execute("MATCH (a:Service) RETURN a AS a ORDER BY a.name");
+        assert.equal(result.Rows.length, 3);
+        const names = result.Rows.map((r) => (r[0] as { Field(k: string): unknown }).Field("name"));
+        assert.deepEqual(names, ["audit", "checkout", "ledger"]);
+    });
+
+    test("variable-length *..0 (min 1 > max 0) raises CypherSemanticError", () =>
+    {
+        assert.throws(
+            () => Sp2Fixture.Engine().Execute("MATCH (a:Service)-[:calls*..0]->(b:Service) RETURN b.name AS n"),
+            CypherSemanticError,
+        );
+    });
+
     test("variable-length min greater than max raises CypherSemanticError", () =>
     {
         assert.throws(

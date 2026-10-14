@@ -52,6 +52,14 @@ describe("functions", () =>
         assert.equal((H.Fn("toInteger", " 3.9 ").Evaluate(H.Ctx()) as ScalarValue).Value, 3);
         assert.equal((H.Fn("toInteger", "1e2").Evaluate(H.Ctx()) as ScalarValue).Value, 100);
     });
+    test("toFloat returns null for non-finite and non-decimal strings", () =>
+    {
+        for (const bad of ["Infinity", "0x10", "NaN", "1e999"])
+        {
+            assert.ok(H.Fn("toFloat", bad).Evaluate(H.Ctx()) instanceof NullValue, bad);
+        }
+        assert.equal((H.Fn("toFloat", " 2.5 ").Evaluate(H.Ctx()) as ScalarValue).Value, 2.5);
+    });
     test("range rejects non-finite or absurdly large spans", () =>
     {
         assert.throws(() => H.Fn("range", 0, Number.POSITIVE_INFINITY).Evaluate(H.Ctx()), CypherSemanticError);

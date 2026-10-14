@@ -10,6 +10,9 @@ export interface IScalarFunction
 
 abstract class FunctionBase implements IScalarFunction
 {
+    // Decimal notation only: rejects "Infinity", "0x10", "0b1", etc.
+    protected static readonly DecimalPattern = /^\s*[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?\s*$/;
+
     public abstract Invoke(args: readonly CypherValue[]): CypherValue;
 
     protected static Str(v: CypherValue | undefined): string | undefined
@@ -53,14 +56,11 @@ class ToStringFunction extends FunctionBase
 
 class ToIntegerFunction extends FunctionBase
 {
-    // Decimal notation only: rejects "Infinity", "0x10", "0b1", etc.
-    private static readonly DecimalPattern = /^\s*[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?\s*$/;
-
     public Invoke(args: readonly CypherValue[]): CypherValue
     {
         const a = args[0];
         if (!(a instanceof ScalarValue)) return NullValue.Instance;
-        const n = typeof a.Value === "number" ? a.Value : typeof a.Value === "string" && ToIntegerFunction.DecimalPattern.test(a.Value) ? Number(a.Value) : Number.NaN;
+        const n = typeof a.Value === "number" ? a.Value : typeof a.Value === "string" && FunctionBase.DecimalPattern.test(a.Value) ? Number(a.Value) : Number.NaN;
         return Number.isFinite(n) ? new ScalarValue(Math.trunc(n)) : NullValue.Instance;
     }
 }
@@ -71,8 +71,8 @@ class ToFloatFunction extends FunctionBase
     {
         const a = args[0];
         if (!(a instanceof ScalarValue)) return NullValue.Instance;
-        const n = typeof a.Value === "number" ? a.Value : typeof a.Value === "string" && a.Value.trim() !== "" ? Number(a.Value) : Number.NaN;
-        return Number.isNaN(n) ? NullValue.Instance : new ScalarValue(n);
+        const n = typeof a.Value === "number" ? a.Value : typeof a.Value === "string" && FunctionBase.DecimalPattern.test(a.Value) ? Number(a.Value) : Number.NaN;
+        return Number.isFinite(n) ? new ScalarValue(n) : NullValue.Instance;
     }
 }
 
