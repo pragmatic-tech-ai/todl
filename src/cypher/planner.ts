@@ -258,6 +258,8 @@ export class LogicalPlanner
             : new Project(input, projection.Items, this.parameters);
 
         if (projection.Distinct) op = new Distinct(op, projection.Items.map((i) => i.ColumnName()));
+        // HAVING-style: WITH ... WHERE filters the projected/aggregated rows, then ORDER BY/SKIP/LIMIT paginate the filtered set.
+        if (projection.Where !== undefined) op = new Filter(op, projection.Where.Predicate, this.parameters);
         if (projection.OrderBy !== undefined)
         {
             op = new Sort(op, this.resolveOrderBy(projection), this.parameters);

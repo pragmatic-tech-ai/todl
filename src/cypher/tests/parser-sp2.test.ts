@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { CypherParser } from "../parser.js";
 import { MatchClause, UnwindClause } from "../query-model.js";
 import { CypherSyntaxError } from "../errors.js";
-import { FunctionCall } from "../expressions.js";
+import { FunctionCall, Comparison } from "../expressions.js";
 
 describe("cypher parser SP2 (query-part loop + projection)", () =>
 {
@@ -143,5 +143,15 @@ describe("cypher parser SP2 (expression edge cases)", () =>
         const rel = m.Paths[0]!.Rels[0]!;
         assert.equal(rel.MinHops, 1);
         assert.equal(rel.MaxHops, 2);
+    });
+
+    test("WITH ... WHERE parses a post-projection predicate; RETURN ... WHERE is a syntax error", () =>
+    {
+        const proj = new CypherParser("MATCH (a) WITH a, count(*) AS c WHERE c > 1 RETURN a").Parse().Parts[0]!.Projection;
+        assert.ok(proj.Where !== undefined);
+        assert.ok(proj.Where.Predicate instanceof Comparison);
+        assert.equal(new CypherParser("MATCH (a) WITH a RETURN a").Parse().Parts[0]!.Projection.Where, undefined);
+        assert.throws(() => new CypherParser("MATCH (a) RETURN a WHERE a").Parse(), CypherSyntaxError);
+        assert.throws(() => new CypherParser("MATCH (a) WITH a WHERE a ORDER BY a WHERE a RETURN a").Parse(), CypherSyntaxError);
     });
 });

@@ -72,6 +72,8 @@ export class ProjectionClause
         public readonly Skip: Expression | undefined,
         public readonly Limit: Expression | undefined,
         public readonly IsReturn: boolean,
+        // Post-projection filter (WITH ... WHERE); evaluated over the projected columns.
+        public readonly Where: WhereClause | undefined = undefined,
     )
     {
     }

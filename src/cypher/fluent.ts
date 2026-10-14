@@ -332,6 +332,7 @@ class PendingProjection
     public OrderBy: readonly SortItem[] | undefined;
     public Skip: Expression | undefined;
     public Limit: Expression | undefined;
+    public Where: WhereClause | undefined;
 
     constructor(public readonly Items: readonly ReturnItem[], public readonly IsReturn: boolean)
     {
@@ -339,7 +340,7 @@ class PendingProjection
 
     public Build(): ProjectionClause
     {
-        return new ProjectionClause(this.Items, this.Distinct, this.OrderBy, this.Skip, this.Limit, this.IsReturn);
+        return new ProjectionClause(this.Items, this.Distinct, this.OrderBy, this.Skip, this.Limit, this.IsReturn, this.Where);
     }
 }
 
@@ -350,6 +351,7 @@ export class CypherQuery
     private static readonly NoProjectionMessage = "projection modifier requires a preceding With or Return";
     private static readonly WhereNeedsMatchMessage = "Where must directly follow a Match or OptionalMatch";
 
+    private static readonly DuplicateWithWhereMessage = "Where was already specified for this With";
     private static readonly DuplicateWhereMessage = "Where was already specified for this Match";
 
     private readonly parts: QueryPart[] = [];
@@ -390,8 +392,15 @@ export class CypherQuery
         return this.AddReading(new UnwindClause(ExprBuilder.Unwrap(expr), variable));
     }
 
+    // After a WITH, sets that projection's post-projection predicate; otherwise attaches to the preceding Match.
     public Where(expr: ExprArg): CypherQuery
     {
+        if (this.projection !== undefined && !this.projection.IsReturn)
+        {
+            if (this.projection.Where !== undefined) throw new Error(CypherQuery.DuplicateWithWhereMessage);
+            this.projection.Where = new WhereClause(ExprBuilder.Unwrap(expr));
+            return this;
+        }
         const last = this.reading[this.reading.length - 1];
         if (this.projection !== undefined || !(last instanceof MatchClause)) throw new Error(CypherQuery.WhereNeedsMatchMessage);
         if (last.Where !== undefined) throw new Error(CypherQuery.DuplicateWhereMessage);
@@ -402,14 +411,14 @@ export class CypherQuery
     // Ends the current query part with a WITH projection; further readings start the next part.
     public With(...items: ReturnItem[]): CypherQuery
     {
-        this.RequireOpen();
+        this.CloseWith();
         this.projection = new PendingProjection(items, false);
         return this;
     }
 
     public Return(...items: ReturnItem[]): CypherQuery
     {
-        this.RequireOpen();
+        this.CloseWith();
         this.projection = new PendingProjection(items, true);
         return this;
     }
@@ -446,20 +455,19 @@ export class CypherQuery
 
     private AddReading(clause: ReadingClause): CypherQuery
     {
-        if (this.projection !== undefined)
-        {
-            if (this.projection.IsReturn) throw new Error(CypherQuery.AfterReturnMessage);
-            this.parts.push(new QueryPart(this.reading, this.projection.Build()));
-            this.reading = [];
-            this.projection = undefined;
-        }
+        this.CloseWith();
         this.reading.push(clause);
         return this;
     }
 
-    private RequireOpen(): void
+    // A pending WITH ends its query part when anything follows it; a pending RETURN ends the query.
+    private CloseWith(): void
     {
-        if (this.projection !== undefined) throw new Error(CypherQuery.AfterReturnMessage);
+        if (this.projection === undefined) return;
+        if (this.projection.IsReturn) throw new Error(CypherQuery.AfterReturnMessage);
+        this.parts.push(new QueryPart(this.reading, this.projection.Build()));
+        this.reading = [];
+        this.projection = undefined;
     }
 
     private RequireProjection(): PendingProjection

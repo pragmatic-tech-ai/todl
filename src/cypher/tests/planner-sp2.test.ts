@@ -174,4 +174,10 @@ describe("cypher planner SP2 (segment pipeline)", () =>
             CypherSemanticError,
         );
     });
+
+    test("WITH ... WHERE is not scope-checked against the pre-projection scope (references projected aliases)", () =>
+    {
+        const r = Sp2Fixture.Engine().Execute("MATCH (a:Service) WITH a.name AS n WHERE n = 'checkout' RETURN n");
+        assert.equal(r.Rows.length, 1);
+    });
 });

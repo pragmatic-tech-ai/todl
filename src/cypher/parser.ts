@@ -47,6 +47,8 @@ export class CypherParser
     private static readonly ExpectedHopCount = "expected an integer hop count";
     private static readonly Expected = "expected";
     private static readonly ExpectedProjection = "expected RETURN or WITH";
+    private static readonly ReturnWhereNotAllowed = "WHERE is not allowed after RETURN (use WITH ... WHERE)";
+    private static readonly DuplicateProjectionWhere = "WITH accepts only one WHERE clause";
 
     private readonly tokens: Token[];
     private index = 0;
@@ -231,10 +233,23 @@ export class CypherParser
         const items = [this.parseReturnItem()];
         while (this.accept(TokenKind.Comma)) items.push(this.parseReturnItem());
 
+        // WITH ... WHERE is accepted before ORDER BY/SKIP/LIMIT (the planner filters first, then sorts/paginates)
+        // and, per openCypher's textual position, after LIMIT.
+        let where = this.parseProjectionWhere(isReturn, undefined);
+
         const orderBy = this.peekKeyword(CypherParser.KwOrder) ? this.parseOrderBy() : undefined;
         const skip = this.acceptKeyword(CypherParser.KwSkip) ? this.parseExpression() : undefined;
         const limit = this.acceptKeyword(CypherParser.KwLimit) ? this.parseExpression() : undefined;
-        return new ProjectionClause(items, distinct, orderBy, skip, limit, isReturn);
+        where = this.parseProjectionWhere(isReturn, where);
+        return new ProjectionClause(items, distinct, orderBy, skip, limit, isReturn, where);
+    }
+
+    private parseProjectionWhere(isReturn: boolean, existing: WhereClause | undefined): WhereClause | undefined
+    {
+        if (!this.peekKeyword(CypherParser.KwWhere)) return existing;
+        if (isReturn) throw this.error(CypherParser.ReturnWhereNotAllowed);
+        if (existing !== undefined) throw this.error(CypherParser.DuplicateProjectionWhere);
+        return this.parseWhere();
     }
 
     private parseOrderBy(): SortItem[]

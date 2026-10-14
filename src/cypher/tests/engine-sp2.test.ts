@@ -365,4 +365,31 @@ describe("CypherEngine SP2 read-plus (end-to-end)", () =>
             { from: "s2", type: "calls", to: "s3" },
         ]);
     });
+
+describe("CypherEngine SP2 WITH ... WHERE", () =>
+{
+    const e = Sp2Fixture.Engine();
+    const base = "MATCH (a:Service) OPTIONAL MATCH (a)-[:calls]->(b) WITH a.name AS n, count(b) AS c";
+
+    test("WITH ... WHERE keeps only rows satisfying the predicate", () =>
+    {
+        const r = e.Execute(`${base} WHERE c > 0 RETURN n, c`);
+        assert.deepEqual(Sp2Fixture.Pairs(r).sort((x, y) => String(x[0]).localeCompare(String(y[0]))),
+            [["billing", 2], ["checkout", 1], ["ledger", 1], ["vault", 1]]);
+    });
+
+    test("WHERE filters before ORDER BY / LIMIT", () =>
+    {
+        const asc = e.Execute(`${base} WHERE c >= 1 ORDER BY c, n LIMIT 1 RETURN n, c`);
+        assert.deepEqual(Sp2Fixture.Pairs(asc), [["checkout", 1]]);
+        const desc = e.Execute(`${base} WHERE c >= 1 ORDER BY c DESC LIMIT 1 RETURN n, c`);
+        assert.deepEqual(Sp2Fixture.Pairs(desc), [["billing", 2]]);
+    });
+
+    test("WHERE on an aggregate alias works as HAVING", () =>
+    {
+        const r = e.Execute("MATCH (a:Service)-[:calls]->(b:Service) WITH b.name AS n, count(*) AS c WHERE c > 1 RETURN n, c");
+        assert.deepEqual(Sp2Fixture.Pairs(r), [["ledger", 2]]);
+    });
+});
 });

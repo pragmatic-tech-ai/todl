@@ -184,4 +184,21 @@ describe("cypher fluent SP2 read-plus", () =>
         assert.equal(bare.Alias, undefined);
         assert.equal(bare.ColumnName(), "a.x");
     });
+
+    test("With(...).Where(...) matches the parser and guards duplicates and Return", () =>
+    {
+        const built = CypherQuery
+            .Match(Pattern.Node("a").Label("Service"))
+            .OptionalMatch(Pattern.Node("a").Out("calls", Pattern.Node("b")))
+            .With(Expr.Prop("a", "name").As("n"), Fn.CountOf(Expr.Var("b")).As("c"))
+            .Where(Expr.Var("c").Gt(0))
+            .Return(Return.Node("n"), Return.Node("c"))
+            .ToModel();
+        const parsed = new CypherParser(
+            "MATCH (a:Service) OPTIONAL MATCH (a)-[:calls]->(b) WITH a.name AS n, count(b) AS c WHERE c > 0 RETURN n, c").Parse();
+        assert.deepStrictEqual(built, parsed);
+        const open = CypherQuery.Match(Pattern.Node("a")).With(Return.Node("a")).Where(Expr.Var("a").Eq(1));
+        assert.throws(() => open.Where(Expr.Var("a").Eq(2)));
+        assert.throws(() => CypherQuery.Match(Pattern.Node("a")).Return(Return.Node("a")).Where(Expr.Var("a").Eq(1)));
+    });
 });
