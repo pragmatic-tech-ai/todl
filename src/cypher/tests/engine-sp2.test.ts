@@ -24,6 +24,13 @@ class Sp2Fixture
     private static readonly ServiceConcept = "Service";
     private static readonly CoreConcept = "CoreService";
     private static readonly CallsRel = "calls";
+    private static readonly NameField = "name";
+    private static readonly KindField = "kind";
+    private static readonly StringType = "string";
+    private static readonly OptionalCard = "?";
+    private static readonly ManyCard = "*";
+    private static readonly KindApi = "api";
+    private static readonly KindCore = "core";
 
     // Graph: checkout->ledger->billing->checkout (cycle), billing->audit, vault(Core)->ledger, lonely (isolated).
     public static Engine(): CypherEngine
@@ -32,14 +39,17 @@ class Sp2Fixture
             format: Sp2Fixture.Format, model: Sp2Fixture.ModelName, version: Sp2Fixture.ModelVersion,
             root: Sp2Fixture.RootConcept,
             concepts: {
-                Element: { extends: null, fields: {}, relationships: {}, invariants: [], annotations: [] },
-                Service: {
+                [Sp2Fixture.RootConcept]: { extends: null, fields: {}, relationships: {}, invariants: [], annotations: [] },
+                [Sp2Fixture.ServiceConcept]: {
                     extends: Sp2Fixture.RootConcept,
-                    fields: { name: { type: "string", card: "?" }, kind: { type: "string", card: "?" } },
-                    relationships: { calls: { targets: [Sp2Fixture.ServiceConcept], card: "*", annotations: [] } },
+                    fields: {
+                        [Sp2Fixture.NameField]: { type: Sp2Fixture.StringType, card: Sp2Fixture.OptionalCard },
+                        [Sp2Fixture.KindField]: { type: Sp2Fixture.StringType, card: Sp2Fixture.OptionalCard },
+                    },
+                    relationships: { [Sp2Fixture.CallsRel]: { targets: [Sp2Fixture.ServiceConcept], card: Sp2Fixture.ManyCard, annotations: [] } },
                     invariants: [], annotations: [],
                 },
-                CoreService: { extends: Sp2Fixture.ServiceConcept, fields: {}, relationships: {}, invariants: [], annotations: [] },
+                [Sp2Fixture.CoreConcept]: { extends: Sp2Fixture.ServiceConcept, fields: {}, relationships: {}, invariants: [], annotations: [] },
             },
             classes: {}, taxonomies: {},
         };
@@ -48,12 +58,12 @@ class Sp2Fixture
         g.PreRegister(m);
         g.Finalize(m);
         const nodes: ReflectedNode[] = [
-            Sp2Fixture.Svc("s1", "checkout", "api"),
-            Sp2Fixture.Svc("s2", "ledger", "core"),
-            Sp2Fixture.Svc("s3", "billing", "core"),
-            Sp2Fixture.Svc("s4", "audit", "api"),
-            Sp2Fixture.Svc("s5", "lonely", "api"),
-            { id: "c1", type: Sp2Fixture.CoreConcept, attrs: { name: "vault", kind: "core" } },
+            Sp2Fixture.Svc("s1", "checkout", Sp2Fixture.KindApi),
+            Sp2Fixture.Svc("s2", "ledger", Sp2Fixture.KindCore),
+            Sp2Fixture.Svc("s3", "billing", Sp2Fixture.KindCore),
+            Sp2Fixture.Svc("s4", "audit", Sp2Fixture.KindApi),
+            Sp2Fixture.Svc("s5", "lonely", Sp2Fixture.KindApi),
+            { id: "c1", type: Sp2Fixture.CoreConcept, attrs: { [Sp2Fixture.NameField]: "vault", [Sp2Fixture.KindField]: Sp2Fixture.KindCore } },
         ];
         const edges = [
             { from: "s1", rel: Sp2Fixture.CallsRel, to: "s2" },
@@ -68,7 +78,7 @@ class Sp2Fixture
 
     public static Svc(id: string, name: string, kind: string): ReflectedNode
     {
-        return { id, type: Sp2Fixture.ServiceConcept, attrs: { name, kind } };
+        return { id, type: Sp2Fixture.ServiceConcept, attrs: { [Sp2Fixture.NameField]: name, [Sp2Fixture.KindField]: kind } };
     }
 
     public static Col(result: CypherResult, index: number): unknown[]
@@ -158,8 +168,13 @@ describe("CypherEngine SP2 read-plus (end-to-end)", () =>
         assert.deepEqual(Sp2Fixture.Col(exact, 0), ["billing"]);
         const all = e.Execute("MATCH p = (a:Service)-[:calls*1..3]->(b) RETURN length(p) AS len");
         assert.ok(all.Rows.length > 0 && all.Rows.length < 100);
-        const unbounded = e.Execute("MATCH p = (a:Service)-[:calls*]->(b) WHERE a.name = 'checkout' RETURN length(p) AS len");
-        assert.ok(unbounded.Rows.length > 0 && unbounded.Rows.length < 100);
+        const unbounded = e.Execute("MATCH p = (a:Service)-[:calls*]->(b) WHERE a.name = 'checkout' RETURN b.name AS n, length(p) AS len, relationships(p) AS rs ORDER BY len, n");
+        assert.deepEqual(unbounded.Rows.map((r) => [Sp2Fixture.Plain(r[0]!), Sp2Fixture.Plain(r[1]!)]), [["ledger", 1], ["billing", 2], ["audit", 3], ["checkout", 3]]);
+        for (const row of unbounded.Rows)
+        {
+            const keys = (row[2] as ListValue).Items.map((x) => x.GroupKey());
+            assert.equal(new Set(keys).size, keys.length, "a relationship repeated within one path");
+        }
     });
 
     test("nodes(p) and relationships(p)", () =>
@@ -232,7 +247,7 @@ describe("CypherEngine SP2 read-plus (end-to-end)", () =>
         assert.equal(reader.id, "s2");
         assert.equal(reader.concept, "Service");
         assert.equal(reader.field("name"), "ledger");
-        assert.equal(reader.field("kind"), "core");
+        assert.equal(reader.field("kind"), Sp2Fixture.KindCore);
     });
 
     test("parity: text and fluent produce identical results on an aggregating query", () =>
@@ -243,7 +258,7 @@ describe("CypherEngine SP2 read-plus (end-to-end)", () =>
         const fluent = e.Execute(
             CypherQuery
                 .Match(Pattern.Node("a").Label("Service").Out("calls", Pattern.Node("b").Label("Service")))
-                .Where(Expr.Prop("a", "kind").Eq("core"))
+                .Where(Expr.Prop("a", "kind").Eq(Sp2Fixture.KindCore))
                 .Return(Return.Prop("b", "name", "n"), Return.Item(Fn.Count(), "c"))
                 .OrderBy(Sort.By(Expr.Var("n"))),
         );
