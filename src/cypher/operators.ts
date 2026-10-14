@@ -126,6 +126,31 @@ export class ExpandInto implements IOperator
     }
 }
 
+// Keeps only rows whose bound variable is a node that is an instance of the label. Used for a label
+// written on a REUSED variable occurrence, where no scan exists to apply it.
+export class LabelFilter implements IOperator
+{
+    constructor(
+        private readonly child: IOperator,
+        private readonly graph: ICypherGraph,
+        private readonly varName: string,
+        private readonly label: string,
+    )
+    {
+    }
+
+    public *Rows(): Iterable<Binding>
+    {
+        for (const row of this.child.Rows())
+        {
+            const v = row.Get(this.varName);
+            if (!(v instanceof NodeValue)) continue;
+            const mirror = this.graph.Reflect(v.Id);
+            if (mirror !== undefined && this.graph.IsInstanceOf(mirror, this.label)) yield row;
+        }
+    }
+}
+
 export class Filter implements IOperator
 {
     constructor(private readonly child: IOperator, private readonly predicate: Expression, private readonly parameters: ReadonlyMap<string, CypherValue>)

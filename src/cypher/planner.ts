@@ -10,7 +10,7 @@ import { Comparison, PropertyAccess, VariableRef, Literal, FunctionCall } from "
 import { Binding, EvalContext } from "./binding.js";
 import { CypherValue, ScalarValue } from "./values.js";
 import { VarLengthExpand } from "./operators-varlength.js";
-import { IOperator, AllNodesScan, LabelScan, Expand, ExpandInto, Filter, Project, SingleRow, BindingRow } from "./operators.js";
+import { IOperator, AllNodesScan, LabelScan, Expand, ExpandInto, Filter, LabelFilter, Project, SingleRow, BindingRow } from "./operators.js";
 import { Unwind } from "./operators-unwind.js";
 import { CartesianProduct } from "./operators-join.js";
 import { OptionalApply } from "./operators-optional.js";
@@ -170,7 +170,7 @@ export class LogicalPlanner
         let op: IOperator;
         if (anchorReused)
         {
-            op = input;
+            op = this.foldReusedConstraints(input, anchor, names[0]!);
         }
         else
         {
@@ -206,9 +206,10 @@ export class LogicalPlanner
             else if (targetBound)
             {
                 // Reusing a variable reached by expansion: constrain the hop to the bound node (equality by
-                // identity) instead of rebinding it. The bound node is already label/property-constrained, so
-                // no re-fold and no re-bind here.
+                // identity) instead of rebinding it. Any label/property written on this reused occurrence is
+                // applied as a filter after the join; no re-bind here.
                 op = new ExpandInto(op, this.graph, names[i]!, names[i + 1]!, rel.RelType, rel.Direction, rel.Variable);
+                op = this.foldReusedConstraints(op, toNode, names[i + 1]!);
                 continue;
             }
             else
@@ -333,6 +334,13 @@ export class LogicalPlanner
     private anchor(node: NodePattern, name: string): IOperator
     {
         return node.Label === undefined ? new AllNodesScan(this.graph, name) : new LabelScan(this.graph, name, node.Label);
+    }
+
+    private foldReusedConstraints(op: IOperator, node: NodePattern, name: string): IOperator
+    {
+        let result = op;
+        if (node.Label !== undefined) result = new LabelFilter(result, this.graph, name, node.Label);
+        return this.foldNodeProperties(result, node, name);
     }
 
     private foldNodeProperties(op: IOperator, node: NodePattern, name: string): IOperator

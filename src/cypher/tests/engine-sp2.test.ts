@@ -34,7 +34,7 @@ class Sp2Fixture
     private static readonly UnexpectedCellMessage = "unexpected cell type in Plain()";
 
     // Graph: checkout->ledger->billing->checkout (cycle), billing->audit, vault(Core)->ledger, lonely (isolated).
-    public static Engine(): CypherEngine
+    public static Engine(extraEdges: { from: string; rel: string; to: string }[] = []): CypherEngine
     {
         const logical: LogicalManifest = {
             format: Sp2Fixture.Format, model: Sp2Fixture.ModelName, version: Sp2Fixture.ModelVersion,
@@ -72,6 +72,7 @@ class Sp2Fixture
             { from: "s3", rel: Sp2Fixture.CallsRel, to: "s1" },
             { from: "s3", rel: Sp2Fixture.CallsRel, to: "s4" },
             { from: "c1", rel: Sp2Fixture.CallsRel, to: "s2" },
+            ...extraEdges,
         ];
         g.BindSeed({ nodes, edges }, { model: Sp2Fixture.ModelName, version: Sp2Fixture.ModelVersion });
         return CypherEngine.OverQuery(new GraphQuery(g));
@@ -552,5 +553,55 @@ describe("CypherEngine SP2 WITH ... WHERE", () =>
     {
         assert.deepEqual(Sp2Fixture.Col(e.Execute("UNWIND $one AS x RETURN x", new Map([["one", 5]])), 0), [5]);
         assert.throws(() => e.Execute("RETURN $nope AS v"), CypherSemanticError);
+    });
+});
+
+class ReusedFixture
+{
+    // Adds checkout(s1)->vault(c1) so the CoreService vault is reachable as a call target.
+    public static readonly ExtraEdges = [{ from: "s1", rel: "calls", to: "c1" }];
+    public static readonly TripleCols = "a.name AS a, b.name AS b, c.name AS c";
+}
+
+describe("CypherEngine SP2 constraints on reused variable occurrences", () =>
+{
+    const e = Sp2Fixture.Engine(ReusedFixture.ExtraEdges);
+
+    test("reused target label excludes bound nodes that are not that label", () =>
+    {
+        const r = e.Execute(`MATCH (a:Service)-[:calls]->(b), (c:Service)-[:calls]->(b:CoreService) RETURN ${ReusedFixture.TripleCols} ORDER BY a, c`);
+        assert.deepEqual(Sp2Fixture.Pairs(r), [["checkout", "vault", "checkout"]]);
+    });
+
+    test("reused target property excludes non-matching bound nodes", () =>
+    {
+        const r = e.Execute(`MATCH (a)-[:calls]->(b), (c)-[:calls]->(b {kind: 'api'}) RETURN ${ReusedFixture.TripleCols} ORDER BY a, b, c`);
+        assert.deepEqual(Sp2Fixture.Pairs(r), [["billing", "audit", "billing"], ["billing", "checkout", "billing"]]);
+    });
+
+    test("reused anchor label constrains the bound variable", () =>
+    {
+        const r = e.Execute("MATCH (a:Service)-[:calls]->(b), (b:CoreService)-[:calls]->(x) RETURN a.name AS a, b.name AS b, x.name AS x");
+        assert.deepEqual(Sp2Fixture.Pairs(r), [["checkout", "vault", "ledger"]]);
+    });
+
+    test("reused anchor property constrains the bound variable", () =>
+    {
+        const r = e.Execute("MATCH (a)-[:calls]->(b), (b {kind: 'core'})-[:calls]->(x) RETURN a.name AS a, b.name AS b, x.name AS x ORDER BY a, b, x");
+        assert.deepEqual(Sp2Fixture.Pairs(r), [
+            ["checkout", "ledger", "billing"],
+            ["checkout", "vault", "ledger"],
+            ["ledger", "billing", "audit"],
+            ["ledger", "billing", "checkout"],
+            ["vault", "ledger", "billing"],
+        ]);
+    });
+
+    test("reused occurrences with no extra constraint are unchanged", () =>
+    {
+        const r = e.Execute(`MATCH (a)-[:calls]->(b), (c)-[:calls]->(b) WHERE a.name < c.name RETURN ${ReusedFixture.TripleCols} ORDER BY a, c`);
+        assert.deepEqual(Sp2Fixture.Pairs(r), [["checkout", "ledger", "vault"]]);
+        const r2 = e.Execute("MATCH (a)-[:calls]->(b), (b)-[:calls]->(x) RETURN count(*) AS n");
+        assert.deepEqual(Sp2Fixture.Col(r2, 0), [7]);
     });
 });
