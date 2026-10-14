@@ -463,6 +463,13 @@ describe("CypherEngine SP2 WITH ... WHERE", () =>
         assert.deepEqual(Sp2Fixture.Col(r, 0), ["checkout"]);
     });
 
+    test("WITH ... WHERE accepts a parameter on the projected alias", () =>
+    {
+        const q = "MATCH (a:Service) WITH a.name AS n WHERE n = $x RETURN n";
+        assert.deepEqual(Sp2Fixture.Col(e.Execute(q, new Map([["x", "checkout"]])), 0), ["checkout"]);
+        assert.equal(e.Execute(q, new Map([["x", "no-such-service"]])).Rows.length, 0);
+    });
+
     test("WITH ... WHERE alias form still works", () =>
     {
         const r = e.Execute("MATCH (a:Service) WITH a.name AS n WHERE n = 'checkout' RETURN n");
@@ -615,7 +622,7 @@ describe("CypherEngine strict WITH-segment scope (opt-in)", () =>
 
     test("strict rejects reuse of a name dropped by WITH", () =>
     {
-        assert.throws(() => strict.Execute(dropped), (e: unknown) => e instanceof CypherSemanticError && /dropped by WITH/.test(e.message));
+        assert.throws(() => strict.Execute(dropped), (e: unknown) => e instanceof CypherSemanticError && /dropped by an earlier WITH/.test(e.message));
     });
 
     test("default mode still allows the dropped-name reuse (fresh variable)", () =>

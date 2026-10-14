@@ -56,7 +56,7 @@ export class LogicalPlanner
     private static readonly PathVarNeedsVarLength = "a path variable requires a variable-length relationship";
     private static readonly VarLengthIntoBoundUnsupported = "variable-length expansion into an already-bound node is not yet supported";
 
-    private static readonly StrictScopeReuse = "variable reused after being dropped by WITH";
+    private static readonly StrictScopeReuse = "variable reused after being dropped by an earlier WITH";
 
     private readonly maxVarLength: number;
     private readonly strictWithScope: boolean;
@@ -299,19 +299,26 @@ export class LogicalPlanner
         return op;
     }
 
+    // Projected expression StructuralKey -> output column name. First projected item wins for duplicate projections
+    // (identical values). Shared by WITH ... WHERE and ORDER BY resolution so the two stay in lockstep.
+    private projectedColumnsByKey(projection: ProjectionClause): Map<string, string>
+    {
+        const byKey = new Map<string, string>();
+        for (const item of projection.Items)
+        {
+            const key = item.Expr.StructuralKey();
+            if (!byKey.has(key)) byKey.set(key, item.ColumnName());
+        }
+        return byKey;
+    }
+
     // WITH ... WHERE runs over the projected rows. Symmetric with ORDER BY: any predicate sub-expression structurally
     // equal to a projected expression (WITH a.name AS n WHERE a.name = 'x') is rewritten to read that output column.
     // Whatever remains must reference projected output columns by NAME/alias, else it is an unknown WHERE column.
     private resolveWithWhere(projection: ProjectionClause): Expression
     {
         const columns = new Set<string>(projection.Items.map((i) => i.ColumnName()));
-        const byKey = new Map<string, string>();
-        // First projected item wins for duplicate projections (identical values).
-        for (const item of projection.Items)
-        {
-            const key = item.Expr.StructuralKey();
-            if (!byKey.has(key)) byKey.set(key, item.ColumnName());
-        }
+        const byKey = this.projectedColumnsByKey(projection);
         const rewritten = projection.Where!.Predicate.Rewrite((e) =>
         {
             const column = byKey.get(e.StructuralKey());
@@ -332,12 +339,11 @@ export class LogicalPlanner
     private resolveOrderBy(projection: ProjectionClause): SortItem[]
     {
         const columns = new Set<string>(projection.Items.map((i) => i.ColumnName()));
+        const byKey = this.projectedColumnsByKey(projection);
         return projection.OrderBy!.map((sort) =>
         {
-            const sortKey = sort.Expr.StructuralKey();
-            // find takes the first projected item with a matching key; harmless for duplicate projections (identical values).
-            const match = projection.Items.find((i) => i.Expr.StructuralKey() === sortKey);
-            if (match !== undefined) return new SortItem(new VariableRef(match.ColumnName()), sort.Descending);
+            const matched = byKey.get(sort.Expr.StructuralKey());
+            if (matched !== undefined) return new SortItem(new VariableRef(matched), sort.Descending);
             const referenced = new Set<string>();
             sort.Expr.CollectVariables(referenced);
             for (const v of referenced)
