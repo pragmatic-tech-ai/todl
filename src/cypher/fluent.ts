@@ -350,9 +350,8 @@ export class CypherQuery
     private static readonly AfterReturnMessage = "no clauses may follow Return";
     private static readonly NoProjectionMessage = "projection modifier requires a preceding With or Return";
     private static readonly WhereNeedsMatchMessage = "Where must directly follow a Match or OptionalMatch";
-
-    private static readonly DuplicateWithWhereMessage = "Where was already specified for this With";
     private static readonly DuplicateWhereMessage = "Where was already specified for this Match";
+    private static readonly DuplicateWithWhereMessage = "Where was already specified for this With";
 
     private readonly parts: QueryPart[] = [];
     private reading: ReadingClause[] = [];

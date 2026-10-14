@@ -365,6 +365,7 @@ describe("CypherEngine SP2 read-plus (end-to-end)", () =>
             { from: "s2", type: "calls", to: "s3" },
         ]);
     });
+});
 
 describe("CypherEngine SP2 WITH ... WHERE", () =>
 {
@@ -386,10 +387,15 @@ describe("CypherEngine SP2 WITH ... WHERE", () =>
         assert.deepEqual(Sp2Fixture.Pairs(desc), [["billing", 2]]);
     });
 
+    test("WITH ... WHERE referencing a non-projected name is a semantic error", () =>
+    {
+        assert.throws(() => e.Execute("MATCH (a:Service) WITH a.name AS n WHERE zzz > 1 RETURN n"), CypherSemanticError);
+        assert.throws(() => e.Execute("MATCH (a:Service) WITH a.name AS n WHERE a.name = 'x' RETURN n"), CypherSemanticError);
+    });
+
     test("WHERE on an aggregate alias works as HAVING", () =>
     {
         const r = e.Execute("MATCH (a:Service)-[:calls]->(b:Service) WITH b.name AS n, count(*) AS c WHERE c > 1 RETURN n, c");
         assert.deepEqual(Sp2Fixture.Pairs(r), [["ledger", 2]]);
     });
-});
 });

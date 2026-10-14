@@ -179,5 +179,6 @@ describe("cypher planner SP2 (segment pipeline)", () =>
     {
         const r = Sp2Fixture.Engine().Execute("MATCH (a:Service) WITH a.name AS n WHERE n = 'checkout' RETURN n");
         assert.equal(r.Rows.length, 1);
+        assert.equal((r.Rows[0]![0] as ScalarValue).Value, "checkout");
     });
 });

@@ -48,7 +48,7 @@ export class CypherParser
     private static readonly Expected = "expected";
     private static readonly ExpectedProjection = "expected RETURN or WITH";
     private static readonly ReturnWhereNotAllowed = "WHERE is not allowed after RETURN (use WITH ... WHERE)";
-    private static readonly DuplicateProjectionWhere = "WITH accepts only one WHERE clause";
+    private static readonly MisplacedWithWhere = "WITH ... WHERE must come before ORDER BY / SKIP / LIMIT";
 
     private readonly tokens: Token[];
     private index = 0;
@@ -233,22 +233,20 @@ export class CypherParser
         const items = [this.parseReturnItem()];
         while (this.accept(TokenKind.Comma)) items.push(this.parseReturnItem());
 
-        // WITH ... WHERE is accepted before ORDER BY/SKIP/LIMIT (the planner filters first, then sorts/paginates)
-        // and, per openCypher's textual position, after LIMIT.
-        let where = this.parseProjectionWhere(isReturn, undefined);
+        // Deliberate position restriction: WITH ... WHERE is accepted only here, before ORDER BY/SKIP/LIMIT, matching the
+        // planner's HAVING semantics (filter, then order/paginate). Standard Cypher's after-LIMIT WHERE is a deferred nicety.
+        const where = this.peekKeyword(CypherParser.KwWhere) ? this.parseProjectionWhere(isReturn) : undefined;
 
         const orderBy = this.peekKeyword(CypherParser.KwOrder) ? this.parseOrderBy() : undefined;
         const skip = this.acceptKeyword(CypherParser.KwSkip) ? this.parseExpression() : undefined;
         const limit = this.acceptKeyword(CypherParser.KwLimit) ? this.parseExpression() : undefined;
-        where = this.parseProjectionWhere(isReturn, where);
+        if (this.peekKeyword(CypherParser.KwWhere)) throw this.error(isReturn ? CypherParser.ReturnWhereNotAllowed : CypherParser.MisplacedWithWhere);
         return new ProjectionClause(items, distinct, orderBy, skip, limit, isReturn, where);
     }
 
-    private parseProjectionWhere(isReturn: boolean, existing: WhereClause | undefined): WhereClause | undefined
+    private parseProjectionWhere(isReturn: boolean): WhereClause
     {
-        if (!this.peekKeyword(CypherParser.KwWhere)) return existing;
         if (isReturn) throw this.error(CypherParser.ReturnWhereNotAllowed);
-        if (existing !== undefined) throw this.error(CypherParser.DuplicateProjectionWhere);
         return this.parseWhere();
     }
 

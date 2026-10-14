@@ -198,7 +198,7 @@ describe("cypher fluent SP2 read-plus", () =>
             "MATCH (a:Service) OPTIONAL MATCH (a)-[:calls]->(b) WITH a.name AS n, count(b) AS c WHERE c > 0 RETURN n, c").Parse();
         assert.deepStrictEqual(built, parsed);
         const open = CypherQuery.Match(Pattern.Node("a")).With(Return.Node("a")).Where(Expr.Var("a").Eq(1));
-        assert.throws(() => open.Where(Expr.Var("a").Eq(2)));
-        assert.throws(() => CypherQuery.Match(Pattern.Node("a")).Return(Return.Node("a")).Where(Expr.Var("a").Eq(1)));
+        assert.throws(() => open.Where(Expr.Var("a").Eq(2)), /already specified for this With/);
+        assert.throws(() => CypherQuery.Match(Pattern.Node("a")).Return(Return.Node("a")).Where(Expr.Var("a").Eq(1)), /directly follow a Match/);
     });
 });

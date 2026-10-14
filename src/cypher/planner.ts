@@ -48,6 +48,7 @@ export class LogicalPlanner
     private static readonly RelPropsUnsupported = "relationship properties are not supported";
     private static readonly UnknownRelType = "unknown relationship type";
     private static readonly UnknownOrderByColumn = "unknown ORDER BY column";
+    private static readonly UnknownWhereColumn = "unknown WITH ... WHERE column";
     private static readonly UnboundVariable = "variable not in scope";
     private static readonly NonNumericLimit = "SKIP/LIMIT must evaluate to a number";
     private static readonly NestedAggregate = "aggregate functions must be a direct call in a projection item";
@@ -259,6 +260,7 @@ export class LogicalPlanner
 
         if (projection.Distinct) op = new Distinct(op, projection.Items.map((i) => i.ColumnName()));
         // HAVING-style: WITH ... WHERE filters the projected/aggregated rows, then ORDER BY/SKIP/LIMIT paginate the filtered set.
+        if (projection.Where !== undefined) this.checkWithWhereColumns(projection);
         if (projection.Where !== undefined) op = new Filter(op, projection.Where.Predicate, this.parameters);
         if (projection.OrderBy !== undefined)
         {
@@ -267,6 +269,18 @@ export class LogicalPlanner
         if (projection.Skip !== undefined) op = new Skip(op, this.evalCount(projection.Skip));
         if (projection.Limit !== undefined) op = new Limit(op, this.evalCount(projection.Limit));
         return op;
+    }
+
+    // WITH ... WHERE runs over the projected rows, so (like ORDER BY) it may only reference projected output columns.
+    private checkWithWhereColumns(projection: ProjectionClause): void
+    {
+        const columns = new Set<string>(projection.Items.map((i) => i.ColumnName()));
+        const referenced = new Set<string>();
+        projection.Where!.Predicate.CollectVariables(referenced);
+        for (const v of referenced)
+        {
+            if (!columns.has(v)) throw new CypherSemanticError(`${LogicalPlanner.UnknownWhereColumn}: "${v}"`);
+        }
     }
 
     // Sort runs over the projected rows. A sort expression equal to a projected property access

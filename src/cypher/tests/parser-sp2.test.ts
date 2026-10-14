@@ -152,6 +152,7 @@ describe("cypher parser SP2 (expression edge cases)", () =>
         assert.ok(proj.Where.Predicate instanceof Comparison);
         assert.equal(new CypherParser("MATCH (a) WITH a RETURN a").Parse().Parts[0]!.Projection.Where, undefined);
         assert.throws(() => new CypherParser("MATCH (a) RETURN a WHERE a").Parse(), CypherSyntaxError);
-        assert.throws(() => new CypherParser("MATCH (a) WITH a WHERE a ORDER BY a WHERE a RETURN a").Parse(), CypherSyntaxError);
+        assert.throws(() => new CypherParser("MATCH (a) WITH a LIMIT 1 WHERE a > 1 RETURN a").Parse(), (e: unknown) => e instanceof CypherSyntaxError && /before ORDER BY/.test(e.message));
+        assert.throws(() => new CypherParser("MATCH (a) WITH a ORDER BY a WHERE a RETURN a").Parse(), CypherSyntaxError);
     });
 });
