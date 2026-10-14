@@ -19,7 +19,7 @@ class Sp2Fixture
     private static readonly ServiceConcept = "Service";
     private static readonly CallsRel = "calls";
 
-    public static Engine(): CypherEngine
+    public static Engine(extraEdges: { from: string; rel: string; to: string }[] = []): CypherEngine
     {
         const logical: LogicalManifest = {
             format: Sp2Fixture.Format, model: Sp2Fixture.ModelName, version: Sp2Fixture.ModelVersion,
@@ -50,6 +50,7 @@ class Sp2Fixture
                 edges: [
                     { from: "a", rel: Sp2Fixture.CallsRel, to: "b" },
                     { from: "a", rel: Sp2Fixture.CallsRel, to: "c" },
+                    ...extraEdges,
                 ],
             },
             { model: Sp2Fixture.ModelName, version: Sp2Fixture.ModelVersion },
@@ -117,16 +118,15 @@ describe("cypher planner SP2 (segment pipeline)", () =>
 
     test("ORDER BY an unaliased projected aggregate sorts on the projected column", () =>
     {
-        // Fixture: checkout calls ledger + audit, the other two call nothing; count(b) is 2, 0, 0 (nulls are skipped).
+        // Fixture: a(checkout) calls b(ledger) and c(audit); one extra edge b->c gives out-degrees 2 / 1 / 0.
         const query = "MATCH (a:Service) OPTIONAL MATCH (a)-[:calls]->(b:Service) RETURN a.name AS n, count(b) AS c ORDER BY count(b)";
-        const engine = Sp2Fixture.Engine();
+        const engine = Sp2Fixture.Engine([{ from: "b", rel: "calls", to: "c" }]);
         const names = (text: string) => engine.Execute(text).Rows.map((r) => (r[0] as ScalarValue).Value);
         const counts = (text: string) => engine.Execute(text).Rows.map((r) => (r[1] as ScalarValue).Value);
-        assert.deepEqual(names(`${query} DESC, n`), ["checkout", "audit", "ledger"]);
-        assert.deepEqual(counts(`${query} DESC, n`), [2, 0, 0]);
-        assert.deepEqual(names(`${query} ASC, n`), ["audit", "ledger", "checkout"]);
-        assert.deepEqual(counts(`${query} ASC, n`), [0, 0, 2]);
-        assert.deepEqual(names(`${query} DESC, n DESC`), ["checkout", "ledger", "audit"]);
+        assert.deepEqual(names(`${query} DESC`), ["checkout", "ledger", "audit"]);
+        assert.deepEqual(counts(`${query} DESC`), [2, 1, 0]);
+        assert.deepEqual(names(`${query} ASC`), ["audit", "ledger", "checkout"]);
+        assert.deepEqual(counts(`${query} ASC`), [0, 1, 2]);
     });
 
     test("ORDER BY a different aggregate than the projected one is rejected", () =>

@@ -84,8 +84,8 @@ describe("ordering operators", () =>
     test("multi-key sort: later key breaks ties, per-key direction", () =>
     {
         const src = new Rows(MultiRows.Make([[1, 2], [2, 1], [1, 1], [2, 2]]));
-        const asc = new Sort(src, [new SortItem(new VariableRef("x"), false), new SortItem(new VariableRef("y"), true)], new Map());
-        assert.deepEqual(MultiRows.Pairs(asc.Rows()), [[1, 2], [1, 1], [2, 2], [2, 1]]);
+        const mixed = new Sort(src, [new SortItem(new VariableRef("x"), false), new SortItem(new VariableRef("y"), true)], new Map());
+        assert.deepEqual(MultiRows.Pairs(mixed.Rows()), [[1, 2], [1, 1], [2, 2], [2, 1]]);
     });
 
     test("sort is stable: tied keys keep input order", () =>

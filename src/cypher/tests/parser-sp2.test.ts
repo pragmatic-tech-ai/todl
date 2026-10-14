@@ -128,12 +128,13 @@ describe("cypher parser SP2 (expression edge cases)", () =>
     {
         const c = new CypherParser("RETURN coalesce(null, 2) IN [2, 3] AS x").Parse();
         assert.equal(c.Parts[0]!.Projection.Items[0]!.Alias, "x");
-        assert.doesNotThrow(() => new CypherParser("MATCH (a) RETURN count(*) IN [1] AS x").Parse());
+        const agg = new CypherParser("MATCH (a) RETURN count(*) IN [1] AS x").Parse();
+        assert.equal(agg.Parts[0]!.Projection.Items[0]!.Alias, "x");
     });
 
     test("IN with a non-literal right side is a clear syntax error", () =>
     {
-        assert.throws(() => new CypherParser("RETURN 1 IN $xs AS x").Parse(), (e: unknown) => e instanceof CypherSyntaxError && /LBracket/.test(e.message));
+        assert.throws(() => new CypherParser("RETURN 1 IN $xs AS x").Parse(), (e: unknown) => e instanceof CypherSyntaxError && /expected/i.test(e.message) && /line 1/.test(e.message));
     });
 
     test("a relationship variable on a variable-length pattern parses with its hop bounds", () =>
