@@ -95,4 +95,16 @@ describe("Aggregate operator", () =>
         const out = [...new Aggregate(new Rows([]), Fixtures.Grouping(), [Fixtures.CountStar()], new Map()).Rows()];
         assert.equal(out.length, 0);
     });
+
+    test("groups emit in first-seen order, not sorted order", () =>
+    {
+        const src = new Rows([Rows.Row("z", 1), Rows.Row("a", 2), Rows.Row("m", 3), Rows.Row("a", 4), Rows.Row("z", 5)]);
+        const out = [...new Aggregate(src, Fixtures.Grouping(), [Fixtures.CountStar(), Fixtures.Collect(false)], new Map()).Rows()];
+        assert.deepEqual(out.map((r) => (r.Get("k") as ScalarValue).Value), ["z", "a", "m"]);
+        assert.deepEqual(out.map((r) => (r.Get("c") as ScalarValue).Value), [2, 2, 1]);
+        const xs = (r: Binding) => (r.Get("xs") as ListValue).Items.map((i) => (i as ScalarValue).Value);
+        assert.deepEqual(xs(out[0]!), [1, 5]);
+        assert.deepEqual(xs(out[1]!), [2, 4]);
+        assert.deepEqual(xs(out[2]!), [3]);
+    });
 });

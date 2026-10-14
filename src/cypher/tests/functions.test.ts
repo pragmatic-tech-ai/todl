@@ -4,6 +4,7 @@ import { FunctionCall, Literal } from "../expressions.js";
 import { Binding, EvalContext } from "../binding.js";
 import { ScalarValue, NullValue } from "../values.js";
 import { ListValue } from "../values-structured.js";
+import { FunctionRegistry } from "../functions.js";
 import { CypherSemanticError } from "../errors.js";
 
 class H
@@ -71,5 +72,55 @@ describe("functions", () =>
     {
         assert.throws(() => H.Fn("bogus", 1).Evaluate(H.Ctx()), CypherSemanticError);
         assert.throws(() => H.Fn("count", 1).Evaluate(H.Ctx()), CypherSemanticError);
+    });
+
+    test("function names are case-insensitive", () =>
+    {
+        assert.equal((H.Fn("TOUPPER", "ab").Evaluate(H.Ctx()) as ScalarValue).Value, "AB");
+        assert.equal((H.Fn("ToUpper", "ab").Evaluate(H.Ctx()) as ScalarValue).Value, "AB");
+        assert.equal((H.Fn("SIZE", "abc").Evaluate(H.Ctx()) as ScalarValue).Value, 3);
+        assert.equal((H.Fn("CoAlEsCe", null, 4).Evaluate(H.Ctx()) as ScalarValue).Value, 4);
+        assert.equal(FunctionRegistry.IsAggregate("COUNT"), true);
+        assert.notEqual(FunctionRegistry.Scalar("ToLower"), undefined);
+    });
+    test("wrong-typed or missing args yield null", () =>
+    {
+        for (const name of ["toLower", "trim", "head", "last", "tail", "reverse", "keys", "length", "nodes", "relationships", "size"])
+        {
+            assert.ok(H.Fn(name, 5).Evaluate(H.Ctx()) instanceof NullValue, name);
+        }
+        assert.ok(H.Fn("toUpper").Evaluate(H.Ctx()) instanceof NullValue);
+        assert.ok(H.Fn("substring", "abc", "x").Evaluate(H.Ctx()) instanceof NullValue);
+        assert.ok(H.Fn("replace", "abc", "a", 1).Evaluate(H.Ctx()) instanceof NullValue);
+        assert.ok(H.Fn("range", "a", 3).Evaluate(H.Ctx()) instanceof NullValue);
+        assert.ok(H.Fn("range", 1, 3, 0).Evaluate(H.Ctx()) instanceof NullValue);
+        assert.ok(H.Fn("toInteger", "abc").Evaluate(H.Ctx()) instanceof NullValue);
+        assert.ok(H.Fn("coalesce", null, null).Evaluate(H.Ctx()) instanceof NullValue);
+    });
+    test("IsAggregate recognises exactly the aggregate names", () =>
+    {
+        for (const n of ["count", "collect", "sum", "avg", "min", "max"])
+        {
+            assert.equal(FunctionRegistry.IsAggregate(n), true, n);
+            assert.equal(FunctionRegistry.Scalar(n), undefined, n);
+        }
+        for (const n of ["coalesce", "size", "range", "bogus"])
+        {
+            assert.equal(FunctionRegistry.IsAggregate(n), false, n);
+        }
+    });
+    test("range values, ascending, descending and stepped", () =>
+    {
+        const vals = (...a: number[]) => ((H.Fn("range", ...a).Evaluate(H.Ctx())) as ListValue).Items.map((i) => (i as ScalarValue).Value);
+        assert.deepEqual(vals(1, 5), [1, 2, 3, 4, 5]);
+        assert.deepEqual(vals(0, 10, 3), [0, 3, 6, 9]);
+        assert.deepEqual(vals(5, 1, -2), [5, 3, 1]);
+        assert.deepEqual(vals(3, 1), []);
+        assert.deepEqual(vals(2, 2), [2]);
+    });
+    test("unknown and misplaced-aggregate errors carry the function name", () =>
+    {
+        assert.throws(() => H.Fn("bogus", 1).Evaluate(H.Ctx()), (e: unknown) => e instanceof CypherSemanticError && /unknown function: bogus/.test(e.message));
+        assert.throws(() => H.Fn("count", 1).Evaluate(H.Ctx()), (e: unknown) => e instanceof CypherSemanticError && /aggregate function outside a projection: count/.test(e.message));
     });
 });

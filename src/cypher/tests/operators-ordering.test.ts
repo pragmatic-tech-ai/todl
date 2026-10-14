@@ -29,6 +29,19 @@ class Rows implements IOperator
     }
 }
 
+class MultiRows
+{
+    public static Make(pairs: number[][]): Binding[]
+    {
+        return pairs.map((p) => new Binding().With("x", new ScalarValue(p[0]!)).With("y", new ScalarValue(p[1]!)));
+    }
+
+    public static Pairs(rows: Iterable<Binding>): number[][]
+    {
+        return [...rows].map((r) => [(r.Get("x") as ScalarValue).Value as number, (r.Get("y") as ScalarValue).Value as number]);
+    }
+}
+
 describe("ordering operators", () =>
 {
     test("Sort asc + desc", () =>
@@ -66,5 +79,40 @@ describe("ordering operators", () =>
         assert.deepEqual(Rows.Values(new Skip(Rows.Of("x", [1, 2, 3]), -5).Rows()), [1, 2, 3]);
         assert.deepEqual(Rows.Values(new Skip(Rows.Of("x", [1, 2, 3]), Number.NaN).Rows()), [1, 2, 3]);
         assert.deepEqual(Rows.Values(new Skip(Rows.Of("x", [1, 2, 3]), 1.9).Rows()), [2, 3]);
+    });
+
+    test("multi-key sort: later key breaks ties, per-key direction", () =>
+    {
+        const src = new Rows(MultiRows.Make([[1, 2], [2, 1], [1, 1], [2, 2]]));
+        const asc = new Sort(src, [new SortItem(new VariableRef("x"), false), new SortItem(new VariableRef("y"), true)], new Map());
+        assert.deepEqual(MultiRows.Pairs(asc.Rows()), [[1, 2], [1, 1], [2, 2], [2, 1]]);
+    });
+
+    test("sort is stable: tied keys keep input order", () =>
+    {
+        const src = new Rows(MultiRows.Make([[1, 10], [0, 11], [1, 12], [0, 13], [1, 14]]));
+        const out = new Sort(src, [new SortItem(new VariableRef("x"), false)], new Map());
+        assert.deepEqual(MultiRows.Pairs(out.Rows()), [[0, 11], [0, 13], [1, 10], [1, 12], [1, 14]]);
+        const desc = new Sort(new Rows(MultiRows.Make([[1, 10], [0, 11], [1, 12], [0, 13], [1, 14]])), [new SortItem(new VariableRef("x"), true)], new Map());
+        assert.deepEqual(MultiRows.Pairs(desc.Rows()), [[1, 10], [1, 12], [1, 14], [0, 11], [0, 13]]);
+    });
+
+    test("Limit(0) yields nothing; a large limit yields everything", () =>
+    {
+        assert.deepEqual(Rows.Values(new Limit(Rows.Of("x", [1, 2, 3]), 0).Rows()), []);
+        assert.deepEqual(Rows.Values(new Limit(Rows.Of("x", [1, 2, 3]), 10).Rows()), [1, 2, 3]);
+    });
+
+    test("Skip beyond the end yields nothing", () =>
+    {
+        assert.deepEqual(Rows.Values(new Skip(Rows.Of("x", [1, 2, 3]), 3).Rows()), []);
+        assert.deepEqual(Rows.Values(new Skip(Rows.Of("x", [1, 2, 3]), 99).Rows()), []);
+    });
+
+    test("multi-column Distinct dedups on the column tuple", () =>
+    {
+        const src = new Rows(MultiRows.Make([[1, 1], [1, 2], [1, 1], [2, 1], [2, 1], [1, 2]]));
+        assert.deepEqual(MultiRows.Pairs(new Distinct(src, ["x", "y"]).Rows()), [[1, 1], [1, 2], [2, 1]]);
+        assert.deepEqual(MultiRows.Pairs(new Distinct(new Rows(MultiRows.Make([[1, 1], [1, 2], [2, 3]])), ["x"]).Rows()), [[1, 1], [2, 3]]);
     });
 });

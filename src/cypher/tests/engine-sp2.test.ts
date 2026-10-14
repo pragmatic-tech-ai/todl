@@ -265,4 +265,21 @@ describe("CypherEngine SP2 read-plus (end-to-end)", () =>
         assert.deepEqual(text.Columns, fluent.Columns);
         assert.deepEqual(CypherEngine.ToDto(text), CypherEngine.ToDto(fluent));
     });
+
+    test("NodeValue compares by id and ranks between scalars and lists", () =>
+    {
+        const r = e.Execute("MATCH (a:Service) RETURN a ORDER BY a.name");
+        const nodes = r.Rows.map((row) => row[0] as NodeValue);
+        assert.equal(nodes.length, 6);
+        const byId = new Map(nodes.map((n) => [n.Id, n]));
+        assert.ok(CypherValue.Compare(byId.get("s1")!, byId.get("s2")!) < 0);
+        assert.ok(CypherValue.Compare(byId.get("s2")!, byId.get("s1")!) > 0);
+        assert.equal(CypherValue.Compare(byId.get("s3")!, byId.get("s3")!), 0);
+        const node = byId.get("s1")!;
+        assert.ok(CypherValue.Compare(new ScalarValue(true), node) < 0);
+        assert.ok(CypherValue.Compare(node, new ListValue([])) < 0);
+        assert.ok(CypherValue.Compare(node, NullValue.Instance) < 0);
+        const sorted = e.Execute("MATCH (a:Service) RETURN a ORDER BY a DESC");
+        assert.deepEqual(sorted.Rows.map((row) => (row[0] as NodeValue).Id), ["s5", "s4", "s3", "s2", "s1", "c1"]);
+    });
 });
