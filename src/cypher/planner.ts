@@ -119,11 +119,7 @@ export class LogicalPlanner
     private compilePart(part: QueryPart, input: IOperator | undefined, inScope: ReadonlySet<string>): IOperator
     {
         const declared = new Set<string>(inScope);
-        for (const clause of part.Reading)
-        {
-            if (clause instanceof MatchClause) for (const v of clause.DeclaredVariables()) declared.add(v);
-            else if (clause instanceof UnwindClause) declared.add(clause.Variable);
-        }
+        for (const v of this.readingVariables(part)) declared.add(v);
         this.validateScope(part, declared);
 
         const pipelineBound = new Set<string>(inScope);

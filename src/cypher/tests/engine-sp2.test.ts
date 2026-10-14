@@ -615,7 +615,7 @@ describe("CypherEngine strict WITH-segment scope (opt-in)", () =>
 
     test("strict rejects reuse of a name dropped by WITH", () =>
     {
-        assert.throws(() => strict.Execute(dropped), CypherSemanticError);
+        assert.throws(() => strict.Execute(dropped), (e: unknown) => e instanceof CypherSemanticError && /dropped by WITH/.test(e.message));
     });
 
     test("default mode still allows the dropped-name reuse (fresh variable)", () =>
