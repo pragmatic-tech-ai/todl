@@ -34,7 +34,6 @@ export class CypherEngine
         const rows: CypherValue[][] = [];
         let truncated = false;
         const probe = new CancelProbe(limits?.Cancel);
-        probe.Begin();
         for (const binding of plan.Rows())
         {
             probe.Tick();
