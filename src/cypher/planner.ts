@@ -22,6 +22,8 @@ import { Sort, Skip, Limit, Distinct } from "./operators-ordering.js";
 export interface PlannerOptions
 {
     readonly MaxVarLength?: number;
+    // Opt-in: reusing the name of a variable dropped by an earlier WITH as a new pattern variable throws.
+    readonly StrictWithScope?: boolean;
 }
 
 class OptionalMatchPlan implements IOptionalPlan
@@ -54,7 +56,10 @@ export class LogicalPlanner
     private static readonly PathVarNeedsVarLength = "a path variable requires a variable-length relationship";
     private static readonly VarLengthIntoBoundUnsupported = "variable-length expansion into an already-bound node is not yet supported";
 
+    private static readonly StrictScopeReuse = "variable reused after being dropped by WITH";
+
     private readonly maxVarLength: number;
+    private readonly strictWithScope: boolean;
 
     constructor(
         private readonly graph: ICypherGraph,
@@ -64,15 +69,20 @@ export class LogicalPlanner
     {
         // Variable-length wiring lands in a later task; the cap is accepted and carried now.
         this.maxVarLength = options?.MaxVarLength ?? LogicalPlanner.DefaultMaxVarLength;
+        this.strictWithScope = options?.StrictWithScope ?? false;
     }
 
     public Plan(model: CypherQueryModel): IOperator
     {
         let inScope = new Set<string>();
+        const everBound = new Set<string>();
         let op: IOperator | undefined = undefined;
         for (const part of model.Parts)
         {
+            if (this.strictWithScope) this.checkStrictScope(part, inScope, everBound);
             op = this.compilePart(part, op, inScope);
+            for (const v of this.readingVariables(part)) everBound.add(v);
+            for (const item of part.Projection.Items) everBound.add(item.ColumnName());
             if (!part.Projection.IsReturn)
             {
                 inScope = new Set<string>(part.Projection.Items.map((i) => i.ColumnName()));
@@ -80,6 +90,30 @@ export class LogicalPlanner
         }
         // Parse/fluent invariants guarantee at least one part, so op is always assigned.
         return op!;
+    }
+
+    private readingVariables(part: QueryPart): Set<string>
+    {
+        const out = new Set<string>();
+        for (const clause of part.Reading)
+        {
+            if (clause instanceof MatchClause) for (const v of clause.DeclaredVariables()) out.add(v);
+            else if (clause instanceof UnwindClause) out.add(clause.Variable);
+        }
+        return out;
+    }
+
+    // Strict mode: a MATCH/UNWIND variable bound in a PRIOR segment but not carried into this
+    // segment's inScope is a dropped-then-reused name; reject it.
+    private checkStrictScope(part: QueryPart, inScope: ReadonlySet<string>, everBound: ReadonlySet<string>): void
+    {
+        for (const v of this.readingVariables(part))
+        {
+            if (!inScope.has(v) && everBound.has(v))
+            {
+                throw new CypherSemanticError(`${LogicalPlanner.StrictScopeReuse}: "${v}"`);
+            }
+        }
     }
 
     private compilePart(part: QueryPart, input: IOperator | undefined, inScope: ReadonlySet<string>): IOperator

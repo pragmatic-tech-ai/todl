@@ -14,6 +14,7 @@ import { CypherValue, NodeValue, ScalarValue, NullValue } from "../values.js";
 import { ListValue, MapValue, PathValue, RelValue } from "../values-structured.js";
 import { CypherSemanticError } from "../errors.js";
 import type { CypherResult } from "../result.js";
+import type { PlannerOptions } from "../planner.js";
 
 class Sp2Fixture
 {
@@ -34,7 +35,7 @@ class Sp2Fixture
     private static readonly UnexpectedCellMessage = "unexpected cell type in Plain()";
 
     // Graph: checkout->ledger->billing->checkout (cycle), billing->audit, vault(Core)->ledger, lonely (isolated).
-    public static Engine(extraEdges: { from: string; rel: string; to: string }[] = []): CypherEngine
+    public static Engine(extraEdges: { from: string; rel: string; to: string }[] = [], options?: PlannerOptions): CypherEngine
     {
         const logical: LogicalManifest = {
             format: Sp2Fixture.Format, model: Sp2Fixture.ModelName, version: Sp2Fixture.ModelVersion,
@@ -75,7 +76,7 @@ class Sp2Fixture
             ...extraEdges,
         ];
         g.BindSeed({ nodes, edges }, { model: Sp2Fixture.ModelName, version: Sp2Fixture.ModelVersion });
-        return CypherEngine.OverQuery(new GraphQuery(g));
+        return CypherEngine.OverQuery(new GraphQuery(g), options);
     }
 
     public static Svc(id: string, name: string, kind: string): ReflectedNode
@@ -603,5 +604,41 @@ describe("CypherEngine SP2 constraints on reused variable occurrences", () =>
         assert.deepEqual(Sp2Fixture.Pairs(r), [["checkout", "ledger", "vault"]]);
         const r2 = e.Execute("MATCH (a)-[:calls]->(b), (b)-[:calls]->(x) RETURN count(*) AS n");
         assert.deepEqual(Sp2Fixture.Col(r2, 0), [7]);
+    });
+});
+
+describe("CypherEngine strict WITH-segment scope (opt-in)", () =>
+{
+    const strict = Sp2Fixture.Engine([], { StrictWithScope: true });
+    const lax = Sp2Fixture.Engine();
+    const dropped = "MATCH (a:Service) WITH a.name AS n MATCH (a)-[:calls]->(b) RETURN b.name";
+
+    test("strict rejects reuse of a name dropped by WITH", () =>
+    {
+        assert.throws(() => strict.Execute(dropped), CypherSemanticError);
+    });
+
+    test("default mode still allows the dropped-name reuse (fresh variable)", () =>
+    {
+        const r = lax.Execute(dropped);
+        assert.ok(r.Rows.length > 0);
+    });
+
+    test("strict allows a variable carried through WITH as a join", () =>
+    {
+        const r = strict.Execute("MATCH (a:Service) WITH a AS a MATCH (a)-[:calls]->(b) RETURN b.name");
+        assert.ok(r.Rows.length > 0);
+    });
+
+    test("strict allows a genuinely new variable in a later segment", () =>
+    {
+        const r = strict.Execute("MATCH (a:Service) WITH a.name AS n MATCH (x:Service) RETURN n, x.name");
+        assert.ok(r.Rows.length > 0);
+    });
+
+    test("strict leaves single-part queries alone", () =>
+    {
+        const r = strict.Execute("MATCH (a:Service)-[:calls]->(b:Service) RETURN a.name, b.name");
+        assert.ok(r.Rows.length > 0);
     });
 });
