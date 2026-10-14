@@ -1,8 +1,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { ArithmeticExpression, UnaryMinus, Literal, ListLiteral, MapLiteral, IndexAccess, PropertyAccess, VariableRef } from "../expressions.js";
+import { Expression, ArithmeticExpression, UnaryMinus, Literal, ListLiteral, MapLiteral, IndexAccess, PropertyAccess, VariableRef, Comparison, BooleanExpression, IsNullExpression, InExpression, FunctionCall, Parameter, ValueLiteral } from "../expressions.js";
 import { ArithmeticOp, ComparisonOp, BooleanOp } from "../enums.js";
-import { Comparison, BooleanExpression, IsNullExpression, InExpression, FunctionCall, Parameter, ValueLiteral } from "../expressions.js";
 import { Binding, EvalContext } from "../binding.js";
 import { ScalarValue, NullValue } from "../values.js";
 import { ListValue, MapValue } from "../values-structured.js";
@@ -100,7 +99,7 @@ describe("sp2 expressions", () =>
         const key = x.StructuralKey();
         const swap = (e: { StructuralKey(): string }) => (e.StructuralKey() === key ? new VariableRef("c") : undefined);
         const v = new VariableRef("c");
-        const cases: [import("../expressions.js").Expression, import("../expressions.js").Expression][] = [
+        const cases: [Expression, Expression][] = [
             [new Comparison(x, ComparisonOp.Gt, new Literal(1)), new Comparison(v, ComparisonOp.Gt, new Literal(1))],
             [new BooleanExpression(BooleanOp.And, [x, new Literal(true)]), new BooleanExpression(BooleanOp.And, [v, new Literal(true)])],
             [new IsNullExpression(x, true), new IsNullExpression(v, true)],
@@ -116,6 +115,13 @@ describe("sp2 expressions", () =>
             assert.equal(input.Rewrite(swap).StructuralKey(), expected.StructuralKey());
             assert.equal(input.Rewrite(() => undefined).StructuralKey(), input.StructuralKey());
         }
+        // StructuralKey sorts map keys, so inspect the rebuilt entries directly for keys AND insertion order.
+        const map = new MapLiteral(new Map<string, Expression>([["z", x], ["a", new Literal(1)], ["m", x]]));
+        const rebuilt = map.Rewrite(swap) as MapLiteral;
+        const entriesOf = (m: MapLiteral) => [...(m as unknown as { entries: ReadonlyMap<string, Expression> }).entries];
+        assert.notEqual(rebuilt, map);
+        assert.deepEqual(entriesOf(rebuilt).map(([k]) => k), ["z", "a", "m"]);
+        assert.deepEqual(entriesOf(rebuilt).map(([, e]) => e.StructuralKey()), [v.StructuralKey(), new Literal(1).StructuralKey(), v.StructuralKey()]);
         for (const leaf of [new Literal(1), new Parameter("p"), new ValueLiteral(NullValue.Instance), new VariableRef("q")])
         {
             assert.equal(leaf.Rewrite(() => undefined), leaf);
