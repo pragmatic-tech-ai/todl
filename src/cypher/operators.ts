@@ -71,6 +71,42 @@ export class Expand implements IOperator
     }
 }
 
+// Expands from an already-bound source into an already-bound target, constraining the
+// reached node to equal the target rather than rebinding it. Adds NO binding to the row:
+// it yields the original row unchanged when the target is reachable over the relationship,
+// so a reused target variable (converging joins, cycles) is constrained, never clobbered.
+export class ExpandInto implements IOperator
+{
+    constructor(
+        private readonly child: IOperator,
+        private readonly graph: ICypherGraph,
+        private readonly fromVar: string,
+        private readonly toVar: string,
+        private readonly relType: string | undefined,
+        private readonly direction: RelDirection,
+    )
+    {
+    }
+
+    public *Rows(): Iterable<Binding>
+    {
+        for (const row of this.child.Rows())
+        {
+            const from = row.Get(this.fromVar);
+            const to = row.Get(this.toVar);
+            if (!(from instanceof NodeValue) || !(to instanceof NodeValue)) continue;
+            for (const target of this.graph.Expand(from.Id, this.relType, this.direction))
+            {
+                if (new NodeValue(target).Id === to.Id)
+                {
+                    yield row;
+                    break;
+                }
+            }
+        }
+    }
+}
+
 export class Filter implements IOperator
 {
     constructor(private readonly child: IOperator, private readonly predicate: Expression, private readonly parameters: ReadonlyMap<string, Scalar>)

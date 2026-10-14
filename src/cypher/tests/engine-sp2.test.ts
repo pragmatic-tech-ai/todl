@@ -31,6 +31,7 @@ class Sp2Fixture
     private static readonly ManyCard = "*";
     private static readonly KindApi = "api";
     private static readonly KindCore = "core";
+    private static readonly UnexpectedCellMessage = "unexpected cell type in Plain()";
 
     // Graph: checkout->ledger->billing->checkout (cycle), billing->audit, vault(Core)->ledger, lonely (isolated).
     public static Engine(): CypherEngine
@@ -97,7 +98,7 @@ class Sp2Fixture
         if (v instanceof NullValue) return null;
         if (v instanceof ListValue) return v.Items.map((i) => Sp2Fixture.Plain(i));
         if (v instanceof NodeValue) return v.Id;
-        return v.GroupKey();
+        throw new Error(`${Sp2Fixture.UnexpectedCellMessage}: ${v.constructor.name}`);
     }
 }
 
@@ -166,8 +167,8 @@ describe("CypherEngine SP2 read-plus (end-to-end)", () =>
         assert.deepEqual(Sp2Fixture.Pairs(r), [["ledger", 1], ["billing", 2], ["audit", 3], ["checkout", 3]]);
         const exact = e.Execute("MATCH p = (a:Service)-[:calls*2..2]->(b) WHERE a.name = 'checkout' RETURN b.name AS n");
         assert.deepEqual(Sp2Fixture.Col(exact, 0), ["billing"]);
-        const all = e.Execute("MATCH p = (a:Service)-[:calls*1..3]->(b) RETURN length(p) AS len");
-        assert.ok(all.Rows.length > 0 && all.Rows.length < 100);
+        const all = e.Execute("MATCH p = (a:Service)-[:calls*1..3]->(b) RETURN length(p) AS len ORDER BY len");
+        assert.deepEqual(Sp2Fixture.Col(all, 0), [1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3]);
         const unbounded = e.Execute("MATCH p = (a:Service)-[:calls*]->(b) WHERE a.name = 'checkout' RETURN b.name AS n, length(p) AS len, relationships(p) AS rs ORDER BY len, n");
         assert.deepEqual(unbounded.Rows.map((r) => [Sp2Fixture.Plain(r[0]!), Sp2Fixture.Plain(r[1]!)]), [["ledger", 1], ["billing", 2], ["audit", 3], ["checkout", 3]]);
         for (const row of unbounded.Rows)
@@ -221,6 +222,54 @@ describe("CypherEngine SP2 read-plus (end-to-end)", () =>
             ["ledger", "checkout"],
             ["vault", "billing"],
         ]);
+    });
+
+    test("converging join: two sources must reach the SAME bound target", () =>
+    {
+        // s2 (ledger) is reached by both s1 (checkout) and c1 (vault); the second path reuses the bound (b).
+        // Before the fix the second Expand clobbered b, so a and c were no longer required to share a target.
+        const r = e.Execute(
+            "MATCH (a:Service)-[:calls]->(b:Service), (c:Service)-[:calls]->(b) RETURN a.name AS x, b.name AS y, c.name AS z ORDER BY x, y, z");
+        assert.deepEqual(Sp2Fixture.Pairs(r), [
+            ["billing", "audit", "billing"],
+            ["billing", "checkout", "billing"],
+            ["checkout", "ledger", "checkout"],
+            ["checkout", "ledger", "vault"],
+            ["ledger", "billing", "ledger"],
+            ["vault", "ledger", "checkout"],
+            ["vault", "ledger", "vault"],
+        ]);
+        // Every row genuinely shares b; a non-sharing combination (e.g. billing/ledger/*) is excluded.
+        assert.ok(!Sp2Fixture.Pairs(r).some(([x, y]) => x === "billing" && y === "ledger"));
+    });
+
+    test("triangle: a 3-cycle only matches when the closing hop returns to the anchor", () =>
+    {
+        // s1->s2->s3->s1 is the only 3-cycle (up to rotation); the closing hop reuses the bound anchor (a).
+        // Before the fix the closing Expand overwrote a, turning this into every 3-hop path (6 rows).
+        const r = e.Execute(
+            "MATCH (a:Service)-[:calls]->(b:Service)-[:calls]->(c:Service)-[:calls]->(a) RETURN a.name AS x, b.name AS y, c.name AS z ORDER BY x, y, z");
+        assert.deepEqual(Sp2Fixture.Pairs(r), [
+            ["billing", "checkout", "ledger"],
+            ["checkout", "ledger", "billing"],
+            ["ledger", "billing", "checkout"],
+        ]);
+    });
+
+    test("converging join is order-independent regardless of which path binds the shared target", () =>
+    {
+        const first = e.Execute(
+            "MATCH (a:Service)-[:calls]->(b:Service), (c:Service)-[:calls]->(b) RETURN a.name AS x, b.name AS y, c.name AS z ORDER BY x, y, z");
+        const swapped = e.Execute(
+            "MATCH (c:Service)-[:calls]->(b:Service), (a:Service)-[:calls]->(b) RETURN a.name AS x, b.name AS y, c.name AS z ORDER BY x, y, z");
+        assert.deepEqual(Sp2Fixture.Pairs(first), Sp2Fixture.Pairs(swapped));
+    });
+
+    test("variable-length expansion into an already-bound node is a loud error", () =>
+    {
+        assert.throws(
+            () => e.Execute("MATCH (a:Service)-[:calls]->(b:Service), (a)-[:calls*1..2]->(b) RETURN a.name AS x"),
+            (err: unknown) => err instanceof CypherSemanticError && /already-bound node is not yet supported/.test((err as Error).message));
     });
 
     test("ToDto: list/map/rel/path cells have the documented shapes", () =>

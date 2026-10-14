@@ -10,7 +10,7 @@ import { Comparison, PropertyAccess, VariableRef, Literal, FunctionCall } from "
 import { Binding, EvalContext } from "./binding.js";
 import { ScalarValue } from "./values.js";
 import { VarLengthExpand } from "./operators-varlength.js";
-import { IOperator, AllNodesScan, LabelScan, Expand, Filter, Project, SingleRow, BindingRow } from "./operators.js";
+import { IOperator, AllNodesScan, LabelScan, Expand, ExpandInto, Filter, Project, SingleRow, BindingRow } from "./operators.js";
 import { Unwind } from "./operators-unwind.js";
 import { CartesianProduct } from "./operators-join.js";
 import { OptionalApply } from "./operators-optional.js";
@@ -53,6 +53,7 @@ export class LogicalPlanner
     private static readonly NestedAggregate = "aggregate functions must be a direct call in a projection item";
     private static readonly DefaultMaxVarLength = 15;
     private static readonly PathVarNeedsVarLength = "a path variable requires a variable-length relationship";
+    private static readonly VarLengthIntoBoundUnsupported = "variable-length expansion into an already-bound node is not yet supported";
 
     private readonly maxVarLength: number;
 
@@ -193,11 +194,23 @@ export class LogicalPlanner
         {
             const rel = path.Rels[i]!;
             const toNode = path.Nodes[i + 1]!;
+            const targetBound = toNode.Variable !== undefined && bound.has(toNode.Variable);
             if (rel.IsVariableLength)
             {
+                // Var-length into an already-bound target (depth ranges + optional path variable) is a harder
+                // case not yet implemented; a loud error beats silently clobbering the bound node.
+                if (targetBound) throw new CypherSemanticError(LogicalPlanner.VarLengthIntoBoundUnsupported);
                 const pathVar = i === pathVarRel ? path.PathVariable : undefined;
                 op = new VarLengthExpand(op, this.graph, names[i]!, names[i + 1]!, rel.RelType, rel.Direction,
                     rel.MinHops ?? 1, rel.MaxHops ?? this.maxVarLength, toNode.Label, pathVar);
+            }
+            else if (targetBound)
+            {
+                // Reusing a variable reached by expansion: constrain the hop to the bound node (equality by
+                // identity) instead of rebinding it. The bound node is already label/property-constrained, so
+                // no re-fold and no re-bind here.
+                op = new ExpandInto(op, this.graph, names[i]!, names[i + 1]!, rel.RelType, rel.Direction);
+                continue;
             }
             else
             {
