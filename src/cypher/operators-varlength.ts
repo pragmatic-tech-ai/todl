@@ -1,9 +1,10 @@
 import type { InstanceMirror } from "../manifest/reflection/reflection.js";
 import type { ICypherGraph } from "./graph.js";
 import type { IOperator } from "./operators.js";
+import { RelOrientation } from "./operators.js";
 import { Binding } from "./binding.js";
 import { NodeValue } from "./values.js";
-import { PathValue, RelValue } from "./values-structured.js";
+import { ListValue, PathValue, RelValue } from "./values-structured.js";
 import { RelDirection } from "./enums.js";
 
 /**
@@ -15,7 +16,6 @@ import { RelDirection } from "./enums.js";
 export class VarLengthExpand implements IOperator
 {
     private static readonly StepSeparator = "\u0000";
-    private static readonly UntypedRel = "";
 
     constructor(
         private readonly child: IOperator,
@@ -28,6 +28,7 @@ export class VarLengthExpand implements IOperator
         private readonly max: number,
         private readonly toLabel: string | undefined,
         private readonly pathVar: string | undefined,
+        private readonly relVar: string | undefined = undefined,
     )
     {
     }
@@ -53,11 +54,15 @@ export class VarLengthExpand implements IOperator
             {
                 out = out.With(this.pathVar, new PathValue([...nodes], [...rels]));
             }
+            if (this.relVar !== undefined)
+            {
+                out = out.With(this.relVar, new ListValue([...rels]));
+            }
             yield out;
         }
         if (depth >= this.max) return;
 
-        const type = this.relType ?? VarLengthExpand.UntypedRel;
+        const type = this.relType ?? RelOrientation.UntypedRel;
         for (const target of this.graph.Expand(current.Id, this.relType, this.direction))
         {
             const next = new NodeValue(target);
@@ -65,7 +70,7 @@ export class VarLengthExpand implements IOperator
             if (used.has(key)) continue;
             used.add(key);
             nodes.push(next);
-            rels.push(this.OrientedRel(current.Id, type, next.Id));
+            rels.push(RelOrientation.Oriented(this.direction, this.relType, current.Id, next.Id));
             yield* this.Walk(row, next, target, nodes, rels, used);
             rels.pop();
             nodes.pop();
@@ -79,13 +84,6 @@ export class VarLengthExpand implements IOperator
     {
         const ends = this.direction === RelDirection.Undirected ? [currentId, nextId].sort() : [currentId, nextId];
         return [ends[0], type, ends[1]].join(VarLengthExpand.StepSeparator);
-    }
-
-    // Outgoing walks current->next; Incoming walks against the edge, so the real edge is next->current.
-    // Undirected keeps traversal order (true undirected orientation needs edge-direction info Expand does not return; filed Feature).
-    private OrientedRel(currentId: string, type: string, nextId: string): RelValue
-    {
-        return this.direction === RelDirection.Incoming ? new RelValue(nextId, type, currentId) : new RelValue(currentId, type, nextId);
     }
 
     private LabelOk(mirror: InstanceMirror | undefined): boolean

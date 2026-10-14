@@ -4,6 +4,7 @@ import type { Expression } from "./expressions.js";
 import type { ReturnItem } from "./query-model.js";
 import { Binding, EvalContext } from "./binding.js";
 import { NodeValue } from "./values.js";
+import { RelValue } from "./values-structured.js";
 import { BooleanExpression } from "./expressions.js";
 import { RelDirection } from "./enums.js";
 
@@ -42,6 +43,21 @@ export class LabelScan implements IOperator
     }
 }
 
+// Single home for how a traversed edge is reported as a RelValue, shared by every expand operator so
+// fixed and variable-length relationship variables agree. Outgoing walks current->next; Incoming walks
+// against the edge, so the real edge is next->current. Undirected keeps traversal order (true undirected
+// orientation needs edge-direction info Expand does not return; filed Feature).
+export class RelOrientation
+{
+    public static readonly UntypedRel = "";
+
+    public static Oriented(direction: RelDirection, relType: string | undefined, currentId: string, nextId: string): RelValue
+    {
+        const type = relType ?? RelOrientation.UntypedRel;
+        return direction === RelDirection.Incoming ? new RelValue(nextId, type, currentId) : new RelValue(currentId, type, nextId);
+    }
+}
+
 export class Expand implements IOperator
 {
     constructor(
@@ -52,6 +68,7 @@ export class Expand implements IOperator
         private readonly relType: string | undefined,
         private readonly direction: RelDirection,
         private readonly toLabel: string | undefined,
+        private readonly relVar: string | undefined = undefined,
     )
     {
     }
@@ -65,7 +82,8 @@ export class Expand implements IOperator
             for (const target of this.graph.Expand(from.Id, this.relType, this.direction))
             {
                 if (this.toLabel !== undefined && !this.graph.IsInstanceOf(target, this.toLabel)) continue;
-                yield row.With(this.toVar, new NodeValue(target));
+                const out = row.With(this.toVar, new NodeValue(target));
+                yield this.relVar === undefined ? out : out.With(this.relVar, RelOrientation.Oriented(this.direction, this.relType, from.Id, new NodeValue(target).Id));
             }
         }
     }
@@ -84,6 +102,7 @@ export class ExpandInto implements IOperator
         private readonly toVar: string,
         private readonly relType: string | undefined,
         private readonly direction: RelDirection,
+        private readonly relVar: string | undefined = undefined,
     )
     {
     }
@@ -99,7 +118,7 @@ export class ExpandInto implements IOperator
             {
                 if (new NodeValue(target).Id === to.Id)
                 {
-                    yield row;
+                    yield this.relVar === undefined ? row : row.With(this.relVar, RelOrientation.Oriented(this.direction, this.relType, from.Id, to.Id));
                     break;
                 }
             }

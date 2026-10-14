@@ -353,17 +353,60 @@ describe("CypherEngine SP2 read-plus (end-to-end)", () =>
         assert.equal(none.Rows.length, 0);
     });
 
-    // LATENT DEFECT (reported, not fixed): relationship variables are declared in scope but never bound by the
-    // planner, so `RETURN r` is silently null for both fixed ([r:calls]) and variable-length ([r:calls*2]) rels.
-    test.skip("relationship variable on a variable-length pattern binds the list of traversed relationships", () =>
+    test("relationship variable on a variable-length pattern binds the list of traversed relationships", () =>
     {
         const r = e.Execute("MATCH (a:Service)-[r:calls*2]->(b) WHERE a.name = 'checkout' RETURN r");
         assert.equal(r.Rows.length, 1);
         const list = r.Rows[0]![0] as ListValue;
+        assert.ok(list instanceof ListValue);
         assert.deepEqual(list.Items.map((x) => (x as RelValue).ToRelDto()), [
             { from: "s1", type: "calls", to: "s2" },
             { from: "s2", type: "calls", to: "s3" },
         ]);
+    });
+
+    test("relationship variable on a fixed-length pattern binds a RelValue", () =>
+    {
+        const r = e.Execute("MATCH (a:Service)-[r:calls]->(b:Service) WHERE a.name = 'billing' RETURN r, b.name AS n ORDER BY n");
+        assert.equal(r.Rows.length, 2);
+        assert.ok(r.Rows.every((row) => row[0] instanceof RelValue));
+        assert.deepEqual(r.Rows.map((row) => (row[0] as RelValue).ToRelDto()), [
+            { from: "s3", type: "calls", to: "s4" },
+            { from: "s3", type: "calls", to: "s1" },
+        ]);
+    });
+
+    test("fixed-length rel variable DTO round-trips as a RelDto", () =>
+    {
+        const r = e.Execute("MATCH (a:Service)-[r:calls]->(b:Service) WHERE a.name = 'checkout' RETURN r");
+        assert.equal(r.Rows.length, 1);
+        assert.deepEqual((r.Rows[0]![0] as RelValue).ToDto(), { from: "s1", type: "calls", to: "s2" });
+    });
+
+    test("incoming fixed-length rel variable reports the real edge direction", () =>
+    {
+        const r = e.Execute("MATCH (b:Service)<-[r:calls]-(a:Service) WHERE b.name = 'ledger' RETURN r, a.name AS n ORDER BY n");
+        assert.deepEqual(r.Rows.map((row) => (row[0] as RelValue).ToRelDto()), [
+            { from: "s1", type: "calls", to: "s2" },
+            { from: "c1", type: "calls", to: "s2" },
+        ]);
+    });
+
+    test("untyped rel variable uses the empty type sentinel", () =>
+    {
+        const r = e.Execute("MATCH (a:Service)-[r]->(b:Service) WHERE a.name = 'checkout' RETURN r");
+        assert.deepEqual((r.Rows[0]![0] as RelValue).ToRelDto(), { from: "s1", type: "", to: "s2" });
+    });
+
+    test("rel variable binds when the target is already bound (ExpandInto path)", () =>
+    {
+        const r = e.Execute("MATCH (a:Service)-[:calls]->(b:Service), (a)-[r:calls]->(b) WHERE a.name = 'checkout' RETURN r");
+        assert.equal(r.Rows.length, 1);
+        assert.ok(r.Rows[0]![0] instanceof RelValue);
+        assert.deepEqual((r.Rows[0]![0] as RelValue).ToRelDto(), { from: "s1", type: "calls", to: "s2" });
+        const conv = e.Execute("MATCH (a:Service)-[:calls]->(b:Service), (c)-[r:calls]->(b) WHERE a.name = 'checkout' RETURN r, c.name AS n ORDER BY n");
+        assert.ok(conv.Rows.length > 0);
+        assert.ok(conv.Rows.every((row) => row[0] instanceof RelValue));
     });
 });
 

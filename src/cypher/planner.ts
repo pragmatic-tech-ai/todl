@@ -201,19 +201,19 @@ export class LogicalPlanner
                 if (targetBound) throw new CypherSemanticError(LogicalPlanner.VarLengthIntoBoundUnsupported);
                 const pathVar = i === pathVarRel ? path.PathVariable : undefined;
                 op = new VarLengthExpand(op, this.graph, names[i]!, names[i + 1]!, rel.RelType, rel.Direction,
-                    rel.MinHops ?? 1, rel.MaxHops ?? this.maxVarLength, toNode.Label, pathVar);
+                    rel.MinHops ?? 1, rel.MaxHops ?? this.maxVarLength, toNode.Label, pathVar, rel.Variable);
             }
             else if (targetBound)
             {
                 // Reusing a variable reached by expansion: constrain the hop to the bound node (equality by
                 // identity) instead of rebinding it. The bound node is already label/property-constrained, so
                 // no re-fold and no re-bind here.
-                op = new ExpandInto(op, this.graph, names[i]!, names[i + 1]!, rel.RelType, rel.Direction);
+                op = new ExpandInto(op, this.graph, names[i]!, names[i + 1]!, rel.RelType, rel.Direction, rel.Variable);
                 continue;
             }
             else
             {
-                op = new Expand(op, this.graph, names[i]!, names[i + 1]!, rel.RelType, rel.Direction, toNode.Label);
+                op = new Expand(op, this.graph, names[i]!, names[i + 1]!, rel.RelType, rel.Direction, toNode.Label, rel.Variable);
             }
             op = this.foldNodeProperties(op, toNode, names[i + 1]!);
             if (toNode.Variable !== undefined) bound.add(toNode.Variable);
