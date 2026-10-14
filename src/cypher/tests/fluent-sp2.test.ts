@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { CypherQuery, Pattern, Expr, Return, Fn, Sort, Hops } from "../fluent.js";
 import { CypherSemanticError } from "../errors.js";
 import { CypherParser } from "../parser.js";
+import { FunctionCall } from "../expressions.js";
 import { MatchClause, UnwindClause, CypherQueryModel } from "../query-model.js";
 
 class ParityChecker
@@ -117,5 +118,70 @@ describe("cypher fluent SP2 read-plus", () =>
         ParityChecker.CheckHops(Hops.Any(), "*");
         ParityChecker.CheckHops(Hops.Exactly(2), "*2");
         ParityChecker.CheckHops(Hops.AtLeast(2), "*2..");
+    });
+
+    test("aggregate helpers Sum/Avg/Min/Max match the parser", () =>
+    {
+        const built = CypherQuery.Match(Pattern.Node("a").Label("Service"))
+            .Return(
+                Fn.Sum(Expr.Prop("a", "x")).As("s"),
+                Fn.Avg(Expr.Prop("a", "x")).As("v"),
+                Fn.Min(Expr.Prop("a", "x")).As("lo"),
+                Fn.Max(Expr.Prop("a", "x")).As("hi"))
+            .ToModel();
+        const parsed = new CypherParser("MATCH (a:Service) RETURN sum(a.x) AS s, avg(a.x) AS v, min(a.x) AS lo, max(a.x) AS hi").Parse();
+        assert.deepStrictEqual(built, parsed);
+        const names = built.Parts[0]!.Projection.Items.map((i) => (i.Expr as FunctionCall).Name);
+        assert.deepEqual(names, ["sum", "avg", "min", "max"]);
+    });
+
+    test("Coalesce and Call match the parser", () =>
+    {
+        const built = CypherQuery.Match(Pattern.Node("a").Label("Service"))
+            .Return(
+                Fn.Coalesce(Expr.Prop("a", "x"), Expr.Lit(0)).As("c"),
+                Fn.Call("toUpper", Expr.Prop("a", "name")).As("u"),
+                Fn.Call("range", Expr.Lit(1), Expr.Lit(3)).As("r"))
+            .ToModel();
+        const parsed = new CypherParser("MATCH (a:Service) RETURN coalesce(a.x, 0) AS c, toUpper(a.name) AS u, range(1, 3) AS r").Parse();
+        assert.deepStrictEqual(built, parsed);
+    });
+
+    test("arithmetic builders Add/Sub/Mul/Div/Mod match the parser", () =>
+    {
+        const x = () => Expr.Prop("a", "x");
+        const built = CypherQuery.Match(Pattern.Node("a").Label("Service"))
+            .Return(
+                Return.Item(x().Add(Expr.Lit(1)), "p"),
+                Return.Item(x().Sub(Expr.Lit(2)), "q"),
+                Return.Item(x().Mul(Expr.Lit(3)), "r"),
+                Return.Item(x().Div(Expr.Lit(4)), "s"),
+                Return.Item(x().Mod(Expr.Lit(5)), "t"),
+                Return.Item(x().Add(Expr.Lit(1)).Mul(Expr.Lit(2)), "u"))
+            .ToModel();
+        const parsed = new CypherParser("MATCH (a:Service) RETURN a.x + 1 AS p, a.x - 2 AS q, a.x * 3 AS r, a.x / 4 AS s, a.x % 5 AS t, (a.x + 1) * 2 AS u").Parse();
+        assert.deepStrictEqual(built, parsed);
+    });
+
+    test("At(index), Map and List builders match the parser", () =>
+    {
+        const built = CypherQuery.Match(Pattern.Node("a").Label("Service"))
+            .Return(
+                Return.Item(Expr.List(Expr.Lit(10), Expr.Lit(20)).At(Expr.Lit(1)), "i"),
+                Return.Item(Expr.Map({ k: Expr.Prop("a", "x"), j: Expr.Lit("v") }), "m"),
+                Return.Item(Expr.Map({ k: Expr.Lit(5) }).At(Expr.Lit("k")), "mk"))
+            .ToModel();
+        const parsed = new CypherParser("MATCH (a:Service) RETURN [10, 20][1] AS i, {k: a.x, j: 'v'} AS m, {k: 5}['k'] AS mk").Parse();
+        assert.deepStrictEqual(built, parsed);
+    });
+
+    test("Return.Item takes an expression and an optional alias", () =>
+    {
+        const aliased = Return.Item(Expr.Prop("a", "x").Add(Expr.Lit(1)), "n");
+        assert.equal(aliased.Alias, "n");
+        assert.equal(aliased.ColumnName(), "n");
+        const bare = Return.Item(Expr.Prop("a", "x"));
+        assert.equal(bare.Alias, undefined);
+        assert.equal(bare.ColumnName(), "a.x");
     });
 });

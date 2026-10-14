@@ -247,7 +247,7 @@ describe("CypherEngine SP2 read-plus (end-to-end)", () =>
         assert.equal(reader.id, "s2");
         assert.equal(reader.concept, "Service");
         assert.equal(reader.field("name"), "ledger");
-        assert.equal(reader.field("kind"), Sp2Fixture.KindCore);
+        assert.equal(reader.field("kind"), "core");
     });
 
     test("parity: text and fluent produce identical results on an aggregating query", () =>
@@ -258,7 +258,7 @@ describe("CypherEngine SP2 read-plus (end-to-end)", () =>
         const fluent = e.Execute(
             CypherQuery
                 .Match(Pattern.Node("a").Label("Service").Out("calls", Pattern.Node("b").Label("Service")))
-                .Where(Expr.Prop("a", "kind").Eq(Sp2Fixture.KindCore))
+                .Where(Expr.Prop("a", "kind").Eq("core"))
                 .Return(Return.Prop("b", "name", "n"), Return.Item(Fn.Count(), "c"))
                 .OrderBy(Sort.By(Expr.Var("n"))),
         );
@@ -281,5 +281,39 @@ describe("CypherEngine SP2 read-plus (end-to-end)", () =>
         assert.ok(CypherValue.Compare(node, NullValue.Instance) < 0);
         const sorted = e.Execute("MATCH (a:Service) RETURN a ORDER BY a DESC");
         assert.deepEqual(sorted.Rows.map((row) => (row[0] as NodeValue).Id), ["s5", "s4", "s3", "s2", "s1", "c1"]);
+    });
+
+    test("nested unary minus and decimals evaluate", () =>
+    {
+        assert.deepEqual(Sp2Fixture.Pairs(e.Execute("RETURN - -1 AS a, -(-2) AS b, - - -3 AS c, 2 - -1 AS d, 1.5 + 1 AS f")), [[1, 2, -3, 3, 2.5]]);
+    });
+
+    test("coalesce(...) IN [list] evaluates; aggregate inside IN is a clear semantic error", () =>
+    {
+        assert.deepEqual(Sp2Fixture.Pairs(e.Execute("RETURN coalesce(null, 2) IN [2, 3] AS yes, coalesce(null, 9) IN [2, 3] AS no")), [[true, false]]);
+        assert.throws(
+            () => e.Execute("MATCH (a:Service) RETURN count(*) IN [1] AS x"),
+            (err: unknown) => err instanceof CypherSemanticError && /direct call in a projection item/.test(err.message));
+    });
+
+    test("exact-hops *3 end-to-end", () =>
+    {
+        const r = e.Execute("MATCH p = (a:Service)-[:calls*3]->(b) WHERE a.name = 'checkout' RETURN b.name AS n, length(p) AS len ORDER BY n");
+        assert.deepEqual(Sp2Fixture.Pairs(r), [["audit", 3], ["checkout", 3]]);
+        const none = e.Execute("MATCH (a:Service)-[:calls*4]->(b) WHERE a.name = 'checkout' RETURN b.name AS n");
+        assert.equal(none.Rows.length, 0);
+    });
+
+    // LATENT DEFECT (reported, not fixed): relationship variables are declared in scope but never bound by the
+    // planner, so `RETURN r` is silently null for both fixed ([r:calls]) and variable-length ([r:calls*2]) rels.
+    test.skip("relationship variable on a variable-length pattern binds the list of traversed relationships", () =>
+    {
+        const r = e.Execute("MATCH (a:Service)-[r:calls*2]->(b) WHERE a.name = 'checkout' RETURN r");
+        assert.equal(r.Rows.length, 1);
+        const list = r.Rows[0]![0] as ListValue;
+        assert.deepEqual(list.Items.map((x) => (x as RelValue).ToRelDto()), [
+            { from: "s1", type: "calls", to: "s2" },
+            { from: "s2", type: "calls", to: "s3" },
+        ]);
     });
 });

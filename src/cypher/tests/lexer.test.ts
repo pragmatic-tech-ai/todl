@@ -52,4 +52,27 @@ describe("cypher lexer", () =>
             return e instanceof CypherSyntaxError && e.Line === 1;
         });
     });
+
+    test("decimal literal lexes as one Number token", () =>
+    {
+        const toks = new CypherLexer("1.5").Tokenize();
+        assert.deepEqual(toks.map((t) => t.Kind), [TokenKind.Number, TokenKind.Eof]);
+        assert.equal(toks[0]!.Text, "1.5");
+    });
+
+    test("1..2 lexes as integer, range dots, integer (not a decimal)", () =>
+    {
+        const toks = new CypherLexer("1..2").Tokenize();
+        assert.deepEqual(toks.map((t) => t.Text), ["1", ".", ".", "2", ""]);
+        assert.equal(toks[0]!.Kind, TokenKind.Number);
+        assert.equal(toks[3]!.Kind, TokenKind.Number);
+        assert.equal(toks[1]!.Kind, toks[2]!.Kind);
+    });
+
+    test("range inside a relationship pattern keeps both bounds as integers", () =>
+    {
+        const toks = new CypherLexer("[:r*1..2]").Tokenize();
+        const nums = toks.filter((t) => t.Kind === TokenKind.Number).map((t) => t.Text);
+        assert.deepEqual(nums, ["1", "2"]);
+    });
 });

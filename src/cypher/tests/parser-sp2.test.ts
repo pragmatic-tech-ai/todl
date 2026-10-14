@@ -113,3 +113,34 @@ describe("cypher parser SP2 (OPTIONAL MATCH, UNWIND, multi-path MATCH)", () =>
         assert.throws(() => new CypherParser("OPTIONAL (a) RETURN a").Parse(), CypherSyntaxError);
     });
 });
+
+describe("cypher parser SP2 (expression edge cases)", () =>
+{
+    test("nested unary minus parses", () =>
+    {
+        for (const q of ["RETURN - -1 AS x", "RETURN -(-2) AS x", "RETURN - - -3 AS x", "RETURN 2 - -1 AS x"])
+        {
+            assert.doesNotThrow(() => new CypherParser(q).Parse(), q);
+        }
+    });
+
+    test("coalesce(...) IN [list] and count(*) IN [list] both parse", () =>
+    {
+        const c = new CypherParser("RETURN coalesce(null, 2) IN [2, 3] AS x").Parse();
+        assert.equal(c.Parts[0]!.Projection.Items[0]!.Alias, "x");
+        assert.doesNotThrow(() => new CypherParser("MATCH (a) RETURN count(*) IN [1] AS x").Parse());
+    });
+
+    test("IN with a non-literal right side is a clear syntax error", () =>
+    {
+        assert.throws(() => new CypherParser("RETURN 1 IN $xs AS x").Parse(), (e: unknown) => e instanceof CypherSyntaxError && /LBracket/.test(e.message));
+    });
+
+    test("a relationship variable on a variable-length pattern parses with its hop bounds", () =>
+    {
+        const m = new CypherParser("MATCH (a)-[r:calls*1..2]->(b) RETURN r").Parse().Parts[0]!.Reading[0] as MatchClause;
+        const rel = m.Paths[0]!.Rels[0]!;
+        assert.equal(rel.MinHops, 1);
+        assert.equal(rel.MaxHops, 2);
+    });
+});

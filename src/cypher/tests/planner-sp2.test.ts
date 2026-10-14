@@ -117,11 +117,16 @@ describe("cypher planner SP2 (segment pipeline)", () =>
 
     test("ORDER BY an unaliased projected aggregate sorts on the projected column", () =>
     {
-        const result = Sp2Fixture.Engine().Execute(
-            "MATCH (a:Service)-[:calls]->(b:Service) RETURN b.name AS n, count(*) AS c ORDER BY count(*) DESC, n",
-        );
-        assert.equal(result.Rows.length, 2);
-        assert.deepEqual(result.Rows.map((r) => (r[0] as ScalarValue).Value), ["audit", "ledger"]);
+        // Fixture: checkout calls ledger + audit, the other two call nothing; count(b) is 2, 0, 0 (nulls are skipped).
+        const query = "MATCH (a:Service) OPTIONAL MATCH (a)-[:calls]->(b:Service) RETURN a.name AS n, count(b) AS c ORDER BY count(b)";
+        const engine = Sp2Fixture.Engine();
+        const names = (text: string) => engine.Execute(text).Rows.map((r) => (r[0] as ScalarValue).Value);
+        const counts = (text: string) => engine.Execute(text).Rows.map((r) => (r[1] as ScalarValue).Value);
+        assert.deepEqual(names(`${query} DESC, n`), ["checkout", "audit", "ledger"]);
+        assert.deepEqual(counts(`${query} DESC, n`), [2, 0, 0]);
+        assert.deepEqual(names(`${query} ASC, n`), ["audit", "ledger", "checkout"]);
+        assert.deepEqual(counts(`${query} ASC, n`), [0, 0, 2]);
+        assert.deepEqual(names(`${query} DESC, n DESC`), ["checkout", "ledger", "audit"]);
     });
 
     test("ORDER BY a different aggregate than the projected one is rejected", () =>
