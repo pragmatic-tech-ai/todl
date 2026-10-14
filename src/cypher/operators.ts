@@ -82,8 +82,9 @@ export class Expand implements IOperator
             for (const target of this.graph.Expand(from.Id, this.relType, this.direction))
             {
                 if (this.toLabel !== undefined && !this.graph.IsInstanceOf(target, this.toLabel)) continue;
-                const out = row.With(this.toVar, new NodeValue(target));
-                yield this.relVar === undefined ? out : out.With(this.relVar, RelOrientation.Oriented(this.direction, this.relType, from.Id, new NodeValue(target).Id));
+                const next = new NodeValue(target);
+                const out = row.With(this.toVar, next);
+                yield this.relVar === undefined ? out : out.With(this.relVar, RelOrientation.Oriented(this.direction, this.relType, from.Id, next.Id));
             }
         }
     }

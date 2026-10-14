@@ -405,8 +405,21 @@ describe("CypherEngine SP2 read-plus (end-to-end)", () =>
         assert.ok(r.Rows[0]![0] instanceof RelValue);
         assert.deepEqual((r.Rows[0]![0] as RelValue).ToRelDto(), { from: "s1", type: "calls", to: "s2" });
         const conv = e.Execute("MATCH (a:Service)-[:calls]->(b:Service), (c)-[r:calls]->(b) WHERE a.name = 'checkout' RETURN r, c.name AS n ORDER BY n");
-        assert.ok(conv.Rows.length > 0);
-        assert.ok(conv.Rows.every((row) => row[0] instanceof RelValue));
+        assert.deepEqual(conv.Rows.map((row) => (row[0] as RelValue).ToRelDto()), [
+            { from: "s1", type: "calls", to: "s2" },
+            { from: "c1", type: "calls", to: "s2" },
+        ]);
+    });
+
+    test("incoming variable-length rel variable lists real-direction edges in path order", () =>
+    {
+        const r = e.Execute("MATCH (b:Service)<-[r:calls*2]-(a:Service) WHERE b.name = 'billing' RETURN r, a.name AS n ORDER BY n");
+        assert.equal(r.Rows.length, 2);
+        const dtos = r.Rows.map((row) => (row[0] as ListValue).Items.map((x) => (x as RelValue).ToRelDto()));
+        assert.deepEqual(dtos, [
+            [{ from: "s2", type: "calls", to: "s3" }, { from: "s1", type: "calls", to: "s2" }],
+            [{ from: "s2", type: "calls", to: "s3" }, { from: "c1", type: "calls", to: "s2" }],
+        ]);
     });
 });
 
