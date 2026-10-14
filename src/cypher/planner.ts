@@ -260,9 +260,8 @@ export class LogicalPlanner
         const columns = new Set<string>(projection.Items.map((i) => i.ColumnName()));
         return projection.OrderBy!.map((sort) =>
         {
-            const match = sort.Expr instanceof PropertyAccess
-                ? projection.Items.find((i) => i.Expr instanceof PropertyAccess && i.Expr.DefaultName() === sort.Expr.DefaultName())
-                : undefined;
+            const sortKey = LogicalPlanner.IdentityKey(sort.Expr);
+            const match = sortKey === undefined ? undefined : projection.Items.find((i) => LogicalPlanner.IdentityKey(i.Expr) === sortKey);
             if (match !== undefined) return new SortItem(new VariableRef(match.ColumnName()), sort.Descending);
             const referenced = new Set<string>();
             sort.Expr.CollectVariables(referenced);
@@ -272,6 +271,23 @@ export class LogicalPlanner
             }
             return sort;
         });
+    }
+
+    // Canonical identity for expressions that can be matched structurally: variables, property accesses and
+    // function calls over such expressions. DefaultName() is a display label and is lossy for most expression
+    // types (a FunctionCall's is just its name), so it cannot serve as a general key. Undefined = not matchable.
+    private static IdentityKey(expr: Expression): string | undefined
+    {
+        if (expr instanceof VariableRef || expr instanceof PropertyAccess) return `${expr.constructor.name}:${expr.DefaultName()}`;
+        if (!(expr instanceof FunctionCall)) return undefined;
+        const args: string[] = [];
+        for (const arg of expr.Args)
+        {
+            const key = LogicalPlanner.IdentityKey(arg);
+            if (key === undefined) return undefined;
+            args.push(key);
+        }
+        return JSON.stringify([expr.Name.toLowerCase(), expr.Distinct, expr.Star, args]);
     }
 
     private aggregateCall(item: ReturnItem): FunctionCall

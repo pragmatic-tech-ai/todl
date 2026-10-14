@@ -115,6 +115,23 @@ describe("cypher planner SP2 (segment pipeline)", () =>
         assert.deepEqual(rows, ["ledger", "checkout", "audit"]);
     });
 
+    test("ORDER BY an unaliased projected aggregate sorts on the projected column", () =>
+    {
+        const result = Sp2Fixture.Engine().Execute(
+            "MATCH (a:Service)-[:calls]->(b:Service) RETURN b.name AS n, count(*) AS c ORDER BY count(*) DESC, n",
+        );
+        assert.equal(result.Rows.length, 2);
+        assert.deepEqual(result.Rows.map((r) => (r[0] as ScalarValue).Value), ["audit", "ledger"]);
+    });
+
+    test("ORDER BY a different aggregate than the projected one is rejected", () =>
+    {
+        assert.throws(
+            () => Sp2Fixture.Engine().Execute("MATCH (a:Service) RETURN a.kind AS k, count(*) AS c ORDER BY count(a)"),
+            CypherSemanticError,
+        );
+    });
+
     test("aliased projection can ORDER BY the original property expression", () =>
     {
         const rows = Sp2Fixture.Scalars(Sp2Fixture.Engine(), "MATCH (a:Service) RETURN a.name AS n ORDER BY a.name");
