@@ -16,6 +16,7 @@ export interface ICypherGraph
 export class GraphQueryAdapter implements ICypherGraph
 {
     private static readonly UnknownLabel = "unknown label";
+    private static readonly AmbiguousLabel = "ambiguous label";
     private static readonly UnknownDirection = "unknown relationship direction";
 
     constructor(private readonly query: IGraphQuery)
@@ -24,7 +25,7 @@ export class GraphQueryAdapter implements ICypherGraph
 
     public NodesByLabel(label: string): InstanceMirror[]
     {
-        const type = this.query.Type(label);
+        const type = this.ResolveLabel(label);
         if (type === undefined)
         {
             throw new CypherSemanticError(`${GraphQueryAdapter.UnknownLabel} "${label}"`);
@@ -58,7 +59,7 @@ export class GraphQueryAdapter implements ICypherGraph
 
     public IsInstanceOf(mirror: InstanceMirror, label: string): boolean
     {
-        const type = this.query.Type(label);
+        const type = this.ResolveLabel(label);
         return type !== undefined && type.isAssignableFrom(mirror.type);
     }
 
@@ -72,6 +73,21 @@ export class GraphQueryAdapter implements ICypherGraph
             }
         }
         return false;
+    }
+
+    private ResolveLabel(label: string): ReturnType<IGraphQuery["Type"]>
+    {
+        const exact = this.query.Type(label);
+        if (exact !== undefined)
+        {
+            return exact;
+        }
+        const matches = this.query.Concepts().filter((c) => c.fullName.substring(c.fullName.lastIndexOf(".") + 1) === label);
+        if (matches.length > 1)
+        {
+            throw new CypherSemanticError(`${GraphQueryAdapter.AmbiguousLabel} "${label}": ${matches.map((c) => c.fullName).join(", ")}`);
+        }
+        return matches[0];
     }
 
     private outgoing(nodeId: string, relType: string | undefined): InstanceMirror[]
