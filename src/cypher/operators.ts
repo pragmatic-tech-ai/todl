@@ -1,9 +1,8 @@
-import type { Scalar } from "../manifest/logical.js";
 import type { ICypherGraph } from "./graph.js";
 import type { Expression } from "./expressions.js";
 import type { ReturnItem } from "./query-model.js";
 import { Binding, EvalContext } from "./binding.js";
-import { NodeValue } from "./values.js";
+import { CypherValue, NodeValue } from "./values.js";
 import { RelValue } from "./values-structured.js";
 import { BooleanExpression } from "./expressions.js";
 import { RelDirection } from "./enums.js";
@@ -129,7 +128,7 @@ export class ExpandInto implements IOperator
 
 export class Filter implements IOperator
 {
-    constructor(private readonly child: IOperator, private readonly predicate: Expression, private readonly parameters: ReadonlyMap<string, Scalar>)
+    constructor(private readonly child: IOperator, private readonly predicate: Expression, private readonly parameters: ReadonlyMap<string, CypherValue>)
     {
     }
 
@@ -145,7 +144,7 @@ export class Filter implements IOperator
 
 export class Project implements IOperator
 {
-    constructor(private readonly child: IOperator, private readonly items: readonly ReturnItem[], private readonly parameters: ReadonlyMap<string, Scalar>)
+    constructor(private readonly child: IOperator, private readonly items: readonly ReturnItem[], private readonly parameters: ReadonlyMap<string, CypherValue>)
     {
     }
 

@@ -1,4 +1,3 @@
-import type { Scalar } from "../manifest/logical.js";
 import type { CypherValue } from "./values.js";
 
 export class Binding
@@ -38,7 +37,7 @@ export class Binding
 
 export class EvalContext
 {
-    constructor(public readonly Binding: Binding, public readonly Parameters: ReadonlyMap<string, Scalar>)
+    constructor(public readonly Binding: Binding, public readonly Parameters: ReadonlyMap<string, CypherValue>)
     {
     }
 }

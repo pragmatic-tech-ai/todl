@@ -454,4 +454,45 @@ describe("CypherEngine SP2 WITH ... WHERE", () =>
         const r = e.Execute("MATCH (a:Service)-[:calls]->(b:Service) WITH b.name AS n, count(*) AS c WHERE c > 1 RETURN n, c");
         assert.deepEqual(Sp2Fixture.Pairs(r), [["ledger", 2]]);
     });
+
+    test("list parameter in UNWIND", () =>
+    {
+        const r = e.Execute("UNWIND $xs AS x RETURN x", new Map([["xs", [1, 2, 3]]]));
+        assert.deepEqual(Sp2Fixture.Col(r, 0), [1, 2, 3]);
+    });
+
+    test("list parameter indexing", () =>
+    {
+        const r = e.Execute("RETURN $xs[1] AS second", new Map([["xs", [10, 20, 30]]]));
+        assert.equal((r.Rows[0]![0] as ScalarValue).Value, 20);
+    });
+
+    test("map parameter property and index access", () =>
+    {
+        const params = new Map([["m", { k: "hi" }]]);
+        assert.equal((e.Execute("RETURN $m.k AS v", params).Rows[0]![0] as ScalarValue).Value, "hi");
+        assert.equal((e.Execute("RETURN $m['k'] AS v", params).Rows[0]![0] as ScalarValue).Value, "hi");
+    });
+
+    test("nested list parameter round-trips through ToDto", () =>
+    {
+        const r = e.Execute("UNWIND $xs AS pair RETURN pair", new Map([["xs", [[1, 2], [3]]]]));
+        assert.equal(r.Rows.length, 2);
+        assert.ok(r.Rows[0]![0] instanceof ListValue);
+        assert.deepEqual(CypherEngine.ToDto(r).Rows, [[[1, 2]], [[3]]]);
+        const whole = e.Execute("RETURN $xs AS xs", new Map([["xs", [1, "a", null]]]));
+        assert.deepEqual(CypherEngine.ToDto(whole).Rows, [[[1, "a", null]]]);
+    });
+
+    test("null parameter is NullValue", () =>
+    {
+        const r = e.Execute("RETURN $n AS n", new Map([["n", null]]));
+        assert.equal(r.Rows[0]![0], NullValue.Instance);
+    });
+
+    test("scalar parameter back-compat and missing parameter", () =>
+    {
+        assert.deepEqual(Sp2Fixture.Col(e.Execute("UNWIND $one AS x RETURN x", new Map([["one", 5]])), 0), [5]);
+        assert.throws(() => e.Execute("RETURN $nope AS v"), CypherSemanticError);
+    });
 });

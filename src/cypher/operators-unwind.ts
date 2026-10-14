@@ -1,8 +1,7 @@
-import type { Scalar } from "../manifest/logical.js";
 import type { Expression } from "./expressions.js";
 import type { IOperator } from "./operators.js";
 import { Binding, EvalContext } from "./binding.js";
-import { NullValue } from "./values.js";
+import { CypherValue, NullValue } from "./values.js";
 import { ListValue } from "./values-structured.js";
 
 export class Unwind implements IOperator
@@ -11,7 +10,7 @@ export class Unwind implements IOperator
         private readonly child: IOperator,
         private readonly expr: Expression,
         private readonly variable: string,
-        private readonly parameters: ReadonlyMap<string, Scalar>,
+        private readonly parameters: ReadonlyMap<string, CypherValue>,
     )
     {
     }

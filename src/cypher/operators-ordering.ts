@@ -1,4 +1,3 @@
-import type { Scalar } from "../manifest/logical.js";
 import type { IOperator } from "./operators.js";
 import type { SortItem } from "./query-model.js";
 import { Binding, EvalContext } from "./binding.js";
@@ -16,7 +15,7 @@ export class Sort implements IOperator
     constructor(
         private readonly child: IOperator,
         private readonly keys: readonly SortItem[],
-        private readonly parameters: ReadonlyMap<string, Scalar>,
+        private readonly parameters: ReadonlyMap<string, CypherValue>,
     )
     {
     }

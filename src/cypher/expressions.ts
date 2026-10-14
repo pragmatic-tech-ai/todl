@@ -154,7 +154,7 @@ export class Parameter extends Expression
     {
         const value = ctx.Parameters.get(this.Name);
         if (value === undefined) throw new CypherSemanticError(`${Parameter.MissingPrefix}${this.Name} not supplied`);
-        return new ScalarValue(value);
+        return value;
     }
 
     public StructuralKey(): string

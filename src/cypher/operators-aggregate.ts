@@ -1,4 +1,3 @@
-import type { Scalar } from "../manifest/logical.js";
 import type { IOperator } from "./operators.js";
 import type { ReturnItem } from "./query-model.js";
 import type { FunctionCall } from "./expressions.js";
@@ -33,7 +32,7 @@ export class Aggregate implements IOperator
         private readonly child: IOperator,
         private readonly groupingItems: readonly ReturnItem[],
         private readonly aggregateItems: readonly AggregateItem[],
-        private readonly parameters: ReadonlyMap<string, Scalar>,
+        private readonly parameters: ReadonlyMap<string, CypherValue>,
     )
     {
     }

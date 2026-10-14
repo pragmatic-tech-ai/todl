@@ -6,7 +6,7 @@ export { CypherParser } from "./parser.js";
 export { CypherQuery, Pattern, Expr, Return, NodeBuilder, ExprBuilder, Fn, Sort, Hops } from "./fluent.js";
 export type { ExprArg } from "./fluent.js";
 export { CypherValue, ScalarValue, NullValue, NodeValue } from "./values.js";
-export type { CypherValueDto } from "./values.js";
+export type { CypherValueDto, ParameterValue } from "./values.js";
 export { ListValue, MapValue, RelValue, PathValue } from "./values-structured.js";
 export type { RelDto } from "./values-structured.js";
 export { GraphQueryAdapter } from "./graph.js";

@@ -8,7 +8,7 @@ import { ComparisonOp } from "./enums.js";
 import type { Expression } from "./expressions.js";
 import { Comparison, PropertyAccess, VariableRef, Literal, FunctionCall } from "./expressions.js";
 import { Binding, EvalContext } from "./binding.js";
-import { ScalarValue } from "./values.js";
+import { CypherValue, ScalarValue } from "./values.js";
 import { VarLengthExpand } from "./operators-varlength.js";
 import { IOperator, AllNodesScan, LabelScan, Expand, ExpandInto, Filter, Project, SingleRow, BindingRow } from "./operators.js";
 import { Unwind } from "./operators-unwind.js";
@@ -58,7 +58,7 @@ export class LogicalPlanner
 
     constructor(
         private readonly graph: ICypherGraph,
-        private readonly parameters: ReadonlyMap<string, Scalar>,
+        private readonly parameters: ReadonlyMap<string, CypherValue>,
         options?: PlannerOptions,
     )
     {

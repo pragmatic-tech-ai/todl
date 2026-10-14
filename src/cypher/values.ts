@@ -6,6 +6,8 @@ import { Snapshot, type MirrorSnapshot } from "../graph-api/index.js";
 
 export type CypherValueDto = MirrorSnapshot | Scalar | null | CypherValueDto[] | { [k: string]: CypherValueDto };
 
+export type ParameterValue = Scalar | null | readonly ParameterValue[] | { readonly [key: string]: ParameterValue };
+
 export abstract class CypherValue
 {
     public abstract ToDto(): CypherValueDto;
