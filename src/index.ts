@@ -470,3 +470,6 @@ export {
 export { PolicyPredicateCodec } from './compiler-services/policy/policy-predicate-codec.js';
 export { parsePolicyPredicate, PolicyParseError } from './compiler-services/policy/policy-predicate-parser.js';
 export * as Cypher from './cypher/index.js';
+export { ConnectorMirrorMapper } from './model-data/connector-mirror-mapper.js';
+export { ConnectorPrefetch, type INodeReflector } from './model-data/connector-prefetch.js';
+export { ConnectorRuntimeGraphQuery } from './graph-api/connector-runtime-graph-query.js';
