@@ -15,3 +15,4 @@ export { RelDirection, ComparisonOp, BooleanOp } from "./enums.js";
 export { CypherError, CypherSyntaxError, CypherSemanticError, CypherTimeout } from "./errors.js";
 export { Deadline } from "./execution-limits.js";
 export type { ExecutionLimits, ICancellation } from "./execution-limits.js";
+export { ReferencedLabels } from "./referenced-labels.js";
