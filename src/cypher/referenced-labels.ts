@@ -4,7 +4,7 @@ import type { CypherQueryModel } from "./query-model.js";
 
 export class ReferencedLabels
 {
-    public static Of(text: string): { labels: readonly string[]; wildcard: boolean }
+    public static Of(text: string): { labels: readonly string[]; wildcard: boolean; parseFailed: boolean }
     {
         const labels = new Set<string>();
         let wildcard = false;
@@ -25,9 +25,9 @@ export class ReferencedLabels
         }
         catch
         {
-            return { labels: [], wildcard: true };
+            return { labels: [], wildcard: false, parseFailed: true };
         }
-        return { labels: [...labels], wildcard };
+        return { labels: [...labels], wildcard, parseFailed: false };
     }
 
     // Walk MATCH / OPTIONAL MATCH node patterns; yield each node's Label (undefined when absent).
