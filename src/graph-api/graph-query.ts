@@ -1,7 +1,7 @@
 import type { TypeInfo, IInstanceMirror, TermInfo } from "../manifest/reflection/reflection.js";
 
 // The read-only query contract, now reflection-native: methods return live reflection
-// handles (TypeInfo / InstanceMirror / TermInfo). Callers project to serializable DTOs
+// handles (TypeInfo / IInstanceMirror / TermInfo). Callers project to serializable DTOs
 // with the Snapshot class. Any backing (a composed DomainHost, later an HTTP proxy over
 // snapshots) can satisfy it.
 export interface IGraphQuery
