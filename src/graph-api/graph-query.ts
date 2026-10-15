@@ -1,4 +1,4 @@
-import type { TypeInfo, InstanceMirror, TermInfo } from "../manifest/reflection/reflection.js";
+import type { TypeInfo, IInstanceMirror, TermInfo } from "../manifest/reflection/reflection.js";
 
 // The read-only query contract, now reflection-native: methods return live reflection
 // handles (TypeInfo / InstanceMirror / TermInfo). Callers project to serializable DTOs
@@ -8,12 +8,12 @@ export interface IGraphQuery
 {
     Concepts(): TypeInfo[];
     Type(name: string): TypeInfo | undefined;
-    InstancesOf(conceptId: string): InstanceMirror[];
-    Reflect(id: string): InstanceMirror | undefined;
-    Refs(id: string, member: string): InstanceMirror[];
-    Referrers(id: string, member?: string): InstanceMirror[];
-    Search(text: string): InstanceMirror[];
-    AllInstances(): InstanceMirror[];
+    InstancesOf(conceptId: string): IInstanceMirror[];
+    Reflect(id: string): IInstanceMirror | undefined;
+    Refs(id: string, member: string): IInstanceMirror[];
+    Referrers(id: string, member?: string): IInstanceMirror[];
+    Search(text: string): IInstanceMirror[];
+    AllInstances(): IInstanceMirror[];
     Term(id: string): TermInfo | undefined;
     Narrower(termId: string): TermInfo[];
     Broader(termId: string): TermInfo[];

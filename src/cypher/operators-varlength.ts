@@ -1,4 +1,4 @@
-import type { InstanceMirror } from "../manifest/reflection/reflection.js";
+import type { IInstanceMirror } from "../manifest/reflection/reflection.js";
 import type { ICypherGraph } from "./graph.js";
 import type { IOperator } from "./operators.js";
 import { RelOrientation } from "./operators.js";
@@ -50,7 +50,7 @@ export class VarLengthExpand implements IOperator
         }
     }
 
-    private *Walk(probe: CancelProbe, row: Binding, current: NodeValue, currentMirror: InstanceMirror | undefined, nodes: NodeValue[], rels: RelValue[], used: Set<string>): Iterable<Binding>
+    private *Walk(probe: CancelProbe, row: Binding, current: NodeValue, currentMirror: IInstanceMirror | undefined, nodes: NodeValue[], rels: RelValue[], used: Set<string>): Iterable<Binding>
     {
         probe.Tick();
         const depth = rels.length;
@@ -93,7 +93,7 @@ export class VarLengthExpand implements IOperator
         return [ends[0], type, ends[1]].join(VarLengthExpand.StepSeparator);
     }
 
-    private LabelOk(mirror: InstanceMirror | undefined): boolean
+    private LabelOk(mirror: IInstanceMirror | undefined): boolean
     {
         if (this.toLabel === undefined) return true;
         return mirror !== undefined && this.graph.IsInstanceOf(mirror, this.toLabel);

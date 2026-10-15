@@ -9,3 +9,4 @@ export type {
     RelSchemaSnapshot,
     AnnotationSnapshot,
 } from "./snapshot.js";
+export type { IInstanceMirror, FieldView, ReflectedNode, TypeInfo, TermInfo } from "../manifest/reflection/reflection.js";

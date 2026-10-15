@@ -1,15 +1,15 @@
 import type { IGraphQuery } from "../graph-api/index.js";
-import type { InstanceMirror } from "../manifest/reflection/reflection.js";
+import type { IInstanceMirror } from "../manifest/reflection/reflection.js";
 import { RelDirection } from "./enums.js";
 import { CypherSemanticError } from "./errors.js";
 
 export interface ICypherGraph
 {
-    NodesByLabel(label: string): InstanceMirror[];
-    AllInstances(): InstanceMirror[];
-    Reflect(id: string): InstanceMirror | undefined;
-    Expand(nodeId: string, relType: string | undefined, direction: RelDirection): InstanceMirror[];
-    IsInstanceOf(mirror: InstanceMirror, label: string): boolean;
+    NodesByLabel(label: string): IInstanceMirror[];
+    AllInstances(): IInstanceMirror[];
+    Reflect(id: string): IInstanceMirror | undefined;
+    Expand(nodeId: string, relType: string | undefined, direction: RelDirection): IInstanceMirror[];
+    IsInstanceOf(mirror: IInstanceMirror, label: string): boolean;
     HasRelationshipType(relType: string): boolean;
 }
 
@@ -23,7 +23,7 @@ export class GraphQueryAdapter implements ICypherGraph
     {
     }
 
-    public NodesByLabel(label: string): InstanceMirror[]
+    public NodesByLabel(label: string): IInstanceMirror[]
     {
         const type = this.ResolveLabel(label);
         if (type === undefined)
@@ -33,17 +33,17 @@ export class GraphQueryAdapter implements ICypherGraph
         return this.query.InstancesOf(type.fullName);
     }
 
-    public AllInstances(): InstanceMirror[]
+    public AllInstances(): IInstanceMirror[]
     {
         return this.query.AllInstances();
     }
 
-    public Reflect(id: string): InstanceMirror | undefined
+    public Reflect(id: string): IInstanceMirror | undefined
     {
         return this.query.Reflect(id);
     }
 
-    public Expand(nodeId: string, relType: string | undefined, direction: RelDirection): InstanceMirror[]
+    public Expand(nodeId: string, relType: string | undefined, direction: RelDirection): IInstanceMirror[]
     {
         switch (direction)
         {
@@ -57,7 +57,7 @@ export class GraphQueryAdapter implements ICypherGraph
         throw new CypherSemanticError(`${GraphQueryAdapter.UnknownDirection} "${String(direction)}"`);
     }
 
-    public IsInstanceOf(mirror: InstanceMirror, label: string): boolean
+    public IsInstanceOf(mirror: IInstanceMirror, label: string): boolean
     {
         const type = this.ResolveLabel(label);
         return type !== undefined && type.isAssignableFrom(mirror.type);
@@ -90,7 +90,7 @@ export class GraphQueryAdapter implements ICypherGraph
         return matches[0];
     }
 
-    private outgoing(nodeId: string, relType: string | undefined): InstanceMirror[]
+    private outgoing(nodeId: string, relType: string | undefined): IInstanceMirror[]
     {
         if (relType !== undefined)
         {
@@ -101,7 +101,7 @@ export class GraphQueryAdapter implements ICypherGraph
         {
             return [];
         }
-        const out: InstanceMirror[] = [];
+        const out: IInstanceMirror[] = [];
         for (const r of mirror.type.getRelationships())
         {
             out.push(...this.query.Refs(nodeId, r.name));
@@ -109,10 +109,10 @@ export class GraphQueryAdapter implements ICypherGraph
         return out;
     }
 
-    private static dedup(mirrors: InstanceMirror[]): InstanceMirror[]
+    private static dedup(mirrors: IInstanceMirror[]): IInstanceMirror[]
     {
         const seen = new Set<string>();
-        const out: InstanceMirror[] = [];
+        const out: IInstanceMirror[] = [];
         for (const m of mirrors)
         {
             if (seen.has(m.node.id))

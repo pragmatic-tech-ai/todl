@@ -2,7 +2,7 @@
 // instance or taxonomy term. Scalars come from the reflection FieldView; references
 // are resolved to sibling entities through the identity-mapped host (ReflectedRepository).
 
-import type { InstanceMirror, TermInfo } from "../manifest/reflection/reflection.js";
+import type { InstanceMirror, IInstanceMirror, TermInfo } from "../manifest/reflection/reflection.js";
 import type { Scalar } from "../manifest/logical.js";
 
 /** The read source behind a ReflectedEntity: a heap instance or a taxonomy term. */
@@ -76,7 +76,7 @@ export class ReflectedEntity
 /** An EntityReader over a heap instance. */
 export class MirrorReader implements EntityReader
 {
-    constructor(private readonly mirror: InstanceMirror)
+    constructor(private readonly mirror: IInstanceMirror)
     {
     }
 

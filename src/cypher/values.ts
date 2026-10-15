@@ -1,5 +1,5 @@
 import type { Scalar } from "../manifest/logical.js";
-import type { InstanceMirror } from "../manifest/reflection/reflection.js";
+import type { IInstanceMirror } from "../manifest/reflection/reflection.js";
 import type { EntityReader, EntityHost } from "../reflection-client/index.js";
 import { ReflectedEntity, MirrorReader } from "../reflection-client/index.js";
 import { Snapshot, type MirrorSnapshot } from "../graph-api/index.js";
@@ -100,7 +100,7 @@ export class NodeValue extends CypherValue
     private static readonly GroupKeyPrefix = "node:";
     private static readonly NodeRank = 3;
 
-    constructor(private readonly mirror: InstanceMirror)
+    constructor(private readonly mirror: IInstanceMirror)
     {
         super();
     }
