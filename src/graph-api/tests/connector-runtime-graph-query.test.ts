@@ -93,6 +93,20 @@ test("AllInstances unions base and snapshot", () =>
     assert.deepEqual(query.AllInstances().map(m => m.node.id), [FakeBase.NativeId, Fixture.SyntheticId]);
 });
 
+test("AllInstances shadows base rows of external concepts but unions default concepts", () =>
+{
+    const typed = (id: string, concept: string): InstanceMirror =>
+        ({ node: { id, type: concept, attrs: {} }, type: { fullName: concept } }) as unknown as InstanceMirror;
+    const base = new FakeBase();
+    const baseRows = [typed("x1", "ns.Ext"), typed("b1", "ns.Def"), base.Native];
+    base.AllInstances = () => baseRows;
+    const snapshot = new Map([["ns.Ext", [typed("e1", "ns.Ext")]], ["ns.Def", [typed("w2", "ns.Def")]]]);
+
+    const ids = new ConnectorRuntimeGraphQuery(base, snapshot, new Set(["ns.Def"])).AllInstances().map(m => m.node.id).sort();
+
+    assert.deepEqual(ids, ["b1", "e1", FakeBase.NativeId, "w2"].sort());
+});
+
 test("Reflect finds snapshot ids and delegates otherwise", () =>
 {
     const base = new FakeBase();

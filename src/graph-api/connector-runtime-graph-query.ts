@@ -27,11 +27,20 @@ export class ConnectorRuntimeGraphQuery implements IGraphQuery
         return [...fetched];
     }
 
-    // Base instances plus the snapshot's, unmerged: the adapter is the system of record for a snapshot concept, so its snapshot rows
-    // are authoritative and base-graph rows for that concept (including subtype rows) are intentionally not reconciled with them.
+    // Same union/shadow rule as InstancesOf: a base mirror is dropped when its concept is in the snapshot but not default-backed
+    // (the adapter is the system of record); default-backed and non-snapshot concepts keep their base rows. Snapshot rows are appended.
     public AllInstances(): InstanceMirror[]
     {
-        const all: InstanceMirror[] = [...this.base.AllInstances()];
+        const all: InstanceMirror[] = [];
+        for (const mirror of this.base.AllInstances())
+        {
+            const concept = mirror.type?.fullName;
+            const shadowed = concept !== undefined && this.connectorInstances.has(concept) && !this.defaultConcepts.has(concept);
+            if (!shadowed)
+            {
+                all.push(mirror);
+            }
+        }
         for (const mirrors of this.connectorInstances.values())
         {
             all.push(...mirrors);
