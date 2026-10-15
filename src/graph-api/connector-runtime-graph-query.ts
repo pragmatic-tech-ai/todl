@@ -10,12 +10,16 @@ export class ConnectorRuntimeGraphQuery implements IGraphQuery
     {
     }
 
+    // When a concept is in the connector snapshot its instances are served SOLELY from the snapshot (the adapter is the
+    // system of record); base-graph rows for that concept, including any subtype rows base would return, are intentionally not merged.
     public InstancesOf(conceptId: string): InstanceMirror[]
     {
         const fetched = this.connectorInstances.get(conceptId);
         return fetched === undefined ? this.base.InstancesOf(conceptId) : [...fetched];
     }
 
+    // Base instances plus the snapshot's, unmerged: the adapter is the system of record for a snapshot concept, so its snapshot rows
+    // are authoritative and base-graph rows for that concept (including subtype rows) are intentionally not reconciled with them.
     public AllInstances(): InstanceMirror[]
     {
         const all: InstanceMirror[] = [...this.base.AllInstances()];

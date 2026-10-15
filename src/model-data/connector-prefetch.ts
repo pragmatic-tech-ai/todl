@@ -28,6 +28,7 @@ export class ConnectorPrefetch
             {
                 continue;
             }
+            // One binding per concept is assumed: the first match wins; multiple bindings for one concept are unsupported here.
             const binding = plan.Bindings.find(b => b.Concept === concept);
             const spec = binding === undefined ? undefined : plan.Connectors.find(c => c.Name === binding.Connector);
             if (binding === undefined || spec === undefined)

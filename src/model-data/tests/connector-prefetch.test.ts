@@ -7,6 +7,7 @@ import type { IDataSourceAdapter, IDataSourceAdapterFactory } from "../data-sour
 import { ConnectorPrefetch, type INodeReflector } from "../connector-prefetch.js";
 import { ConnectorMirrorMapper } from "../connector-mirror-mapper.js";
 import type { InstanceMirror, ReflectedNode } from "../../manifest/reflection/reflection.js";
+import type { ExternalRecord, QueryRequest, WriteBatch, WriteResult } from "../connector-plan.js";
 import { InMemoryAdapterFactory } from "./fakes.js";
 
 class StubReflector implements INodeReflector
@@ -27,6 +28,55 @@ class ThrowingFactory implements IDataSourceAdapterFactory
     {
         throw new Error("cannot open");
     }
+}
+
+class RecordingAdapter implements IDataSourceAdapter
+{
+    public LastRequest: QueryRequest | undefined;
+
+    public async Query(request: QueryRequest): Promise<readonly ExternalRecord[]>
+    {
+        this.LastRequest = request;
+        return [];
+    }
+
+    public async Apply(_batch: WriteBatch): Promise<WriteResult>
+    {
+        return { Applied: 0, Conflicts: [] };
+    }
+
+    public async Dispose(): Promise<void>
+    {
+    }
+}
+
+class RecordingFactory implements IDataSourceAdapterFactory
+{
+    public readonly Adapter = new RecordingAdapter();
+
+    public constructor(public readonly Kind: DataSourceKind)
+    {
+    }
+
+    public async Open(_connection: ResolvedConnection): Promise<IDataSourceAdapter>
+    {
+        return this.Adapter;
+    }
+}
+
+class RejectingAdapter extends RecordingAdapter
+{
+    public static readonly Message = "query exploded";
+
+    public override async Query(_request: QueryRequest): Promise<readonly ExternalRecord[]>
+    {
+        throw new Error(RejectingAdapter.Message);
+    }
+}
+
+class RejectingFactory extends RecordingFactory
+{
+    public override readonly Adapter = new RejectingAdapter();
 }
 
 class Fixture
@@ -93,4 +143,26 @@ test("mapper drops records lacking an id", () =>
 {
     assert.equal(ConnectorMirrorMapper.NodeFor(Fixture.Binding, { name: "x" }), undefined);
     assert.equal(ConnectorMirrorMapper.NodeFor(Fixture.Binding, { pk: null, name: "x" }), undefined);
+});
+
+test("prefetch sends the binding's source and a deduped, sorted field list", async () =>
+{
+    const factory = new RecordingFactory(DataSourceKind.Sql);
+    const catalog = new DataSourceAdapterCatalog().Register(factory);
+    const binding: ConnectorBinding = { ...Fixture.Binding, FieldMap: { id: "pk", label: "name", alias: "name", z: "zeta" } };
+    const plan: ModelConnectorPlan = { ...Fixture.Plan, Bindings: [binding] };
+
+    await ConnectorPrefetch.ForConcepts([Fixture.Concept], plan, catalog, new ServiceProvider(), new StubReflector());
+
+    assert.equal(factory.Adapter.LastRequest!.Source, "widgets");
+    assert.deepEqual(factory.Adapter.LastRequest!.Fields, ["name", "pk", "zeta"]);
+});
+
+test("a resolved adapter whose Query rejects propagates the error (not fail-closed)", async () =>
+{
+    const catalog = new DataSourceAdapterCatalog().Register(new RejectingFactory(DataSourceKind.Sql));
+
+    await assert.rejects(
+        ConnectorPrefetch.ForConcepts([Fixture.Concept], Fixture.Plan, catalog, new ServiceProvider(), new StubReflector()),
+        /query exploded/);
 });
