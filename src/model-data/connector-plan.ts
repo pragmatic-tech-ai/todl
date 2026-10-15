@@ -7,6 +7,7 @@ export enum DataSourceKind
     Rest = "rest",
     Cypher = "cypher",
     Document = "document",
+    Builtin = "builtin",
 }
 
 /** A named connector declared by a model. */

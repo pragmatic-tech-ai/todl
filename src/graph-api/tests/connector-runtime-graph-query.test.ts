@@ -61,6 +61,31 @@ test("connector concept is served from the snapshot; native concept delegates", 
     assert.deepEqual(base.Calls, ["InstancesOf"]);
 });
 
+test("default-backed concept unions base instances with the snapshot", () =>
+{
+    const base = new FakeBase();
+    const query = new ConnectorRuntimeGraphQuery(base, Fixture.Snapshot(), new Set([Fixture.ConnectorConcept]));
+
+    const ids = query.InstancesOf(Fixture.ConnectorConcept).map(m => m.node.id).sort();
+    assert.deepEqual(ids, [FakeBase.NativeId, Fixture.SyntheticId].sort());
+});
+
+test("non-default (external) concept in snapshot still shadows base", () =>
+{
+    const query = new ConnectorRuntimeGraphQuery(new FakeBase(), Fixture.Snapshot(), new Set());
+
+    assert.deepEqual(query.InstancesOf(Fixture.ConnectorConcept).map(m => m.node.id), [Fixture.SyntheticId]);
+});
+
+test("omitting defaultConcepts preserves SP-3c(1) behavior (regression)", () =>
+{
+    const base = new FakeBase();
+    const query = new ConnectorRuntimeGraphQuery(base, Fixture.Snapshot());
+
+    assert.deepEqual(query.InstancesOf(Fixture.ConnectorConcept).map(m => m.node.id), [Fixture.SyntheticId]);
+    assert.deepEqual(base.Calls, []);
+});
+
 test("AllInstances unions base and snapshot", () =>
 {
     const query = new ConnectorRuntimeGraphQuery(new FakeBase(), Fixture.Snapshot());

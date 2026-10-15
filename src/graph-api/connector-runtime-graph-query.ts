@@ -6,16 +6,25 @@ export class ConnectorRuntimeGraphQuery implements IGraphQuery
 {
     public constructor(
         private readonly base: IGraphQuery,
-        private readonly connectorInstances: ReadonlyMap<string, readonly InstanceMirror[]>)
+        private readonly connectorInstances: ReadonlyMap<string, readonly InstanceMirror[]>,
+        private readonly defaultConcepts: ReadonlySet<string> = new Set())
     {
     }
 
-    // When a concept is in the connector snapshot its instances are served SOLELY from the snapshot (the adapter is the
-    // system of record); base-graph rows for that concept, including any subtype rows base would return, are intentionally not merged.
+    // A snapshot concept is served SOLELY from the snapshot (the adapter is the system of record); base-graph rows are intentionally
+    // not merged. Exception: default-backed concepts return base (seed) rows UNIONed with the snapshot (seed + store).
     public InstancesOf(conceptId: string): InstanceMirror[]
     {
         const fetched = this.connectorInstances.get(conceptId);
-        return fetched === undefined ? this.base.InstancesOf(conceptId) : [...fetched];
+        if (fetched === undefined)
+        {
+            return this.base.InstancesOf(conceptId);
+        }
+        if (this.defaultConcepts.has(conceptId))
+        {
+            return [...this.base.InstancesOf(conceptId), ...fetched];
+        }
+        return [...fetched];
     }
 
     // Base instances plus the snapshot's, unmerged: the adapter is the system of record for a snapshot concept, so its snapshot rows
