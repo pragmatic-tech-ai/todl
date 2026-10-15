@@ -21,3 +21,10 @@ test("a syntactically invalid query yields wildcard (fail-safe: prefetch all)", 
     const r = ReferencedLabels.Of("MATCH (a RETURN");
     assert.equal(r.wildcard, true);
 });
+
+test("covers OPTIONAL MATCH and mixed labeled/unlabeled across clauses", () =>
+{
+    const r = ReferencedLabels.Of("MATCH (a:A) OPTIONAL MATCH (a)-[:next]->(b) RETURN a");
+    assert.deepEqual([...r.labels], ["A"]);
+    assert.equal(r.wildcard, true);
+});
