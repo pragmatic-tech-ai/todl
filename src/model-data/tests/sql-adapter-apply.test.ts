@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { SqlAdapter } from "../sql-adapter.js";
 import { WriteAtomicity, WriteConcurrency, WriteFailureKind, WriteOperationKind } from "../connector-plan.js";
 import type { WriteBatch, WriteOperation } from "../connector-plan.js";
-import { FailingSqlSession, RecordingSqlSession, RejectingSqlSession } from "./sql-fakes.js";
+import { FailingSqlSession, RecordingSqlSession, RejectingSqlSession, TransactionalSqlSession } from "./sql-fakes.js";
 
 class ApplyFixtures
 {
@@ -34,6 +34,15 @@ class ApplyFixtures
     public static SequentialBatch(ops: readonly WriteOperation[]): WriteBatch
     {
         return { Source: "order", IdKey: "order_id", Operations: ops, Concurrency: WriteConcurrency.LastWriteWins, Atomicity: WriteAtomicity.Sequential };
+    }
+
+    public static TransactionalBatch(
+        ops: readonly WriteOperation[],
+        concurrency: WriteConcurrency = WriteConcurrency.LastWriteWins,
+        versionField?: string): WriteBatch
+    {
+        const batch: WriteBatch = { Source: "order", IdKey: "order_id", Operations: ops, Concurrency: concurrency, Atomicity: WriteAtomicity.Transactional };
+        return versionField === undefined ? batch : { ...batch, VersionField: versionField };
     }
 }
 
@@ -153,4 +162,63 @@ test("SqlAdapter key-only upsert ignores the batch VersionField", async () =>
     assert.deepEqual(session.calls[0]!.params, ["O-1007"]);
     assert.equal(result.Applied, 1);
     assert.deepEqual(result.Failures, []);
+});
+
+test("Transactional batch rolls back all ops when op N errors (Applied 0, all failures)", async () =>
+{
+    // Op 2 of 3 throws a driver error inside the transaction; the resulting RollbackSignal discards
+    // the whole unit of work, so ops 1 and 3 never persist and nothing is applied.
+    const session = new TransactionalSqlSession(2, new Error(ApplyFixtures.DriverErrorMessage));
+    const batch = ApplyFixtures.TransactionalBatch([
+        ApplyFixtures.UpsertOp(undefined, "O-1"),
+        ApplyFixtures.UpsertOp(undefined, "O-2"),
+        ApplyFixtures.UpsertOp(undefined, "O-3"),
+    ]);
+    const result = await new SqlAdapter(session).Apply(batch);
+    assert.deepEqual(session.PersistedKeys, []);
+    assert.equal(result.Applied, 0);
+    assert.equal(result.Failures.length, 1);
+    assert.equal(result.Failures[0]!.Key, "O-2");
+    assert.equal(result.Failures[0]!.Kind, WriteFailureKind.Error);
+    assert.equal(result.Failures[0]!.Reason, ApplyFixtures.DriverErrorMessage);
+});
+
+test("Transactional batch rolls back on an Optimistic Conflict", async () =>
+{
+    // Op 2 reports a zero rowcount (version guard matched no row) -> Conflict. The whole batch is
+    // rolled back, so even ops 1 and 3 (which the backend applied) vanish and Applied is 0.
+    const session = new TransactionalSqlSession(0, undefined, 2);
+    const batch = ApplyFixtures.TransactionalBatch([
+        ApplyFixtures.UpsertOp(1, "O-1"),
+        ApplyFixtures.UpsertOp(1, "O-2"),
+        ApplyFixtures.UpsertOp(1, "O-3"),
+    ], WriteConcurrency.Optimistic, "version");
+    const result = await new SqlAdapter(session).Apply(batch);
+    assert.deepEqual(session.PersistedKeys, []);
+    assert.equal(result.Applied, 0);
+    assert.equal(result.Failures.length, 1);
+    assert.equal(result.Failures[0]!.Key, "O-2");
+    assert.equal(result.Failures[0]!.Kind, WriteFailureKind.Conflict);
+    assert.equal(result.Failures[0]!.Reason, ApplyFixtures.VersionConflictReason);
+});
+
+test("Transactional on a session without Transaction returns all Unsupported, nothing applied", async () =>
+{
+    const session = new RecordingSqlSession();
+    const batch = ApplyFixtures.TransactionalBatch([
+        ApplyFixtures.UpsertOp(undefined, "O-1"),
+        ApplyFixtures.UpsertOp(undefined, "O-2"),
+    ]);
+    const result = await new SqlAdapter(session).Apply(batch);
+    assert.equal(session.calls.length, 0);
+    assert.equal(result.Applied, 0);
+    assert.equal(result.Failures.length, 2);
+    assert.deepEqual(result.Failures.map(f => f.Kind), [WriteFailureKind.Unsupported, WriteFailureKind.Unsupported]);
+    assert.deepEqual(result.Failures.map(f => f.Key), ["O-1", "O-2"]);
+});
+
+test("CanTransact reflects the session", () =>
+{
+    assert.equal(new SqlAdapter(new RecordingSqlSession()).CanTransact, false);
+    assert.equal(new SqlAdapter(new TransactionalSqlSession()).CanTransact, true);
 });

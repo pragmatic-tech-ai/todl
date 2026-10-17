@@ -1,7 +1,9 @@
-import { QueryCompareOp, WriteConcurrency, WriteFailureKind, WriteOperationKind } from "./connector-plan.js";
+import { QueryCompareOp, WriteAtomicity, WriteConcurrency, WriteFailureKind, WriteOperationKind } from "./connector-plan.js";
 import type { ExternalFieldValue, ExternalRecord, QueryRequest, WriteBatch, WriteFailure, WriteOperation, WriteResult } from "./connector-plan.js";
 import type { IDataSourceAdapter } from "./data-source-adapter.js";
+import { RollbackSignal } from "./rollback-signal.js";
 import type { ISqlSession, SqlRow } from "./sql-session.js";
+import { WriteCapability } from "./write-capability.js";
 
 /** Translates read requests into SQL SELECT statements run through an {@link ISqlSession}. */
 export class SqlQueryTranslator
@@ -99,6 +101,7 @@ export class SqlAdapter implements IDataSourceAdapter
     private static readonly CloseParen = ")";
     private static readonly FirstParamIndex = "1";
     private static readonly VersionConflictReason = "version mismatch";
+    private static readonly AtomicUnsupportedReason = "atomic write not supported by this connector";
 
     private readonly translator: SqlQueryTranslator;
 
@@ -107,46 +110,104 @@ export class SqlAdapter implements IDataSourceAdapter
         this.translator = new SqlQueryTranslator(session);
     }
 
+    /** Whether this adapter can run a batch inside a backend transaction: true iff its session can. */
+    public get CanTransact(): boolean
+    {
+        return this.session.Transaction !== undefined;
+    }
+
     public Query(request: QueryRequest): Promise<readonly ExternalRecord[]>
     {
         return this.translator.Query(request);
     }
 
-    /**
-     * Sequential resilient apply: runs ops in order, wrapping each in try/catch so a thrown
-     * driver error becomes a WriteFailure{Error} and the batch CONTINUES to the next op (no
-     * rollback; still-pending ops remain in the working copy). Applied counts only ops that
-     * persisted. The transactional (all-or-nothing) path is a separate axis handled elsewhere.
-     */
+    /** Dispatches on the batch's atomicity axis: resilient Sequential apply, or all-or-nothing Transactional. */
     public async Apply(batch: WriteBatch): Promise<WriteResult>
+    {
+        if (batch.Atomicity === WriteAtomicity.Transactional)
+        {
+            return this.ApplyTransactional(batch);
+        }
+        return this.ApplySequential(batch);
+    }
+
+    /**
+     * Sequential resilient apply: runs ops in order; a thrown driver error becomes a
+     * WriteFailure{Error} and the batch CONTINUES to the next op (no rollback; still-pending ops
+     * remain in the working copy). Applied counts only ops that persisted.
+     */
+    private async ApplySequential(batch: WriteBatch): Promise<WriteResult>
     {
         let applied = 0;
         const failures: WriteFailure[] = [];
         for (const op of batch.Operations)
         {
-            try
+            const failure = await this.ApplyOne(this.session, batch, op);
+            if (failure === undefined)
             {
-                if (op.Kind === WriteOperationKind.Delete)
-                {
-                    // Delete is unconditional in v1: no version guard.
-                    await this.session.Execute(SqlAdapter.DeleteSql(batch), [op.Key]);
-                    applied++;
-                }
-                else if (await this.ApplyUpsert(batch, op))
-                {
-                    applied++;
-                }
-                else
-                {
-                    failures.push({ Key: op.Key, Kind: WriteFailureKind.Conflict, Reason: SqlAdapter.VersionConflictReason });
-                }
+                applied++;
             }
-            catch (error)
+            else
             {
-                failures.push({ Key: op.Key, Kind: WriteFailureKind.Error, Reason: SqlAdapter.ErrorReason(error) });
+                failures.push(failure);
             }
         }
         return { Applied: applied, Failures: failures };
+    }
+
+    /**
+     * Transactional all-or-nothing apply. A backend that cannot transact returns every op as
+     * Unsupported (never a silent downgrade to partial). Otherwise the whole op loop runs inside one
+     * session transaction; any Conflict or Error throws a RollbackSignal to abort the backend
+     * transaction, caught here so the collected failures come back with Applied 0.
+     */
+    private async ApplyTransactional(batch: WriteBatch): Promise<WriteResult>
+    {
+        if (!WriteCapability.CanTransact(this))
+        {
+            return {
+                Applied: 0,
+                Failures: batch.Operations.map(op => ({
+                    Key: op.Key,
+                    Kind: WriteFailureKind.Unsupported,
+                    Reason: SqlAdapter.AtomicUnsupportedReason,
+                })),
+            };
+        }
+        try
+        {
+            return await this.session.Transaction!(async (tx) =>
+            {
+                let applied = 0;
+                const failures: WriteFailure[] = [];
+                for (const op of batch.Operations)
+                {
+                    const failure = await this.ApplyOne(tx, batch, op);
+                    if (failure === undefined)
+                    {
+                        applied++;
+                    }
+                    else
+                    {
+                        failures.push(failure);
+                    }
+                }
+                if (failures.length > 0)
+                {
+                    // Abort the backend transaction; the caller reports nothing as applied.
+                    throw new RollbackSignal({ Applied: 0, Failures: failures });
+                }
+                return { Applied: applied, Failures: failures };
+            });
+        }
+        catch (error)
+        {
+            if (error instanceof RollbackSignal)
+            {
+                return error.Result;
+            }
+            throw error;
+        }
     }
 
     /** Releases the underlying session, if it supports disposal. */
@@ -155,8 +216,35 @@ export class SqlAdapter implements IDataSourceAdapter
         await this.session.Dispose?.();
     }
 
-    /** Runs one upsert; returns false when a version-guarded upsert updated no row. */
-    private async ApplyUpsert(batch: WriteBatch, op: WriteOperation): Promise<boolean>
+    /**
+     * Applies one op against a given session (so Sequential and Transactional share the logic):
+     * returns undefined on success, or the WriteFailure (Conflict for a guarded no-op row, Error for
+     * a thrown driver fault) otherwise.
+     */
+    private async ApplyOne(session: ISqlSession, batch: WriteBatch, op: WriteOperation): Promise<WriteFailure | undefined>
+    {
+        try
+        {
+            if (op.Kind === WriteOperationKind.Delete)
+            {
+                // Delete is unconditional in v1: no version guard.
+                await session.Execute(SqlAdapter.DeleteSql(batch), [op.Key]);
+                return undefined;
+            }
+            if (await this.ApplyUpsert(session, batch, op))
+            {
+                return undefined;
+            }
+            return { Key: op.Key, Kind: WriteFailureKind.Conflict, Reason: SqlAdapter.VersionConflictReason };
+        }
+        catch (error)
+        {
+            return { Key: op.Key, Kind: WriteFailureKind.Error, Reason: SqlAdapter.ErrorReason(error) };
+        }
+    }
+
+    /** Runs one upsert against the given session; returns false when a version-guarded upsert updated no row. */
+    private async ApplyUpsert(session: ISqlSession, batch: WriteBatch, op: WriteOperation): Promise<boolean>
     {
         const fieldNames = Object.keys(op.Fields).filter(name => name !== batch.IdKey);
         const columns = [batch.IdKey, ...fieldNames];
@@ -176,7 +264,7 @@ export class SqlAdapter implements IDataSourceAdapter
         if (fieldNames.length === 0)
         {
             // Key-only: nothing to update, so no version guard; DO NOTHING affecting 0 rows is not a conflict.
-            await this.session.Execute(sql + SqlAdapter.DoNothing, params);
+            await session.Execute(sql + SqlAdapter.DoNothing, params);
             return true;
         }
 
@@ -195,11 +283,11 @@ export class SqlAdapter implements IDataSourceAdapter
             sql += SqlAdapter.Where + SqlQueryTranslator.QuoteIdent(batch.Source) + SqlAdapter.QualifierDot
                 + SqlQueryTranslator.QuoteIdent(batch.VersionField)
                 + SqlAdapter.Equals + SqlAdapter.Placeholder + params.length;
-            return (await this.session.Execute(sql, params)) > 0;
+            return (await session.Execute(sql, params)) > 0;
         }
 
         // LastWriteWins: unconditional upsert, no version guard regardless of VersionField; always applies.
-        await this.session.Execute(sql, params);
+        await session.Execute(sql, params);
         return true;
     }
 

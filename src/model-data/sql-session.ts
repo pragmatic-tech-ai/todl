@@ -13,6 +13,11 @@ export interface ISqlSession
     Query(sql: string, params: readonly unknown[]): Promise<readonly SqlRow[]>;
     /** Runs a statement and returns the affected-row count. */
     Execute(sql: string, params: readonly unknown[]): Promise<number>;
+    /**
+     * Optional: runs `work` inside one backend transaction, committing on resolve and rolling back +
+     * rethrowing on reject. Absent on sessions that cannot transact (REST/GraphQL, non-replica Mongo).
+     */
+    Transaction?<T>(work: (tx: ISqlSession) => Promise<T>): Promise<T>;
     /** Optional: closes a pool-backed connection. In-memory/recording sessions omit it. */
     Dispose?(): Promise<void>;
 }
