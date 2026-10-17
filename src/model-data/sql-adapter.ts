@@ -1,4 +1,4 @@
-import { QueryCompareOp, WriteFailureKind, WriteOperationKind } from "./connector-plan.js";
+import { QueryCompareOp, WriteConcurrency, WriteFailureKind, WriteOperationKind } from "./connector-plan.js";
 import type { ExternalFieldValue, ExternalRecord, QueryRequest, WriteBatch, WriteFailure, WriteOperation, WriteResult } from "./connector-plan.js";
 import type { IDataSourceAdapter } from "./data-source-adapter.js";
 import type { ISqlSession, SqlRow } from "./sql-session.js";
@@ -113,8 +113,10 @@ export class SqlAdapter implements IDataSourceAdapter
     }
 
     /**
-     * Applies ops in order. If session.Execute throws mid-batch, ops already applied are not
-     * rolled back (v1: the caller retries; still-pending ops remain in the working copy).
+     * Sequential resilient apply: runs ops in order, wrapping each in try/catch so a thrown
+     * driver error becomes a WriteFailure{Error} and the batch CONTINUES to the next op (no
+     * rollback; still-pending ops remain in the working copy). Applied counts only ops that
+     * persisted. The transactional (all-or-nothing) path is a separate axis handled elsewhere.
      */
     public async Apply(batch: WriteBatch): Promise<WriteResult>
     {
@@ -122,19 +124,26 @@ export class SqlAdapter implements IDataSourceAdapter
         const failures: WriteFailure[] = [];
         for (const op of batch.Operations)
         {
-            if (op.Kind === WriteOperationKind.Delete)
+            try
             {
-                // Delete is unconditional in v1: no version guard.
-                await this.session.Execute(SqlAdapter.DeleteSql(batch), [op.Key]);
-                applied++;
+                if (op.Kind === WriteOperationKind.Delete)
+                {
+                    // Delete is unconditional in v1: no version guard.
+                    await this.session.Execute(SqlAdapter.DeleteSql(batch), [op.Key]);
+                    applied++;
+                }
+                else if (await this.ApplyUpsert(batch, op))
+                {
+                    applied++;
+                }
+                else
+                {
+                    failures.push({ Key: op.Key, Kind: WriteFailureKind.Conflict, Reason: SqlAdapter.VersionConflictReason });
+                }
             }
-            else if (await this.ApplyUpsert(batch, op))
+            catch (error)
             {
-                applied++;
-            }
-            else
-            {
-                failures.push({ Key: op.Key, Kind: WriteFailureKind.Conflict, Reason: SqlAdapter.VersionConflictReason });
+                failures.push({ Key: op.Key, Kind: WriteFailureKind.Error, Reason: SqlAdapter.ErrorReason(error) });
             }
         }
         return { Applied: applied, Failures: failures };
@@ -177,18 +186,26 @@ export class SqlAdapter implements IDataSourceAdapter
                     + SqlAdapter.Excluded + SqlQueryTranslator.QuoteIdent(name))
                 .join(SqlAdapter.ListSeparator);
 
-        if (batch.VersionField === undefined)
+        if (batch.Concurrency === WriteConcurrency.Optimistic && batch.VersionField !== undefined)
         {
-            await this.session.Execute(sql, params);
-            return true;
+            // Optimistic: guard on the version column. A missing op.Version binds NULL and
+            // "= NULL" never matches, so rowcount 0 -> Conflict (fail-closed: never a silent
+            // overwrite of a present-but-unversioned record).
+            params.push(op.Version ?? null);
+            sql += SqlAdapter.Where + SqlQueryTranslator.QuoteIdent(batch.Source) + SqlAdapter.QualifierDot
+                + SqlQueryTranslator.QuoteIdent(batch.VersionField)
+                + SqlAdapter.Equals + SqlAdapter.Placeholder + params.length;
+            return (await this.session.Execute(sql, params)) > 0;
         }
 
-        // A missing op.Version binds NULL; "= NULL" never matches, so such an op always conflicts.
-        params.push(op.Version ?? null);
-        sql += SqlAdapter.Where + SqlQueryTranslator.QuoteIdent(batch.Source) + SqlAdapter.QualifierDot
-            + SqlQueryTranslator.QuoteIdent(batch.VersionField)
-            + SqlAdapter.Equals + SqlAdapter.Placeholder + params.length;
-        return (await this.session.Execute(sql, params)) > 0;
+        // LastWriteWins: unconditional upsert, no version guard regardless of VersionField; always applies.
+        await this.session.Execute(sql, params);
+        return true;
+    }
+
+    private static ErrorReason(error: unknown): string
+    {
+        return error instanceof Error ? error.message : String(error);
     }
 
     private static DeleteSql(batch: WriteBatch): string

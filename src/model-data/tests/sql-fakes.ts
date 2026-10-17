@@ -24,6 +24,36 @@ export class RecordingSqlSession implements ISqlSession
     }
 }
 
+/** Records every call; throws the configured error on the nth Execute (1-based), otherwise affects 1 row. */
+export class FailingSqlSession implements ISqlSession
+{
+    public readonly calls: { sql: string; params: readonly unknown[] }[] = [];
+    private executeCount = 0;
+
+    public constructor(
+        private readonly failOnExecute: number,
+        private readonly error: Error)
+    {
+    }
+
+    public async Query(sql: string, params: readonly unknown[]): Promise<readonly SqlRow[]>
+    {
+        this.calls.push({ sql, params });
+        return [];
+    }
+
+    public async Execute(sql: string, params: readonly unknown[]): Promise<number>
+    {
+        this.calls.push({ sql, params });
+        this.executeCount++;
+        if (this.executeCount === this.failOnExecute)
+        {
+            throw this.error;
+        }
+        return 1;
+    }
+}
+
 /** Returns canned rows from Query; Execute affects 0 rows. */
 export class DataSqlSession implements ISqlSession
 {
