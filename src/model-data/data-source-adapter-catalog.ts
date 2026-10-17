@@ -44,14 +44,18 @@ export class DataSourceAdapterCatalog
 
     public Open(spec: ConnectorSpec, services: IServiceProvider): Promise<IDataSourceAdapter>
     {
-        let pending = this.opened.get(spec.Name);
+        // Memoize per connector DECLARATION: the namespace-qualified id when present
+        // (so e.g. shop.pg and inventory.pg stay distinct), falling back to the bare
+        // Name for hand-written specs that carry no Id.
+        const key = spec.Id ?? spec.Name;
+        let pending = this.opened.get(key);
         if (!pending)
         {
             pending = this.OpenCore(spec, services);
-            this.opened.set(spec.Name, pending);
+            this.opened.set(key, pending);
             pending.catch(() =>
             {
-                if (this.opened.get(spec.Name) === pending) this.opened.delete(spec.Name);
+                if (this.opened.get(key) === pending) this.opened.delete(key);
             });
         }
         return pending;

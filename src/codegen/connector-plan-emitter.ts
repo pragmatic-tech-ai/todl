@@ -62,10 +62,11 @@ export class ConnectorPlanEmitter
         for (const population of populations)
         {
             const attrs = population!.attrs;
-            const connectorNode = repo.resolve(String(attrs.get(Builder.BindingConnectorAttr)) as NodeId);
+            const connectorId = String(attrs.get(Builder.BindingConnectorAttr));
+            const connectorNode = repo.resolve(connectorId as NodeId);
             const spec = connectorNode === undefined
                 ? undefined
-                : ConnectorPlanEmitter.SpecOf(connectorNode.attrs);
+                : ConnectorPlanEmitter.SpecOf(connectorId, connectorNode.attrs);
             if (spec === undefined)
             {
                 continue;
@@ -108,7 +109,7 @@ export class ConnectorPlanEmitter
         );
     }
 
-    private static SpecOf(attrs: ReadonlyMap<string, unknown>): ConnectorSpec | undefined
+    private static SpecOf(id: string, attrs: ReadonlyMap<string, unknown>): ConnectorSpec | undefined
     {
         const kind = ConnectorPlanEmitter.KindMembers.get(String(attrs.get(Builder.ConnectorKindAttr)));
         if (kind === undefined)
@@ -117,6 +118,7 @@ export class ConnectorPlanEmitter
         }
         const configJson = attrs.get(Builder.ConnectorConfigAttr);
         const spec: ConnectorSpec = {
+            Id: id,
             Name: String(attrs.get(Builder.ConnectorNameAttr)),
             Kind: kind,
             Config: configJson === undefined
@@ -145,10 +147,13 @@ export class ConnectorPlanEmitter
     private static EmitConnector(c: ConnectorSpec): string
     {
         const i3 = ConnectorPlanEmitter.Indent3;
-        const lines = [
-            `${i3}Name: ${JSON.stringify(c.Name)},`,
-            `${i3}Kind: ${ConnectorPlanEmitter.KindTypeName}.${ConnectorPlanEmitter.KindMemberNames.get(c.Kind)},`,
-        ];
+        const lines: string[] = [];
+        if (c.Id !== undefined)
+        {
+            lines.push(`${i3}Id: ${JSON.stringify(c.Id)},`);
+        }
+        lines.push(`${i3}Name: ${JSON.stringify(c.Name)},`);
+        lines.push(`${i3}Kind: ${ConnectorPlanEmitter.KindTypeName}.${ConnectorPlanEmitter.KindMemberNames.get(c.Kind)},`);
         if (c.Connection !== undefined)
         {
             lines.push(`${i3}Connection: ${JSON.stringify(c.Connection)},`);

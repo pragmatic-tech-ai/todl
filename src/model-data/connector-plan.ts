@@ -13,6 +13,12 @@ export enum DataSourceKind
 /** A named connector declared by a model. */
 export interface ConnectorSpec
 {
+    /** The connector's namespace-qualified id (the declaration's identity). Emitted
+     *  from the compiled connector node; absent in hand-written specs. The adapter
+     *  catalog keys its per-connector memo on this (falling back to Name), so two
+     *  connectors that share a bare Name across namespaces no longer collide on one
+     *  memoized adapter. */
+    Id?: string;
     Name: string;
     Kind: DataSourceKind;
     Connection?: string;

@@ -27,6 +27,11 @@ test("ConnectorPlanEmitter.PlanFor is reachable from the barrel and plans a conn
         {
             planned++;
             assert.ok(plan.Bindings.length > 0);
+            assert.equal(plan.Connectors.length, 1);
+            // The spec carries the fully-qualified connector node id (the catalog memo
+            // key) alongside the bare local Name.
+            assert.equal(plan.Connectors[0]!.Id, "shop@connector:pg");
+            assert.equal(plan.Connectors[0]!.Name, "pg");
         }
     }
     assert.equal(planned, 1);

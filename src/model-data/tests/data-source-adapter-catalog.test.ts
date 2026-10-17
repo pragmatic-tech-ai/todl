@@ -32,6 +32,34 @@ test("catalog opens a registered factory and memoizes per connector name", async
     assert.equal(first, second);
 });
 
+test("catalog memoizes by qualified Id: same bare Name in different namespaces gets distinct adapters", async () =>
+{
+    const factory = new RecordingFactory(DataSourceKind.Sql);
+    const catalog = new DataSourceAdapterCatalog().Register(factory);
+    const services = new ServiceProvider();
+    // Two different connectors that share the bare local name "pg".
+    const shopPg = { Id: "shop.pg", Name: "pg", Kind: DataSourceKind.Sql, Config: { db: "shop" } };
+    const inventoryPg = { Id: "inventory.pg", Name: "pg", Kind: DataSourceKind.Sql, Config: { db: "inventory" } };
+    const a1 = await catalog.Open(shopPg, services);
+    const a2 = await catalog.Open(inventoryPg, services);
+    const a1Again = await catalog.Open(shopPg, services);
+    assert.notEqual(a1, a2);          // distinct declarations -> distinct adapters (no bare-name collision)
+    assert.equal(a1, a1Again);        // same declaration -> memoized
+    assert.equal(factory.Opens, 2);
+});
+
+test("catalog falls back to bare Name when a spec carries no Id", async () =>
+{
+    const factory = new RecordingFactory(DataSourceKind.Sql);
+    const catalog = new DataSourceAdapterCatalog().Register(factory);
+    const services = new ServiceProvider();
+    const spec = { Name: "pg", Kind: DataSourceKind.Sql, Config: {} };   // hand-written, no Id
+    const first = await catalog.Open(spec, services);
+    const second = await catalog.Open(spec, services);
+    assert.equal(first, second);
+    assert.equal(factory.Opens, 1);
+});
+
 test("catalog falls back to the provider when no factory is registered", async () =>
 {
     const provider = new RegisteredAdapterProvider();

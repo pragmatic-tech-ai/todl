@@ -98,6 +98,7 @@ const SHARD_SALES_SALES_PLAN: ModelConnectorPlan = {
   Version: "0.0.0",
   Connectors: [
     {
+      Id: "sales@connector:pg",
       Name: "pg",
       Kind: DataSourceKind.Sql,
       Connection: "crm-postgres",
