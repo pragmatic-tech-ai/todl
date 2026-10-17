@@ -538,3 +538,39 @@ test('ResolveBasesFor resolves a live diamond once (no duplicate, no cyclic prob
     assert.ok(bases.some((b) => b.nodes.some((n) => n.id === 'lib_A.Anode')))  // A's own compile succeeded
     assert.ok(bases.some((b) => b.nodes.some((n) => n.id === 'lib_B.Bnode')))  // B's own compile succeeded too
 })
+
+test('ResolveBasesFor: an open library sharing a published base with the consumer is not starved (shared seenPub)', async () =>
+{
+    // consumer binds published meta-model mm (metaModels) AND open library evelyn
+    // (libraries); evelyn ALSO binds published mm and extends its concept. mm is
+    // published-only. Before the fix the consumer's own mm binding consumed the one
+    // shared seenPub key first, so evelyn's recursive resolve hit seenPub.has(mm) and
+    // returned empty — evelyn compiled with no base and failed with a bogus
+    // undefined-symbol error (GitHub todl#25). Each open producer must get its own
+    // seenPub for a complete compile closure; the final dedup collapses the duplicate.
+    const consumer = Fixtures.Storage({
+        [PROJECT_MANIFEST_FILENAME]: JSON.stringify({
+            type: ProjectType.Library, name: 'consumer', version: 1, id: 'consumer',
+            metaModels: [{ id: 'mm', version: '1.0.0' }],
+            libraries: [{ id: 'evelyn', version: '1.0.0' }],
+        }),
+        'model.todl': 'namespace lib_consumer { concept Con { } }',
+    })
+    const provider = Fixtures.Provider(
+        Fixtures.Manager([
+            { id: 'evelyn', type: 'library', storage: Fixtures.Storage(Fixtures.LibraryFiles('evelyn', 'mm', '1.0.0', 'Ev', 'Widget')) },
+        ]),
+        Fixtures.Published({ 'mm@1.0.0': Fixtures.PublishedDoc([{ id: 'acme.Widget' }]) }),
+    )
+    const resolver = new SolutionBaseResolver(provider)
+
+    const { bases, problems } = await resolver.ResolveBasesFor(consumer)
+
+    // evelyn's own compile must NOT be starved of its mm base.
+    assert.equal(problems.filter((p) => /local library "evelyn"/.test(p)).length, 0, problems.join('; '))
+    // mm's published base appears exactly once (deduped across the consumer's own
+    // binding and evelyn's flattened closure).
+    assert.equal(bases.filter((b) => b.nodes.some((n) => n.id === 'acme.Widget')).length, 1)
+    // evelyn compiled cleanly and contributed its own concept.
+    assert.ok(bases.some((b) => b.nodes.some((n) => n.id === 'lib_evelyn.Ev')))
+})
