@@ -80,9 +80,14 @@ export class ConnectorWorkingCopy
             const concurrency = binding.VersionField === undefined
                 ? WriteConcurrency.LastWriteWins
                 : WriteConcurrency.Optimistic;
-            const batch: WriteBatch = binding.VersionField === undefined
-                ? { Source: binding.Source, IdKey: binding.IdKey, Operations: operations, Concurrency: concurrency, Atomicity: WriteAtomicity.Sequential }
-                : { Source: binding.Source, IdKey: binding.IdKey, Operations: operations, Concurrency: concurrency, Atomicity: WriteAtomicity.Sequential, VersionField: binding.VersionField };
+            const batch: WriteBatch = {
+                Source: binding.Source,
+                IdKey: binding.IdKey,
+                Operations: operations,
+                Concurrency: concurrency,
+                Atomicity: WriteAtomicity.Sequential,
+                ...(binding.VersionField === undefined ? {} : { VersionField: binding.VersionField }),
+            };
             const adapter = await catalog.Open(ConnectorLookup.Find(this.plan.Connectors, binding), services);
             const result = await adapter.Apply(batch);
             results.push(result);
