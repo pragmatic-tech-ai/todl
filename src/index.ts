@@ -102,8 +102,10 @@ export {
   type IDataSourceAdapter,
   type IDataSourceAdapterFactory,
   type IDataSourceAdapterProvider,
+  type AdapterResolutionRequest,
   type IConnectionResolver,
 } from './model-data/data-source-adapter.js';
+export type { IAdapterPack } from './model-data/adapter-pack.js';
 export { ConnectionResolver } from './model-data/connection-resolver.js';
 export { type ISqlSession, type SqlRow } from './model-data/sql-session.js';
 export { SqlAdapter, SqlQueryTranslator } from './model-data/sql-adapter.js';

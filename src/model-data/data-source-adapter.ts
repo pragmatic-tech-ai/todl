@@ -18,11 +18,22 @@ export interface IDataSourceAdapterFactory
     Open(connection: ResolvedConnection): Promise<IDataSourceAdapter>;
 }
 
-/** Supplies a factory for a kind on demand (e.g. lazily loaded adapter packs). */
+/** The information a provider needs to resolve a factory: the data-source Kind and, when the
+ *  connector named one, the provider pack specifier (name@range). Never carries the spec or its
+ *  secrets. */
+export interface AdapterResolutionRequest
+{
+    readonly Kind: DataSourceKind;
+    readonly Provider?: string;
+}
+
+/** Supplies a factory for a resolution request on demand (e.g. lazily loaded adapter packs). */
 export interface IDataSourceAdapterProvider
 {
-    Resolve(kind: DataSourceKind): Promise<IDataSourceAdapterFactory>;
+    Resolve(request: AdapterResolutionRequest): Promise<IDataSourceAdapterFactory>;
 }
+
+export type { IAdapterPack } from "./adapter-pack.js";
 
 /** Turns a connector spec into concrete connection details. */
 export interface IConnectionResolver

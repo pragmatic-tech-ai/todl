@@ -97,7 +97,7 @@ export class DataSourceAdapterCatalog
         {
             try
             {
-                return await this.provider.Resolve(spec.Kind);
+                return await this.provider.Resolve({ Kind: spec.Kind });
             }
             catch (error)
             {

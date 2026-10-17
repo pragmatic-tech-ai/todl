@@ -1,6 +1,6 @@
 import { QueryCompareOp, WriteOperationKind } from "../connector-plan.js";
 import type { DataSourceKind, ExternalRecord, QueryRequest, ResolvedConnection, WriteBatch, WriteConflict, WriteResult } from "../connector-plan.js";
-import type { IDataSourceAdapter, IDataSourceAdapterFactory, IDataSourceAdapterProvider } from "../data-source-adapter.js";
+import type { AdapterResolutionRequest, IDataSourceAdapter, IDataSourceAdapterFactory, IDataSourceAdapterProvider } from "../data-source-adapter.js";
 
 export class InMemoryAdapter implements IDataSourceAdapter
 {
@@ -150,10 +150,10 @@ export class RegisteredAdapterProvider implements IDataSourceAdapterProvider
         return this;
     }
 
-    public async Resolve(kind: DataSourceKind): Promise<IDataSourceAdapterFactory>
+    public async Resolve(request: AdapterResolutionRequest): Promise<IDataSourceAdapterFactory>
     {
-        const factory = this.factories.get(kind);
-        if (!factory) throw new Error(`${RegisteredAdapterProvider.MissingMessage} ${kind}`);
+        const factory = this.factories.get(request.Kind);
+        if (!factory) throw new Error(`${RegisteredAdapterProvider.MissingMessage} ${request.Kind}`);
         return factory;
     }
 }
