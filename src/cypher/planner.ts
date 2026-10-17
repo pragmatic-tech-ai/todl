@@ -362,12 +362,13 @@ export class LogicalPlanner
         });
     }
 
-    // Implicit paging order: ORDER BY <first projected column> ascending, resolved exactly as an explicit alias reference.
-    // Ties in the first column keep source order (stable Sort), so page stability relies on a stable source order.
+    // Implicit paging order: ORDER BY all projected columns, ascending, resolved exactly as explicit alias references.
+    // Ordering on every projected column makes this a total order so ties can't reorder a page split; rows equal in
+    // every column are indistinguishable on the wire.
     private implicitOrder(projection: ProjectionClause): SortItem[]
     {
-        const first = new SortItem(new VariableRef(projection.Items[0]!.ColumnName()), false);
-        return this.resolveOrderBy(projection, [first]);
+        const order = projection.Items.map((item) => new SortItem(new VariableRef(item.ColumnName()), false));
+        return this.resolveOrderBy(projection, order);
     }
 
     private aggregateCall(item: ReturnItem): FunctionCall

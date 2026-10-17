@@ -81,6 +81,103 @@ class PagingFixture
     }
 }
 
+class TieFixture
+{
+    private static readonly ModelName = "paging-tie";
+    private static readonly ModelVersion = "1.0.0";
+    private static readonly Format = "todl-manifest/1";
+    private static readonly RootConcept = "Element";
+    private static readonly ServiceConcept = "Service";
+    private static readonly TierField = "tier";
+    private static readonly NameField = "name";
+    private static readonly StringType = "string";
+    private static readonly OptionalCard = "?";
+    private static readonly IdPrefix = "id";
+    private static readonly NamePrefix = "s";
+    private static readonly TierPrefix = "t";
+    private static readonly PadChar = "0";
+    private static readonly PadWidth = 2;
+    private static readonly RunSize = 6;
+    private static readonly UnexpectedCellMessage = "unexpected cell type in Plain()";
+
+    // Services whose FIRST projected column (tier) repeats across rows while the SECOND column (name) is distinct.
+    // The first RunSize names share tier "t0"; the rest share tier "t1". Inserted in REVERSE name order so a correct
+    // ascending (tier, name) total order can only come from sorting, never from source order.
+    public static Engine(count: number): CypherEngine
+    {
+        const logical: LogicalManifest = {
+            format: TieFixture.Format, model: TieFixture.ModelName, version: TieFixture.ModelVersion,
+            root: TieFixture.RootConcept,
+            concepts: {
+                [TieFixture.RootConcept]: { extends: null, fields: {}, relationships: {}, invariants: [], annotations: [] },
+                [TieFixture.ServiceConcept]: {
+                    extends: TieFixture.RootConcept,
+                    fields: {
+                        [TieFixture.TierField]: { type: TieFixture.StringType, card: TieFixture.OptionalCard },
+                        [TieFixture.NameField]: { type: TieFixture.StringType, card: TieFixture.OptionalCard },
+                    },
+                    relationships: {},
+                    invariants: [], annotations: [],
+                },
+            },
+            classes: {}, taxonomies: {},
+        };
+        const g = new FrozenGraph();
+        const m = Manifest.load(ManifestWriter.fromLogical(logical).toJSON());
+        g.PreRegister(m);
+        g.Finalize(m);
+        const nodes: ReflectedNode[] = [];
+        for (let i = count - 1; i >= 0; i--)
+        {
+            nodes.push({ id: `${TieFixture.IdPrefix}${i}`, type: TieFixture.ServiceConcept, attrs: { [TieFixture.TierField]: TieFixture.Tier(i), [TieFixture.NameField]: TieFixture.Name(i) } });
+        }
+        g.BindSeed({ nodes, edges: [] }, { model: TieFixture.ModelName, version: TieFixture.ModelVersion });
+        return CypherEngine.OverQuery(new GraphQuery(g));
+    }
+
+    public static Tier(i: number): string
+    {
+        return `${TieFixture.TierPrefix}${i < TieFixture.RunSize ? 0 : 1}`;
+    }
+
+    public static Name(i: number): string
+    {
+        return `${TieFixture.NamePrefix}${String(i).padStart(TieFixture.PadWidth, TieFixture.PadChar)}`;
+    }
+
+    public static Pairs(result: CypherResult): [unknown, unknown][]
+    {
+        return result.Rows.map((r) => [TieFixture.Plain(r[0]!), TieFixture.Plain(r[1]!)]);
+    }
+
+    private static Plain(v: CypherValue): unknown
+    {
+        if (v instanceof ScalarValue) return v.Value;
+        throw new Error(`${TieFixture.UnexpectedCellMessage}: ${v.constructor.name}`);
+    }
+}
+
+describe("Execute paging tiebreak", () =>
+{
+    const TwoColumn = "MATCH (a:Service) RETURN a.tier, a.name";
+    const Ordered = "MATCH (a:Service) RETURN a.tier, a.name ORDER BY a.tier, a.name";
+    const e = TieFixture.Engine(10);
+
+    test("a non-unique first column pages as a stable total order across the boundary", () =>
+    {
+        // The explicit (tier, name) total order is the ground truth; the implicit paging order must reproduce it.
+        // RunSize=6 shares tier "t0" so a RowCap of 4 splits that run of equal first-column values across the boundary.
+        const single = TieFixture.Pairs(e.Execute(Ordered));
+        const pages = [0, 4, 8].map((skip) => e.Execute(TwoColumn, undefined, { Skip: skip, RowCap: 4 }));
+        const paged = pages.flatMap((p) => TieFixture.Pairs(p));
+        assert.deepEqual(paged, single);
+        // No row skipped or duplicated: the paged sequence is exactly the ten distinct names once each.
+        assert.equal(paged.length, 10);
+        assert.equal(new Set(paged.map((pair) => pair[1])).size, 10);
+        assert.deepEqual(pages.map((p) => p.HasMore), [true, true, false]);
+    });
+});
+
 describe("Execute paging", () =>
 {
     const Ordered = "MATCH (a:Service) RETURN a.name ORDER BY a.name";
