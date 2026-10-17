@@ -58,7 +58,7 @@ class WorkingCopyFixture
         return {
             Model: "Sales", Version: "0.0.0",
             Connectors: [{ Name: "pg", Kind: DataSourceKind.Sql, Config: {} }],
-            Bindings: [{ Concept: "a.Order", Connector: "pg", Source: "order", IdKey: "order_id", FieldMap: this.Versioned ? { id: "order_id", label: "display_name", version: "ver" } : { id: "order_id", label: "display_name" }, Writable: this.Writable, ...(this.Versioned ? { VersionField: "ver" } : {}) }],
+            Bindings: [{ Concept: "a.Order", Connector: "pg", Source: "order", IdKey: "order_id", FieldMap: this.Versioned ? { id: "order_id", label: "display_name", version: "ver" } : { id: "order_id", label: "display_name" }, Writable: this.Writable, ...(this.Versioned ? { VersionField: "ver", Concurrency: WriteConcurrency.Optimistic } : {}) }],
         };
     }
 
@@ -118,6 +118,21 @@ class ProgrammableFactory implements IDataSourceAdapterFactory
     public async Open(): Promise<IDataSourceAdapter>
     {
         return this.Adapter;
+    }
+}
+
+/** A factory whose Open always rejects — the connection cannot be established. */
+class ThrowingOpenFactory implements IDataSourceAdapterFactory
+{
+    private static readonly OpenFailure = "cannot open connection";
+
+    public constructor(public readonly Kind: DataSourceKind)
+    {
+    }
+
+    public async Open(): Promise<IDataSourceAdapter>
+    {
+        throw new Error(ThrowingOpenFactory.OpenFailure);
     }
 }
 
@@ -457,4 +472,41 @@ test("a throwing binding is isolated: its ops stay pending, other bindings still
     assert.equal(scenario.Adapter.Batches.filter(b => b.Source === "throws").length, 2, "throwing binding retried");
     assert.equal(scenario.Adapter.Batches.filter(b => b.Source === "ok").length, 1, "committed binding not retried");
     assert.equal(retry.Results.find(r => r.Applied > 0)!.Applied, 1);
+});
+
+test("a binding whose connection cannot open is isolated: its ops stay pending, other bindings still apply", async () =>
+{
+    const good = new ProgrammableFactory(DataSourceKind.Sql);
+    const bad = new ThrowingOpenFactory(DataSourceKind.Rest);
+    const catalog = new DataSourceAdapterCatalog().Register(good).Register(bad);
+    const services = new ServiceProvider();
+    const order = Nodes.Order("a.Order#o1", "O-1");
+    const customer = Nodes.Order("a.Customer#c1", "C-1", "a.Customer");
+    const plan: ModelConnectorPlan =
+    {
+        Model: "Sales", Version: "0.0.0",
+        Connectors: [
+            { Name: "pg", Kind: DataSourceKind.Sql, Config: {} },
+            { Name: "api", Kind: DataSourceKind.Rest, Config: {} },
+        ],
+        Bindings: [
+            { Concept: "a.Order", Connector: "api", Source: "orders", IdKey: "order_id", FieldMap: { id: "order_id", label: "display_name" }, Writable: true },
+            { Concept: "a.Customer", Connector: "pg", Source: "contacts", IdKey: "customer_id", FieldMap: { id: "customer_id", label: "display_name" }, Writable: true },
+        ],
+    };
+    const copy = new ConnectorWorkingCopy(plan, { nodes: [order, customer], edges: [] }, new Map([
+        [order.id, [{ StorageId: "O-1", Connector: "api", Source: "orders" }]],
+        [customer.id, [{ StorageId: "C-1", Connector: "pg", Source: "contacts" }]],
+    ]));
+    copy.MarkDirty(order.id);
+    copy.MarkDirty(customer.id);
+
+    const outcome = await copy.Flush(catalog, services);
+    assert.ok(outcome.Diagnostics.some(d => d.code === DiagnosticCode.ConnectorWriteFailed), "the open failure is reported as a write-failed diagnostic");
+    assert.equal(good.Adapter.Batches.filter(b => b.Source === "contacts").length, 1, "the healthy binding committed despite the sibling's open throwing");
+
+    // The un-openable binding stayed pending; the committed one cleared and is not retried.
+    const retry = await copy.Flush(catalog, services);
+    assert.equal(good.Adapter.Batches.filter(b => b.Source === "contacts").length, 1, "committed binding not retried");
+    assert.equal(retry.Results.reduce((n, r) => n + r.Applied, 0), 0, "only the still-un-openable binding remains, applying nothing");
 });

@@ -1,4 +1,4 @@
-import { QueryCompareOp, WriteFailureKind, WriteOperationKind } from "../connector-plan.js";
+import { QueryCompareOp, WriteConcurrency, WriteFailureKind, WriteOperationKind } from "../connector-plan.js";
 import type { DataSourceKind, ExternalRecord, QueryRequest, ResolvedConnection, WriteBatch, WriteFailure, WriteResult } from "../connector-plan.js";
 import type { AdapterResolutionRequest, IDataSourceAdapter, IDataSourceAdapterFactory, IDataSourceAdapterProvider } from "../data-source-adapter.js";
 
@@ -54,7 +54,9 @@ export class InMemoryAdapter implements IDataSourceAdapter
                 }
                 continue;
             }
-            if (batch.VersionField !== undefined && index >= 0)
+            // Mirror SqlAdapter: the version guard fires ONLY in Optimistic mode (with a VersionField);
+            // LastWriteWins is an unconditional upsert regardless of any VersionField on the batch.
+            if (batch.Concurrency === WriteConcurrency.Optimistic && batch.VersionField !== undefined && index >= 0)
             {
                 const stored = rows[index]![batch.VersionField] ?? null;
                 if (stored !== (op.Version ?? null))

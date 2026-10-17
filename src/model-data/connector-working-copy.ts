@@ -125,13 +125,14 @@ export class ConnectorWorkingCopy
         return { Results: results, Diagnostics: diagnostics };
     }
 
-    /** Applies one binding's batch, isolating it: a THROWN adapter error becomes an Error failure for
-     *  every op in the batch (so they all stay pending) and never aborts the rest of the Flush. */
+    /** Applies one binding's batch, isolating it: a THROWN error from opening the adapter OR from
+     *  applying the batch becomes an Error failure for every op in the batch (so they all stay pending)
+     *  and never aborts the rest of the Flush. */
     private async ApplyBatch(catalog: DataSourceAdapterCatalog, services: IServiceProvider, binding: ConnectorBinding, batch: WriteBatch, operations: readonly WriteOperation[]): Promise<WriteResult>
     {
-        const adapter = await catalog.Open(ConnectorLookup.Find(this.plan.Connectors, binding), services);
         try
         {
+            const adapter = await catalog.Open(ConnectorLookup.Find(this.plan.Connectors, binding), services);
             return await adapter.Apply(batch);
         }
         catch (error)
