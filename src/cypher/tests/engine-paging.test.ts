@@ -9,6 +9,7 @@ import type { ReflectedNode } from "../../manifest/reflection/reflection.js";
 import { CypherEngine } from "../engine.js";
 import { CypherValue, ScalarValue } from "../values.js";
 import type { CypherResult } from "../result.js";
+import { CypherSemanticError } from "../errors.js";
 
 class PagingFixture
 {
@@ -85,6 +86,9 @@ describe("Execute paging", () =>
     const Ordered = "MATCH (a:Service) RETURN a.name ORDER BY a.name";
     const Unordered = "MATCH (a:Service) RETURN a.name";
     const Limited = "MATCH (a:Service) RETURN a.name ORDER BY a.name LIMIT 10";
+    const Counted = "MATCH (a:Service) RETURN count(a) AS c";
+    const Distinct = "MATCH (a:Service) RETURN DISTINCT a.name";
+    const Chained = "MATCH (a:Service) WITH a.name AS n RETURN n";
     const e = PagingFixture.Engine(10);
 
     test("pages by Skip/RowCap with HasMore and never Truncated", () =>
@@ -154,5 +158,44 @@ describe("Execute paging", () =>
         assert.equal(more.Truncated, false);
         const done = CypherEngine.ToDto(e.Execute(Ordered));
         assert.equal(done.HasMore, false);
+    });
+
+    test("rejects a negative or NaN Skip", () =>
+    {
+        assert.throws(() => e.Execute(Ordered, undefined, { Skip: -1, RowCap: 4 }), CypherSemanticError);
+        assert.throws(() => e.Execute(Ordered, undefined, { Skip: Number.NaN, RowCap: 4 }), CypherSemanticError);
+        assert.throws(() => e.Execute(Ordered, undefined, { Skip: 1.5, RowCap: 4 }), CypherSemanticError);
+    });
+
+    test("rejects Skip with a missing or zero RowCap", () =>
+    {
+        assert.throws(() => e.Execute(Ordered, undefined, { Skip: 0 }), CypherSemanticError);
+        assert.throws(() => e.Execute(Ordered, undefined, { Skip: 0, RowCap: 0 }), CypherSemanticError);
+    });
+
+    test("pages over an aggregate", () =>
+    {
+        const r = e.Execute(Counted, undefined, { Skip: 0, RowCap: 2 });
+        assert.deepEqual(PagingFixture.Col(r), [10]);
+        assert.equal(r.HasMore, false);
+        assert.equal(r.Truncated, false);
+    });
+
+    test("pages over DISTINCT", () =>
+    {
+        const first = e.Execute(Distinct, undefined, { Skip: 0, RowCap: 4 });
+        assert.deepEqual(PagingFixture.Col(first), PagingFixture.Names(0, 4));
+        assert.equal(first.HasMore, true);
+        const last = e.Execute(Distinct, undefined, { Skip: 8, RowCap: 4 });
+        assert.deepEqual(PagingFixture.Col(last), PagingFixture.Names(8, 10));
+        assert.equal(last.HasMore, false);
+    });
+
+    test("pages over a WITH-chained query in ascending order", () =>
+    {
+        const pages = [0, 4, 8].map((skip) => e.Execute(Chained, undefined, { Skip: skip, RowCap: 4 }));
+        assert.deepEqual(pages.flatMap((p) => PagingFixture.Col(p)), PagingFixture.Names(0, 10));
+        assert.deepEqual(pages.map((p) => p.Rows.length), [4, 4, 2]);
+        assert.deepEqual(pages.map((p) => p.HasMore), [true, true, false]);
     });
 });

@@ -13,11 +13,14 @@ import { ParameterBinder } from "./parameter-binder.js";
 import { CypherResult } from "./result.js";
 import type { CypherResultDto } from "./result.js";
 import { CancelProbe } from "./execution-limits.js";
+import { CypherSemanticError } from "./errors.js";
 import type { ExecutionLimits } from "./execution-limits.js";
 
 export class CypherEngine
 {
     private static readonly EmptyParams: ReadonlyMap<string, ParameterValue> = new Map();
+    private static readonly InvalidSkip = "paging Skip must be a non-negative integer";
+    private static readonly InvalidPageSize = "paging RowCap must be a positive integer when Skip is supplied";
 
     constructor(private readonly graph: ICypherGraph, private readonly options?: PlannerOptions)
     {
@@ -32,6 +35,7 @@ export class CypherEngine
     {
         const model = typeof source === "string" ? new CypherParser(source).Parse() : source.ToModel();
         const paging = limits?.Skip !== undefined;
+        if (paging) CypherEngine.ValidatePaging(limits!);
         const plan = new LogicalPlanner(this.graph, ParameterBinder.FromInputMap(parameters), this.options, limits?.Cancel, paging).Plan(model);
         const columns = model.FinalColumns();
         return paging ? this.Page(plan, columns, limits!) : this.Collect(plan, columns, limits);
@@ -72,7 +76,7 @@ export class CypherEngine
                 skipped++;
                 continue;
             }
-            if (limits.RowCap !== undefined && rows.length >= limits.RowCap)
+            if (rows.length >= limits.RowCap!)
             {
                 hasMore = true;
                 break;
@@ -80,6 +84,13 @@ export class CypherEngine
             rows.push(CypherEngine.Materialize(binding, columns));
         }
         return new CypherResult(columns, rows, false, hasMore);
+    }
+
+    // Paging limits are fail-fast: a bad Skip must not silently act as 0, and Skip without a page size is a misuse.
+    private static ValidatePaging(limits: ExecutionLimits): void
+    {
+        if (!Number.isInteger(limits.Skip) || limits.Skip! < 0) throw new CypherSemanticError(`${CypherEngine.InvalidSkip}: ${limits.Skip}`);
+        if (!Number.isInteger(limits.RowCap) || limits.RowCap! <= 0) throw new CypherSemanticError(`${CypherEngine.InvalidPageSize}: ${limits.RowCap}`);
     }
 
     private static Materialize(binding: Binding, columns: readonly string[]): CypherValue[]

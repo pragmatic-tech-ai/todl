@@ -363,6 +363,7 @@ export class LogicalPlanner
     }
 
     // Implicit paging order: ORDER BY <first projected column> ascending, resolved exactly as an explicit alias reference.
+    // Ties in the first column keep source order (stable Sort), so page stability relies on a stable source order.
     private implicitOrder(projection: ProjectionClause): SortItem[]
     {
         const first = new SortItem(new VariableRef(projection.Items[0]!.ColumnName()), false);
