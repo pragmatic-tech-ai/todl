@@ -230,6 +230,7 @@ export { tokenize, TokenKind, type Token } from './compiler-services/parse/lexer
 export { SolutionServicesEngine } from './solution-services/solution-services-module.mu.js';
 export { LspServicesEngine } from './solution-services/lsp/lsp-module.mu.js';
 export type { ILanguageService } from './solution-services/lsp/host/i-language-service.js';
+export { GraphBuildState } from './solution-services/lsp/host/graph-build-state.js';
 export { SolutionLanguageService } from './solution-services/lsp/host/solution-language-service.js';
 export { AnalysisEngineKey, type IAnalysisEngine } from './solution-services/lsp/host/i-analysis-engine.js';
 export { AnalysisEngine } from './solution-services/lsp/analysis/analysis-engine.js';

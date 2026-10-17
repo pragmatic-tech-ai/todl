@@ -10,6 +10,7 @@ import type { WikiOrigin } from "../../project-services/core/wiki-origin.js";
 import type { Repository } from "../../../compiler-services/model/model.js";
 import type { SolutionGraphChange } from "./solution-graph.js";
 import type { ResolvedResource } from "./resource-locator.js";
+import type { GraphBuildState } from "./graph-build-state.js";
 
 // The single host-facing language-service authority: one promise-returning method
 // per editor feature plus the live-buffer channel (DidChange) and pull-model
@@ -49,4 +50,11 @@ export interface ILanguageService
     ModelView(consumerStorage: IStorage): Promise<{ model: Repository; originOf: ReadonlyMap<string, WikiOrigin>; provenanceOf: ReadonlyMap<string, string> } | undefined>;
     Resources(nodeId: string): Promise<ResolvedResource[]>;
     readonly GraphChanged: Signal<SolutionGraphChange>;
+
+    // The engine-owned state of the shared graph's full build (warmup / solution switch):
+    // the current value, a signal raised only on a real transition, and a monotonic
+    // revision bumped on every GraphChanged commit (a fingerprint for paging cursors).
+    readonly BuildState: GraphBuildState;
+    readonly BuildStateChanged: Signal<GraphBuildState>;
+    readonly GraphRevision: number;
 }

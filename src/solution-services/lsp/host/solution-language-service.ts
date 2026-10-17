@@ -1,6 +1,6 @@
 import {
-    ServiceBase, ServiceKey, Disposable, FakeStorage, isWatchableStorage,
-    type IServiceProvider, type IStorage, type IDisposable, type Signal,
+    ServiceBase, ServiceKey, Disposable, FakeStorage, isWatchableStorage, Signal,
+    type IServiceProvider, type IStorage, type IDisposable,
 } from "@pragmatic-tech-ai/todl-runtime";
 import { MemberContentWatcher } from "./member-content-watcher.js";
 import type { CollectionChange } from "@pragmatic-tech-ai/todl-runtime";
@@ -29,6 +29,7 @@ import {
     ProjectEventsKey, ProjectEventKind, type IProjectEvents, type ProjectEvent,
 } from "../../project-services/generators/project-events.js";
 import type { ILanguageService } from "./i-language-service.js";
+import { GraphBuildState } from "./graph-build-state.js";
 import type { TodlDocument } from "../../../compiler-services/emit/json.js";
 import { ProjectType, parseManifest, type DependencyRef, type ProjectManifest } from "../../package-manager/manifest.js";
 import type { WikiOrigin } from "../../project-services/core/wiki-origin.js";
@@ -140,6 +141,15 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     // The message of the most recent graph build failure (duplicate member id, cycle),
     // else undefined — a readable flag that the shared graph is stale.
     private lastGraphBuildError: string | undefined;
+    // The engine-owned full-build state (warmup / solution switch), raised on
+    // buildStateChanged only on a real transition. switchGeneration is bumped per
+    // solution switch so only the LATEST full build settles it (a stale switch's rebuild
+    // finishing first must not report Ready for a solution no longer active).
+    private buildState = GraphBuildState.Building;
+    private readonly buildStateChanged = new Signal<GraphBuildState>();
+    private switchGeneration = 0;
+    // Monotonic count of shared-graph commits (every GraphChanged emission).
+    private graphRevision = 0;
 
     // Permanent lifecycle subscriptions (the manager's ActiveSolution channel + the
     // project-event bus), disposed in dispose().
@@ -182,7 +192,8 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
         this.resolver = provider.get(SolutionBaseResolver.Key) ?? new SolutionBaseResolver(provider);
         const packages = provider.get(SolutionManagerService.PackageSourceKey) ?? new EmptyPackageSource();
         this.session = new SolutionSession(new ResolverPackageSource(this.resolver, packages));
-        this.warmup = this.BuildWarmCache();
+        this.subscriptions.push(this.solutionGraph.Changed.subscribe(() => { this.graphRevision++; }));
+        this.warmup = this.WarmAndSettle(this.switchGeneration);
         this.SubscribeToLifecycle();
         this.SubscribeToResolverStale();
     }
@@ -268,6 +279,25 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     public get GraphChanged(): Signal<SolutionGraphChange>
     {
         return this.solutionGraph.Changed;
+    }
+
+    // The engine-owned state of the shared graph's full build: Building at construction
+    // and on each solution switch, then Ready / Failed once the LATEST full build settles.
+    public get BuildState(): GraphBuildState
+    {
+        return this.buildState;
+    }
+
+    // Raised with the new state on every real BuildState transition (never a repeat).
+    public get BuildStateChanged(): Signal<GraphBuildState>
+    {
+        return this.buildStateChanged;
+    }
+
+    // Monotonic revision of the shared graph, bumped on every GraphChanged commit.
+    public get GraphRevision(): number
+    {
+        return this.graphRevision;
     }
 
     // The shared solution view for a member: the ONE Repository + origin map the whole
@@ -497,7 +527,19 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
         // promise that Ready awaits; every later switch enqueues its own rebuild, awaiting
         // warmup first so a switch landing before the initial Build cannot race it (and let
         // a stale assembly finish last).
-        if (this.graphBootstrapped) this.Enqueue(async () => { await this.warmup; await this.RebuildGraphSafely(); });
+        // A switch moves the build state back to Building at once, and only the job of the
+        // LATEST switch (its captured generation still current) settles it.
+        if (this.graphBootstrapped)
+        {
+            const generation = ++this.switchGeneration;
+            this.SetBuildState(GraphBuildState.Building);
+            this.Enqueue(async () =>
+            {
+                await this.warmup;
+                await this.RebuildGraphSafely();
+                this.SettleBuild(generation);
+            });
+        }
         this.graphBootstrapped = true;
     }
 
@@ -732,6 +774,39 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
         // Always build the graph — even with no active solution, AssembleMembers yields []
         // and Build([]) leaves (clears) the graph, so Ready/ModelView have a defined state.
         await this.RebuildGraphSafely();
+    }
+
+    // The warmup, settling the build state for its generation once it completes. A warm
+    // cache failure (before the graph build ran) settles Failed and is re-thrown so Ready
+    // keeps rejecting exactly as before.
+    private async WarmAndSettle(generation: number): Promise<void>
+    {
+        try
+        {
+            await this.BuildWarmCache();
+        }
+        catch (error)
+        {
+            if (!this.disposed && generation === this.switchGeneration) this.SetBuildState(GraphBuildState.Failed);
+            throw error;
+        }
+        this.SettleBuild(generation);
+    }
+
+    // Settle a full build: ignored when a newer switch superseded it (or after dispose),
+    // else Failed when the graph build was rejected, Ready otherwise.
+    private SettleBuild(generation: number): void
+    {
+        if (this.disposed || generation !== this.switchGeneration) return;
+        this.SetBuildState(this.lastGraphBuildError !== undefined ? GraphBuildState.Failed : GraphBuildState.Ready);
+    }
+
+    // Assign and raise the build state, a no-op when unchanged (emit only on transitions).
+    private SetBuildState(next: GraphBuildState): void
+    {
+        if (next === this.buildState) return;
+        this.buildState = next;
+        this.buildStateChanged.emit(next);
     }
 
     // Re-resolve a member's warm base-set and store it under its project root — the

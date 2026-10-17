@@ -10,6 +10,7 @@ import type { ILanguageService } from "../../solution-services/lsp/host/i-langua
 import type { RenameError } from "../../solution-services/lsp/analysis/rename-provider.js";
 import type { SolutionGraphChange } from "../../solution-services/lsp/host/solution-graph.js";
 import type { ResolvedResource } from "../../solution-services/lsp/host/resource-locator.js";
+import { GraphBuildState } from "../../solution-services/lsp/host/graph-build-state.js";
 
 // A fake language service recording the calls the proxy delegates, with canned results.
 class FakeService implements ILanguageService
@@ -39,6 +40,9 @@ class FakeService implements ILanguageService
     async ModelView(): Promise<undefined> { return undefined; }
     async Resources(): Promise<ResolvedResource[]> { return []; }
     readonly GraphChanged = new Signal<SolutionGraphChange>();
+    readonly BuildState = GraphBuildState.Ready;
+    readonly BuildStateChanged = new Signal<GraphBuildState>();
+    readonly GraphRevision = 0;
 }
 
 function wire(service: ILanguageService)
