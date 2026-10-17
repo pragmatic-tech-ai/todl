@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { ServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
 import { FederatedModelDataConnector } from "../federated-model-data-connector.js";
 import { DataSourceAdapterCatalog } from "../data-source-adapter-catalog.js";
-import { DataSourceKind, WriteFailureKind, WriteOperationKind, type ModelConnectorPlan, type WriteBatch, type WriteResult, type ExternalRecord, type QueryRequest } from "../connector-plan.js";
-import type { IDataSourceAdapter } from "../data-source-adapter.js";
+import { DataSourceKind, WriteAtomicity, WriteConcurrency, WriteFailureKind, WriteOperationKind, type ModelConnectorPlan, type WriteBatch, type WriteFailure, type WriteResult, type ExternalRecord, type QueryRequest } from "../connector-plan.js";
+import type { IDataSourceAdapter, IDataSourceAdapterFactory } from "../data-source-adapter.js";
 import type { ResolvedConnection } from "../connector-plan.js";
 import { ConnectorWorkingCopy } from "../connector-working-copy.js";
 import { DiagnosticCode } from "../../compiler-services/diagnostics/diagnostic.js";
@@ -65,6 +65,70 @@ class WorkingCopyFixture
     public Connector(): FederatedModelDataConnector
     {
         return new FederatedModelDataConnector(this.Plan(), { nodes: [], edges: [] });
+    }
+}
+
+/** A write adapter scriptable per source and per key: throw on named sources, fail chosen keys
+ *  with a chosen WriteFailureKind, and (for rollback sources) return Applied 0 + only the first
+ *  faulting op — the shape a rolled-back transactional batch reports. */
+class ProgrammableAdapter implements IDataSourceAdapter
+{
+    public readonly Batches: WriteBatch[] = [];
+    public readonly ThrowSources = new Set<string>();
+    public readonly RollbackSources = new Set<string>();
+    public readonly FailKeys = new Map<string, WriteFailureKind>();
+
+    public async Query(): Promise<readonly ExternalRecord[]>
+    {
+        return [];
+    }
+
+    public async Apply(batch: WriteBatch): Promise<WriteResult>
+    {
+        this.Batches.push(batch);
+        if (this.ThrowSources.has(batch.Source)) throw new Error(`apply exploded for ${batch.Source}`);
+        const failures: WriteFailure[] = [];
+        let applied = 0;
+        for (const op of batch.Operations)
+        {
+            const kind = this.FailKeys.get(String(op.Key));
+            if (kind !== undefined) failures.push({ Key: op.Key, Kind: kind, Reason: `${kind} on ${String(op.Key)}` });
+            else applied++;
+        }
+        if (this.RollbackSources.has(batch.Source) && failures.length > 0)
+        {
+            return { Applied: 0, Failures: [failures[0]!] };
+        }
+        return { Applied: applied, Failures: failures };
+    }
+
+    public async Dispose(): Promise<void>
+    {
+    }
+}
+
+class ProgrammableFactory implements IDataSourceAdapterFactory
+{
+    public readonly Adapter = new ProgrammableAdapter();
+
+    public constructor(public readonly Kind: DataSourceKind)
+    {
+    }
+
+    public async Open(): Promise<IDataSourceAdapter>
+    {
+        return this.Adapter;
+    }
+}
+
+class Nodes
+{
+    public static Order(id: string, storageId: string, type: string = "a.Order"): JsonNode
+    {
+        return {
+            id, tier: "Instance", type, metaKind: null, namespace: "a", localId: id,
+            isClass: false, class: null, storageId, canonicalId: null, fields: [], attrs: { label: storageId },
+        };
     }
 }
 
@@ -219,6 +283,8 @@ test("no VersionField: same edit upserts last-write-wins without conflict", asyn
     assert.equal(outcome.Diagnostics.length, 0);
     assert.equal(outcome.Results[0]!.Applied, 1);
     assert.equal(fx.Factory.Batches[0]!.VersionField, undefined);
+    assert.equal(fx.Factory.Batches[0]!.Concurrency, WriteConcurrency.LastWriteWins, "absent axis defaults to last-write-wins");
+    assert.equal(fx.Factory.Batches[0]!.Atomicity, WriteAtomicity.Sequential, "absent axis defaults to sequential");
 });
 
 test("Flush fans a merged canonical out to every writable source and reports read-only ones", async () =>
@@ -260,4 +326,135 @@ test("Flush fans a merged canonical out to every writable source and reports rea
     const legacy = await factory.Adapter.Query({ ...query, Source: "legacy" } as QueryRequest);
     assert.deepEqual(contacts, [{ customer_id: "C1", email: "merged@acme.com" }]);
     assert.deepEqual(legacy, []);
+});
+
+class ProgrammableScenario
+{
+    public readonly Factory = new ProgrammableFactory(DataSourceKind.Sql);
+    public readonly Catalog = new DataSourceAdapterCatalog().Register(this.Factory);
+    public readonly Services = new ServiceProvider();
+
+    public get Adapter(): ProgrammableAdapter
+    {
+        return this.Factory.Adapter;
+    }
+
+    public Build(bindings: ModelConnectorPlan["Bindings"], nodes: readonly JsonNode[], targets: ReadonlyMap<string, { StorageId: string; Connector: string; Source: string }[]>): ConnectorWorkingCopy
+    {
+        const plan: ModelConnectorPlan = { Model: "Sales", Version: "0.0.0", Connectors: [{ Name: "pg", Kind: DataSourceKind.Sql, Config: {} }], Bindings: bindings };
+        return new ConnectorWorkingCopy(plan, { nodes: [...nodes], edges: [] }, targets);
+    }
+}
+
+test("the WriteBatch carries the binding's Concurrency/Atomicity/VersionField", async () =>
+{
+    const scenario = new ProgrammableScenario();
+    const node = Nodes.Order("a.Order#o1", "O-1");
+    node.attrs["version"] = 2;
+    const copy = scenario.Build(
+        [{ Concept: "a.Order", Connector: "pg", Source: "order", IdKey: "order_id", FieldMap: { id: "order_id", label: "display_name", version: "ver" }, Writable: true, VersionField: "ver", Concurrency: WriteConcurrency.Optimistic, Atomicity: WriteAtomicity.Transactional }],
+        [node],
+        new Map([[node.id, [{ StorageId: "O-1", Connector: "pg", Source: "order" }]]]));
+    copy.MarkDirty(node.id);
+    await copy.Flush(scenario.Catalog, scenario.Services);
+    const batch = scenario.Adapter.Batches[0]!;
+    assert.equal(batch.Concurrency, WriteConcurrency.Optimistic);
+    assert.equal(batch.Atomicity, WriteAtomicity.Transactional);
+    assert.equal(batch.VersionField, "ver");
+});
+
+test("applied ops are cleared, failed ops stay pending, one diagnostic per failure", async () =>
+{
+    const scenario = new ProgrammableScenario();
+    const n1 = Nodes.Order("a.Order#o1", "O-1");
+    const n2 = Nodes.Order("a.Order#o2", "O-2");
+    const copy = scenario.Build(
+        [{ Concept: "a.Order", Connector: "pg", Source: "order", IdKey: "order_id", FieldMap: { id: "order_id", label: "display_name" }, Writable: true, Atomicity: WriteAtomicity.Sequential }],
+        [n1, n2],
+        new Map([
+            [n1.id, [{ StorageId: "O-1", Connector: "pg", Source: "order" }]],
+            [n2.id, [{ StorageId: "O-2", Connector: "pg", Source: "order" }]],
+        ]));
+    scenario.Adapter.FailKeys.set("O-2", WriteFailureKind.Conflict);
+    copy.MarkDirty(n1.id);
+    copy.MarkDirty(n2.id);
+
+    const outcome = await copy.Flush(scenario.Catalog, scenario.Services);
+    assert.equal(outcome.Results[0]!.Applied, 1);
+    assert.equal(outcome.Diagnostics.length, 1, "one diagnostic for the single failure, not per operation");
+    assert.equal(outcome.Diagnostics[0]!.code, DiagnosticCode.ConnectorWriteConflict);
+
+    // Second flush re-sends ONLY the previously failed O-2 (O-1 was cleared).
+    scenario.Adapter.FailKeys.clear();
+    const retry = await copy.Flush(scenario.Catalog, scenario.Services);
+    const retried = scenario.Adapter.Batches[scenario.Adapter.Batches.length - 1]!;
+    assert.equal(retried.Operations.length, 1);
+    assert.equal(retried.Operations[0]!.Key, "O-2");
+    assert.equal(retry.Results[0]!.Applied, 1);
+});
+
+test("a rolled-back Transactional binding keeps ALL its ops pending", async () =>
+{
+    const scenario = new ProgrammableScenario();
+    const n1 = Nodes.Order("a.Order#o1", "O-1");
+    const n2 = Nodes.Order("a.Order#o2", "O-2");
+    const n3 = Nodes.Order("a.Order#o3", "O-3");
+    const copy = scenario.Build(
+        [{ Concept: "a.Order", Connector: "pg", Source: "order", IdKey: "order_id", FieldMap: { id: "order_id", label: "display_name" }, Writable: true, Atomicity: WriteAtomicity.Transactional }],
+        [n1, n2, n3],
+        new Map([
+            [n1.id, [{ StorageId: "O-1", Connector: "pg", Source: "order" }]],
+            [n2.id, [{ StorageId: "O-2", Connector: "pg", Source: "order" }]],
+            [n3.id, [{ StorageId: "O-3", Connector: "pg", Source: "order" }]],
+        ]));
+    scenario.Adapter.RollbackSources.add("order");
+    scenario.Adapter.FailKeys.set("O-2", WriteFailureKind.Error);
+    copy.MarkDirty(n1.id);
+    copy.MarkDirty(n2.id);
+    copy.MarkDirty(n3.id);
+
+    const first = await copy.Flush(scenario.Catalog, scenario.Services);
+    assert.equal(first.Results[0]!.Applied, 0, "a rolled-back batch applied nothing");
+    assert.equal(first.Results[0]!.Failures.length, 1, "backend reports only the faulting op");
+    assert.equal(first.Diagnostics.length, 1);
+    assert.equal(first.Diagnostics[0]!.code, DiagnosticCode.ConnectorWriteFailed);
+
+    // All three ops stay pending despite only one being in Failures: the whole batch rolled back.
+    scenario.Adapter.RollbackSources.clear();
+    scenario.Adapter.FailKeys.clear();
+    const retry = await copy.Flush(scenario.Catalog, scenario.Services);
+    const retried = scenario.Adapter.Batches[scenario.Adapter.Batches.length - 1]!;
+    assert.equal(retried.Operations.length, 3);
+    assert.equal(retry.Results[0]!.Applied, 3);
+});
+
+test("a throwing binding is isolated: its ops stay pending, other bindings still apply", async () =>
+{
+    const scenario = new ProgrammableScenario();
+    const order = Nodes.Order("a.Order#o1", "O-1");
+    const customer = Nodes.Order("a.Customer#c1", "C-1", "a.Customer");
+    const copy = scenario.Build(
+        [
+            { Concept: "a.Order", Connector: "pg", Source: "throws", IdKey: "order_id", FieldMap: { id: "order_id", label: "display_name" }, Writable: true },
+            { Concept: "a.Customer", Connector: "pg", Source: "ok", IdKey: "customer_id", FieldMap: { id: "customer_id", label: "display_name" }, Writable: true },
+        ],
+        [order, customer],
+        new Map([
+            [order.id, [{ StorageId: "O-1", Connector: "pg", Source: "throws" }]],
+            [customer.id, [{ StorageId: "C-1", Connector: "pg", Source: "ok" }]],
+        ]));
+    scenario.Adapter.ThrowSources.add("throws");
+    copy.MarkDirty(order.id);
+    copy.MarkDirty(customer.id);
+
+    const outcome = await copy.Flush(scenario.Catalog, scenario.Services);
+    assert.ok(outcome.Diagnostics.some(d => d.code === DiagnosticCode.ConnectorWriteFailed), "the thrown error is reported as a write-failed diagnostic");
+    assert.equal(scenario.Adapter.Batches.filter(b => b.Source === "ok").length, 1, "the healthy binding ran despite the other throwing");
+
+    // The throwing binding stayed pending; the committed one cleared.
+    scenario.Adapter.ThrowSources.clear();
+    const retry = await copy.Flush(scenario.Catalog, scenario.Services);
+    assert.equal(scenario.Adapter.Batches.filter(b => b.Source === "throws").length, 2, "throwing binding retried");
+    assert.equal(scenario.Adapter.Batches.filter(b => b.Source === "ok").length, 1, "committed binding not retried");
+    assert.equal(retry.Results.find(r => r.Applied > 0)!.Applied, 1);
 });

@@ -1,8 +1,8 @@
 import type { IServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
 import { DiagnosticCode, Severity, type Diagnostic } from "../compiler-services/diagnostics/diagnostic.js";
 import type { JsonNode, TodlDocument } from "../compiler-services/emit/json.js";
-import type { ConnectorBinding, ExternalFieldValue, ModelConnectorPlan, WriteBatch, WriteOperation, WriteResult, WriteTarget } from "./connector-plan.js";
-import { ConnectorLookup, WriteAtomicity, WriteConcurrency, WriteOperationKind } from "./connector-plan.js";
+import type { ConnectorBinding, ExternalFieldValue, ModelConnectorPlan, WriteBatch, WriteFailure, WriteOperation, WriteResult, WriteTarget } from "./connector-plan.js";
+import { ConnectorLookup, WriteAtomicity, WriteConcurrency, WriteFailureKind, WriteOperationKind } from "./connector-plan.js";
 import type { DataSourceAdapterCatalog } from "./data-source-adapter-catalog.js";
 
 export interface FlushOutcome
@@ -16,6 +16,7 @@ export class ConnectorWorkingCopy
 {
     private static readonly ReadOnlyMessage = "Cannot edit read-only connector binding for";
     private static readonly ConflictMessage = "Write conflict on";
+    private static readonly WriteFailedMessage = "Write failed on";
     private static readonly KeySeparator = "\u0000";
 
     private readonly bindingsByKey = new Map<string, ConnectorBinding>();
@@ -47,7 +48,12 @@ export class ConnectorWorkingCopy
         return this.Record(instanceId, WriteOperationKind.Delete);
     }
 
-    /** Flushes pending edits to every source a canonical was drawn from; read-only sources yield connector.read-only, conflicts yield connector.write-conflict and stay pending. */
+    /** Flushes pending edits to every source a canonical was drawn from, one binding at a time and
+     *  isolated from the others (a thrown adapter error fails just that binding). Each binding's batch
+     *  carries its authored Concurrency/Atomicity/VersionField. Read-only sources yield
+     *  connector.read-only; a conflict yields connector.write-conflict, any other failure
+     *  connector.write-failed. Failed ops stay pending; a rolled-back transactional batch keeps ALL of
+     *  its ops pending. Cross-binding/cross-adapter writes are NOT atomic. */
     public async Flush(catalog: DataSourceAdapterCatalog, services: IServiceProvider): Promise<FlushOutcome>
     {
         const batches = new Map<ConnectorBinding, WriteOperation[]>();
@@ -71,42 +77,81 @@ export class ConnectorWorkingCopy
         }
 
         const results: WriteResult[] = [];
-        const failed = new Set<string>();
+        // Target keys whose pending edit must survive this Flush (a failure, or a rolled-back
+        // transactional batch that applied nothing). Cross-binding writes are independent: a
+        // failure in one binding never retains another's ops.
+        const retained = new Set<string>();
         for (const [binding, operations] of batches)
         {
-            // Task-1 compile-bridge: reproduce today's behavior exactly. A versioned binding wrote
-            // optimistically; an unversioned one last-write-wins. Atomicity is always Sequential (no
-            // transaction seam yet). The per-axis authoring/honoring lands in later tasks.
-            const concurrency = binding.VersionField === undefined
-                ? WriteConcurrency.LastWriteWins
-                : WriteConcurrency.Optimistic;
+            // Honor the binding's authored axes, defaulting to the weakest guarantees when absent.
+            const concurrency = binding.Concurrency ?? WriteConcurrency.LastWriteWins;
+            const atomicity = binding.Atomicity ?? WriteAtomicity.Sequential;
             const batch: WriteBatch = {
                 Source: binding.Source,
                 IdKey: binding.IdKey,
                 Operations: operations,
                 Concurrency: concurrency,
-                Atomicity: WriteAtomicity.Sequential,
+                Atomicity: atomicity,
                 ...(binding.VersionField === undefined ? {} : { VersionField: binding.VersionField }),
             };
-            const adapter = await catalog.Open(ConnectorLookup.Find(this.plan.Connectors, binding), services);
-            const result = await adapter.Apply(batch);
+            const result = await this.ApplyBatch(catalog, services, binding, batch, operations);
             results.push(result);
+
+            // A transactional batch that applied nothing rolled back wholesale: the backend returns
+            // only the faulting op in Failures, so every op in the batch must stay pending — not just
+            // the reported one. A sequential batch retains exactly the ops it reported as failures.
+            const rolledBack = atomicity === WriteAtomicity.Transactional && result.Applied === 0 && operations.length > 0;
+            const failedKeys = new Set(result.Failures.map(failure => String(failure.Key)));
+            for (const operation of operations)
+            {
+                if (rolledBack || failedKeys.has(String(operation.Key)))
+                {
+                    retained.add(ConnectorWorkingCopy.TargetKey(binding.Concept, binding.Connector, binding.Source, operation.Key));
+                }
+            }
             for (const failure of result.Failures)
             {
-                diagnostics.push(this.BuildDiagnostic(DiagnosticCode.ConnectorWriteConflict,
-                    `${ConnectorWorkingCopy.ConflictMessage} ${binding.Concept} ${String(failure.Key)}: ${failure.Reason}`, null));
-                failed.add(ConnectorWorkingCopy.TargetKey(binding.Concept, binding.Connector, binding.Source, failure.Key));
+                diagnostics.push(this.FailureDiagnostic(binding, failure));
             }
         }
 
         for (const instanceId of [...this.pending.keys()])
         {
             const concept = this.nodes.get(instanceId)?.type;
-            const conflicted = concept != null && (this.writeTargets.get(instanceId) ?? []).some(target =>
-                failed.has(ConnectorWorkingCopy.TargetKey(concept, target.Connector, target.Source, target.StorageId)));
-            if (!conflicted) this.pending.delete(instanceId);
+            const keep = concept != null && (this.writeTargets.get(instanceId) ?? []).some(target =>
+                retained.has(ConnectorWorkingCopy.TargetKey(concept, target.Connector, target.Source, target.StorageId)));
+            if (!keep) this.pending.delete(instanceId);
         }
         return { Results: results, Diagnostics: diagnostics };
+    }
+
+    /** Applies one binding's batch, isolating it: a THROWN adapter error becomes an Error failure for
+     *  every op in the batch (so they all stay pending) and never aborts the rest of the Flush. */
+    private async ApplyBatch(catalog: DataSourceAdapterCatalog, services: IServiceProvider, binding: ConnectorBinding, batch: WriteBatch, operations: readonly WriteOperation[]): Promise<WriteResult>
+    {
+        const adapter = await catalog.Open(ConnectorLookup.Find(this.plan.Connectors, binding), services);
+        try
+        {
+            return await adapter.Apply(batch);
+        }
+        catch (error)
+        {
+            const reason = error instanceof Error ? error.message : String(error);
+            return { Applied: 0, Failures: operations.map(operation => ({ Key: operation.Key, Kind: WriteFailureKind.Error, Reason: reason })) };
+        }
+    }
+
+    /** One diagnostic per write failure: a version clash keeps the connector.write-conflict code; every
+     *  other kind (driver Error, Unsupported) surfaces as connector.write-failed carrying the Reason. */
+    private FailureDiagnostic(binding: ConnectorBinding, failure: WriteFailure): Diagnostic
+    {
+        if (failure.Kind === WriteFailureKind.Conflict)
+        {
+            return this.BuildDiagnostic(DiagnosticCode.ConnectorWriteConflict,
+                `${ConnectorWorkingCopy.ConflictMessage} ${binding.Concept} ${String(failure.Key)}: ${failure.Reason}`, null);
+        }
+        return this.BuildDiagnostic(DiagnosticCode.ConnectorWriteFailed,
+            `${ConnectorWorkingCopy.WriteFailedMessage} ${binding.Concept} ${String(failure.Key)}: ${failure.Reason}`, null);
     }
 
     /** A canonical whose targets resolve to no writable binding (including none matching at all) is treated as read-only and yields connector.read-only. */
