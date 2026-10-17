@@ -77,7 +77,7 @@ export class ModelPackageGenerator
         }
         if (hasConnectors)
         {
-            values.push("FederatedModelDataConnector", "DataSourceKind");
+            values.push("FederatedModelDataConnector", "DataSourceKind", "WriteConcurrency", "WriteAtomicity");
         }
         const types = hasConnectors
             ? "EntityReader, IModelDataConnector, InstanceDescriptor, ModelConnectorPlan, NodeId, Scalar, TodlDocument"

@@ -4,6 +4,7 @@ import { check } from "../../compiler-services/api.js";
 import { toJSON } from "../../compiler-services/emit/json.js";
 import { PopulationBuilder } from "../population-builder.js";
 import { ConnectorResolutionStep } from "../connector-resolution-step.js";
+import { WriteConcurrency, WriteAtomicity } from "../connector-plan.js";
 import type { ConnectorBinding } from "../connector-plan.js";
 
 const META = `namespace shop
@@ -15,7 +16,7 @@ const META = `namespace shop
 
 function binding(source: string): ConnectorBinding
 {
-    return { Concept: "shop.Customer", Connector: "opsdb", Source: source, IdKey: "customer_id", FieldMap: { customer_id: "customer_id", email: "email", phone: "phone" }, Writable: true };
+    return { Concept: "shop.Customer", Connector: "opsdb", Source: source, IdKey: "customer_id", FieldMap: { customer_id: "customer_id", email: "email", phone: "phone" }, Writable: true, Concurrency: WriteConcurrency.LastWriteWins, Atomicity: WriteAtomicity.Sequential };
 }
 
 test("resolves two sources of one entity into a single collapsed canonical with fan-out targets", () =>

@@ -7,7 +7,7 @@ import { ModelDataSource } from "../model-data-source.js";
 import { ModelShardExtractor } from "../model-shard-extractor.js";
 import { FederatedModelDataConnector } from "../federated-model-data-connector.js";
 import { DataSourceAdapterCatalog } from "../data-source-adapter-catalog.js";
-import { DataSourceKind, type ModelConnectorPlan } from "../connector-plan.js";
+import { DataSourceKind, WriteConcurrency, WriteAtomicity, type ModelConnectorPlan } from "../connector-plan.js";
 import { CountingAdapterFactory } from "./fakes.js";
 
 class ReflectionFixture
@@ -49,7 +49,7 @@ test("a federated population is reflected through the model data source", async 
     {
         Model: ReflectionFixture.ModelId, Version: "0.0.0",
         Connectors: [{ Name: "pg", Kind: DataSourceKind.Sql, Config: {} }],
-        Bindings: [{ Concept: ReflectionFixture.Concept, Connector: "pg", Source: "order", IdKey: "order_id", FieldMap: { id: "order_id", label: "display_name" }, Writable: true }],
+        Bindings: [{ Concept: ReflectionFixture.Concept, Connector: "pg", Source: "order", IdKey: "order_id", FieldMap: { id: "order_id", label: "display_name" }, Writable: true, Concurrency: WriteConcurrency.LastWriteWins, Atomicity: WriteAtomicity.Sequential }],
     };
     const source = new OrderModel(new FederatedModelDataConnector(plan, ReflectionFixture.BaseShard()));
     await source.Prepare(services);

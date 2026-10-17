@@ -81,6 +81,7 @@ export { GenericModelDataSource } from './model-data/generic-model-data-source.j
 export {
   DataSourceKind,
   ConnectorPlanProjection,
+  ConnectorPlanValidator,
   type ConnectorSpec,
   type ConnectorBinding,
   type ModelConnectorPlan,

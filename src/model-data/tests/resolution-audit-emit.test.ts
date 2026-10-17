@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { ServiceProvider, CompositionRoot } from "@pragmatic-tech-ai/todl-runtime";
 import { check } from "../../compiler-services/api.js";
 import { toJSON } from "../../compiler-services/emit/json.js";
-import { DataSourceKind } from "../connector-plan.js";
+import { DataSourceKind, WriteConcurrency, WriteAtomicity } from "../connector-plan.js";
 import type { ModelConnectorPlan, ConnectorBinding } from "../connector-plan.js";
 import { FederatedModelDataConnector } from "../federated-model-data-connector.js";
 import { DataSourceAdapterCatalog } from "../data-source-adapter-catalog.js";
@@ -48,7 +48,7 @@ class CrmHarness
 
     public static Binding(source: string): ConnectorBinding
     {
-        return { Concept: "shop.Customer", Connector: "opsdb", Source: source, IdKey: "customer_id", FieldMap: { customer_id: "customer_id", email: "email", phone: "phone" }, Writable: true };
+        return { Concept: "shop.Customer", Connector: "opsdb", Source: source, IdKey: "customer_id", FieldMap: { customer_id: "customer_id", email: "email", phone: "phone" }, Writable: true, Concurrency: WriteConcurrency.LastWriteWins, Atomicity: WriteAtomicity.Sequential };
     }
 
     public static Plan(bindings: ConnectorBinding[]): ModelConnectorPlan

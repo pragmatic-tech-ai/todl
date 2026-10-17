@@ -8,7 +8,10 @@ import { MetaKind } from "../compiler-services/model/kinds.js";
 import { Builder } from "../compiler-services/model/builder.js";
 import {
     ConnectorPlanProjection,
+    ConnectorPlanValidator,
     DataSourceKind,
+    WriteAtomicity,
+    WriteConcurrency,
     type ConnectorBinding,
     type ConnectorSpec,
     type ModelConnectorPlan,
@@ -38,6 +41,29 @@ export class ConnectorPlanEmitter
         [DataSourceKind.Rest, "Rest"],
         [DataSourceKind.Cypher, "Cypher"],
         [DataSourceKind.Document, "Document"],
+    ]);
+
+    private static readonly ConcurrencyTypeName = "WriteConcurrency";
+    private static readonly AtomicityTypeName = "WriteAtomicity";
+
+    private static readonly ConcurrencyMembers: ReadonlyMap<string, WriteConcurrency> = new Map<string, WriteConcurrency>([
+        [WriteConcurrency.LastWriteWins, WriteConcurrency.LastWriteWins],
+        [WriteConcurrency.Optimistic, WriteConcurrency.Optimistic],
+    ]);
+
+    private static readonly ConcurrencyMemberNames: ReadonlyMap<WriteConcurrency, string> = new Map<WriteConcurrency, string>([
+        [WriteConcurrency.LastWriteWins, "LastWriteWins"],
+        [WriteConcurrency.Optimistic, "Optimistic"],
+    ]);
+
+    private static readonly AtomicityMembers: ReadonlyMap<string, WriteAtomicity> = new Map<string, WriteAtomicity>([
+        [WriteAtomicity.Sequential, WriteAtomicity.Sequential],
+        [WriteAtomicity.Transactional, WriteAtomicity.Transactional],
+    ]);
+
+    private static readonly AtomicityMemberNames: ReadonlyMap<WriteAtomicity, string> = new Map<WriteAtomicity, string>([
+        [WriteAtomicity.Sequential, "Sequential"],
+        [WriteAtomicity.Transactional, "Transactional"],
     ]);
 
     /** Name of the emitted plan constant for a shard slug. */
@@ -72,17 +98,25 @@ export class ConnectorPlanEmitter
                 continue;
             }
             specs.set(spec.Id ?? spec.Name, spec);
+            const fieldMap = JSON.parse(String(attrs.get(Builder.BindingFieldMapAttr))) as Record<string, string>;
             const binding: ConnectorBinding = {
                 Concept: String(attrs.get(Builder.BindingConceptAttr)),
                 Connector: spec.Name,
                 Source: String(attrs.get(Builder.BindingSourceAttr)),
                 IdKey: String(attrs.get(Builder.BindingIdKeyAttr)),
-                FieldMap: JSON.parse(String(attrs.get(Builder.BindingFieldMapAttr))) as Record<string, string>,
+                FieldMap: fieldMap,
                 Writable: attrs.get(Builder.BindingWritableAttr) === true,
+                Concurrency: ConnectorPlanEmitter.ConcurrencyOf(attrs),
+                Atomicity: ConnectorPlanEmitter.AtomicityOf(attrs),
             };
             if (spec.Id !== undefined)
             {
                 binding.ConnectorId = spec.Id;
+            }
+            const versionField = ConnectorPlanEmitter.VersionFieldOf(attrs, fieldMap);
+            if (versionField !== undefined)
+            {
+                binding.VersionField = versionField;
             }
             bindings.push(binding);
         }
@@ -90,12 +124,41 @@ export class ConnectorPlanEmitter
         {
             return undefined;
         }
-        return {
+        const plan: ModelConnectorPlan = {
             Model: ConnectorPlanEmitter.LocalName(modelId),
             Version: ConnectorPlanEmitter.DefaultVersion,
             Connectors: [...specs.values()],
             Bindings: bindings,
         };
+        ConnectorPlanValidator.Validate(plan);
+        return plan;
+    }
+
+    /** The authored concurrency axis, defaulting to last-write-wins when the source omits it. */
+    private static ConcurrencyOf(attrs: ReadonlyMap<string, unknown>): WriteConcurrency
+    {
+        return ConnectorPlanEmitter.ConcurrencyMembers.get(String(attrs.get(Builder.BindingConcurrencyAttr)))
+            ?? WriteConcurrency.LastWriteWins;
+    }
+
+    /** The authored atomicity axis, defaulting to sequential when the source omits it. */
+    private static AtomicityOf(attrs: ReadonlyMap<string, unknown>): WriteAtomicity
+    {
+        return ConnectorPlanEmitter.AtomicityMembers.get(String(attrs.get(Builder.BindingAtomicityAttr)))
+            ?? WriteAtomicity.Sequential;
+    }
+
+    /** The authored version field, translated from its FieldMap MEMBER name to the EXTERNAL
+     *  field (the column working-copy guards on); undefined when the source omits `version`. */
+    private static VersionFieldOf(attrs: ReadonlyMap<string, unknown>, fieldMap: Record<string, string>): string | undefined
+    {
+        const authored = attrs.get(Builder.BindingVersionAttr);
+        if (authored === undefined)
+        {
+            return undefined;
+        }
+        const member = String(authored);
+        return fieldMap[member] ?? member;
     }
 
     public static Emit(plan: ModelConnectorPlan, constantName: string): string
@@ -194,6 +257,12 @@ export class ConnectorPlanEmitter
         lines.push(`${i3}IdKey: ${JSON.stringify(b.IdKey)},`);
         lines.push(`${i3}FieldMap: ${ConnectorPlanEmitter.EmitRecord(b.FieldMap)},`);
         lines.push(`${i3}Writable: ${b.Writable},`);
+        lines.push(`${i3}Concurrency: ${ConnectorPlanEmitter.ConcurrencyTypeName}.${ConnectorPlanEmitter.ConcurrencyMemberNames.get(b.Concurrency)},`);
+        lines.push(`${i3}Atomicity: ${ConnectorPlanEmitter.AtomicityTypeName}.${ConnectorPlanEmitter.AtomicityMemberNames.get(b.Atomicity)},`);
+        if (b.VersionField !== undefined)
+        {
+            lines.push(`${i3}VersionField: ${JSON.stringify(b.VersionField)},`);
+        }
         return ConnectorPlanEmitter.Wrap(lines);
     }
 

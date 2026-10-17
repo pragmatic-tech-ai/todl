@@ -1087,7 +1087,7 @@ export function loadInto(
       const bindingId = `${modelNodeId}@populate:${conceptId}`;
       if (model.has(bindingId)) continue;
       const source = populate.source ?? conceptId.slice(conceptId.lastIndexOf(".") + 1);
-      populateBuilder.defineBinding(bindingId, modelNodeId, conceptId, connectorId, source, idKey, JSON.stringify(fieldMap), !populate.readOnly);
+      populateBuilder.defineBinding(bindingId, modelNodeId, conceptId, connectorId, source, idKey, JSON.stringify(fieldMap), !populate.readOnly, populate.versionField, populate.concurrency, populate.atomicity);
       recordHome(rec, bindingId);
     }
   }

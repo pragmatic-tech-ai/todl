@@ -87,6 +87,9 @@ export class Builder
   public static readonly BindingIdKeyAttr = "idKey";
   public static readonly BindingFieldMapAttr = "fieldMap";
   public static readonly BindingWritableAttr = "writable";
+  public static readonly BindingVersionAttr = "versionField";
+  public static readonly BindingConcurrencyAttr = "concurrency";
+  public static readonly BindingAtomicityAttr = "atomicity";
   public static readonly MatchLeftVar = "a";
   public static readonly MatchRightVar = "b";
 
@@ -377,6 +380,9 @@ export class Builder
     idKey: string,
     fieldMapJson: string,
     writable: boolean,
+    versionField: string | null = null,
+    concurrency: string | null = null,
+    atomicity: string | null = null,
   ): this
   {
     this.stagedNodes.push(this.makeNode(id, Tier.Ontology, { metaKind: MetaKind.Population }));
@@ -387,6 +393,9 @@ export class Builder
     this.stagedAttrs.push({ id, name: Builder.BindingIdKeyAttr, value: idKey });
     this.stagedAttrs.push({ id, name: Builder.BindingFieldMapAttr, value: fieldMapJson });
     this.stagedAttrs.push({ id, name: Builder.BindingWritableAttr, value: writable });
+    if (versionField !== null) this.stagedAttrs.push({ id, name: Builder.BindingVersionAttr, value: versionField });
+    if (concurrency !== null) this.stagedAttrs.push({ id, name: Builder.BindingConcurrencyAttr, value: concurrency });
+    if (atomicity !== null) this.stagedAttrs.push({ id, name: Builder.BindingAtomicityAttr, value: atomicity });
     return this;
   }
 

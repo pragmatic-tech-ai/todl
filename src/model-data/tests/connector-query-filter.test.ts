@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { ServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
 import { check } from "../../compiler-services/api.js";
 import { toJSON } from "../../compiler-services/emit/json.js";
-import { DataSourceKind, QueryCompareOp } from "../connector-plan.js";
+import { DataSourceKind, QueryCompareOp, WriteConcurrency, WriteAtomicity } from "../connector-plan.js";
 import type { ModelConnectorPlan } from "../connector-plan.js";
 import { FederatedModelDataConnector, type IConnectorQueryFilterProvider } from "../federated-model-data-connector.js";
 import { DataSourceAdapterCatalog } from "../data-source-adapter-catalog.js";
@@ -23,7 +23,7 @@ class FilterHarness
         return {
             Model: "shop", Version: "1",
             Connectors: [{ Name: "opsdb", Kind: DataSourceKind.Sql, Config: {} }],
-            Bindings: [{ Concept: FilterHarness.Concept, Connector: "opsdb", Source: "customers", IdKey: "customer_id", FieldMap: { customer_id: "customer_id", region: "region" }, Writable: false }]
+            Bindings: [{ Concept: FilterHarness.Concept, Connector: "opsdb", Source: "customers", IdKey: "customer_id", FieldMap: { customer_id: "customer_id", region: "region" }, Writable: false, Concurrency: WriteConcurrency.LastWriteWins, Atomicity: WriteAtomicity.Sequential }]
         };
     }
 

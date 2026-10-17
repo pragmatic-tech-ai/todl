@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ConnectorPlanEmitter, MetaKind, check } from "@pragmatic-tech-ai/todl";
+import { ConnectorPlanEmitter, MetaKind, WriteConcurrency, WriteAtomicity, check } from "@pragmatic-tech-ai/todl";
 
 const META = `
 namespace shop {
@@ -53,6 +53,69 @@ test("ConnectorPlanEmitter.PlanFor is reachable from the barrel and plans a conn
         }
     }
     assert.equal(planned, 1);
+});
+
+const META_WITH_WRITE_MODE = `
+namespace shop {
+  concept Order { total : string; ver : string; }
+  datasource pg { kind = sql; }
+  model Shop : shop {
+    annotate entrypoint { }
+    connect pg;
+    populate Order key order_id { version ver; concurrency optimistic; atomicity transactional; }
+  }
+}
+`;
+
+const META_GRAPHQL_OPTIMISTIC = `
+namespace shop {
+  concept Order { total : string; ver : string; }
+  datasource api { kind = rest; style = "graphql"; }
+  model Shop : shop {
+    annotate entrypoint { }
+    connect api;
+    populate Order key order_id { version ver; concurrency optimistic; }
+  }
+}
+`;
+
+test("omitting the attributes defaults to LastWriteWins + Sequential", () =>
+{
+    const { model, diagnostics } = check([{ uri: "shop.todl", text: META }]);
+    assert.deepEqual(diagnostics, []);
+    const [modelId] = model.nodesOfMetaKind(MetaKind.Model);
+    const plan = ConnectorPlanEmitter.PlanFor(model, modelId!);
+    assert.ok(plan !== undefined);
+    const binding = plan!.Bindings[0]!;
+    assert.equal(binding.Concurrency, WriteConcurrency.LastWriteWins);
+    assert.equal(binding.Atomicity, WriteAtomicity.Sequential);
+    assert.equal(binding.VersionField, undefined);
+});
+
+test("a binding declaring version+concurrency+atomicity lowers to the right ConnectorBinding", () =>
+{
+    const { model, diagnostics } = check([{ uri: "shop.todl", text: META_WITH_WRITE_MODE }]);
+    assert.deepEqual(diagnostics, []);
+    const [modelId] = model.nodesOfMetaKind(MetaKind.Model);
+    const plan = ConnectorPlanEmitter.PlanFor(model, modelId!);
+    assert.ok(plan !== undefined);
+    const binding = plan!.Bindings[0]!;
+    assert.equal(binding.Concurrency, WriteConcurrency.Optimistic);
+    assert.equal(binding.Atomicity, WriteAtomicity.Transactional);
+    // The authored `version` MEMBER is translated to its EXTERNAL field for the plan.
+    assert.equal(binding.VersionField, "ver");
+    const emitted = ConnectorPlanEmitter.Emit(plan!, "SHOP_PLAN");
+    assert.ok(emitted.includes("Concurrency: WriteConcurrency.Optimistic"));
+    assert.ok(emitted.includes("Atomicity: WriteAtomicity.Transactional"));
+    assert.ok(emitted.includes(`VersionField: "ver"`));
+});
+
+test("an Optimistic binding on a GraphQL connector fails plan-build", () =>
+{
+    const { model, diagnostics } = check([{ uri: "shop.todl", text: META_GRAPHQL_OPTIMISTIC }]);
+    assert.deepEqual(diagnostics, []);
+    const [modelId] = model.nodesOfMetaKind(MetaKind.Model);
+    assert.throws(() => ConnectorPlanEmitter.PlanFor(model, modelId!), /cannot version writes/);
 });
 
 test("an authored connector provider survives the plan and is rendered by Emit", () =>

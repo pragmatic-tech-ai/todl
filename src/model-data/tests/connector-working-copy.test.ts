@@ -58,7 +58,7 @@ class WorkingCopyFixture
         return {
             Model: "Sales", Version: "0.0.0",
             Connectors: [{ Name: "pg", Kind: DataSourceKind.Sql, Config: {} }],
-            Bindings: [{ Concept: "a.Order", Connector: "pg", Source: "order", IdKey: "order_id", FieldMap: this.Versioned ? { id: "order_id", label: "display_name", version: "ver" } : { id: "order_id", label: "display_name" }, Writable: this.Writable, ...(this.Versioned ? { VersionField: "ver", Concurrency: WriteConcurrency.Optimistic } : {}) }],
+            Bindings: [{ Concept: "a.Order", Connector: "pg", Source: "order", IdKey: "order_id", FieldMap: this.Versioned ? { id: "order_id", label: "display_name", version: "ver" } : { id: "order_id", label: "display_name" }, Writable: this.Writable, Concurrency: this.Versioned ? WriteConcurrency.Optimistic : WriteConcurrency.LastWriteWins, Atomicity: WriteAtomicity.Sequential, ...(this.Versioned ? { VersionField: "ver" } : {}) }],
         };
     }
 
@@ -315,7 +315,7 @@ test("Optimistic Flush against a present-but-unversioned row is a fail-closed co
     {
         Model: "Sales", Version: "0.0.0",
         Connectors: [{ Name: "pg", Kind: DataSourceKind.Sql, Config: {} }],
-        Bindings: [{ Concept: "a.Order", Connector: "pg", Source: "order", IdKey: "order_id", FieldMap: { id: "order_id", label: "display_name", version: "ver" }, Writable: true, VersionField: "ver", Concurrency: WriteConcurrency.Optimistic }],
+        Bindings: [{ Concept: "a.Order", Connector: "pg", Source: "order", IdKey: "order_id", FieldMap: { id: "order_id", label: "display_name", version: "ver" }, Writable: true, VersionField: "ver", Concurrency: WriteConcurrency.Optimistic, Atomicity: WriteAtomicity.Sequential }],
     };
     const copy = new ConnectorWorkingCopy(plan, { nodes: [node], edges: [] }, new Map([[node.id, [{ StorageId: "O-1", Connector: "pg", Source: "order" }]]]));
     copy.MarkDirty(node.id);
@@ -334,8 +334,8 @@ test("Flush fans a merged canonical out to every writable source and reports rea
         Model: "shop", Version: "1",
         Connectors: [{ Name: "opsdb", Kind: DataSourceKind.Sql, Config: {} }],
         Bindings: [
-            { Concept: "shop.Customer", Connector: "opsdb", Source: "contacts", IdKey: "customer_id", FieldMap: field, Writable: true },
-            { Concept: "shop.Customer", Connector: "opsdb", Source: "legacy", IdKey: "customer_id", FieldMap: field, Writable: false },
+            { Concept: "shop.Customer", Connector: "opsdb", Source: "contacts", IdKey: "customer_id", FieldMap: field, Writable: true, Concurrency: WriteConcurrency.LastWriteWins, Atomicity: WriteAtomicity.Sequential },
+            { Concept: "shop.Customer", Connector: "opsdb", Source: "legacy", IdKey: "customer_id", FieldMap: field, Writable: false, Concurrency: WriteConcurrency.LastWriteWins, Atomicity: WriteAtomicity.Sequential },
         ],
     };
     const canonicalId = "shop.Customer#opsdb.contacts#C1";
@@ -408,7 +408,7 @@ test("applied ops are cleared, failed ops stay pending, one diagnostic per failu
     const n1 = Nodes.Order("a.Order#o1", "O-1");
     const n2 = Nodes.Order("a.Order#o2", "O-2");
     const copy = scenario.Build(
-        [{ Concept: "a.Order", Connector: "pg", Source: "order", IdKey: "order_id", FieldMap: { id: "order_id", label: "display_name" }, Writable: true, Atomicity: WriteAtomicity.Sequential }],
+        [{ Concept: "a.Order", Connector: "pg", Source: "order", IdKey: "order_id", FieldMap: { id: "order_id", label: "display_name" }, Writable: true, Concurrency: WriteConcurrency.LastWriteWins, Atomicity: WriteAtomicity.Sequential }],
         [n1, n2],
         new Map([
             [n1.id, [{ StorageId: "O-1", Connector: "pg", Source: "order" }]],
@@ -439,7 +439,7 @@ test("a rolled-back Transactional binding keeps ALL its ops pending", async () =
     const n2 = Nodes.Order("a.Order#o2", "O-2");
     const n3 = Nodes.Order("a.Order#o3", "O-3");
     const copy = scenario.Build(
-        [{ Concept: "a.Order", Connector: "pg", Source: "order", IdKey: "order_id", FieldMap: { id: "order_id", label: "display_name" }, Writable: true, Atomicity: WriteAtomicity.Transactional }],
+        [{ Concept: "a.Order", Connector: "pg", Source: "order", IdKey: "order_id", FieldMap: { id: "order_id", label: "display_name" }, Writable: true, Concurrency: WriteConcurrency.LastWriteWins, Atomicity: WriteAtomicity.Transactional }],
         [n1, n2, n3],
         new Map([
             [n1.id, [{ StorageId: "O-1", Connector: "pg", Source: "order" }]],
@@ -481,8 +481,8 @@ test("a throwing binding is isolated: its ops stay pending, other bindings still
     const customer = Nodes.Order("a.Customer#c1", "C-1", "a.Customer");
     const copy = scenario.Build(
         [
-            { Concept: "a.Order", Connector: "pg", Source: "throws", IdKey: "order_id", FieldMap: { id: "order_id", label: "display_name" }, Writable: true },
-            { Concept: "a.Customer", Connector: "pg", Source: "ok", IdKey: "customer_id", FieldMap: { id: "customer_id", label: "display_name" }, Writable: true },
+            { Concept: "a.Order", Connector: "pg", Source: "throws", IdKey: "order_id", FieldMap: { id: "order_id", label: "display_name" }, Writable: true, Concurrency: WriteConcurrency.LastWriteWins, Atomicity: WriteAtomicity.Sequential },
+            { Concept: "a.Customer", Connector: "pg", Source: "ok", IdKey: "customer_id", FieldMap: { id: "customer_id", label: "display_name" }, Writable: true, Concurrency: WriteConcurrency.LastWriteWins, Atomicity: WriteAtomicity.Sequential },
         ],
         [order, customer],
         new Map([
@@ -521,8 +521,8 @@ test("a binding whose connection cannot open is isolated: its ops stay pending, 
             { Name: "api", Kind: DataSourceKind.Rest, Config: {} },
         ],
         Bindings: [
-            { Concept: "a.Order", Connector: "api", Source: "orders", IdKey: "order_id", FieldMap: { id: "order_id", label: "display_name" }, Writable: true },
-            { Concept: "a.Customer", Connector: "pg", Source: "contacts", IdKey: "customer_id", FieldMap: { id: "customer_id", label: "display_name" }, Writable: true },
+            { Concept: "a.Order", Connector: "api", Source: "orders", IdKey: "order_id", FieldMap: { id: "order_id", label: "display_name" }, Writable: true, Concurrency: WriteConcurrency.LastWriteWins, Atomicity: WriteAtomicity.Sequential },
+            { Concept: "a.Customer", Connector: "pg", Source: "contacts", IdKey: "customer_id", FieldMap: { id: "customer_id", label: "display_name" }, Writable: true, Concurrency: WriteConcurrency.LastWriteWins, Atomicity: WriteAtomicity.Sequential },
         ],
     };
     const copy = new ConnectorWorkingCopy(plan, { nodes: [order, customer], edges: [] }, new Map([

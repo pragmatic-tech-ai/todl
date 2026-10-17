@@ -123,9 +123,20 @@ class ParseError extends Error
 class Parser
 {
   private static readonly ReadOnlyMember = "read-only";
+  private static readonly VersionMember = "version";
+  private static readonly ConcurrencyMember = "concurrency";
+  private static readonly AtomicityMember = "atomicity";
+  // mirror WriteConcurrency / WriteAtomicity string values in model-data (cannot import upward across the layer boundary)
+  private static readonly ConcurrencyValues: ReadonlySet<string> = new Set(["last-write-wins", "optimistic"]);
+  private static readonly AtomicityValues: ReadonlySet<string> = new Set(["sequential", "transactional"]);
+  private static readonly WriteModeMembers: ReadonlySet<string> = new Set([
+    Parser.VersionMember, Parser.ConcurrencyMember, Parser.AtomicityMember,
+  ]);
   private static readonly Hyphen = "-";
   private static readonly ExpectedValueMessage = "expected a string or identifier value";
   private static readonly ExpectedFieldMessage = "expected a field name";
+  private static readonly ExpectedConcurrencyMessage = "expected concurrency last-write-wins or optimistic";
+  private static readonly ExpectedAtomicityMessage = "expected atomicity sequential or transactional";
 
   /** Index of the next UNCONSUMED token — the whole parser's only mutable state. */
   private pos = 0;
@@ -910,6 +921,9 @@ class Parser
     }
     const overrides: PopulateOverride[] = [];
     let readOnly = false;
+    let versionField: string | null = null;
+    let concurrency: string | null = null;
+    let atomicity: string | null = null;
     if (this.check(TokenKind.LBrace))
     {
       this.advance();
@@ -918,6 +932,25 @@ class Parser
         const mStart = this.current();
         const memberName = this.parseHyphenatedName();
         const memberSpan = this.spanFrom(mStart);
+        // Write-mode attributes (`version <member>`, `concurrency <value>`, `atomicity <value>`)
+        // take an argument, distinguishing them from the bare `read-only;` flag and `member = "field";`.
+        if (Parser.WriteModeMembers.has(memberName) && !this.check(TokenKind.Equals) && !this.check(TokenKind.Semicolon))
+        {
+          const value = this.parseHyphenatedName();
+          this.expect(TokenKind.Semicolon);
+          if (memberName === Parser.VersionMember) versionField = value;
+          else if (memberName === Parser.ConcurrencyMember)
+          {
+            if (!Parser.ConcurrencyValues.has(value)) throw this.error(Parser.ExpectedConcurrencyMessage);
+            concurrency = value;
+          }
+          else
+          {
+            if (!Parser.AtomicityValues.has(value)) throw this.error(Parser.ExpectedAtomicityMessage);
+            atomicity = value;
+          }
+          return;
+        }
         if (this.check(TokenKind.Semicolon))
         {
           if (memberName !== Parser.ReadOnlyMember) throw this.error("expected read-only or member = field");
@@ -938,7 +971,10 @@ class Parser
     {
       this.expect(TokenKind.Semicolon);
     }
-    const decl: PopulateDecl = { concept, connector, source, idKey, overrides, readOnly, span: this.spanFrom(start) };
+    const decl: PopulateDecl = {
+      concept, connector, source, idKey, overrides, readOnly, versionField, concurrency, atomicity,
+      span: this.spanFrom(start),
+    };
     decl.conceptSpan = conceptSpan;
     return decl;
   }

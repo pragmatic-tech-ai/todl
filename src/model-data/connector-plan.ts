@@ -47,12 +47,12 @@ export interface ConnectorBinding
     Writable: boolean;
     /** External version/etag column guarding optimistic writes; absent = last-write-wins. */
     VersionField?: string;
-    /** Concurrency axis for writes to this binding. Authored in TODL source and defaulted on
-     *  plan-build; absent in Task-1 compile-bridge plans (which behave as {@link WriteConcurrency.LastWriteWins}). */
-    Concurrency?: WriteConcurrency;
-    /** Atomicity axis for writes to this binding. Authored in TODL source and defaulted on
-     *  plan-build; absent in Task-1 compile-bridge plans (which behave as {@link WriteAtomicity.Sequential}). */
-    Atomicity?: WriteAtomicity;
+    /** Concurrency axis for writes to this binding. Authored in TODL source (`concurrency ...`) and
+     *  defaulted to {@link WriteConcurrency.LastWriteWins} on plan-build when the source omits it. */
+    Concurrency: WriteConcurrency;
+    /** Atomicity axis for writes to this binding. Authored in TODL source (`atomicity ...`) and
+     *  defaulted to {@link WriteAtomicity.Sequential} on plan-build when the source omits it. */
+    Atomicity: WriteAtomicity;
 }
 
 /** The datasource + bound source (table/endpoint) a connector-minted instance node came from. */
@@ -248,6 +248,70 @@ export class ConnectorLookup
     {
         const key = binding.ConnectorId ?? binding.Connector;
         return connectors.find(candidate => (candidate.Id ?? candidate.Name) === key);
+    }
+}
+
+/** Plan-build validation of the write-mode axes authored on each binding. Runs when a
+ *  {@link ModelConnectorPlan} is finalized (the emitter's build path); a violation is a
+ *  hard plan-build error, never a silent downgrade to last-write-wins (#5). */
+export class ConnectorPlanValidator
+{
+    private static readonly BindingPrefix = "optimistic binding for '";
+    private static readonly NoVersionSuffix = "' requires a version field";
+    private static readonly AbsentVersionMiddle = "' names version field '";
+    private static readonly AbsentVersionSuffix = "' which is not in its field map";
+    private static readonly GraphQlMiddle = "' targets GraphQL connector '";
+    private static readonly GraphQlSuffix = "', which cannot version writes";
+    private static readonly GraphQlStyleKey = "style";
+    private static readonly GraphQlStyleValue = "graphql";
+
+    /** Throws on the first optimistic binding that cannot be honored. */
+    public static Validate(plan: ModelConnectorPlan): void
+    {
+        for (const binding of plan.Bindings)
+        {
+            if (binding.Concurrency === WriteConcurrency.Optimistic)
+            {
+                ConnectorPlanValidator.ValidateOptimistic(plan.Connectors, binding);
+            }
+        }
+    }
+
+    private static ValidateOptimistic(connectors: readonly ConnectorSpec[], binding: ConnectorBinding): void
+    {
+        if (binding.VersionField === undefined || binding.VersionField === "")
+        {
+            throw new Error(`${ConnectorPlanValidator.BindingPrefix}${binding.Concept}`
+                + ConnectorPlanValidator.NoVersionSuffix);
+        }
+        if (!ConnectorPlanValidator.InFieldMap(binding.FieldMap, binding.VersionField))
+        {
+            throw new Error(`${ConnectorPlanValidator.BindingPrefix}${binding.Concept}`
+                + `${ConnectorPlanValidator.AbsentVersionMiddle}${binding.VersionField}`
+                + ConnectorPlanValidator.AbsentVersionSuffix);
+        }
+        if (ConnectorPlanValidator.IsGraphQl(ConnectorLookup.TryFind(connectors, binding)))
+        {
+            throw new Error(`${ConnectorPlanValidator.BindingPrefix}${binding.Concept}`
+                + `${ConnectorPlanValidator.GraphQlMiddle}${binding.Connector}`
+                + ConnectorPlanValidator.GraphQlSuffix);
+        }
+    }
+
+    /** A version field "is in the field map" when it is a mapped external field (a value)
+     *  or a member name (a key) — either way working-copy can resolve its version. */
+    private static InFieldMap(fieldMap: Readonly<Record<string, string>>, versionField: string): boolean
+    {
+        return versionField in fieldMap || Object.values(fieldMap).includes(versionField);
+    }
+
+    /** GraphQL is identified the way the adapter factory does: a REST connector whose
+     *  `style` config is `graphql` (RestAdapterFactory selects the GraphQL transport on it). */
+    private static IsGraphQl(spec: ConnectorSpec | undefined): boolean
+    {
+        return spec !== undefined
+            && spec.Kind === DataSourceKind.Rest
+            && spec.Config[ConnectorPlanValidator.GraphQlStyleKey] === ConnectorPlanValidator.GraphQlStyleValue;
     }
 }
 

@@ -5,7 +5,7 @@ import { FederatedModelDataConnector } from "../federated-model-data-connector.j
 import { DataSourceAdapterCatalog } from "../data-source-adapter-catalog.js";
 import { CountingAdapterFactory } from "./fakes.js";
 import type { JsonNode } from "../../compiler-services/emit/json.js";
-import { DataSourceKind, type ModelConnectorPlan } from "../connector-plan.js";
+import { DataSourceKind, WriteConcurrency, WriteAtomicity, type ModelConnectorPlan } from "../connector-plan.js";
 
 test("read path pulls one population and is idempotent", async () =>
 {
@@ -19,7 +19,7 @@ test("read path pulls one population and is idempotent", async () =>
     {
         Model: "Sales", Version: "0.0.0",
         Connectors: [{ Name: "pg", Kind: DataSourceKind.Sql, Config: {} }],
-        Bindings: [{ Concept: "a.Order", Connector: "pg", Source: "order", IdKey: "order_id", FieldMap: { id: "order_id", label: "display_name" }, Writable: true }],
+        Bindings: [{ Concept: "a.Order", Connector: "pg", Source: "order", IdKey: "order_id", FieldMap: { id: "order_id", label: "display_name" }, Writable: true, Concurrency: WriteConcurrency.LastWriteWins, Atomicity: WriteAtomicity.Sequential }],
     };
     const connector = new FederatedModelDataConnector(plan, { nodes: [], edges: [] });
     const first = await connector.Prepare(services);
@@ -36,7 +36,7 @@ class FederatedTestFixture
         return {
             Model: "Sales", Version: "0.0.0",
             Connectors: [{ Name: "pg", Kind: DataSourceKind.Sql, Config: {} }],
-            Bindings: [{ Concept: "a.Order", Connector: connector, Source: "order", IdKey: "order_id", FieldMap: { id: "order_id", label: "display_name" }, Writable: true }],
+            Bindings: [{ Concept: "a.Order", Connector: connector, Source: "order", IdKey: "order_id", FieldMap: { id: "order_id", label: "display_name" }, Writable: true, Concurrency: WriteConcurrency.LastWriteWins, Atomicity: WriteAtomicity.Sequential }],
         };
     }
 

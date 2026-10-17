@@ -444,6 +444,12 @@ export interface PopulateDecl
   idKey: string | null;
   overrides: PopulateOverride[];
   readOnly: boolean;
+  /** `version <member>` — the FieldMap member naming the optimistic-write version field. */
+  versionField: string | null;
+  /** `concurrency last-write-wins|optimistic` — raw authored value (mirrors `WriteConcurrency`). */
+  concurrency: string | null;
+  /** `atomicity sequential|transactional` — raw authored value (mirrors `WriteAtomicity`). */
+  atomicity: string | null;
   span: SourceSpan;
   conceptSpan?: SourceSpan;
 }

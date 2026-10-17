@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { ServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
-import { DataSourceKind, type ConnectorBinding, type ConnectorSpec, type ModelConnectorPlan, type ResolvedConnection } from "../connector-plan.js";
+import { DataSourceKind, WriteConcurrency, WriteAtomicity, type ConnectorBinding, type ConnectorSpec, type ModelConnectorPlan, type ResolvedConnection } from "../connector-plan.js";
 import { DataSourceAdapterCatalog } from "../data-source-adapter-catalog.js";
 import type { IDataSourceAdapter, IDataSourceAdapterFactory } from "../data-source-adapter.js";
 import { ConnectorPrefetch, type INodeReflector } from "../connector-prefetch.js";
@@ -107,6 +107,8 @@ class Fixture
         IdKey: "pk",
         FieldMap: { id: "pk", label: "name" },
         Writable: false,
+        Concurrency: WriteConcurrency.LastWriteWins,
+        Atomicity: WriteAtomicity.Sequential,
     };
     public static readonly Plan: ModelConnectorPlan =
     {

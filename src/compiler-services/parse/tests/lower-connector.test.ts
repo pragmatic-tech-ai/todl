@@ -43,6 +43,36 @@ test("convention expansion yields a total field map with overrides applied", () 
     assert.equal(attrs.get(Builder.BindingWritableAttr), true);
 });
 
+test("a binding declaring version+concurrency+atomicity lowers to the right ConnectorBinding", () =>
+{
+    const { model, diagnostics } = Harness.compile(
+        `connect pg; populate Order key order_id { version total; concurrency optimistic; atomicity transactional; label = "display_name"; }`);
+    assert.deepEqual(diagnostics, []);
+    const attrs = Harness.population(model, "Order");
+    assert.equal(attrs.get(Builder.BindingVersionAttr), "total");
+    assert.equal(attrs.get(Builder.BindingConcurrencyAttr), "optimistic");
+    assert.equal(attrs.get(Builder.BindingAtomicityAttr), "transactional");
+    // The write-mode attributes coexist with the ordinary field-map overrides.
+    assert.deepEqual(JSON.parse(String(attrs.get(Builder.BindingFieldMapAttr))),
+        { id: "order_id", total: "total", label: "display_name" });
+});
+
+test("omitting the write-mode attributes stages no version/concurrency/atomicity attrs", () =>
+{
+    const { model, diagnostics } = Harness.compile(`connect pg; populate Order;`);
+    assert.deepEqual(diagnostics, []);
+    const attrs = Harness.population(model, "Order");
+    assert.equal(attrs.get(Builder.BindingVersionAttr), undefined);
+    assert.equal(attrs.get(Builder.BindingConcurrencyAttr), undefined);
+    assert.equal(attrs.get(Builder.BindingAtomicityAttr), undefined);
+});
+
+test("an unrecognized concurrency value is a parse error", () =>
+{
+    const { diagnostics } = Harness.compile(`connect pg; populate Order { concurrency bogus; }`);
+    assert.ok(diagnostics.length > 0);
+});
+
 test("an override on a non-member emits connector.unknown-field", () =>
 {
     const { diagnostics } = Harness.compile(`connect pg; populate Order { nope = "x"; }`);
