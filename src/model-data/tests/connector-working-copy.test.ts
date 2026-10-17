@@ -302,6 +302,30 @@ test("no VersionField: same edit upserts last-write-wins without conflict", asyn
     assert.equal(fx.Factory.Batches[0]!.Atomicity, WriteAtomicity.Sequential, "absent axis defaults to sequential");
 });
 
+test("Optimistic Flush against a present-but-unversioned row is a fail-closed conflict (fake)", async () =>
+{
+    const factory = new InMemoryAdapterFactory(DataSourceKind.Sql);
+    // Present row whose version column is NULL; the edit carries no version either (null vs null).
+    factory.Adapter.Seed("order", [{ order_id: "O-1", display_name: "Acme", ver: null }]);
+    const catalog = new DataSourceAdapterCatalog().Register(factory);
+    const services = new ServiceProvider();
+    const node = Nodes.Order("a.Order#o1", "O-1");
+    node.attrs["label"] = "Changed";
+    const plan: ModelConnectorPlan =
+    {
+        Model: "Sales", Version: "0.0.0",
+        Connectors: [{ Name: "pg", Kind: DataSourceKind.Sql, Config: {} }],
+        Bindings: [{ Concept: "a.Order", Connector: "pg", Source: "order", IdKey: "order_id", FieldMap: { id: "order_id", label: "display_name", version: "ver" }, Writable: true, VersionField: "ver", Concurrency: WriteConcurrency.Optimistic }],
+    };
+    const copy = new ConnectorWorkingCopy(plan, { nodes: [node], edges: [] }, new Map([[node.id, [{ StorageId: "O-1", Connector: "pg", Source: "order" }]]]));
+    copy.MarkDirty(node.id);
+    const outcome = await copy.Flush(catalog, services);
+    assert.equal(outcome.Results[0]!.Applied, 0, "never a silent overwrite of a present-but-unversioned row");
+    assert.equal(outcome.Diagnostics.length, 1);
+    assert.equal(outcome.Diagnostics[0]!.code, DiagnosticCode.ConnectorWriteConflict);
+    assert.deepEqual(await factory.Adapter.Query({ Source: "order", Fields: ["order_id", "display_name"] }), [{ order_id: "O-1", display_name: "Acme" }]);
+});
+
 test("Flush fans a merged canonical out to every writable source and reports read-only ones", async () =>
 {
     const field = { customer_id: "customer_id", email: "email" };
@@ -434,7 +458,14 @@ test("a rolled-back Transactional binding keeps ALL its ops pending", async () =
     assert.equal(first.Diagnostics.length, 1);
     assert.equal(first.Diagnostics[0]!.code, DiagnosticCode.ConnectorWriteFailed);
 
-    // All three ops stay pending despite only one being in Failures: the whole batch rolled back.
+    // Re-flush while the backend is still broken: all three stayed pending, so they are re-sent and
+    // roll back again. Applied 0 AND the write-failed diagnostic recurs -> they were KEPT, not dropped.
+    const stillFailing = await copy.Flush(scenario.Catalog, scenario.Services);
+    assert.equal(scenario.Adapter.Batches[scenario.Adapter.Batches.length - 1]!.Operations.length, 3, "all three re-sent");
+    assert.equal(stillFailing.Results[0]!.Applied, 0);
+    assert.ok(stillFailing.Diagnostics.some(d => d.code === DiagnosticCode.ConnectorWriteFailed), "ops stayed pending: the failure recurs");
+
+    // Now the backend recovers: the still-pending three apply.
     scenario.Adapter.RollbackSources.clear();
     scenario.Adapter.FailKeys.clear();
     const retry = await copy.Flush(scenario.Catalog, scenario.Services);
@@ -509,4 +540,5 @@ test("a binding whose connection cannot open is isolated: its ops stay pending, 
     const retry = await copy.Flush(catalog, services);
     assert.equal(good.Adapter.Batches.filter(b => b.Source === "contacts").length, 1, "committed binding not retried");
     assert.equal(retry.Results.reduce((n, r) => n + r.Applied, 0), 0, "only the still-un-openable binding remains, applying nothing");
+    assert.ok(retry.Diagnostics.some(d => d.code === DiagnosticCode.ConnectorWriteFailed), "ops stayed pending: the open failure recurs rather than being silently dropped");
 });

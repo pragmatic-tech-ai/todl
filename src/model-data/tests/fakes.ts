@@ -58,8 +58,11 @@ export class InMemoryAdapter implements IDataSourceAdapter
             // LastWriteWins is an unconditional upsert regardless of any VersionField on the batch.
             if (batch.Concurrency === WriteConcurrency.Optimistic && batch.VersionField !== undefined && index >= 0)
             {
+                // Fail-closed like SqlAdapter's "version = ?" guard: a NULL stored version never matches
+                // (NULL = NULL is UNKNOWN), so a present-but-unversioned row is a Conflict even when
+                // op.Version is also null. Only a non-null stored version equal to op.Version writes.
                 const stored = rows[index]![batch.VersionField] ?? null;
-                if (stored !== (op.Version ?? null))
+                if (stored === null || stored !== (op.Version ?? null))
                 {
                     failures.push({ Key: op.Key, Kind: WriteFailureKind.Conflict, Reason: `${InMemoryAdapter.StaleVersionMessage} ${batch.VersionField}` });
                     continue;
