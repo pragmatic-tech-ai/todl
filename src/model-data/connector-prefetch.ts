@@ -3,6 +3,7 @@ import type { DataSourceAdapterCatalog } from "./data-source-adapter-catalog.js"
 import type { IDataSourceAdapter } from "./data-source-adapter.js";
 import type { ModelConnectorPlan, ConnectorBinding, ConnectorSpec, QueryRequest } from "./connector-plan.js";
 import { ConnectorLookup } from "./connector-plan.js";
+import { ConnectorResolutionDiagnosticSinkKey, ConnectorResolutionIssue } from "./connector-resolution-diagnostic-sink.js";
 import type { ReflectedNode, InstanceMirror } from "../manifest/reflection/reflection.js";
 import { ConnectorMirrorMapper } from "./connector-mirror-mapper.js";
 
@@ -55,7 +56,10 @@ export class ConnectorPrefetch
         }
         catch
         {
-            return [];   // fail-closed: an unresolved adapter yields no instances, not a query error
+            // fail-closed: an unresolved adapter yields no instances, not a query error — but
+            // surface a diagnostic so a host can tell this apart from a resolved-but-empty source.
+            await ConnectorPrefetch.ReportUnresolved(binding, services);
+            return [];
         }
         const request: QueryRequest = { Source: binding.Source, Fields: [...new Set(Object.values(binding.FieldMap))].sort() };
         const records = await adapter.Query(request);   // a resolved-but-failing adapter's error propagates (loud, not silent-empty)
@@ -69,5 +73,20 @@ export class ConnectorPrefetch
             }
         }
         return mirrors;
+    }
+
+    private static async ReportUnresolved(binding: ConnectorBinding, services: IServiceProvider): Promise<void>
+    {
+        const sink = services.get(ConnectorResolutionDiagnosticSinkKey);
+        if (sink === undefined)
+        {
+            return;
+        }
+        await sink.Record({
+            concept: binding.Concept,
+            connector: binding.Connector,
+            source: binding.Source,
+            issue: ConnectorResolutionIssue.Unresolved,
+        });
     }
 }

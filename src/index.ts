@@ -195,6 +195,8 @@ export { MergeStrategy } from './compiler-services/parse/ast.js';
 export type { WriteTarget } from './model-data/connector-plan.js';
 export { ResolutionAuditSinkKey } from './model-data/resolution-audit-sink.js';
 export type { IResolutionAuditSink, ResolutionAuditEvent } from './model-data/resolution-audit-sink.js';
+export { ConnectorResolutionDiagnosticSinkKey, ConnectorResolutionIssue } from './model-data/connector-resolution-diagnostic-sink.js';
+export type { IConnectorResolutionDiagnosticSink, ConnectorResolutionDiagnostic } from './model-data/connector-resolution-diagnostic-sink.js';
 
 export {
     toJSON,

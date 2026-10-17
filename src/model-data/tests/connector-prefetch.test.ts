@@ -6,6 +6,12 @@ import { DataSourceAdapterCatalog } from "../data-source-adapter-catalog.js";
 import type { IDataSourceAdapter, IDataSourceAdapterFactory } from "../data-source-adapter.js";
 import { ConnectorPrefetch, type INodeReflector } from "../connector-prefetch.js";
 import { ConnectorMirrorMapper } from "../connector-mirror-mapper.js";
+import {
+    ConnectorResolutionDiagnosticSinkKey,
+    ConnectorResolutionIssue,
+    type ConnectorResolutionDiagnostic,
+    type IConnectorResolutionDiagnosticSink,
+} from "../connector-resolution-diagnostic-sink.js";
 import type { InstanceMirror, ReflectedNode } from "../../manifest/reflection/reflection.js";
 import type { ExternalRecord, QueryRequest, WriteBatch, WriteResult } from "../connector-plan.js";
 import { InMemoryAdapterFactory } from "./fakes.js";
@@ -79,6 +85,16 @@ class RejectingFactory extends RecordingFactory
     public override readonly Adapter = new RejectingAdapter();
 }
 
+class RecordingDiagnosticSink implements IConnectorResolutionDiagnosticSink
+{
+    public readonly Diagnostics: ConnectorResolutionDiagnostic[] = [];
+
+    public async Record(diagnostic: ConnectorResolutionDiagnostic): Promise<void>
+    {
+        this.Diagnostics.push(diagnostic);
+    }
+}
+
 class Fixture
 {
     public static readonly Concept = "ns.Widget";
@@ -125,6 +141,36 @@ test("prefetch is fail-closed when the adapter cannot be opened", async () =>
     const snapshot = await ConnectorPrefetch.ForConcepts([Fixture.Concept], Fixture.Plan, catalog, new ServiceProvider(), new StubReflector());
 
     assert.deepEqual(snapshot.get(Fixture.Concept), []);
+});
+
+test("prefetch records an Unresolved diagnostic when the adapter cannot be opened", async () =>
+{
+    const catalog = new DataSourceAdapterCatalog().Register(new ThrowingFactory(DataSourceKind.Sql));
+    const sink = new RecordingDiagnosticSink();
+    const services = new ServiceProvider();
+    services.registerInstance(ConnectorResolutionDiagnosticSinkKey, sink);
+
+    const snapshot = await ConnectorPrefetch.ForConcepts([Fixture.Concept], Fixture.Plan, catalog, services, new StubReflector());
+
+    assert.deepEqual(snapshot.get(Fixture.Concept), []);
+    assert.deepEqual(sink.Diagnostics, [
+        { concept: Fixture.Concept, connector: "pg", source: "widgets", issue: ConnectorResolutionIssue.Unresolved },
+    ]);
+});
+
+test("prefetch records NO diagnostic when a resolved adapter simply returns no rows", async () =>
+{
+    // RecordingFactory's adapter resolves but Query() returns []: a genuinely empty source,
+    // which must read apart from the unresolved case — no diagnostic.
+    const catalog = new DataSourceAdapterCatalog().Register(new RecordingFactory(DataSourceKind.Sql));
+    const sink = new RecordingDiagnosticSink();
+    const services = new ServiceProvider();
+    services.registerInstance(ConnectorResolutionDiagnosticSinkKey, sink);
+
+    const snapshot = await ConnectorPrefetch.ForConcepts([Fixture.Concept], Fixture.Plan, catalog, services, new StubReflector());
+
+    assert.deepEqual(snapshot.get(Fixture.Concept), []);
+    assert.equal(sink.Diagnostics.length, 0);
 });
 
 test("prefetch skips concepts with no binding and de-duplicates requests", async () =>
