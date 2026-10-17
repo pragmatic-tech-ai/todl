@@ -26,6 +26,7 @@ export class DataSourceAdapterCatalog
     public static readonly ServiceKey = new ServiceKey<DataSourceAdapterCatalog>("DataSourceAdapterCatalog");
 
     private static readonly NoAdapterMessage = "connector '{0}': no data-source adapter available for kind '{1}'";
+    private static readonly NoProviderMessage = "connector '{0}': names provider '{1}' but no adapter provider is configured";
     private static readonly PlaceholderPattern = /\{(\d)\}/g;
 
     private readonly factories = new Map<DataSourceKind, IDataSourceAdapterFactory>();
@@ -90,6 +91,10 @@ export class DataSourceAdapterCatalog
 
     private async ResolveFactory(spec: ConnectorSpec): Promise<IDataSourceAdapterFactory>
     {
+        if (spec.Provider !== undefined)
+        {
+            return this.ResolveNamedProvider(spec, spec.Provider);
+        }
         const registered = this.factories.get(spec.Kind);
         if (registered) return registered;
         let cause: unknown;
@@ -108,5 +113,20 @@ export class DataSourceAdapterCatalog
         const message = DataSourceAdapterCatalog.NoAdapterMessage.replace(
             DataSourceAdapterCatalog.PlaceholderPattern, (_match, index: string) => args[Number(index)] ?? "");
         throw cause === undefined ? new Error(message) : new Error(message, { cause });
+    }
+
+    // A connector that NAMES a provider pack resolves through the injected provider — the pack is
+    // authoritative. A missing provider or a provider rejection is fail-closed: never silently fall
+    // back to a Kind-registered factory, which would mask a provisioning failure.
+    private async ResolveNamedProvider(spec: ConnectorSpec, provider: string): Promise<IDataSourceAdapterFactory>
+    {
+        if (this.provider === undefined)
+        {
+            const args: string[] = [spec.Name, provider];
+            const message = DataSourceAdapterCatalog.NoProviderMessage.replace(
+                DataSourceAdapterCatalog.PlaceholderPattern, (_match, index: string) => args[Number(index)] ?? "");
+            throw new Error(message);
+        }
+        return this.provider.Resolve({ Kind: spec.Kind, Provider: provider });
     }
 }

@@ -155,3 +155,33 @@ test("provider failure is wrapped with cause, and names with replacement tokens 
         (e: Error) => e.cause === original && e.message.includes(`'${name}'`) && e.message.includes("'cypher'"),
     );
 });
+
+test("a connector that names a provider resolves through the provider, not a Kind-registered factory", async () =>
+{
+    const registered = new InMemoryAdapterFactory(DataSourceKind.Sql);
+    const packFactory = new InMemoryAdapterFactory(DataSourceKind.Sql);
+    const provider = new RegisteredAdapterProvider().Add(packFactory);
+    const catalog = new DataSourceAdapterCatalog(provider).Register(registered);
+    const opened = await catalog.Open(
+        { Name: "pg", Kind: DataSourceKind.Sql, Config: {}, Provider: "@x/pg@1.0.0" }, new ServiceProvider());
+    assert.equal(opened, packFactory.Adapter);
+    assert.notEqual(opened, registered.Adapter);
+});
+
+test("a named provider with no provider configured is fail-closed", async () =>
+{
+    const catalog = new DataSourceAdapterCatalog().Register(new InMemoryAdapterFactory(DataSourceKind.Sql));
+    await assert.rejects(
+        () => catalog.Open({ Name: "pg", Kind: DataSourceKind.Sql, Config: {}, Provider: "@x/pg@1.0.0" }, new ServiceProvider()),
+        /no adapter provider is configured/);
+});
+
+test("a named provider that rejects is fail-closed (no fall back to a Kind factory)", async () =>
+{
+    const registered = new InMemoryAdapterFactory(DataSourceKind.Sql);
+    const provider: IDataSourceAdapterProvider = { Resolve: async () => { throw new Error("pack boom"); } };
+    const catalog = new DataSourceAdapterCatalog(provider).Register(registered);
+    await assert.rejects(
+        () => catalog.Open({ Name: "pg", Kind: DataSourceKind.Sql, Config: {}, Provider: "@x/pg@1.0.0" }, new ServiceProvider()),
+        /pack boom/);
+});
