@@ -89,6 +89,14 @@
         "default": "./dist/graph-api/index.js"
       },
       "require": "./dist/graph-api/index.js"
+    },
+    "./adapter-pack": {
+      "types": "./dist/model-data/adapter-pack.d.ts",
+      "import": {
+        "development": "./src/model-data/adapter-pack.ts",
+        "default": "./dist/model-data/adapter-pack.js"
+      },
+      "require": "./dist/model-data/adapter-pack.js"
     }
   },
   "files": [
