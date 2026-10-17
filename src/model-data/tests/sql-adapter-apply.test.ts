@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { SqlAdapter } from "../sql-adapter.js";
-import { WriteOperationKind } from "../connector-plan.js";
+import { WriteAtomicity, WriteConcurrency, WriteOperationKind } from "../connector-plan.js";
 import type { WriteBatch, WriteOperation } from "../connector-plan.js";
 import { RecordingSqlSession } from "./sql-fakes.js";
 
@@ -22,7 +22,7 @@ class ApplyFixtures
 
     public static Batch(op: WriteOperation, versionField?: string): WriteBatch
     {
-        const batch: WriteBatch = { Source: "order", IdKey: "order_id", Operations: [op] };
+        const batch: WriteBatch = { Source: "order", IdKey: "order_id", Operations: [op], Concurrency: WriteConcurrency.LastWriteWins, Atomicity: WriteAtomicity.Sequential };
         return versionField === undefined ? batch : { ...batch, VersionField: versionField };
     }
 }
@@ -35,7 +35,7 @@ test("SqlAdapter upsert emits a parameterized INSERT ... ON CONFLICT", async () 
     assert.equal(session.calls[0]!.sql, ApplyFixtures.UpsertSql);
     assert.deepEqual(session.calls[0]!.params, ["O-1007", "Acme reorder", "2020"]);
     assert.equal(result.Applied, 1);
-    assert.deepEqual(result.Conflicts, []);
+    assert.deepEqual(result.Failures, []);
 });
 
 test("SqlAdapter delete emits a parameterized DELETE", async () =>
@@ -55,8 +55,8 @@ test("SqlAdapter optimistic upsert reports a conflict when no row is updated", a
     assert.equal(session.calls[0]!.sql, ApplyFixtures.UpsertSql + ' WHERE "order"."version" = $4');
     assert.deepEqual(session.calls[0]!.params, ["O-1007", "Acme reorder", "2020", 3]);
     assert.equal(result.Applied, 0);
-    assert.equal(result.Conflicts.length, 1);
-    assert.equal(result.Conflicts[0]!.Key, "O-1007");
+    assert.equal(result.Failures.length, 1);
+    assert.equal(result.Failures[0]!.Key, "O-1007");
 });
 
 test("SqlAdapter optimistic upsert applies when a row is updated", async () =>
@@ -64,7 +64,7 @@ test("SqlAdapter optimistic upsert applies when a row is updated", async () =>
     const session = new RecordingSqlSession([], 1);
     const result = await new SqlAdapter(session).Apply(ApplyFixtures.Batch(ApplyFixtures.UpsertOp(3), "version"));
     assert.equal(result.Applied, 1);
-    assert.deepEqual(result.Conflicts, []);
+    assert.deepEqual(result.Failures, []);
 });
 
 test("SqlAdapter key-only upsert emits DO NOTHING without a version guard", async () =>
@@ -75,7 +75,7 @@ test("SqlAdapter key-only upsert emits DO NOTHING without a version guard", asyn
     assert.equal(session.calls[0]!.sql, 'INSERT INTO "order" ("order_id") VALUES ($1) ON CONFLICT ("order_id") DO NOTHING');
     assert.deepEqual(session.calls[0]!.params, ["O-1007"]);
     assert.equal(result.Applied, 1);
-    assert.deepEqual(result.Conflicts, []);
+    assert.deepEqual(result.Failures, []);
 });
 
 test("SqlAdapter key-only upsert ignores the batch VersionField", async () =>
@@ -86,7 +86,7 @@ test("SqlAdapter key-only upsert ignores the batch VersionField", async () =>
     assert.equal(session.calls[0]!.sql, 'INSERT INTO "order" ("order_id") VALUES ($1) ON CONFLICT ("order_id") DO NOTHING');
     assert.deepEqual(session.calls[0]!.params, ["O-1007"]);
     assert.equal(result.Applied, 1);
-    assert.deepEqual(result.Conflicts, []);
+    assert.deepEqual(result.Failures, []);
 });
 
 test("SqlAdapter optimistic upsert with a missing Version binds NULL and conflicts", async () =>
@@ -95,5 +95,5 @@ test("SqlAdapter optimistic upsert with a missing Version binds NULL and conflic
     const result = await new SqlAdapter(session).Apply(ApplyFixtures.Batch(ApplyFixtures.UpsertOp(), "version"));
     assert.deepEqual(session.calls[0]!.params, ["O-1007", "Acme reorder", "2020", null]);
     assert.equal(result.Applied, 0);
-    assert.equal(result.Conflicts.length, 1);
+    assert.equal(result.Failures.length, 1);
 });

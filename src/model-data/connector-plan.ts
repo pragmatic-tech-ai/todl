@@ -47,6 +47,12 @@ export interface ConnectorBinding
     Writable: boolean;
     /** External version/etag column guarding optimistic writes; absent = last-write-wins. */
     VersionField?: string;
+    /** Concurrency axis for writes to this binding. Authored in TODL source and defaulted on
+     *  plan-build; absent in Task-1 compile-bridge plans (which behave as {@link WriteConcurrency.LastWriteWins}). */
+    Concurrency?: WriteConcurrency;
+    /** Atomicity axis for writes to this binding. Authored in TODL source and defaulted on
+     *  plan-build; absent in Task-1 compile-bridge plans (which behave as {@link WriteAtomicity.Sequential}). */
+    Atomicity?: WriteAtomicity;
 }
 
 /** The datasource + bound source (table/endpoint) a connector-minted instance node came from. */
@@ -119,19 +125,44 @@ export interface WriteOperation
     Version?: ExternalFieldValue;
 }
 
+/** Concurrency axis of a write: how an upsert guards against a concurrent change. */
+export enum WriteConcurrency
+{
+    LastWriteWins = "last-write-wins",
+    Optimistic = "optimistic",
+}
+
+/** Atomicity axis of a write batch: how a mid-batch failure is handled. */
+export enum WriteAtomicity
+{
+    Sequential = "sequential",
+    Transactional = "transactional",
+}
+
+/** Why a single write did not persist. */
+export enum WriteFailureKind
+{
+    Conflict = "conflict",
+    Error = "error",
+    Unsupported = "unsupported",
+}
+
 /** A group of writes against one external source. */
 export interface WriteBatch
 {
     Source: string;
     IdKey: string;
     Operations: readonly WriteOperation[];
+    Concurrency: WriteConcurrency;
+    Atomicity: WriteAtomicity;
     VersionField?: string;
 }
 
-/** A write that was refused rather than applied. */
-export interface WriteConflict
+/** A single write that did not persist, with a typed reason. */
+export interface WriteFailure
 {
     Key: ExternalFieldValue;
+    Kind: WriteFailureKind;
     Reason: string;
 }
 
@@ -139,7 +170,7 @@ export interface WriteConflict
 export interface WriteResult
 {
     Applied: number;
-    Conflicts: readonly WriteConflict[];
+    Failures: readonly WriteFailure[];
 }
 
 /** The minimal resolved connection shape handed to an adapter. */

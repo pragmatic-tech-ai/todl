@@ -94,8 +94,11 @@ export {
   WriteOperationKind,
   type WriteOperation,
   type WriteBatch,
-  type WriteConflict,
+  type WriteFailure,
   type WriteResult,
+  WriteConcurrency,
+  WriteAtomicity,
+  WriteFailureKind,
 } from './model-data/connector-plan.js';
 export {
   ConnectionResolverKey,
@@ -105,6 +108,8 @@ export {
   type AdapterResolutionRequest,
   type IConnectionResolver,
 } from './model-data/data-source-adapter.js';
+export { WriteCapability, type IWriteCapable } from './model-data/write-capability.js';
+export { RollbackSignal } from './model-data/rollback-signal.js';
 export { AdapterPack, AdapterPackContract } from './model-data/adapter-pack.js';
 export type { IAdapterPack, AdapterPackManifest } from './model-data/adapter-pack.js';
 export { ConnectionResolver } from './model-data/connection-resolver.js';

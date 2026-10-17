@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { WriteOperationKind } from "../connector-plan.js";
+import { WriteAtomicity, WriteConcurrency, WriteOperationKind } from "../connector-plan.js";
 import type { IDataSourceAdapter } from "../data-source-adapter.js";
 
 /**
@@ -30,11 +30,11 @@ export function describeDataSourceAdapter(name: string, make: () => IDataSourceA
     test(`${name}: Apply upserts a new row that Query then returns`, async () => {
         const adapter = make();
         const result = await adapter.Apply({
-            Source: "Customer", IdKey: "id",
+            Source: "Customer", IdKey: "id", Concurrency: WriteConcurrency.LastWriteWins, Atomicity: WriteAtomicity.Sequential,
             Operations: [{ Kind: WriteOperationKind.Upsert, Key: "c2", Fields: { label: "Globex" } }],
         });
         assert.equal(result.Applied, 1);
-        assert.equal(result.Conflicts.length, 0);
+        assert.equal(result.Failures.length, 0);
         const rows = await adapter.Query({ Source: "Customer", Fields: ["id", "label"] });
         assert.equal(rows.length, 2);
         assert.deepEqual(rows.find(r => r.id === "c2"), { id: "c2", label: "Globex" });
@@ -43,7 +43,7 @@ export function describeDataSourceAdapter(name: string, make: () => IDataSourceA
     test(`${name}: Apply upsert on an existing key overwrites`, async () => {
         const adapter = make();
         await adapter.Apply({
-            Source: "Customer", IdKey: "id",
+            Source: "Customer", IdKey: "id", Concurrency: WriteConcurrency.LastWriteWins, Atomicity: WriteAtomicity.Sequential,
             Operations: [{ Kind: WriteOperationKind.Upsert, Key: "c1", Fields: { label: "Acme 2" } }],
         });
         const rows = await adapter.Query({ Source: "Customer", Fields: ["id", "label"] });
@@ -53,7 +53,7 @@ export function describeDataSourceAdapter(name: string, make: () => IDataSourceA
     test(`${name}: Apply delete removes the row`, async () => {
         const adapter = make();
         const result = await adapter.Apply({
-            Source: "Customer", IdKey: "id",
+            Source: "Customer", IdKey: "id", Concurrency: WriteConcurrency.LastWriteWins, Atomicity: WriteAtomicity.Sequential,
             Operations: [{ Kind: WriteOperationKind.Delete, Key: "c1", Fields: {} }],
         });
         assert.equal(result.Applied, 1);

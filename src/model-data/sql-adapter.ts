@@ -1,5 +1,5 @@
-import { QueryCompareOp, WriteOperationKind } from "./connector-plan.js";
-import type { ExternalFieldValue, ExternalRecord, QueryRequest, WriteBatch, WriteConflict, WriteOperation, WriteResult } from "./connector-plan.js";
+import { QueryCompareOp, WriteFailureKind, WriteOperationKind } from "./connector-plan.js";
+import type { ExternalFieldValue, ExternalRecord, QueryRequest, WriteBatch, WriteFailure, WriteOperation, WriteResult } from "./connector-plan.js";
 import type { IDataSourceAdapter } from "./data-source-adapter.js";
 import type { ISqlSession, SqlRow } from "./sql-session.js";
 
@@ -119,7 +119,7 @@ export class SqlAdapter implements IDataSourceAdapter
     public async Apply(batch: WriteBatch): Promise<WriteResult>
     {
         let applied = 0;
-        const conflicts: WriteConflict[] = [];
+        const failures: WriteFailure[] = [];
         for (const op of batch.Operations)
         {
             if (op.Kind === WriteOperationKind.Delete)
@@ -134,10 +134,10 @@ export class SqlAdapter implements IDataSourceAdapter
             }
             else
             {
-                conflicts.push({ Key: op.Key, Reason: SqlAdapter.VersionConflictReason });
+                failures.push({ Key: op.Key, Kind: WriteFailureKind.Conflict, Reason: SqlAdapter.VersionConflictReason });
             }
         }
-        return { Applied: applied, Conflicts: conflicts };
+        return { Applied: applied, Failures: failures };
     }
 
     /** Releases the underlying session, if it supports disposal. */

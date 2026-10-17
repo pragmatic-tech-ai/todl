@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { ServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
 import { FederatedModelDataConnector } from "../federated-model-data-connector.js";
 import { DataSourceAdapterCatalog } from "../data-source-adapter-catalog.js";
-import { DataSourceKind, WriteOperationKind, type ModelConnectorPlan, type WriteBatch, type WriteResult, type ExternalRecord, type QueryRequest } from "../connector-plan.js";
+import { DataSourceKind, WriteFailureKind, WriteOperationKind, type ModelConnectorPlan, type WriteBatch, type WriteResult, type ExternalRecord, type QueryRequest } from "../connector-plan.js";
 import type { IDataSourceAdapter } from "../data-source-adapter.js";
 import type { ResolvedConnection } from "../connector-plan.js";
 import { ConnectorWorkingCopy } from "../connector-working-copy.js";
@@ -26,7 +26,7 @@ class RecordingFactory extends CountingAdapterFactory
                 this.Batches.push(batch);
                 if (this.ConflictKey !== undefined)
                 {
-                    return { Applied: 0, Conflicts: [{ Key: this.ConflictKey, Reason: "conflict" }] };
+                    return { Applied: 0, Failures: [{ Key: this.ConflictKey, Kind: WriteFailureKind.Conflict, Reason: "conflict" }] };
                 }
                 return inner.Apply(batch);
             },
@@ -131,7 +131,7 @@ test("conflicted operation stays pending for retry", async () =>
     fx.Factory.ConflictKey = "O-1";
     const { Results: first } = await wc.Flush(fx.Catalog, fx.Services);
     assert.equal(first.length, 1);
-    assert.equal(first[0]!.Conflicts[0]!.Key, "O-1");
+    assert.equal(first[0]!.Failures[0]!.Key, "O-1");
     fx.Factory.ConflictKey = undefined;
     const { Results: retry } = await wc.Flush(fx.Catalog, fx.Services);
     assert.equal(retry.length, 1);

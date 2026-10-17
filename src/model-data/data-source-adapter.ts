@@ -9,6 +9,12 @@ export interface IDataSourceAdapter
     Apply(batch: WriteBatch): Promise<WriteResult>;
     /** Releases any driver connection/pool held by this adapter. Idempotent. */
     Dispose(): Promise<void>;
+    /** Whether this adapter can run a batch inside a backend transaction. Optional so existing
+     *  fakes and the merged adapter-pack ABI keep compiling; absent ⇒ the weakest guarantee (false). */
+    readonly CanTransact?: boolean;
+    /** Whether this adapter can enforce an optimistic version guard. Optional for the same reason;
+     *  absent ⇒ false. */
+    readonly CanVersion?: boolean;
 }
 
 /** Opens adapters for one kind of data source. */

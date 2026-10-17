@@ -21,7 +21,7 @@ class DisposeCountingAdapter implements IDataSourceAdapter
 
     public async Apply(_b: WriteBatch): Promise<WriteResult>
     {
-        return { Applied: 0, Conflicts: [] };
+        return { Applied: 0, Failures: [] };
     }
 
     public async Dispose(): Promise<void>

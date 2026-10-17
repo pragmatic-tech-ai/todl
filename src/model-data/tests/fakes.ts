@@ -1,5 +1,5 @@
-import { QueryCompareOp, WriteOperationKind } from "../connector-plan.js";
-import type { DataSourceKind, ExternalRecord, QueryRequest, ResolvedConnection, WriteBatch, WriteConflict, WriteResult } from "../connector-plan.js";
+import { QueryCompareOp, WriteFailureKind, WriteOperationKind } from "../connector-plan.js";
+import type { DataSourceKind, ExternalRecord, QueryRequest, ResolvedConnection, WriteBatch, WriteFailure, WriteResult } from "../connector-plan.js";
 import type { AdapterResolutionRequest, IDataSourceAdapter, IDataSourceAdapterFactory, IDataSourceAdapterProvider } from "../data-source-adapter.js";
 
 export class InMemoryAdapter implements IDataSourceAdapter
@@ -40,7 +40,7 @@ export class InMemoryAdapter implements IDataSourceAdapter
     {
         const rows = this.sources.get(batch.Source) ?? [];
         this.sources.set(batch.Source, rows);
-        const conflicts: WriteConflict[] = [];
+        const failures: WriteFailure[] = [];
         let applied = 0;
         for (const op of batch.Operations)
         {
@@ -59,7 +59,7 @@ export class InMemoryAdapter implements IDataSourceAdapter
                 const stored = rows[index]![batch.VersionField] ?? null;
                 if (stored !== (op.Version ?? null))
                 {
-                    conflicts.push({ Key: op.Key, Reason: `${InMemoryAdapter.StaleVersionMessage} ${batch.VersionField}` });
+                    failures.push({ Key: op.Key, Kind: WriteFailureKind.Conflict, Reason: `${InMemoryAdapter.StaleVersionMessage} ${batch.VersionField}` });
                     continue;
                 }
             }
@@ -68,7 +68,7 @@ export class InMemoryAdapter implements IDataSourceAdapter
             else rows.push(row);
             applied++;
         }
-        return { Applied: applied, Conflicts: conflicts };
+        return { Applied: applied, Failures: failures };
     }
 
     public async Dispose(): Promise<void>

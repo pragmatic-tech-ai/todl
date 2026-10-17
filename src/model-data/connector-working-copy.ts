@@ -2,7 +2,7 @@ import type { IServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
 import { DiagnosticCode, Severity, type Diagnostic } from "../compiler-services/diagnostics/diagnostic.js";
 import type { JsonNode, TodlDocument } from "../compiler-services/emit/json.js";
 import type { ConnectorBinding, ExternalFieldValue, ModelConnectorPlan, WriteBatch, WriteOperation, WriteResult, WriteTarget } from "./connector-plan.js";
-import { ConnectorLookup, WriteOperationKind } from "./connector-plan.js";
+import { ConnectorLookup, WriteAtomicity, WriteConcurrency, WriteOperationKind } from "./connector-plan.js";
 import type { DataSourceAdapterCatalog } from "./data-source-adapter-catalog.js";
 
 export interface FlushOutcome
@@ -74,17 +74,23 @@ export class ConnectorWorkingCopy
         const failed = new Set<string>();
         for (const [binding, operations] of batches)
         {
+            // Task-1 compile-bridge: reproduce today's behavior exactly. A versioned binding wrote
+            // optimistically; an unversioned one last-write-wins. Atomicity is always Sequential (no
+            // transaction seam yet). The per-axis authoring/honoring lands in later tasks.
+            const concurrency = binding.VersionField === undefined
+                ? WriteConcurrency.LastWriteWins
+                : WriteConcurrency.Optimistic;
             const batch: WriteBatch = binding.VersionField === undefined
-                ? { Source: binding.Source, IdKey: binding.IdKey, Operations: operations }
-                : { Source: binding.Source, IdKey: binding.IdKey, Operations: operations, VersionField: binding.VersionField };
+                ? { Source: binding.Source, IdKey: binding.IdKey, Operations: operations, Concurrency: concurrency, Atomicity: WriteAtomicity.Sequential }
+                : { Source: binding.Source, IdKey: binding.IdKey, Operations: operations, Concurrency: concurrency, Atomicity: WriteAtomicity.Sequential, VersionField: binding.VersionField };
             const adapter = await catalog.Open(ConnectorLookup.Find(this.plan.Connectors, binding), services);
             const result = await adapter.Apply(batch);
             results.push(result);
-            for (const conflict of result.Conflicts)
+            for (const failure of result.Failures)
             {
                 diagnostics.push(this.BuildDiagnostic(DiagnosticCode.ConnectorWriteConflict,
-                    `${ConnectorWorkingCopy.ConflictMessage} ${binding.Concept} ${String(conflict.Key)}: ${conflict.Reason}`, null));
-                failed.add(ConnectorWorkingCopy.TargetKey(binding.Concept, binding.Connector, binding.Source, conflict.Key));
+                    `${ConnectorWorkingCopy.ConflictMessage} ${binding.Concept} ${String(failure.Key)}: ${failure.Reason}`, null));
+                failed.add(ConnectorWorkingCopy.TargetKey(binding.Concept, binding.Connector, binding.Source, failure.Key));
             }
         }
 
