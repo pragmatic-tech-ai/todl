@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { SqlAdapter } from "../sql-adapter.js";
 import { WriteAtomicity, WriteConcurrency, WriteFailureKind, WriteOperationKind } from "../connector-plan.js";
 import type { WriteBatch, WriteOperation } from "../connector-plan.js";
-import { FailingSqlSession, RecordingSqlSession } from "./sql-fakes.js";
+import { FailingSqlSession, RecordingSqlSession, RejectingSqlSession } from "./sql-fakes.js";
 
 class ApplyFixtures
 {
@@ -11,6 +11,9 @@ class ApplyFixtures
         + 'ON CONFLICT ("order_id") DO UPDATE SET "display_name" = EXCLUDED."display_name", "created_at" = EXCLUDED."created_at"';
     public static readonly VersionGuard = ' WHERE "order"."version" = $4';
     public static readonly DriverErrorMessage = "connection reset by peer";
+    // Mirrors SqlAdapter.VersionConflictReason (private); kept in lock-step by this assertion.
+    public static readonly VersionConflictReason = "version mismatch";
+    public static readonly NonErrorRejection = "driver returned a bare string";
 
     public static UpsertOp(version?: number, key = "O-1007"): WriteOperation
     {
@@ -85,6 +88,7 @@ test("Optimistic upsert on a version match applies, on mismatch is a Conflict fa
     assert.equal(conflicted.Failures.length, 1);
     assert.equal(conflicted.Failures[0]!.Key, "O-1007");
     assert.equal(conflicted.Failures[0]!.Kind, WriteFailureKind.Conflict);
+    assert.equal(conflicted.Failures[0]!.Reason, ApplyFixtures.VersionConflictReason);
 });
 
 test("Optimistic upsert on a present row whose version is NULL is a Conflict (fail-closed)", async () =>
@@ -110,12 +114,23 @@ test("Sequential apply collects a mid-batch driver Error and keeps applying the 
         ApplyFixtures.UpsertOp(undefined, "O-3"),
     ]);
     const result = await new SqlAdapter(session).Apply(batch);
-    assert.equal(session.calls.length, 3);
+    // All three ops reached the session in order; ops 1 and 3 persisted, op 2 is the lone Error failure.
+    assert.deepEqual(session.calls.map(c => c.params[0]), ["O-1", "O-2", "O-3"]);
     assert.equal(result.Applied, 2);
     assert.equal(result.Failures.length, 1);
     assert.equal(result.Failures[0]!.Key, "O-2");
     assert.equal(result.Failures[0]!.Kind, WriteFailureKind.Error);
     assert.equal(result.Failures[0]!.Reason, ApplyFixtures.DriverErrorMessage);
+});
+
+test("Sequential apply surfaces a non-Error rejection via String(error)", async () =>
+{
+    const session = new RejectingSqlSession(ApplyFixtures.NonErrorRejection);
+    const result = await new SqlAdapter(session).Apply(ApplyFixtures.Batch(ApplyFixtures.UpsertOp()));
+    assert.equal(result.Applied, 0);
+    assert.equal(result.Failures.length, 1);
+    assert.equal(result.Failures[0]!.Kind, WriteFailureKind.Error);
+    assert.equal(result.Failures[0]!.Reason, ApplyFixtures.NonErrorRejection);
 });
 
 test("SqlAdapter key-only upsert emits DO NOTHING without a version guard", async () =>

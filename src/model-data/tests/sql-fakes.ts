@@ -54,6 +54,28 @@ export class FailingSqlSession implements ISqlSession
     }
 }
 
+/** Rejects every Execute with the configured non-Error value (exercises the String(error) branch). */
+export class RejectingSqlSession implements ISqlSession
+{
+    public readonly calls: { sql: string; params: readonly unknown[] }[] = [];
+
+    public constructor(private readonly thrown: unknown)
+    {
+    }
+
+    public async Query(sql: string, params: readonly unknown[]): Promise<readonly SqlRow[]>
+    {
+        this.calls.push({ sql, params });
+        return [];
+    }
+
+    public async Execute(sql: string, params: readonly unknown[]): Promise<number>
+    {
+        this.calls.push({ sql, params });
+        throw this.thrown;
+    }
+}
+
 /** Returns canned rows from Query; Execute affects 0 rows. */
 export class DataSqlSession implements ISqlSession
 {
