@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DataSourceKind, ConnectorPlanProjection, type ModelConnectorPlan } from "../connector-plan.js";
+import { DataSourceKind, ConnectorPlanProjection, ConnectorLookup, type ConnectorBinding, type ConnectorSpec, type ModelConnectorPlan } from "../connector-plan.js";
 
 test("Normalize sorts connectors, bindings, and field-map keys deterministically", () =>
 {
@@ -46,6 +46,33 @@ test("Normalize does not mutate its input", () =>
     assert.equal(plan.Connectors[0]!.Name, "warehouse");
     assert.equal(plan.Bindings[0]!.Concept, "a.Order");
     assert.deepEqual(Object.keys(plan.Bindings[0]!.FieldMap), ["label", "id"]);
+});
+
+test("ConnectorLookup.Find links by qualified ConnectorId when bare names collide across namespaces", () =>
+{
+    const shopPg: ConnectorSpec = { Id: "shop@connector:pg", Name: "pg", Kind: DataSourceKind.Sql, Config: { db: "shop" } };
+    const invPg: ConnectorSpec = { Id: "inventory@connector:pg", Name: "pg", Kind: DataSourceKind.Sql, Config: { db: "inventory" } };
+    const binding: ConnectorBinding =
+    {
+        Concept: "inventory.Item", Connector: "pg", ConnectorId: "inventory@connector:pg",
+        Source: "items", IdKey: "id", FieldMap: {}, Writable: false,
+    };
+    // Bare Name "pg" matches both specs; the qualified ConnectorId disambiguates to the inventory one.
+    assert.equal(ConnectorLookup.Find([shopPg, invPg], binding), invPg);
+});
+
+test("ConnectorLookup.TryFind falls back to bare Connector name for legacy plans (no ConnectorId)", () =>
+{
+    const pg: ConnectorSpec = { Name: "pg", Kind: DataSourceKind.Sql, Config: {} };
+    const legacy: ConnectorBinding = { Concept: "a.X", Connector: "pg", Source: "s", IdKey: "id", FieldMap: {}, Writable: false };
+    assert.equal(ConnectorLookup.TryFind([pg], legacy), pg);
+});
+
+test("ConnectorLookup.TryFind returns undefined when nothing matches", () =>
+{
+    const shopPg: ConnectorSpec = { Id: "shop@connector:pg", Name: "pg", Kind: DataSourceKind.Sql, Config: {} };
+    const miss: ConnectorBinding = { Concept: "a.X", Connector: "x", ConnectorId: "nope@connector:x", Source: "s", IdKey: "id", FieldMap: {}, Writable: false };
+    assert.equal(ConnectorLookup.TryFind([shopPg], miss), undefined);
 });
 
 test("Normalize sorts connector Config keys", () =>

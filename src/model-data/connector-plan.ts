@@ -36,6 +36,11 @@ export interface ConnectorBinding
 {
     Concept: string;
     Connector: string;
+    /** The connector's namespace-qualified id (its {@link ConnectorSpec.Id}), used to LINK
+     *  this binding to its spec unambiguously when two connectors share a bare Name across
+     *  namespaces. The bare Connector name is retained for the source/provenance tag and the
+     *  minted node-id scheme. Absent in hand-written/legacy plans, which link by Connector. */
+    ConnectorId?: string;
     Source: string;
     IdKey: string;
     FieldMap: Record<string, string>;
@@ -194,7 +199,7 @@ export class ConnectorLookup
 
     public static Find(connectors: readonly ConnectorSpec[], binding: ConnectorBinding): ConnectorSpec
     {
-        const spec = connectors.find(candidate => candidate.Name === binding.Connector);
+        const spec = ConnectorLookup.TryFind(connectors, binding);
         if (!spec)
         {
             throw new Error(`${ConnectorLookup.UnknownConnectorPrefix}${binding.Concept}`
@@ -202,6 +207,16 @@ export class ConnectorLookup
                 + ConnectorLookup.UnknownConnectorSuffix);
         }
         return spec;
+    }
+
+    /** Resolves a binding's connector to its spec, or undefined when none matches. Links by
+     *  the binding's qualified {@link ConnectorBinding.ConnectorId} when present (matched
+     *  against each spec's {@link ConnectorSpec.Id}), falling back to the bare Connector name
+     *  (matched against Name) for hand-written/legacy plans. */
+    public static TryFind(connectors: readonly ConnectorSpec[], binding: ConnectorBinding): ConnectorSpec | undefined
+    {
+        const key = binding.ConnectorId ?? binding.Connector;
+        return connectors.find(candidate => (candidate.Id ?? candidate.Name) === key);
     }
 }
 

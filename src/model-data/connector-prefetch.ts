@@ -2,6 +2,7 @@ import type { IServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
 import type { DataSourceAdapterCatalog } from "./data-source-adapter-catalog.js";
 import type { IDataSourceAdapter } from "./data-source-adapter.js";
 import type { ModelConnectorPlan, ConnectorBinding, ConnectorSpec, QueryRequest } from "./connector-plan.js";
+import { ConnectorLookup } from "./connector-plan.js";
 import type { ReflectedNode, InstanceMirror } from "../manifest/reflection/reflection.js";
 import { ConnectorMirrorMapper } from "./connector-mirror-mapper.js";
 
@@ -30,7 +31,7 @@ export class ConnectorPrefetch
             }
             // One binding per concept is assumed: the first match wins; multiple bindings for one concept are unsupported here.
             const binding = plan.Bindings.find(b => b.Concept === concept);
-            const spec = binding === undefined ? undefined : plan.Connectors.find(c => c.Name === binding.Connector);
+            const spec = binding === undefined ? undefined : ConnectorLookup.TryFind(plan.Connectors, binding);
             if (binding === undefined || spec === undefined)
             {
                 continue;

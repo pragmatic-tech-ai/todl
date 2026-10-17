@@ -71,15 +71,20 @@ export class ConnectorPlanEmitter
             {
                 continue;
             }
-            specs.set(spec.Name, spec);
-            bindings.push({
+            specs.set(spec.Id ?? spec.Name, spec);
+            const binding: ConnectorBinding = {
                 Concept: String(attrs.get(Builder.BindingConceptAttr)),
                 Connector: spec.Name,
                 Source: String(attrs.get(Builder.BindingSourceAttr)),
                 IdKey: String(attrs.get(Builder.BindingIdKeyAttr)),
                 FieldMap: JSON.parse(String(attrs.get(Builder.BindingFieldMapAttr))) as Record<string, string>,
                 Writable: attrs.get(Builder.BindingWritableAttr) === true,
-            });
+            };
+            if (spec.Id !== undefined)
+            {
+                binding.ConnectorId = spec.Id;
+            }
+            bindings.push(binding);
         }
         if (bindings.length === 0)
         {
@@ -178,14 +183,18 @@ export class ConnectorPlanEmitter
     private static EmitBinding(b: ConnectorBinding): string
     {
         const i3 = ConnectorPlanEmitter.Indent3;
-        return ConnectorPlanEmitter.Wrap([
-            `${i3}Concept: ${JSON.stringify(b.Concept)},`,
-            `${i3}Connector: ${JSON.stringify(b.Connector)},`,
-            `${i3}Source: ${JSON.stringify(b.Source)},`,
-            `${i3}IdKey: ${JSON.stringify(b.IdKey)},`,
-            `${i3}FieldMap: ${ConnectorPlanEmitter.EmitRecord(b.FieldMap)},`,
-            `${i3}Writable: ${b.Writable},`,
-        ]);
+        const lines: string[] = [];
+        lines.push(`${i3}Concept: ${JSON.stringify(b.Concept)},`);
+        lines.push(`${i3}Connector: ${JSON.stringify(b.Connector)},`);
+        if (b.ConnectorId !== undefined)
+        {
+            lines.push(`${i3}ConnectorId: ${JSON.stringify(b.ConnectorId)},`);
+        }
+        lines.push(`${i3}Source: ${JSON.stringify(b.Source)},`);
+        lines.push(`${i3}IdKey: ${JSON.stringify(b.IdKey)},`);
+        lines.push(`${i3}FieldMap: ${ConnectorPlanEmitter.EmitRecord(b.FieldMap)},`);
+        lines.push(`${i3}Writable: ${b.Writable},`);
+        return ConnectorPlanEmitter.Wrap(lines);
     }
 
     private static Wrap(lines: readonly string[]): string

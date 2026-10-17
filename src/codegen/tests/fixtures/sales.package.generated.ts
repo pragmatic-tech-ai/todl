@@ -110,6 +110,7 @@ const SHARD_SALES_SALES_PLAN: ModelConnectorPlan = {
     {
       Concept: "sales.Customer",
       Connector: "pg",
+      ConnectorId: "sales@connector:pg",
       Source: "cust_v",
       IdKey: "id",
       FieldMap: { "description": "description", "id": "id", "label": "label", "name": "name" },
@@ -118,6 +119,7 @@ const SHARD_SALES_SALES_PLAN: ModelConnectorPlan = {
     {
       Concept: "sales.Order",
       Connector: "pg",
+      ConnectorId: "sales@connector:pg",
       Source: "Order",
       IdKey: "order_id",
       FieldMap: { "description": "description", "id": "order_id", "label": "display_name", "total": "total" },

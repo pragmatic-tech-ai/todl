@@ -46,6 +46,10 @@ test("ConnectorPlanEmitter.PlanFor is reachable from the barrel and plans a conn
             assert.equal(plan.Connectors[0]!.Name, "pg");
             // No provider authored here, so the spec carries none.
             assert.equal(plan.Connectors[0]!.Provider, undefined);
+            // Each binding links to its connector by the qualified id, while the bare
+            // Connector name is retained for the source/provenance tag.
+            assert.equal(plan.Bindings[0]!.Connector, "pg");
+            assert.equal(plan.Bindings[0]!.ConnectorId, "shop@connector:pg");
         }
     }
     assert.equal(planned, 1);
