@@ -24,6 +24,11 @@ export interface ConnectorSpec
     Connection?: string;
     Config: Record<string, string>;
     Secret?: string;
+    /** Names an adapter PROVIDER pack that supplies this connector's factory (as
+     *  opposed to inline Kind-based resolution). Authored as `provider = "..."` and
+     *  gated by the deployment ConnectionPolicy; carried through codegen so a
+     *  published plan preserves the authored provider. Absent in hand-written specs. */
+    Provider?: string;
 }
 
 /** Binds a concept to a source (table, endpoint, ...) on a connector. */

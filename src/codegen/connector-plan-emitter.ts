@@ -135,6 +135,11 @@ export class ConnectorPlanEmitter
         {
             spec.Secret = String(secret);
         }
+        const provider = attrs.get(Builder.ConnectorProviderAttr);
+        if (provider !== undefined)
+        {
+            spec.Provider = String(provider);
+        }
         return spec;
     }
 
@@ -162,6 +167,10 @@ export class ConnectorPlanEmitter
         if (c.Secret !== undefined)
         {
             lines.push(`${i3}Secret: ${JSON.stringify(c.Secret)},`);
+        }
+        if (c.Provider !== undefined)
+        {
+            lines.push(`${i3}Provider: ${JSON.stringify(c.Provider)},`);
         }
         return ConnectorPlanEmitter.Wrap(lines);
     }
