@@ -1084,10 +1084,22 @@ export function loadInto(
         if (o.member === Builder.IdMember) continue;
         fieldMap[o.member] = o.field;
       }
+      // A `version <member>` must name a FieldMap member (same membership the overrides use);
+      // a typo is a build error here, not a silent passthrough that reaches plan-build.
+      let versionMember = populate.versionField;
+      if (versionMember !== null && !(versionMember in fieldMap))
+      {
+        diagnostics.push({
+          code: DiagnosticCode.ConnectorUnknownField, severity: Severity.Error,
+          message: `populate version member "${versionMember}" is not a field of "${populate.concept}"`,
+          span: populate.span, node: conceptId, path: versionMember,
+        });
+        versionMember = null;
+      }
       const bindingId = `${modelNodeId}@populate:${conceptId}`;
       if (model.has(bindingId)) continue;
       const source = populate.source ?? conceptId.slice(conceptId.lastIndexOf(".") + 1);
-      populateBuilder.defineBinding(bindingId, modelNodeId, conceptId, connectorId, source, idKey, JSON.stringify(fieldMap), !populate.readOnly, populate.versionField, populate.concurrency, populate.atomicity);
+      populateBuilder.defineBinding(bindingId, modelNodeId, conceptId, connectorId, source, idKey, JSON.stringify(fieldMap), !populate.readOnly, versionMember, populate.concurrency, populate.atomicity);
       recordHome(rec, bindingId);
     }
   }

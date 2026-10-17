@@ -67,6 +67,13 @@ test("omitting the write-mode attributes stages no version/concurrency/atomicity
     assert.equal(attrs.get(Builder.BindingAtomicityAttr), undefined);
 });
 
+test("a version naming a non-member emits connector.unknown-field", () =>
+{
+    const { diagnostics } = Harness.compile(
+        `connect pg; populate Order { concurrency optimistic; version nope; }`);
+    assert.ok(diagnostics.some((d) => d.code === DiagnosticCode.ConnectorUnknownField));
+});
+
 test("an unrecognized concurrency value is a parse error", () =>
 {
     const { diagnostics } = Harness.compile(`connect pg; populate Order { concurrency bogus; }`);

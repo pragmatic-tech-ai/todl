@@ -157,8 +157,10 @@ export class ConnectorPlanEmitter
         {
             return undefined;
         }
-        const member = String(authored);
-        return fieldMap[member] ?? member;
+        // The loader guarantees the authored member is a FieldMap key; translate it to its
+        // EXTERNAL field. An absent member yields undefined (no silent raw-name passthrough) and
+        // trips the plan-build "requires a version field" guard.
+        return fieldMap[String(authored)];
     }
 
     public static Emit(plan: ModelConnectorPlan, constantName: string): string
