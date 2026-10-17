@@ -24,7 +24,10 @@ export class Deadline implements ICancellation
 
 export interface ExecutionLimits
 {
+    // Without Skip: RowCap caps the result and sets Truncated. With Skip: RowCap is the page size, the first Skip
+    // rows are discarded, Truncated stays false and HasMore reports whether a further row exists.
     readonly RowCap?: number;
+    readonly Skip?: number;
     readonly Cancel?: ICancellation;
 }
 

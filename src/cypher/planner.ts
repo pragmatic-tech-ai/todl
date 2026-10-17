@@ -67,6 +67,8 @@ export class LogicalPlanner
         private readonly parameters: ReadonlyMap<string, CypherValue>,
         options?: PlannerOptions,
         private readonly cancel?: ICancellation,
+        // Paging needs a stable order: when set, an unordered final RETURN is sorted by its first column (ascending).
+        private readonly ensureOrder: boolean = false,
     )
     {
         // Variable-length wiring lands in a later task; the cap is accepted and carried now.
@@ -82,7 +84,7 @@ export class LogicalPlanner
         for (const part of model.Parts)
         {
             if (this.strictWithScope) this.checkStrictScope(part, inScope, everBound);
-            op = this.compilePart(part, op, inScope);
+            op = this.compilePart(part, op, inScope, part === model.Parts[model.Parts.length - 1]);
             for (const v of this.readingVariables(part)) everBound.add(v);
             for (const item of part.Projection.Items) everBound.add(item.ColumnName());
             if (!part.Projection.IsReturn)
@@ -118,7 +120,7 @@ export class LogicalPlanner
         }
     }
 
-    private compilePart(part: QueryPart, input: IOperator | undefined, inScope: ReadonlySet<string>): IOperator
+    private compilePart(part: QueryPart, input: IOperator | undefined, inScope: ReadonlySet<string>, isFinal: boolean): IOperator
     {
         const declared = new Set<string>(inScope);
         for (const v of this.readingVariables(part)) declared.add(v);
@@ -139,7 +141,7 @@ export class LogicalPlanner
             }
         }
         if (op === undefined) op = new SingleRow();
-        return this.buildProjection(op, part.Projection);
+        return this.buildProjection(op, part.Projection, isFinal && this.ensureOrder);
     }
 
     private validateScope(part: QueryPart, available: ReadonlySet<string>): void
@@ -269,7 +271,7 @@ export class LogicalPlanner
         }
     }
 
-    private buildProjection(input: IOperator, projection: ProjectionClause): IOperator
+    private buildProjection(input: IOperator, projection: ProjectionClause, implicitOrder: boolean): IOperator
     {
         const groupingItems: ReturnItem[] = [];
         const aggregateItems: AggregateItem[] = [];
@@ -295,6 +297,10 @@ export class LogicalPlanner
         if (projection.OrderBy !== undefined)
         {
             op = new Sort(op, this.resolveOrderBy(projection), this.parameters, this.cancel);
+        }
+        else if (implicitOrder)
+        {
+            op = new Sort(op, this.implicitOrder(projection), this.parameters, this.cancel);
         }
         if (projection.Skip !== undefined) op = new Skip(op, this.evalCount(projection.Skip));
         if (projection.Limit !== undefined) op = new Limit(op, this.evalCount(projection.Limit));
@@ -338,11 +344,11 @@ export class LogicalPlanner
     // Sort runs over the projected rows. A sort expression structurally equal to ANY projected expression
     // (RETURN a.x + 1 ORDER BY a.x + 1) is rewritten to read that output column; any other sort expression may only
     // reference projected output columns, else it is an unknown ORDER BY column.
-    private resolveOrderBy(projection: ProjectionClause): SortItem[]
+    private resolveOrderBy(projection: ProjectionClause, orderBy: readonly SortItem[] = projection.OrderBy!): SortItem[]
     {
         const columns = new Set<string>(projection.Items.map((i) => i.ColumnName()));
         const byKey = this.projectedColumnsByKey(projection);
-        return projection.OrderBy!.map((sort) =>
+        return orderBy.map((sort) =>
         {
             const matched = byKey.get(sort.Expr.StructuralKey());
             if (matched !== undefined) return new SortItem(new VariableRef(matched), sort.Descending);
@@ -354,6 +360,13 @@ export class LogicalPlanner
             }
             return sort;
         });
+    }
+
+    // Implicit paging order: ORDER BY <first projected column> ascending, resolved exactly as an explicit alias reference.
+    private implicitOrder(projection: ProjectionClause): SortItem[]
+    {
+        const first = new SortItem(new VariableRef(projection.Items[0]!.ColumnName()), false);
+        return this.resolveOrderBy(projection, [first]);
     }
 
     private aggregateCall(item: ReturnItem): FunctionCall
