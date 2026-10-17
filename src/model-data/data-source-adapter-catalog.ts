@@ -109,24 +109,25 @@ export class DataSourceAdapterCatalog
                 cause = error;
             }
         }
-        const args: string[] = [spec.Name, spec.Kind];
-        const message = DataSourceAdapterCatalog.NoAdapterMessage.replace(
-            DataSourceAdapterCatalog.PlaceholderPattern, (_match, index: string) => args[Number(index)] ?? "");
+        const message = DataSourceAdapterCatalog.Format(DataSourceAdapterCatalog.NoAdapterMessage, [spec.Name, spec.Kind]);
         throw cause === undefined ? new Error(message) : new Error(message, { cause });
     }
 
-    // A connector that NAMES a provider pack resolves through the injected provider — the pack is
+    // A connector that NAMES a provider pack resolves through the injected provider - the pack is
     // authoritative. A missing provider or a provider rejection is fail-closed: never silently fall
     // back to a Kind-registered factory, which would mask a provisioning failure.
     private async ResolveNamedProvider(spec: ConnectorSpec, provider: string): Promise<IDataSourceAdapterFactory>
     {
         if (this.provider === undefined)
         {
-            const args: string[] = [spec.Name, provider];
-            const message = DataSourceAdapterCatalog.NoProviderMessage.replace(
-                DataSourceAdapterCatalog.PlaceholderPattern, (_match, index: string) => args[Number(index)] ?? "");
-            throw new Error(message);
+            throw new Error(DataSourceAdapterCatalog.Format(DataSourceAdapterCatalog.NoProviderMessage, [spec.Name, provider]));
         }
         return this.provider.Resolve({ Kind: spec.Kind, Provider: provider });
+    }
+
+    private static Format(template: string, args: readonly string[]): string
+    {
+        return template.replace(
+            DataSourceAdapterCatalog.PlaceholderPattern, (_match, index: string) => args[Number(index)] ?? "");
     }
 }

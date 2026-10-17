@@ -33,7 +33,6 @@ export interface IDataSourceAdapterProvider
     Resolve(request: AdapterResolutionRequest): Promise<IDataSourceAdapterFactory>;
 }
 
-export type { IAdapterPack } from "./adapter-pack.js";
 
 /** Turns a connector spec into concrete connection details. */
 export interface IConnectionResolver

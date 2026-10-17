@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DataSourceKind } from "../connector-plan.js";
 import type { AdapterResolutionRequest } from "../data-source-adapter.js";
-import type { IAdapterPack as IAdapterPackFromModule } from "../adapter-pack.js";
+import type { IAdapterPack } from "../adapter-pack.js";
 import { RegisteredAdapterProvider, InMemoryAdapterFactory } from "./fakes.js";
 
 test("a provider resolves a factory from an AdapterResolutionRequest by Kind", async () =>
@@ -16,6 +16,6 @@ test("a provider resolves a factory from an AdapterResolutionRequest by Kind", a
 test("IAdapterPack exposes its factories", () =>
 {
     const factory = new InMemoryAdapterFactory(DataSourceKind.Sql);
-    const pack: IAdapterPackFromModule = { Factories: () => [factory] };
+    const pack: IAdapterPack = { Factories: () => [factory] };
     assert.deepEqual(pack.Factories(), [factory]);
 });
