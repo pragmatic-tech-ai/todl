@@ -51,9 +51,13 @@ export interface ILanguageService
     Resources(nodeId: string): Promise<ResolvedResource[]>;
     readonly GraphChanged: Signal<SolutionGraphChange>;
 
-    // The engine-owned state of the shared graph's full build (warmup / solution switch):
-    // the current value, a signal raised only on a real transition, and a monotonic
-    // revision bumped on every GraphChanged commit (a fingerprint for paging cursors).
+    // The engine-owned state of the shared graph's full build. Building at construction
+    // and on each solution switch; the warmup / LATEST switch settles it to Ready or
+    // Failed. Once settled, any later full rebuild (membership, reference or on-disk
+    // change) reconciles it to that rebuild's outcome (Failed <-> Ready, never Building);
+    // a live DidChange edit never moves it. BuildStateChanged is raised only on a real
+    // transition; GraphRevision is a monotonic count bumped on every GraphChanged commit
+    // (a fingerprint for paging cursors).
     readonly BuildState: GraphBuildState;
     readonly BuildStateChanged: Signal<GraphBuildState>;
     readonly GraphRevision: number;

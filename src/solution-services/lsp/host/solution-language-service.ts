@@ -528,16 +528,24 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
         // warmup first so a switch landing before the initial Build cannot race it (and let
         // a stale assembly finish last).
         // A switch moves the build state back to Building at once, and only the job of the
-        // LATEST switch (its captured generation still current) settles it.
+        // LATEST switch (its captured generation still current) settles it. A rejected
+        // warmup must not strand the switch, so it is tolerated here and the settle runs in
+        // a finally (the switch's own rebuild still decides Ready vs Failed).
         if (this.graphBootstrapped)
         {
             const generation = ++this.switchGeneration;
             this.SetBuildState(GraphBuildState.Building);
             this.Enqueue(async () =>
             {
-                await this.warmup;
-                await this.RebuildGraphSafely();
-                this.SettleBuild(generation);
+                try
+                {
+                    await this.warmup.catch(() => undefined);
+                    await this.RebuildGraphSafely();
+                }
+                finally
+                {
+                    this.SettleBuild(generation);
+                }
             });
         }
         this.graphBootstrapped = true;
@@ -802,11 +810,30 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     }
 
     // Assign and raise the build state, a no-op when unchanged (emit only on transitions).
+    // A throwing subscriber is isolated: it must not reject the warmup / Ready, abort a
+    // switch's settle, or escape into the manager's ActiveSolution setter.
     private SetBuildState(next: GraphBuildState): void
     {
         if (next === this.buildState) return;
         this.buildState = next;
-        this.buildStateChanged.emit(next);
+        try
+        {
+            this.buildStateChanged.emit(next);
+        }
+        catch
+        {
+            // ignore: a misbehaving listener cannot corrupt the engine's build state
+        }
+    }
+
+    // After a full rebuild OUTSIDE a warmup / switch (membership, reference, on-disk
+    // change), reconcile a SETTLED state to that rebuild's outcome: Failed -> Ready when
+    // the error cleared, Ready -> Failed when it failed. Never sets Building, and is a
+    // no-op while Building (the in-flight warmup / switch settles that itself).
+    private ReconcileSettledState(): void
+    {
+        if (this.disposed || this.buildState === GraphBuildState.Building) return;
+        this.SetBuildState(this.lastGraphBuildError !== undefined ? GraphBuildState.Failed : GraphBuildState.Ready);
     }
 
     // Re-resolve a member's warm base-set and store it under its project root — the
@@ -842,6 +869,7 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
             // error so a consumer can tell the graph is stale (see LastGraphBuildError).
             this.lastGraphBuildError = error instanceof Error ? error.message : String(error);
         }
+        this.ReconcileSettledState();
     }
 
     // Assemble one SolutionGraphMember per solution member: its graph id, storage,
