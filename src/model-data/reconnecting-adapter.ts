@@ -8,6 +8,8 @@ import type { ConnectionRetryPolicy, IReconnectObserver } from "./connection-rec
  *  inner adapter to classify each thrown error (absent classifier -> Permanent, i.e. no retry). */
 export class ReconnectingAdapter implements IDataSourceAdapter
 {
+    private static readonly UnknownMessage = "unknown connection error";
+
     private inner: IDataSourceAdapter;
     private reopening: Promise<void> | undefined;
     private readonly backoff: ConnectionRetryBackoff;
@@ -48,6 +50,17 @@ export class ReconnectingAdapter implements IDataSourceAdapter
 
     public async Dispose(): Promise<void>
     {
+        if (this.reopening)
+        {
+            try
+            {
+                await this.reopening;
+            }
+            catch
+            {
+                // A failed reopen leaves the current inner in place; dispose it below.
+            }
+        }
         await this.inner.Dispose();
     }
 
@@ -56,21 +69,27 @@ export class ReconnectingAdapter implements IDataSourceAdapter
         let consecutiveTransient = 0;
         for (let attempt = 1; ; attempt++)
         {
+            const current = this.inner;
             try
             {
-                return await op(this.inner);
+                return await op(current);
             }
             catch (error)
             {
-                const kind = this.Classify(error);
+                const kind = this.Classify(current, error);
                 if (kind === ConnectionFailureKind.Permanent || attempt >= this.policy.MaxAttempts)
                 {
                     throw error;
                 }
                 this.Emit(kind, attempt, error);
-                if (kind === ConnectionFailureKind.Auth)
+                if (this.inner !== current)
                 {
-                    await this.Reopen();
+                    // Another caller already reopened to a fresh inner; just retry on it.
+                    consecutiveTransient = 0;
+                }
+                else if (kind === ConnectionFailureKind.Auth)
+                {
+                    await this.ReopenOrRethrow(error);
                     consecutiveTransient = 0;
                 }
                 else
@@ -78,7 +97,7 @@ export class ReconnectingAdapter implements IDataSourceAdapter
                     consecutiveTransient++;
                     if (consecutiveTransient >= 2)
                     {
-                        await this.Reopen();
+                        await this.ReopenOrRethrow(error);
                     }
                 }
                 await this.sleep(this.backoff.Next(attempt));
@@ -86,9 +105,22 @@ export class ReconnectingAdapter implements IDataSourceAdapter
         }
     }
 
-    private Classify(error: unknown): ConnectionFailureKind
+    private async ReopenOrRethrow(error: unknown): Promise<void>
     {
-        const classify = this.inner.ClassifyFailure?.bind(this.inner);
+        try
+        {
+            await this.Reopen();
+        }
+        catch
+        {
+            // A failing reopen must not mask the operation failure that triggered it.
+            throw error;
+        }
+    }
+
+    private Classify(current: IDataSourceAdapter, error: unknown): ConnectionFailureKind
+    {
+        const classify = current.ClassifyFailure?.bind(current);
         return classify ? classify(error) : ConnectionFailureKind.Permanent;
     }
 
@@ -125,7 +157,7 @@ export class ReconnectingAdapter implements IDataSourceAdapter
         {
             return;
         }
-        const message = error instanceof Error ? error.message : String(error);
+        const message = error instanceof Error ? error.message : ReconnectingAdapter.UnknownMessage;
         this.observer.OnReconnect({ Connector: this.connector, Kind: kind, Attempt: attempt, Message: message });
     }
 }

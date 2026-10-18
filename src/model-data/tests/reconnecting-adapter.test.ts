@@ -15,12 +15,15 @@ class TaggedError extends Error
     }
 }
 
-type ScriptedAction = { Throw: ConnectionFailureKind; Message?: string } | { Return: unknown };
+type ScriptedAction =
+    | { Throw: ConnectionFailureKind; Message?: string; Detail?: string; Defer?: Promise<void> }
+    | { Return: unknown };
 
 class ScriptedAdapter implements IDataSourceAdapter
 {
     private static readonly DefaultMessage = "scripted failure";
     private static readonly ExhaustedMessage = "script exhausted";
+    private static readonly DetailKey = "Detail";
 
     public DisposeCount = 0;
     public CanTransact = false;
@@ -63,7 +66,16 @@ class ScriptedAdapter implements IDataSourceAdapter
         }
         if ("Throw" in action)
         {
-            throw new TaggedError(action.Message ?? ScriptedAdapter.DefaultMessage, action.Throw);
+            if (action.Defer)
+            {
+                await action.Defer;
+            }
+            const error = new TaggedError(action.Message ?? ScriptedAdapter.DefaultMessage, action.Throw);
+            if (action.Detail)
+            {
+                (error as unknown as Record<string, unknown>)[ScriptedAdapter.DetailKey] = action.Detail;
+            }
+            throw error;
         }
         return action.Return;
     }
@@ -78,8 +90,16 @@ class ReconnectingAdapterFixture
     public static readonly Secret = "s3cr3t-token-xyz";
     public static readonly ConnectorName = "orders";
     public static readonly NoMoreMessage = "no more adapters";
+    public static readonly BadSql = "bad sql";
+    public static readonly LastOne = "last one";
+    public static readonly ConnectionReset = "connection reset";
+    public static readonly AuthRejected = "auth rejected";
+    public static readonly SecondTransient = "second transient";
+    public static readonly ConflictKey = "a";
+    public static readonly ConflictReason = "stale";
 
     public ReopenCount = 0;
+    public ReopenGate: Promise<void> | undefined;
     public readonly Reopened: ScriptedAdapter[];
 
     public constructor(reopened: ScriptedAdapter[])
@@ -90,6 +110,10 @@ class ReconnectingAdapterFixture
     public Reopen = async (): Promise<IDataSourceAdapter> =>
     {
         this.ReopenCount++;
+        if (this.ReopenGate)
+        {
+            await this.ReopenGate;
+        }
         await new Promise<void>((resolve) => setImmediate(resolve));
         const next = this.Reopened.shift();
         if (!next)
@@ -114,7 +138,15 @@ class ReconnectingAdapterFixture
 
     public static Conflict(): WriteResult
     {
-        return { Applied: 0, Failures: [{ Key: "a", Kind: WriteFailureKind.Conflict, Reason: "stale" }] };
+        return {
+            Applied: 0,
+            Failures: [{ Key: ReconnectingAdapterFixture.ConflictKey, Kind: WriteFailureKind.Conflict, Reason: ReconnectingAdapterFixture.ConflictReason }],
+        };
+    }
+
+    public static Pattern(text: string): RegExp
+    {
+        return new RegExp(text);
     }
 }
 
@@ -147,13 +179,14 @@ test("an auth failure reopens (re-resolves) then retries", async () =>
     assert.equal(rows, ReconnectingAdapterFixture.Rows);
     assert.equal(fixture.ReopenCount, 1);
     assert.equal(inner1.DisposeCount, 1);
+    assert.equal(inner2.DisposeCount, 0);
 });
 
 test("a permanent error rethrows immediately with no retry or reopen", async () =>
 {
-    const inner1 = new ScriptedAdapter([{ Throw: ConnectionFailureKind.Permanent, Message: "bad sql" }]);
+    const inner1 = new ScriptedAdapter([{ Throw: ConnectionFailureKind.Permanent, Message: ReconnectingAdapterFixture.BadSql }]);
     const fixture = new ReconnectingAdapterFixture([]);
-    await assert.rejects(() => fixture.Build(inner1).Query(ReconnectingAdapterFixture.Request), /bad sql/);
+    await assert.rejects(() => fixture.Build(inner1).Query(ReconnectingAdapterFixture.Request), ReconnectingAdapterFixture.Pattern(ReconnectingAdapterFixture.BadSql));
     assert.equal(fixture.ReopenCount, 0);
     assert.equal(inner1.DisposeCount, 0);
 });
@@ -161,9 +194,9 @@ test("a permanent error rethrows immediately with no retry or reopen", async () 
 test("attempts exhausted rethrows the last error", async () =>
 {
     const inner1 = new ScriptedAdapter([{ Throw: ConnectionFailureKind.Transient }, { Throw: ConnectionFailureKind.Transient }]);
-    const inner2 = new ScriptedAdapter([{ Throw: ConnectionFailureKind.Transient, Message: "last one" }, { Return: ReconnectingAdapterFixture.Rows }]);
+    const inner2 = new ScriptedAdapter([{ Throw: ConnectionFailureKind.Transient, Message: ReconnectingAdapterFixture.LastOne }, { Return: ReconnectingAdapterFixture.Rows }]);
     const fixture = new ReconnectingAdapterFixture([inner2]);
-    await assert.rejects(() => fixture.Build(inner1).Query(ReconnectingAdapterFixture.Request), /last one/);
+    await assert.rejects(() => fixture.Build(inner1).Query(ReconnectingAdapterFixture.Request), ReconnectingAdapterFixture.Pattern(ReconnectingAdapterFixture.LastOne));
     assert.equal(fixture.ReopenCount, 1);
     assert.equal(inner2.DisposeCount, 0);
 });
@@ -191,8 +224,6 @@ test("Apply retries a thrown transient and returns the reopened result unaltered
 test("CanTransact/CanVersion reflect the current inner after a reopen", async () =>
 {
     const inner1 = new ScriptedAdapter([{ Throw: ConnectionFailureKind.Transient }, { Throw: ConnectionFailureKind.Transient }]);
-    inner1.CanTransact = false;
-    inner1.CanVersion = false;
     const inner2 = new ScriptedAdapter([{ Return: ReconnectingAdapterFixture.Rows }]);
     inner2.CanTransact = true;
     inner2.CanVersion = true;
@@ -217,13 +248,17 @@ test("concurrent calls during a reopen trigger exactly one reopen", async () =>
     assert.equal(results[0], ReconnectingAdapterFixture.Rows);
     assert.equal(results[1], ReconnectingAdapterFixture.Rows);
     assert.equal(fixture.ReopenCount, 1);
+    assert.equal(inner2.DisposeCount, 0);
 });
 
 test("a reconnect event carries the connector, kind, attempt and message but no secret", async () =>
 {
     const events: ReconnectEvent[] = [];
     const observer: IReconnectObserver = { OnReconnect: (event) => { events.push(event); } };
-    const inner = new ScriptedAdapter([{ Throw: ConnectionFailureKind.Transient, Message: "connection reset" }, { Return: ReconnectingAdapterFixture.Rows }]);
+    const inner = new ScriptedAdapter([
+        { Throw: ConnectionFailureKind.Transient, Message: ReconnectingAdapterFixture.ConnectionReset, Detail: ReconnectingAdapterFixture.Secret },
+        { Return: ReconnectingAdapterFixture.Rows },
+    ]);
     const fixture = new ReconnectingAdapterFixture([]);
     await fixture.Build(inner, observer).Query(ReconnectingAdapterFixture.Request);
     assert.equal(events.length, 1);
@@ -231,6 +266,76 @@ test("a reconnect event carries the connector, kind, attempt and message but no 
     assert.equal(event.Connector, ReconnectingAdapterFixture.ConnectorName);
     assert.equal(event.Kind, ConnectionFailureKind.Transient);
     assert.ok(event.Attempt >= 1);
-    assert.equal(event.Message, "connection reset");
+    assert.equal(event.Message, ReconnectingAdapterFixture.ConnectionReset);
     assert.ok(!JSON.stringify(events).includes(ReconnectingAdapterFixture.Secret));
+});
+
+test("a caller whose op was in flight on a stale inner retries on the fresh one without a second reopen", async () =>
+{
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const inner1 = new ScriptedAdapter([
+        { Throw: ConnectionFailureKind.Transient },
+        { Throw: ConnectionFailureKind.Transient, Defer: gate },
+        { Throw: ConnectionFailureKind.Transient },
+    ]);
+    const inner2 = new ScriptedAdapter([{ Return: ReconnectingAdapterFixture.Rows }], true);
+    const fixture = new ReconnectingAdapterFixture([inner2]);
+    const adapter = fixture.Build(inner1);
+    const first = adapter.Query(ReconnectingAdapterFixture.Request);
+    const second = adapter.Query(ReconnectingAdapterFixture.Request);
+    assert.equal(await first, ReconnectingAdapterFixture.Rows);
+    release();
+    assert.equal(await second, ReconnectingAdapterFixture.Rows);
+    assert.equal(fixture.ReopenCount, 1);
+    assert.equal(inner1.DisposeCount, 1);
+    assert.equal(inner2.DisposeCount, 0);
+});
+
+test("a failing reopen surfaces the original transient error", async () =>
+{
+    const inner1 = new ScriptedAdapter([
+        { Throw: ConnectionFailureKind.Transient },
+        { Throw: ConnectionFailureKind.Transient, Message: ReconnectingAdapterFixture.SecondTransient },
+    ]);
+    const fixture = new ReconnectingAdapterFixture([]);
+    await assert.rejects(() => fixture.Build(inner1).Query(ReconnectingAdapterFixture.Request), ReconnectingAdapterFixture.Pattern(ReconnectingAdapterFixture.SecondTransient));
+    assert.equal(fixture.ReopenCount, 1);
+});
+
+test("a failing reopen surfaces the original auth error", async () =>
+{
+    const inner1 = new ScriptedAdapter([{ Throw: ConnectionFailureKind.Auth, Message: ReconnectingAdapterFixture.AuthRejected }]);
+    const fixture = new ReconnectingAdapterFixture([]);
+    await assert.rejects(() => fixture.Build(inner1).Query(ReconnectingAdapterFixture.Request), ReconnectingAdapterFixture.Pattern(ReconnectingAdapterFixture.AuthRejected));
+});
+
+test("Dispose during an in-flight reopen disposes the newly installed inner", async () =>
+{
+    let release!: () => void;
+    const inner1 = new ScriptedAdapter([{ Throw: ConnectionFailureKind.Transient }, { Throw: ConnectionFailureKind.Transient }]);
+    const inner2 = new ScriptedAdapter([{ Return: ReconnectingAdapterFixture.Rows }]);
+    const fixture = new ReconnectingAdapterFixture([inner2]);
+    fixture.ReopenGate = new Promise<void>((resolve) => { release = resolve; });
+    const adapter = fixture.Build(inner1);
+    const query = adapter.Query(ReconnectingAdapterFixture.Request);
+    while (fixture.ReopenCount === 0)
+    {
+        await new Promise<void>((resolve) => setImmediate(resolve));
+    }
+    const dispose = adapter.Dispose();
+    release();
+    await Promise.all([query, dispose]);
+    assert.equal(inner1.DisposeCount, 1);
+    assert.equal(inner2.DisposeCount, 1);
+});
+
+test("repeated auth failures are bounded by MaxAttempts", async () =>
+{
+    const inner1 = new ScriptedAdapter([{ Throw: ConnectionFailureKind.Auth }]);
+    const inner2 = new ScriptedAdapter([{ Throw: ConnectionFailureKind.Auth }]);
+    const inner3 = new ScriptedAdapter([{ Throw: ConnectionFailureKind.Auth, Message: ReconnectingAdapterFixture.AuthRejected }]);
+    const fixture = new ReconnectingAdapterFixture([inner2, inner3]);
+    await assert.rejects(() => fixture.Build(inner1).Query(ReconnectingAdapterFixture.Request), ReconnectingAdapterFixture.Pattern(ReconnectingAdapterFixture.AuthRejected));
+    assert.equal(fixture.ReopenCount, ReconnectingAdapterFixture.Policy.MaxAttempts - 1);
 });
