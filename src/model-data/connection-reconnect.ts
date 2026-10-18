@@ -27,6 +27,7 @@ export class ConnectionRetryBackoff
         this.random = random;
     }
 
+    /** Backoff delay in ms for a retry; `attempt` is 1-based (the first retry is attempt 1). */
     public Next(attempt: number): number
     {
         const raw = this.policy.InitialDelayMs * Math.pow(this.policy.Factor, Math.max(0, attempt - 1));
