@@ -107,6 +107,11 @@ export class Literal extends Expression
         super();
     }
 
+    public get Value(): Scalar | null
+    {
+        return this.value;
+    }
+
     public Evaluate(): CypherValue
     {
         return this.value === null ? NullValue.Instance : new ScalarValue(this.value);
@@ -206,6 +211,21 @@ export class Comparison extends Expression
         super();
     }
 
+    public get Left(): Expression
+    {
+        return this.left;
+    }
+
+    public get Op(): ComparisonOp
+    {
+        return this.op;
+    }
+
+    public get Right(): Expression
+    {
+        return this.right;
+    }
+
     public Evaluate(ctx: EvalContext): CypherValue
     {
         const l = this.left.Evaluate(ctx);
@@ -266,6 +286,16 @@ export class BooleanExpression extends Expression
         super();
     }
 
+    public get Op(): BooleanOp
+    {
+        return this.op;
+    }
+
+    public get Operands(): readonly Expression[]
+    {
+        return this.operands;
+    }
+
     public Evaluate(ctx: EvalContext): CypherValue
     {
         switch (this.op)
@@ -317,6 +347,16 @@ export class IsNullExpression extends Expression
         super();
     }
 
+    public get Operand(): Expression
+    {
+        return this.operand;
+    }
+
+    public get Negated(): boolean
+    {
+        return this.negated;
+    }
+
     public Evaluate(ctx: EvalContext): CypherValue
     {
         const isNull = this.operand.Evaluate(ctx) instanceof NullValue;
@@ -356,6 +396,16 @@ export class InExpression extends Expression
     constructor(private readonly operand: Expression, private readonly list: readonly Expression[])
     {
         super();
+    }
+
+    public get Operand(): Expression
+    {
+        return this.operand;
+    }
+
+    public get List(): readonly Expression[]
+    {
+        return this.list;
     }
 
     public Evaluate(ctx: EvalContext): CypherValue
@@ -404,6 +454,21 @@ export class ArithmeticExpression extends Expression
     constructor(private readonly left: Expression, private readonly op: ArithmeticOp, private readonly right: Expression)
     {
         super();
+    }
+
+    public get Left(): Expression
+    {
+        return this.left;
+    }
+
+    public get Op(): ArithmeticOp
+    {
+        return this.op;
+    }
+
+    public get Right(): Expression
+    {
+        return this.right;
     }
 
     public Evaluate(ctx: EvalContext): CypherValue
@@ -467,6 +532,11 @@ export class UnaryMinus extends Expression
         super();
     }
 
+    public get Operand(): Expression
+    {
+        return this.operand;
+    }
+
     public Evaluate(ctx: EvalContext): CypherValue
     {
         const v = this.operand.Evaluate(ctx);
@@ -509,6 +579,11 @@ export class ListLiteral extends Expression
         super();
     }
 
+    public get Items(): readonly Expression[]
+    {
+        return this.items;
+    }
+
     public Evaluate(ctx: EvalContext): CypherValue
     {
         return new ListValue(this.items.map((i) => i.Evaluate(ctx)));
@@ -547,6 +622,11 @@ export class MapLiteral extends Expression
     constructor(private readonly entries: ReadonlyMap<string, Expression>)
     {
         super();
+    }
+
+    public get Entries(): ReadonlyMap<string, Expression>
+    {
+        return this.entries;
     }
 
     public Evaluate(ctx: EvalContext): CypherValue
@@ -590,6 +670,16 @@ export class IndexAccess extends Expression
     constructor(private readonly target: Expression, private readonly index: Expression)
     {
         super();
+    }
+
+    public get Target(): Expression
+    {
+        return this.target;
+    }
+
+    public get Index(): Expression
+    {
+        return this.index;
     }
 
     public Evaluate(ctx: EvalContext): CypherValue

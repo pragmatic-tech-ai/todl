@@ -105,12 +105,19 @@ export class CypherLexer
     {
         this.advance(1); // opening quote
         let value = "";
-        while (this.pos < this.source.length && this.current() !== CypherLexer.Quote)
+        for (;;)
         {
-            value += this.current();
-            this.advance(1);
+            while (this.pos < this.source.length && this.current() !== CypherLexer.Quote)
+            {
+                value += this.current();
+                this.advance(1);
+            }
+            if (this.pos >= this.source.length) throw new CypherSyntaxError(CypherLexer.UnterminatedString, line, column);
+            // A doubled quote is an escaped quote inside the literal (SQL style); backslash and newline stay literal.
+            if (this.source.charAt(this.pos + 1) !== CypherLexer.Quote) break;
+            value += CypherLexer.Quote;
+            this.advance(2);
         }
-        if (this.pos >= this.source.length) throw new CypherSyntaxError(CypherLexer.UnterminatedString, line, column);
         this.advance(1); // closing quote
         return new Token(TokenKind.String, value, line, column);
     }

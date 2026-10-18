@@ -3,6 +3,7 @@ export type { PlannerOptions } from "./planner.js";
 export { CypherResult } from "./result.js";
 export type { CypherResultDto } from "./result.js";
 export { CypherParser } from "./parser.js";
+export { CypherUnparser } from "./unparser.js";
 export { CypherQuery, Pattern, Expr, Return, NodeBuilder, ExprBuilder, Fn, Sort, Hops } from "./fluent.js";
 export type { ExprArg } from "./fluent.js";
 export { CypherValue, ScalarValue, NullValue, NodeValue } from "./values.js";

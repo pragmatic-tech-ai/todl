@@ -3,6 +3,7 @@ import { CypherSemanticError } from "./errors.js";
 import { RelDirection, ComparisonOp, ArithmeticOp } from "./enums.js";
 import { NodePattern, RelPattern, PatternPath } from "./patterns.js";
 import { CypherQueryModel, MatchClause, WhereClause, ProjectionClause, QueryPart, ReturnItem, ReadingClause, UnwindClause, SortItem } from "./query-model.js";
+import { CypherUnparser } from "./unparser.js";
 import { Expression, Parameter, VariableRef, PropertyAccess, Literal, Comparison, FunctionCall, ListLiteral, MapLiteral, IndexAccess, ArithmeticExpression } from "./expressions.js";
 
 // Variable-length relationship bounds.
@@ -457,6 +458,12 @@ export class CypherQuery
     {
         if (this.projection === undefined || !this.projection.IsReturn) throw new Error(CypherQuery.MissingReturnMessage);
         return new CypherQueryModel([...this.parts, new QueryPart([...this.reading], this.projection.Build())]);
+    }
+
+    // Renders this query as Cypher text the parser re-accepts, so it can travel over the wire.
+    public ToCypherText(): string
+    {
+        return new CypherUnparser().Text(this.ToModel());
     }
 
     private AddReading(clause: ReadingClause): CypherQuery

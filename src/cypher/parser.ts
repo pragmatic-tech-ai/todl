@@ -477,6 +477,11 @@ export class CypherParser
 
     private parseScalarLiteral(): Scalar
     {
+        if (this.accept(TokenKind.Dash))
+        {
+            // A leading minus on a numeric literal (property maps and IN lists take scalar literals only).
+            return -Number(this.expect(TokenKind.Number).Text);
+        }
         const t = this.peek();
         if (t.Kind === TokenKind.String)
         {
