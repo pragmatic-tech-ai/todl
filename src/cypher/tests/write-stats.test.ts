@@ -76,9 +76,9 @@ describe("NodeRefValue", () =>
     {
         const ref = new NodeRefValue("n1");
         assert.equal(ref.Id, "n1");
-        assert.equal(ref.GroupKey(), "node:n1");
+        assert.equal(ref.GroupKey(), `${NodeValue.GroupKeyPrefix}n1`);
+        assert.equal(new NodeRefValue("x").GroupKey(), "node:x");
         assert.throws(() => ref.ToDto(), (e: unknown) => e instanceof CypherWriteError && /unresolved node reference/.test(e.message));
-        assert.equal(NodeValue.name, "NodeValue");
     });
 });
 

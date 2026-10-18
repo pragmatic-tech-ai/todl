@@ -2,8 +2,8 @@ import type { Scalar } from "../manifest/logical.js";
 import type { IInstanceMirror } from "../manifest/reflection/reflection.js";
 import type { EntityReader, EntityHost } from "../reflection-client/index.js";
 import { ReflectedEntity, MirrorReader } from "../reflection-client/index.js";
-import { CypherWriteError } from "./errors.js";
 import { Snapshot, type MirrorSnapshot } from "../graph-api/index.js";
+import { CypherWriteError } from "./errors.js";
 
 export type CypherValueDto = MirrorSnapshot | Scalar | null | CypherValueDto[] | { [k: string]: CypherValueDto };
 
@@ -168,11 +168,6 @@ export class NodeRefValue extends CypherValue
     public get Id(): string
     {
         return this.id;
-    }
-
-    public Equals(other: CypherValue): boolean
-    {
-        return this.GroupKey() === other.GroupKey();
     }
 
     public ToDto(): CypherValueDto
