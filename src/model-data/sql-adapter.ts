@@ -1,5 +1,6 @@
 import { QueryCompareOp, WriteAtomicity, WriteConcurrency, WriteFailureKind, WriteOperationKind } from "./connector-plan.js";
 import type { ExternalFieldValue, ExternalRecord, QueryRequest, WriteBatch, WriteFailure, WriteOperation, WriteResult } from "./connector-plan.js";
+import { ConnectionFailureKind } from "./connection-reconnect.js";
 import type { IDataSourceAdapter } from "./data-source-adapter.js";
 import { RollbackSignal } from "./rollback-signal.js";
 import type { ISqlSession, SqlRow } from "./sql-session.js";
@@ -114,6 +115,12 @@ export class SqlAdapter implements IDataSourceAdapter
     public get CanTransact(): boolean
     {
         return this.session.Transaction !== undefined;
+    }
+
+    /** Classifies a connection/auth failure via the session; a session without a classifier is Permanent. */
+    public ClassifyFailure(error: unknown): ConnectionFailureKind
+    {
+        return this.session.ClassifyFailure?.(error) ?? ConnectionFailureKind.Permanent;
     }
 
     /** Whether this adapter can enforce an optimistic version guard: true (it emits the versioned WHERE guard). */
