@@ -4,7 +4,7 @@ import { ConnectionFailureKind } from "../connection-reconnect.js";
 import type { ConnectionRetryPolicy, IReconnectObserver, ReconnectEvent } from "../connection-reconnect.js";
 import { WriteFailureKind } from "../connector-plan.js";
 import type { ExternalRecord, QueryRequest, WriteBatch, WriteResult } from "../connector-plan.js";
-import type { IDataSourceAdapter } from "../data-source-adapter.js";
+import type { IDataSourceAdapter, PageQuery, PageSlice } from "../data-source-adapter.js";
 import { ReconnectingAdapter } from "../reconnecting-adapter.js";
 
 class TaggedError extends Error
@@ -58,7 +58,7 @@ class ScriptedAdapter implements IDataSourceAdapter
         return error instanceof TaggedError ? error.Kind : ConnectionFailureKind.Transient;
     }
 
-    private async Next(): Promise<unknown>
+    protected async Next(): Promise<unknown>
     {
         const action = this.repeatLast && this.actions.length === 1 ? this.actions[0] : this.actions.shift();
         if (!action)
@@ -83,6 +83,16 @@ class ScriptedAdapter implements IDataSourceAdapter
             throw error;
         }
         return action.Return;
+    }
+}
+
+class PagingScriptedAdapter extends ScriptedAdapter
+{
+    public CanPage = true;
+
+    public async QueryPage(_request: QueryRequest, _page: PageQuery): Promise<PageSlice>
+    {
+        return (await this.Next()) as PageSlice;
     }
 }
 
@@ -401,4 +411,37 @@ test("an immediate permanent failure emits no events", async () =>
     const fixture = new ReconnectingAdapterFixture([]);
     await assert.rejects(() => fixture.Build(inner, observer).Query(ReconnectingAdapterFixture.Request), ReconnectingAdapterFixture.Pattern(ReconnectingAdapterFixture.BadSql));
     assert.equal(events.length, 0);
+});
+
+test("CanPage forwards the inner value and is false when the inner has none", () =>
+{
+    const fixture = new ReconnectingAdapterFixture([]);
+    assert.equal(fixture.Build(new PagingScriptedAdapter([])).CanPage, true);
+    assert.equal(fixture.Build(new ScriptedAdapter([])).CanPage, false);
+});
+
+test("QueryPage delegates to the inner and returns its slice", async () =>
+{
+    const slice: PageSlice = { Records: ReconnectingAdapterFixture.Rows, NextAfter: "k1" };
+    const fixture = new ReconnectingAdapterFixture([]);
+    const result = await fixture.Build(new PagingScriptedAdapter([{ Return: slice }])).QueryPage(ReconnectingAdapterFixture.Request, { Limit: 1 });
+    assert.equal(result, slice);
+});
+
+test("QueryPage reopens on auth failure and the reopened inner serves the page", async () =>
+{
+    const slice: PageSlice = { Records: ReconnectingAdapterFixture.Rows };
+    const fixture = new ReconnectingAdapterFixture([new PagingScriptedAdapter([{ Return: slice }])]);
+    const wrapper = fixture.Build(new PagingScriptedAdapter([{ Throw: ConnectionFailureKind.Auth }]));
+    const result = await wrapper.QueryPage(ReconnectingAdapterFixture.Request, { Limit: 1 });
+    assert.equal(result, slice);
+    assert.equal(fixture.ReopenCount, 1);
+});
+
+test("QueryPage over an inner without QueryPage throws the unsupported message", async () =>
+{
+    const fixture = new ReconnectingAdapterFixture([]);
+    await assert.rejects(
+        fixture.Build(new ScriptedAdapter([])).QueryPage(ReconnectingAdapterFixture.Request, { Limit: 1 }),
+        { message: "inner adapter does not support paged reads" });
 });

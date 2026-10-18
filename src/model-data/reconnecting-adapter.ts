@@ -1,5 +1,5 @@
 import type { QueryRequest, ExternalRecord, WriteBatch, WriteResult } from "./connector-plan.js";
-import type { IDataSourceAdapter } from "./data-source-adapter.js";
+import type { IDataSourceAdapter, PageQuery, PageSlice } from "./data-source-adapter.js";
 import { ConnectionFailureKind, ConnectionRetryBackoff } from "./connection-reconnect.js";
 import type { ConnectionRetryPolicy, IReconnectObserver } from "./connection-reconnect.js";
 
@@ -8,6 +8,7 @@ import type { ConnectionRetryPolicy, IReconnectObserver } from "./connection-rec
  *  inner adapter to classify each thrown error (absent classifier -> Permanent, i.e. no retry). */
 export class ReconnectingAdapter implements IDataSourceAdapter
 {
+    private static readonly PagingUnsupportedMessage = "inner adapter does not support paged reads";
     private static readonly UnknownMessage = "unknown connection error";
     private static readonly UserInfoPattern = /\/\/[^/@\s]+@/g;
     private static readonly UserInfoRedaction = "//<redacted>@";
@@ -46,9 +47,26 @@ export class ReconnectingAdapter implements IDataSourceAdapter
         return this.inner.CanVersion ?? false;
     }
 
+    public get CanPage(): boolean
+    {
+        return this.inner.CanPage ?? false;
+    }
+
     public Query(request: QueryRequest): Promise<readonly ExternalRecord[]>
     {
         return this.Run((adapter) => adapter.Query(request));
+    }
+
+    public QueryPage(request: QueryRequest, page: PageQuery): Promise<PageSlice>
+    {
+        return this.Run((adapter) =>
+        {
+            if (adapter.QueryPage === undefined)
+            {
+                throw new Error(ReconnectingAdapter.PagingUnsupportedMessage);
+            }
+            return adapter.QueryPage(request, page);
+        });
     }
 
     public Apply(batch: WriteBatch): Promise<WriteResult>
