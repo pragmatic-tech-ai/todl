@@ -40,3 +40,12 @@ test("model and version options override the defaults", () =>
 {
     assert.equal(BakerFixture.Count(BakerFixture.Draft(), { model: "custom", version: "9.9.9" }), 1);
 });
+
+test("BakeQuery returns a directly queryable IGraphQuery and Bake adapts the same recipe", () =>
+{
+    const draft = BakerFixture.Draft();
+    const query = ModelDraftBaker.BakeQuery(draft);
+    assert.deepEqual(query.InstancesOf("shop.Customer").map((m) => m.node.id), ["app.c1"]);
+    const viaAdapter = ModelDraftBaker.Bake(draft).NodesByLabel("shop.Customer").map((m) => m.node.id);
+    assert.deepEqual(viaAdapter, ["app.c1"]);
+});

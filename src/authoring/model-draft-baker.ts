@@ -1,6 +1,7 @@
 import { toJSON } from "../compiler-services/emit/json.js";
 import { FrozenGraph } from "../domain/graph.js";
 import { GraphQuery } from "../graph-api/graph-query-engine.js";
+import type { IGraphQuery } from "../graph-api/index.js";
 import { Manifest } from "../manifest/reflection/reflection.js";
 import { PackageManifestBridge } from "../solution-services/package-manager/package-manifest-bridge.js";
 import { GraphQueryAdapter, type ICypherGraph } from "../cypher/graph.js";
@@ -23,6 +24,12 @@ export class ModelDraftBaker
 
     public static Bake(draft: ModelDraft, opts?: ModelDraftBakeOptions): ICypherGraph
     {
+        return new GraphQueryAdapter(ModelDraftBaker.BakeQuery(draft, opts));
+    }
+
+    /** The recipe up to the graph query, before the Cypher adapter wrap (e.g. for masking). */
+    public static BakeQuery(draft: ModelDraft, opts?: ModelDraftBakeOptions): IGraphQuery
+    {
         const model = opts?.model ?? draft.namespace;
         const version = opts?.version ?? ModelDraftBaker.DefaultVersion;
         const resolved = PackageManifestBridge.toResolvedJsonDocument(toJSON(draft.model), model, version, []);
@@ -31,6 +38,6 @@ export class ModelDraftBaker
         graph.PreRegister(manifest);
         graph.Finalize(manifest);
         if (resolved.seed !== undefined) graph.BindSeed(resolved.seed, { model, version });
-        return new GraphQueryAdapter(new GraphQuery(graph));
+        return new GraphQuery(graph);
     }
 }
