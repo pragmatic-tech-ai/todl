@@ -13,6 +13,7 @@ import type { NodeBuilder } from "../fluent.js";
 import { BooleanExpression, Comparison, IsNullExpression, InExpression, Literal, VariableRef, PropertyAccess } from "../expressions.js";
 import { BooleanOp, ComparisonOp } from "../enums.js";
 import type { ParameterValue } from "../values.js";
+import { CypherSemanticError } from "../errors.js";
 
 class RoundTripFixture
 {
@@ -225,5 +226,14 @@ describe("CypherQuery.ToCypherText round trip", () =>
         const cell = RoundTripFixture.Engine.Execute(q.ToCypherText()).Rows[0]![0]!.ToDto();
         assert.deepEqual(cell, RoundTripFixture.Engine.Execute(q).Rows[0]![0]!.ToDto());
         RoundTripFixture.Check(CypherQuery.Match(S("a").Prop("name", "it's")).Return(Return.Node("a")));
+    });
+
+    test("non-finite number literals throw by design", () =>
+    {
+        for (const n of [Number.NaN, Number.POSITIVE_INFINITY])
+        {
+            const q = CypherQuery.Unwind(Expr.List(Expr.Lit(1)), "x").Return(Return.Item(Expr.Lit(n), "n"));
+            assert.throws(() => q.ToCypherText(), CypherSemanticError);
+        }
     });
 });

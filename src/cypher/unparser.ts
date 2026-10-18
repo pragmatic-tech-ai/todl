@@ -232,6 +232,7 @@ export class CypherUnparser
         if (e instanceof MapLiteral) return this.MapText(e);
         if (e instanceof IndexAccess) return this.Expr(e.Target, Prec.Postfix) + CypherUnparser.OpenBracket + this.Expr(e.Index, Prec.Or) + CypherUnparser.CloseBracket;
         if (e instanceof FunctionCall) return this.CallText(e);
+        // Unreachable from the public fluent builder/parser (ValueLiteral is only constructed directly in tests): defensive, not a round-trip gap.
         if (e instanceof ValueLiteral) throw new CypherSemanticError(CypherUnparser.UnsupportedValueLiteral);
         throw new CypherSemanticError(e.constructor.name);
     }
