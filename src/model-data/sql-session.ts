@@ -1,3 +1,5 @@
+import type { ConnectionFailureKind } from "./connection-reconnect.js";
+
 /** One row returned by a SQL query, keyed by column name. */
 export interface SqlRow
 {
@@ -20,4 +22,7 @@ export interface ISqlSession
     Transaction?<T>(work: (tx: ISqlSession) => Promise<T>): Promise<T>;
     /** Optional: closes a pool-backed connection. In-memory/recording sessions omit it. */
     Dispose?(): Promise<void>;
+    /** Classifies a thrown driver error so the reconnecting catalog can retry/reopen. Optional so existing
+     *  fakes and the adapter-pack ABI keep compiling; absent -> every error is treated as Permanent. */
+    ClassifyFailure?(error: unknown): ConnectionFailureKind;
 }

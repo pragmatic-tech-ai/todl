@@ -1,6 +1,7 @@
 import { ServiceKey } from "@pragmatic-tech-ai/todl-runtime";
 import type { IServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
 import type { ConnectorSpec, DataSourceKind, ExternalRecord, QueryRequest, ResolvedConnection, WriteBatch, WriteResult } from "./connector-plan.js";
+import type { ConnectionFailureKind } from "./connection-reconnect.js";
 
 /** A live connection to one external data source. */
 export interface IDataSourceAdapter
@@ -15,6 +16,9 @@ export interface IDataSourceAdapter
     /** Whether this adapter can enforce an optimistic version guard. Optional for the same reason;
      *  absent -> false. */
     readonly CanVersion?: boolean;
+    /** Classifies a thrown driver error so the reconnecting catalog can retry/reopen. Optional so existing
+     *  fakes and the adapter-pack ABI keep compiling; absent -> every error is treated as Permanent. */
+    ClassifyFailure?(error: unknown): ConnectionFailureKind;
 }
 
 /** Opens adapters for one kind of data source. */
