@@ -32,6 +32,13 @@ export interface InstanceDescriptor
   refs?: ReadonlyMap<string, readonly NodeId[]>;
 }
 
+/** An opaque, deep-copied capture of a draft's mutable state (see Snapshot/Restore). */
+export interface ModelDraftState
+{
+  readonly own: TodlDocument;
+  readonly home: ReadonlyMap<NodeId, string>;
+}
+
 export class ModelDraft
 {
   private own: TodlDocument = { nodes: [], edges: [] };
@@ -178,6 +185,41 @@ export class ModelDraft
   {
     const node = this.ownNode(id);
     (node.attrs as Record<string, Scalar>)[name] = value;
+    this.invalidate();
+  }
+
+  /** Delete an attr from an OWN instance (no-op if absent). Throws for a base (frozen) or unknown id. */
+  removeField(id: NodeId, name: string): void
+  {
+    const node = this.ownNode(id);
+    delete (node.attrs as Record<string, Scalar>)[name];
+    this.invalidate();
+  }
+
+  /** True when `id` is an own (writable) instance of this draft. */
+  owns(id: NodeId): boolean
+  {
+    return !this.baseIds.has(id) && this.own.nodes.some((n) => n.id === id);
+  }
+
+  /** How many own edges touch `id` (as source or target). */
+  incidentEdgeCount(id: NodeId): number
+  {
+    return this.own.edges.filter((e) => e.from === id || e.to === id).length;
+  }
+
+  /** Deep-copy the mutable state (own delta + home map) for a later Restore. */
+  Snapshot(): ModelDraftState
+  {
+    return { own: structuredClone(this.own), home: new Map(this.home) };
+  }
+
+  /** Replace the mutable state with a prior Snapshot (the snapshot stays reusable). */
+  Restore(state: ModelDraftState): void
+  {
+    this.own = structuredClone(state.own);
+    this.home.clear();
+    for (const [id, uri] of state.home) this.home.set(id, uri);
     this.invalidate();
   }
 
