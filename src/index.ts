@@ -143,6 +143,8 @@ export type { ModelPackageOptions } from './codegen/model-package.js';
 
 export { ModelDraft, type InstanceDescriptor, type ModelDraftState } from './authoring/model-draft.js';
 export { ModelDraftWriter } from './authoring/model-draft-writer.js';
+export { ModelDraftBaker, type ModelDraftBakeOptions } from './authoring/model-draft-baker.js';
+export { SnowflakeIdGenerator, type IdGenerator } from './compiler-services/model/id-generator.js';
 
 export { TodlFileStore, type FileIO } from './authoring/file-store.js';
 export { deriveBindings, emitModelTodl, type ModelBindings } from './compiler-services/emit/todl.js';

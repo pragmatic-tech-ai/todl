@@ -2,18 +2,12 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { Severity } from "../../compiler-services/diagnostics/diagnostic.js";
 import { check } from "../../compiler-services/api.js";
-import { toJSON } from "../../compiler-services/emit/json.js";
 import { FakeIdGenerator } from "../../compiler-services/model/tests/fake-id-generator.js";
-import { FrozenGraph } from "../../domain/graph.js";
-import { GraphQuery } from "../../graph-api/graph-query-engine.js";
-import { Manifest } from "../../manifest/reflection/reflection.js";
-import { PackageManifestBridge } from "../../solution-services/package-manager/package-manifest-bridge.js";
 import { CypherEngine } from "../../cypher/engine.js";
-import { GraphQueryAdapter } from "../../cypher/graph.js";
-import type { ICypherGraph } from "../../cypher/graph.js";
 import { CypherWriteError } from "../../cypher/errors.js";
 import { NodeValue } from "../../cypher/values.js";
 import { ModelDraft } from "../model-draft.js";
+import { ModelDraftBaker } from "../model-draft-baker.js";
 import { ModelDraftWriter } from "../model-draft-writer.js";
 
 class Fixture
@@ -44,25 +38,14 @@ class Fixture
     {
         const base = check([Fixture.Meta]).model;
         this.Draft = ModelDraft.fromSource([base], Fixture.Model, { namespace: "app" });
-        this.Writer = new ModelDraftWriter(this.Draft, new FakeIdGenerator(), (d) => Fixture.Bake(d));
+        this.Writer = new ModelDraftWriter(this.Draft, new FakeIdGenerator(), (d) => ModelDraftBaker.Bake(d));
     }
 
     // The engine's read graph is fixed at construction, so each statement gets an engine over a fresh bake
     // (a host re-binds after every write the same way).
     public get Engine(): CypherEngine
     {
-        return new CypherEngine(Fixture.Bake(this.Draft), undefined, this.Writer);
-    }
-
-    public static Bake(draft: ModelDraft): ICypherGraph
-    {
-        const resolved = PackageManifestBridge.toResolvedJsonDocument(toJSON(draft.model), "shop", "1.0.0", []);
-        const manifest = Manifest.load(resolved.manifest);
-        const graph = new FrozenGraph();
-        graph.PreRegister(manifest);
-        graph.Finalize(manifest);
-        if (resolved.seed !== undefined) graph.BindSeed(resolved.seed, { model: "shop", version: "1.0.0" });
-        return new GraphQueryAdapter(new GraphQuery(graph));
+        return new CypherEngine(ModelDraftBaker.Bake(this.Draft), undefined, this.Writer);
     }
 
     public Count(label: string): number
