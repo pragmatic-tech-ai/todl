@@ -26,6 +26,7 @@ export class FederatedModelDataConnector implements IModelDataConnector
     private workingCopy: ConnectorWorkingCopy | undefined;
     private queryFilterProvider: IConnectorQueryFilterProvider | undefined;
     private resolution: ConnectorResolutionResult | undefined;
+    private lastRefreshDiagnostics: readonly Diagnostic[] = [];
 
     public constructor(private readonly plan: ModelConnectorPlan, private readonly base: TodlDocument)
     {
@@ -50,6 +51,16 @@ export class FederatedModelDataConnector implements IModelDataConnector
 
     private async Build(services: IServiceProvider): Promise<TodlDocument>
     {
+        const resolution = await this.Materialize(services);
+        this.resolution = resolution;
+        this.built = resolution.document;
+        await this.EmitAudit(services, resolution);
+        return this.built;
+    }
+
+    /** Pulls every binding and resolves into a NEW document without mutating instance state (may throw). */
+    private async Materialize(services: IServiceProvider): Promise<ConnectorResolutionResult>
+    {
         const catalog = services.getRequired(DataSourceAdapterCatalog.ServiceKey);
         const builder = new PopulationBuilder(this.base);
         for (const binding of this.plan.Bindings)
@@ -60,14 +71,38 @@ export class FederatedModelDataConnector implements IModelDataConnector
             builder.Add(binding, records);
         }
         const built = builder.Build();
-        this.resolution = new ConnectorResolutionStep().Resolve(built, builder.Sources());
-        this.built = this.resolution.document;
+        return new ConnectorResolutionStep().Resolve(built, builder.Sources());
+    }
+
+    private async EmitAudit(services: IServiceProvider, resolution: ConnectorResolutionResult): Promise<void>
+    {
         const auditSink = services.get(ResolutionAuditSinkKey);
-        if (auditSink !== undefined && this.resolution.decisions.length > 0)
+        if (auditSink !== undefined && resolution.decisions.length > 0)
         {
-            await auditSink.Record({ model: this.plan.Model, decisions: this.resolution.decisions });
+            await auditSink.Record({ model: this.plan.Model, decisions: resolution.decisions });
         }
+    }
+
+    /** In-place data refresh: re-pull every binding and resolve into a NEW document, then atomically swap
+     *  the built document + resolution, rebind the working copy (pruning vanished pending ops), and re-emit
+     *  audit. On any query/resolution failure the previous state is left intact and the error rethrows.
+     *  Adapters are reused (no catalog eviction). */
+    public async Refresh(services: IServiceProvider): Promise<TodlDocument>
+    {
+        const resolution = await this.Materialize(services); // may throw - nothing mutated yet
+        this.resolution = resolution;
+        this.built = resolution.document;
+        this.lastRefreshDiagnostics = this.workingCopy === undefined
+            ? []
+            : this.workingCopy.Rebind(resolution.document, resolution.writeTargets);
+        await this.EmitAudit(services, resolution);
         return this.built;
+    }
+
+    /** Dropped-pending-op diagnostics from the most recent Refresh (empty if no working copy / none dropped). */
+    public LastRefreshDiagnostics(): readonly Diagnostic[]
+    {
+        return this.lastRefreshDiagnostics;
     }
 
     /** Lazily creates the write-back working copy over the built document; requires a completed Prepare. */

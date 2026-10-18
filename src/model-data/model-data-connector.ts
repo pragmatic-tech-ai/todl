@@ -13,4 +13,7 @@ export interface IModelDataConnector
      * a second call after success should return the same document.
      */
     Prepare(services: IServiceProvider): Promise<TodlDocument>;
+
+    /** Optional in-place re-pull. Absent on connectors that cannot refresh (the source reports not-refreshable). */
+    Refresh?(services: IServiceProvider): Promise<TodlDocument>;
 }
