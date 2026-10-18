@@ -236,3 +236,17 @@ test("Refresh before Prepare throws NotPrepared", async () =>
     const services = FederatedTestFixture.Services(RefreshFixture.Factory());
     await assert.rejects(() => RefreshFixture.Connector().Refresh(services), /Prepare must complete before accessing connector results/);
 });
+
+test("a Refresh whose audit sink throws leaves the old built document intact", async () =>
+{
+    const events: ResolutionAuditEvent[] = [];
+    const services = AuditFixture.Services(events);
+    const connector = AuditFixture.Connector();
+    const before = await connector.Prepare(services);
+    const decisionsBefore = connector.Decisions();
+    const sinkFailure = "simulated audit sink failure";
+    services.registerInstance(ResolutionAuditSinkKey, { Record: async () => { throw new Error(sinkFailure); } });
+    await assert.rejects(() => connector.Refresh(services), /simulated audit sink failure/);
+    assert.equal(await connector.Prepare(services), before);
+    assert.equal(connector.Decisions(), decisionsBefore);
+});
