@@ -75,6 +75,7 @@ export class CypherUnparser
     private static readonly KwFalse = "FALSE";
     private static readonly Zero = "0";
     private static readonly ExponentPattern = /^(-?)(\d+)(?:\.(\d+))?e([+-]?\d+)$/;
+    private static readonly MissingSetProperty = "a property SET item requires a property name";
     private static readonly UnsupportedValueLiteral = "cannot render a bound value literal as Cypher text";
     private static readonly UnsupportedNumber = "cannot render number as Cypher text: ";
     private static readonly UnsupportedInItem = "IN list items must be scalar literals to render as Cypher text";
@@ -121,7 +122,8 @@ export class CypherUnparser
     {
         const value = this.Expr(item.Value, Prec.Or);
         if (item.Mode === SetMode.MergeMap) return `${item.Variable} ${CypherUnparser.KwPlusEq} ${value}`;
-        return `${item.Variable}${CypherUnparser.Dot}${item.Property!} ${CypherUnparser.Equals} ${value}`;
+        if (item.Property === undefined) throw new CypherSemanticError(CypherUnparser.MissingSetProperty);
+        return `${item.Variable}${CypherUnparser.Dot}${item.Property} ${CypherUnparser.Equals} ${value}`;
     }
 
     private Match(clause: MatchClause): string

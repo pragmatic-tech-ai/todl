@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { CypherParser } from "../parser.js";
 import { CypherQuery, Pattern, Expr, Return } from "../fluent.js";
 import { CypherQueryModel } from "../query-model.js";
+import { CypherSemanticError } from "../errors.js";
 
 class RoundTrip
 {
@@ -82,9 +83,58 @@ describe("cypher write fluent + unparser round-trip", () =>
         assert.equal(set.Items[0].Value.Value, "a'b");
     });
 
-    it("Set rejects a non-property target; WITH-terminated query still needs RETURN", () =>
+    it("CREATE with several anchors comma-joins the paths", () =>
     {
-        assert.throws(() => CypherQuery.Match(Pattern.Node("n")).Set(Expr.Var("n"), Expr.Lit(1)));
-        assert.throws(() => CypherQuery.Match(Pattern.Node("n")).With(Return.Node("n")).ToModel());
+        const q = CypherQuery.Create(Pattern.Node("a").Label("shop.Customer"), Pattern.Node("b").Label("shop.Order"));
+        RoundTrip.Check(q, "CREATE (a:shop.Customer), (b:shop.Order)");
+    });
+
+    it("DELETE and DETACH DELETE with several variables", () =>
+    {
+        const m = Pattern.Node("a").Label("shop.Customer");
+        const n = Pattern.Node("b").Label("shop.Order");
+        RoundTrip.Check(CypherQuery.Match(m, n).Delete("a", "b"), "MATCH (a:shop.Customer), (b:shop.Order) DELETE a, b");
+        RoundTrip.Check(CypherQuery.Match(m, n).DetachDelete("a", "b"), "MATCH (a:shop.Customer), (b:shop.Order) DETACH DELETE a, b");
+    });
+
+    it("REMOVE with several targets", () =>
+    {
+        const q = CypherQuery.Match(Pattern.Node("n").Label("shop.Customer")).Remove(Expr.Prop("n", "tier"), Expr.Prop("n", "note"));
+        RoundTrip.Check(q, "MATCH (n:shop.Customer) REMOVE n.tier, n.note");
+    });
+
+    it("a write after WITH round-trips", () =>
+    {
+        const q = CypherQuery.Match(Pattern.Node("n").Label("shop.Customer"))
+            .With(Return.Node("n"))
+            .Create(Pattern.Node("o").Label("shop.Order"));
+        RoundTrip.Check(q, "MATCH (n:shop.Customer) WITH n CREATE (o:shop.Order)");
+    });
+
+    it("Set rejects a non-property target", () =>
+    {
+        assert.throws(() => CypherQuery.Match(Pattern.Node("n")).Set(Expr.Var("n"), Expr.Lit(1)), CypherSemanticError);
+        assert.throws(() => CypherQuery.Match(Pattern.Node("n")).Set(Expr.Var("n"), Expr.Lit(1)), /property access/);
+    });
+
+    it("Remove rejects a non-property target", () =>
+    {
+        assert.throws(() => CypherQuery.Match(Pattern.Node("n")).Remove(Expr.Var("n")), CypherSemanticError);
+        assert.throws(() => CypherQuery.Match(Pattern.Node("n")).Remove(Expr.Var("n")), /property access/);
+    });
+
+    it("SetMerge rejects an empty variable", () =>
+    {
+        assert.throws(() => CypherQuery.Match(Pattern.Node("n")).SetMerge("", Expr.Map({})), CypherSemanticError);
+    });
+
+    it("Set after Return throws", () =>
+    {
+        assert.throws(() => CypherQuery.Match(Pattern.Node("n")).Return(Return.Node("n")).Set(Expr.Prop("n", "p"), Expr.Lit(1)), /no clauses may follow Return/);
+    });
+
+    it("a WITH-terminated query still needs RETURN", () =>
+    {
+        assert.throws(() => CypherQuery.Match(Pattern.Node("n")).With(Return.Node("n")).ToModel(), /requires a Return clause/);
     });
 });

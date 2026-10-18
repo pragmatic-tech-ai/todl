@@ -357,6 +357,7 @@ export class CypherQuery
     private static readonly MissingReturnMessage = "CypherQuery requires a Return clause";
     private static readonly SetTargetMessage = "Set target must be a property access (Expr.Prop)";
     private static readonly RemoveTargetMessage = "Remove targets must be property accesses (Expr.Prop)";
+    private static readonly SetVariableMessage = "SetMerge requires a non-empty variable name";
     private static readonly AfterReturnMessage = "no clauses may follow Return";
     private static readonly NoProjectionMessage = "projection modifier requires a preceding With or Return";
     private static readonly WhereNeedsMatchMessage = "Where must directly follow a Match or OptionalMatch";
@@ -410,13 +411,14 @@ export class CypherQuery
     public Set(target: ExprBuilder, value: ExprArg): CypherQuery
     {
         const access = target.Inner;
-        if (!(access instanceof PropertyAccess)) throw new Error(CypherQuery.SetTargetMessage);
+        if (!(access instanceof PropertyAccess)) throw new CypherSemanticError(CypherQuery.SetTargetMessage);
         return this.AddSetItem(new SetItem(access.Variable, access.Property, ExprBuilder.Unwrap(value), SetMode.Property));
     }
 
     // SET n += map.
     public SetMerge(variable: string, map: ExprArg): CypherQuery
     {
+        if (variable.length === 0) throw new CypherSemanticError(CypherQuery.SetVariableMessage);
         return this.AddSetItem(new SetItem(variable, undefined, ExprBuilder.Unwrap(map), SetMode.MergeMap));
     }
 
@@ -434,7 +436,7 @@ export class CypherQuery
     {
         const items = targets.map((t) =>
         {
-            if (!(t.Inner instanceof PropertyAccess)) throw new Error(CypherQuery.RemoveTargetMessage);
+            if (!(t.Inner instanceof PropertyAccess)) throw new CypherSemanticError(CypherQuery.RemoveTargetMessage);
             return t.Inner;
         });
         return this.AddClause(new RemoveClause(items));
