@@ -102,6 +102,9 @@ class ReconnectingAdapterFixture
     public static readonly SecondTransient = "second transient";
     public static readonly UnknownMessage = "unknown connection error";
     public static readonly PlainString = "a plain string";
+    public static readonly CredentialMessage = "connect ECONNREFUSED postgres://admin:s3cr3t@db.internal:5432";
+    public static readonly CredentialPassword = "s3cr3t";
+    public static readonly CredentialUserInfo = "admin:s3cr3t";
     public static readonly ConflictKey = "a";
     public static readonly ConflictReason = "stale";
 
@@ -357,4 +360,45 @@ test("a thrown non-Error value emits the generic unknown message, never the valu
     assert.equal(events.length, 1);
     assert.equal(events[0]!.Message, ReconnectingAdapterFixture.UnknownMessage);
     assert.ok(!JSON.stringify(events).includes(ReconnectingAdapterFixture.PlainString));
+});
+
+test("a reconnect event message has URL userinfo redacted", async () =>
+{
+    const events: ReconnectEvent[] = [];
+    const observer: IReconnectObserver = { OnReconnect: (event) => { events.push(event); } };
+    const inner = new ScriptedAdapter([
+        { Throw: ConnectionFailureKind.Transient, Message: ReconnectingAdapterFixture.CredentialMessage },
+        { Return: ReconnectingAdapterFixture.Rows },
+    ]);
+    const fixture = new ReconnectingAdapterFixture([]);
+    await fixture.Build(inner, observer).Query(ReconnectingAdapterFixture.Request);
+    assert.equal(events.length, 1);
+    const message = events[0]!.Message;
+    assert.ok(message.length > 0);
+    assert.ok(!message.includes(ReconnectingAdapterFixture.CredentialPassword));
+    assert.ok(!message.includes(ReconnectingAdapterFixture.CredentialUserInfo));
+});
+
+test("exhausting MaxAttempts emits a final event for the last attempt before rethrowing", async () =>
+{
+    const events: ReconnectEvent[] = [];
+    const observer: IReconnectObserver = { OnReconnect: (event) => { events.push(event); } };
+    const inner1 = new ScriptedAdapter([{ Throw: ConnectionFailureKind.Transient }, { Throw: ConnectionFailureKind.Transient }]);
+    const inner2 = new ScriptedAdapter([{ Throw: ConnectionFailureKind.Transient, Message: ReconnectingAdapterFixture.LastOne }]);
+    const fixture = new ReconnectingAdapterFixture([inner2]);
+    await assert.rejects(() => fixture.Build(inner1, observer).Query(ReconnectingAdapterFixture.Request), ReconnectingAdapterFixture.Pattern(ReconnectingAdapterFixture.LastOne));
+    const max = ReconnectingAdapterFixture.Policy.MaxAttempts;
+    assert.equal(events.length, max);
+    assert.equal(events[events.length - 1]!.Attempt, max);
+    assert.equal(events[events.length - 1]!.Message, ReconnectingAdapterFixture.LastOne);
+});
+
+test("an immediate permanent failure emits no events", async () =>
+{
+    const events: ReconnectEvent[] = [];
+    const observer: IReconnectObserver = { OnReconnect: (event) => { events.push(event); } };
+    const inner = new ScriptedAdapter([{ Throw: ConnectionFailureKind.Permanent, Message: ReconnectingAdapterFixture.BadSql }]);
+    const fixture = new ReconnectingAdapterFixture([]);
+    await assert.rejects(() => fixture.Build(inner, observer).Query(ReconnectingAdapterFixture.Request), ReconnectingAdapterFixture.Pattern(ReconnectingAdapterFixture.BadSql));
+    assert.equal(events.length, 0);
 });

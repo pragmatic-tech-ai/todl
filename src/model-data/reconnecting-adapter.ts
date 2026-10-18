@@ -9,6 +9,14 @@ import type { ConnectionRetryPolicy, IReconnectObserver } from "./connection-rec
 export class ReconnectingAdapter implements IDataSourceAdapter
 {
     private static readonly UnknownMessage = "unknown connection error";
+    private static readonly UserInfoPattern = /\/\/[^/@\s]+@/g;
+    private static readonly UserInfoRedaction = "//<redacted>@";
+
+    /** Strips URL userinfo (credentials in scheme://user:pass@host) from a driver message. */
+    private static RedactUserInfo(message: string): string
+    {
+        return message.replace(ReconnectingAdapter.UserInfoPattern, ReconnectingAdapter.UserInfoRedaction);
+    }
 
     private inner: IDataSourceAdapter;
     private reopening: Promise<void> | undefined;
@@ -77,8 +85,14 @@ export class ReconnectingAdapter implements IDataSourceAdapter
             catch (error)
             {
                 const kind = this.Classify(current, error);
-                if (kind === ConnectionFailureKind.Permanent || attempt >= this.policy.MaxAttempts)
+                if (kind === ConnectionFailureKind.Permanent)
                 {
+                    throw error;
+                }
+                if (attempt >= this.policy.MaxAttempts)
+                {
+                    // The decisive "gave up" event: observable before the original error is rethrown.
+                    this.Emit(kind, attempt, error);
                     throw error;
                 }
                 this.Emit(kind, attempt, error);
@@ -157,7 +171,7 @@ export class ReconnectingAdapter implements IDataSourceAdapter
         {
             return;
         }
-        const message = error instanceof Error ? error.message : ReconnectingAdapter.UnknownMessage;
+        const message = error instanceof Error ? ReconnectingAdapter.RedactUserInfo(error.message) : ReconnectingAdapter.UnknownMessage;
         this.observer.OnReconnect({ Connector: this.connector, Kind: kind, Attempt: attempt, Message: message });
     }
 }
