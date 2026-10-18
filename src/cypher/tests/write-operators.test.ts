@@ -240,16 +240,24 @@ describe("cypher write operators", () =>
         assert.throws(() => planner.Plan(new CypherParser("CREATE (n:Customer)").Parse()), CypherSemanticError);
     });
 
-    test("CREATE rejects undirected, untyped and variable-length relationships at plan time, before any write", () =>
+    test("CREATE rejects undirected, untyped and variable-length relationships at plan time, each with its own message", () =>
     {
-        for (const q of [
-            "MATCH (a:shop.Customer) CREATE (a)-[:orders]-(o:shop.Order)",
-            "MATCH (a:shop.Customer) CREATE (a)-->(o:shop.Order)",
-            "MATCH (a:shop.Customer) CREATE (a)-[:orders*1..2]->(o:shop.Order)",
-        ])
+        const cases: [string, RegExp][] = [
+            ["MATCH (a:shop.Customer) CREATE (a)-[:orders]-(o:shop.Order)", /requires a direction/],
+            ["MATCH (a:shop.Customer) CREATE (a)-->(o:shop.Order)", /requires a type/],
+            ["MATCH (a:shop.Customer) CREATE (a)-[:orders*1..2]->(o:shop.Order)", /variable-length relationships cannot be created/],
+        ];
+        for (const [q, message] of cases)
         {
-            assert.throws(() => WriteFixture.Plan(q), CypherSemanticError, q);
+            assert.throws(() => WriteFixture.Plan(q), (e: unknown) => e instanceof CypherSemanticError && message.test(e.message), q);
         }
+    });
+
+    test("MERGE on a variable bound to a non-node value throws", () =>
+    {
+        assert.throws(
+            () => WriteFixture.Run("UNWIND [1] AS n MERGE (n:shop.Customer {name: 'Zed'})"),
+            (e: unknown) => e instanceof CypherSemanticError && /non-node/.test(e.message));
     });
 
     test("incoming-direction CREATE swaps from/to", () =>

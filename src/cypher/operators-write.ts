@@ -24,6 +24,7 @@ class WriteSupport
     public static readonly MergeMapNotMap = "SET n += requires a map";
     public static readonly NullEndpoint = "cannot create a relationship from a null node variable";
     public static readonly MergeNeedsNode = "MERGE requires a node pattern";
+    public static readonly MergeBoundNotNode = "MERGE variable is bound to a non-node value";
     public static readonly MergeBoundNull = "MERGE variable is bound to null";
 
     public static NodeId(value: CypherValue | undefined): string | undefined
@@ -141,6 +142,10 @@ export class MergeOperator implements IOperator
             if (bound instanceof NullValue) throw new CypherSemanticError(`${WriteSupport.MergeBoundNull}: "${node.Variable}"`);
             if (bound !== undefined)
             {
+                if (!(bound instanceof NodeValue || bound instanceof NodeRefValue))
+                {
+                    throw new CypherSemanticError(`${WriteSupport.MergeBoundNotNode}: "${node.Variable}"`);
+                }
                 yield row;
                 continue;
             }
