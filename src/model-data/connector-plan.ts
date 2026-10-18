@@ -273,12 +273,16 @@ export class ConnectorPlanValidator
     private static readonly UpsertReturnKey = "upsertReturn";
     private static readonly DeleteIdTypeKey = "deleteIdType";
     private static readonly DeleteIdArgKey = "deleteIdArg";
-    // The four single-identifier keys; upsertReturn (a space/comma list) is validated field-by-field.
+    private static readonly UpsertMutationKey = "upsertMutation";
+    private static readonly DeleteMutationKey = "deleteMutation";
+    // The single-identifier keys (type/arg names + mutation names); upsertReturn (a space/comma list) is validated field-by-field.
     private static readonly GraphQlIdentifierKeys: readonly string[] = [
         ConnectorPlanValidator.UpsertInputTypeKey,
         ConnectorPlanValidator.UpsertInputArgKey,
         ConnectorPlanValidator.DeleteIdTypeKey,
         ConnectorPlanValidator.DeleteIdArgKey,
+        ConnectorPlanValidator.UpsertMutationKey,
+        ConnectorPlanValidator.DeleteMutationKey,
     ];
     // GraphQL identifier rule, mirrored from the host's GraphQlName.Pattern (no upward import).
     private static readonly GraphQlNamePattern = /^[_A-Za-z][_0-9A-Za-z]*$/;

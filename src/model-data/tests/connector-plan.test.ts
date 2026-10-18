@@ -170,15 +170,19 @@ class GraphQlWriteConfigHarness
 test("an invalid GraphQL identifier (input type / arg / return field) is a plan-build error", () =>
 {
     assert.throws(() => ConnectorPlanValidator.Validate(GraphQlWriteConfigHarness.Plan({ upsertInputType: "not a type!" })),
-        /not a valid GraphQL identifier/);
+        /upsertInputType.*not a valid GraphQL identifier/);
     assert.throws(() => ConnectorPlanValidator.Validate(GraphQlWriteConfigHarness.Plan({ deleteIdType: "1Bad" })),
-        /not a valid GraphQL identifier/);
+        /deleteIdType.*not a valid GraphQL identifier/);
     assert.throws(() => ConnectorPlanValidator.Validate(GraphQlWriteConfigHarness.Plan({ upsertInputArg: "has-dash" })),
-        /not a valid GraphQL identifier/);
+        /upsertInputArg.*not a valid GraphQL identifier/);
     assert.throws(() => ConnectorPlanValidator.Validate(GraphQlWriteConfigHarness.Plan({ deleteIdArg: "" })),
-        /not a valid GraphQL identifier/);
+        /deleteIdArg.*not a valid GraphQL identifier/);
     assert.throws(() => ConnectorPlanValidator.Validate(GraphQlWriteConfigHarness.Plan({ upsertReturn: "id total$" })),
-        /not a valid GraphQL identifier/);
+        /upsertReturn.*not a valid GraphQL identifier/);
+    assert.throws(() => ConnectorPlanValidator.Validate(GraphQlWriteConfigHarness.Plan({ upsertMutation: "upsert Customer" })),
+        /upsertMutation.*not a valid GraphQL identifier/);
+    assert.throws(() => ConnectorPlanValidator.Validate(GraphQlWriteConfigHarness.Plan({ deleteMutation: "delete-it" })),
+        /deleteMutation.*not a valid GraphQL identifier/);
 });
 
 test("valid GraphQL write-config identifiers pass plan-build", () =>
@@ -186,6 +190,7 @@ test("valid GraphQL write-config identifiers pass plan-build", () =>
     assert.doesNotThrow(() => ConnectorPlanValidator.Validate(GraphQlWriteConfigHarness.Plan({
         upsertInputType: "OrderInput", upsertInputArg: "input", upsertReturn: "id total",
         deleteIdType: "ID", deleteIdArg: "id",
+        upsertMutation: "upsertOrder", deleteMutation: "deleteOrder",
     })));
 });
 
