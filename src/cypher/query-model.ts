@@ -1,3 +1,4 @@
+import type { SetMode } from "./enums.js";
 import type { Expression, PropertyAccess } from "./expressions.js";
 import type { PatternPath } from "./patterns.js";
 
@@ -85,12 +86,6 @@ export class MergeClause extends WritingClause
     {
         return WritingPatterns.Variables([this.Pattern]);
     }
-}
-
-export enum SetMode
-{
-    Property,
-    MergeMap,
 }
 
 export class SetItem

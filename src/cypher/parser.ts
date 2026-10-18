@@ -1,12 +1,12 @@
 import type { Scalar } from "../manifest/logical.js";
 import { CypherLexer, Token } from "./lexer.js";
-import { TokenKind, RelDirection, ComparisonOp, BooleanOp, ArithmeticOp } from "./enums.js";
+import { TokenKind, SetMode, RelDirection, ComparisonOp, BooleanOp, ArithmeticOp } from "./enums.js";
 import { CypherSyntaxError } from "./errors.js";
 import { NodePattern, RelPattern, PatternPath } from "./patterns.js";
 import {
     CypherQueryModel, MatchClause, WhereClause, ReadingClause,
     ProjectionClause, QueryPart, UnwindClause, SortItem, ReturnItem,
-    CreateClause, MergeClause, SetClause, SetItem, SetMode, DeleteClause, RemoveClause, WritingClause,
+    CreateClause, MergeClause, SetClause, SetItem, DeleteClause, RemoveClause, WritingClause,
 } from "./query-model.js";
 import {
     Expression, VariableRef, PropertyAccess, Literal, Parameter,
@@ -175,7 +175,7 @@ export class CypherParser
         const variable = this.expect(TokenKind.Identifier).Text;
         if (this.accept(TokenKind.PlusEq)) return new SetItem(variable, undefined, this.parseExpression(), SetMode.MergeMap);
         this.expect(TokenKind.Dot);
-        const property = this.expect(TokenKind.Identifier).Text;
+        const property = this.expectName();
         this.expect(TokenKind.Eq);
         return new SetItem(variable, property, this.parseExpression(), SetMode.Property);
     }
@@ -201,7 +201,7 @@ export class CypherParser
     {
         const variable = this.expect(TokenKind.Identifier).Text;
         this.expect(TokenKind.Dot);
-        return new PropertyAccess(variable, this.expect(TokenKind.Identifier).Text);
+        return new PropertyAccess(variable, this.expectName());
     }
 
     private parseUnwind(): UnwindClause
@@ -324,7 +324,7 @@ export class CypherParser
         {
             do
             {
-                const key = this.expect(TokenKind.Identifier).Text;
+                const key = this.expectName();
                 this.expect(TokenKind.Colon);
                 map.set(key, this.parseScalarLiteral());
             }
@@ -490,7 +490,7 @@ export class CypherParser
             }
             else if (this.accept(TokenKind.Dot))
             {
-                expr = new IndexAccess(expr, new Literal(this.expect(TokenKind.Identifier).Text));
+                expr = new IndexAccess(expr, new Literal(this.expectName()));
             }
             else
             {
@@ -521,7 +521,7 @@ export class CypherParser
         if (this.peek().Kind === TokenKind.Identifier)
         {
             const name = this.advance().Text;
-            if (this.accept(TokenKind.Dot)) return new PropertyAccess(name, this.expect(TokenKind.Identifier).Text);
+            if (this.accept(TokenKind.Dot)) return new PropertyAccess(name, this.expectName());
             if (this.accept(TokenKind.LParen)) return this.parseCallArguments(name);
             return new VariableRef(name);
         }
@@ -552,7 +552,7 @@ export class CypherParser
         {
             do
             {
-                const key = this.expect(TokenKind.Identifier).Text;
+                const key = this.expectName();
                 this.expect(TokenKind.Colon);
                 entries.set(key, this.parseExpression());
             }

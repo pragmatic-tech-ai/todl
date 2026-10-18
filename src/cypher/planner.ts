@@ -2,7 +2,7 @@ import type { Scalar } from "../manifest/logical.js";
 import type { ICypherGraph } from "./graph.js";
 import type { NodePattern, PatternPath } from "./patterns.js";
 import type { CypherQueryModel, QueryPart, ProjectionClause, ReturnItem } from "./query-model.js";
-import { MatchClause, UnwindClause, SortItem } from "./query-model.js";
+import { MatchClause, UnwindClause, WritingClause, SortItem } from "./query-model.js";
 import { CypherSemanticError } from "./errors.js";
 import { ComparisonOp } from "./enums.js";
 import type { Expression } from "./expressions.js";
@@ -45,6 +45,7 @@ class OptionalMatchPlan implements IOptionalPlan
 
 export class LogicalPlanner
 {
+    private static readonly WritesNotExecutable = "write clauses are not executable yet";
     private static readonly AnonPrefix = "__n";
     private static readonly RelPropsUnsupported = "relationship properties are not supported";
     private static readonly UnknownRelType = "unknown relationship type";
@@ -139,6 +140,10 @@ export class LogicalPlanner
             {
                 op = new Unwind(op ?? new SingleRow(), clause.Expr, clause.Variable, this.parameters);
                 pipelineBound.add(clause.Variable);
+            }
+            else if (clause instanceof WritingClause)
+            {
+                throw new CypherSemanticError(LogicalPlanner.WritesNotExecutable);
             }
         }
         if (op === undefined) op = new SingleRow();

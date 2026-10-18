@@ -1,10 +1,12 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { CypherParser } from "../parser.js";
+import { SetMode } from "../enums.js";
 import { CypherSyntaxError } from "../errors.js";
+import { LogicalPlanner } from "../planner.js";
 import { ReferencedLabels } from "../referenced-labels.js";
 import {
-    CreateClause, MergeClause, MatchClause, SetClause, SetMode, DeleteClause, RemoveClause, ProjectionClause,
+    CreateClause, MergeClause, MatchClause, SetClause, DeleteClause, RemoveClause, ProjectionClause,
 } from "../query-model.js";
 
 class P
@@ -98,6 +100,36 @@ describe("cypher write parse", () =>
     it("relationship properties in CREATE are rejected", () =>
     {
         assert.throws(() => P.Parse("CREATE (a)-[:orders {qty: 2}]->(b)"), CypherSyntaxError);
+    });
+
+    it("MERGE with a relationship path is rejected", () =>
+    {
+        assert.throws(() => P.Parse("MERGE (a)-[:r]->(b)"), CypherSyntaxError);
+    });
+
+    it("a keyword-spelled label parses on the read path", () =>
+    {
+        const m = P.Parse("MATCH (o:shop.Order) RETURN o");
+        const c = m.Parts[0]!.Reading[0];
+        assert.ok(c instanceof MatchClause);
+        assert.equal(c.Paths[0]!.Nodes[0]!.Label, "shop.Order");
+    });
+
+    it("DETACH without DELETE is a syntax error", () =>
+    {
+        assert.throws(() => P.Parse("MATCH (n:shop.Customer) DETACH n"), CypherSyntaxError);
+    });
+
+    it("keyword spellings are valid property names and map keys", () =>
+    {
+        const m = P.Parse("MATCH (n:shop.Customer {delete: true}) SET n.set = n.create REMOVE n.merge RETURN n.remove");
+        assert.equal(m.Parts.length, 1);
+        assert.throws(() => P.Parse("MATCH (set) RETURN set"), CypherSyntaxError);
+    });
+
+    it("an unexecutable write clause fails planning loudly", () =>
+    {
+        assert.throws(() => new LogicalPlanner({} as never, new Map()).Plan(P.Parse("MATCH (n) DELETE n")));
     });
 
     it("ReferencedLabels includes CREATE/MERGE labels", () =>
