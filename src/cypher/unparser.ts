@@ -1,12 +1,12 @@
 import type { Scalar } from "../manifest/logical.js";
-import { ArithmeticOp, BooleanOp, ComparisonOp, RelDirection } from "./enums.js";
+import { ArithmeticOp, BooleanOp, ComparisonOp, RelDirection, SetMode } from "./enums.js";
 import { CypherSemanticError } from "./errors.js";
 import {
     ArithmeticExpression, BooleanExpression, Comparison, Expression, FunctionCall, InExpression, IndexAccess, IsNullExpression,
     ListLiteral, Literal, MapLiteral, Parameter, PropertyAccess, UnaryMinus, ValueLiteral, VariableRef,
 } from "./expressions.js";
 import { NodePattern, PatternPath, RelPattern } from "./patterns.js";
-import { CypherQueryModel, MatchClause, ProjectionClause, QueryPart, ReadingClause, ReturnItem, SortItem, UnwindClause, WhereClause } from "./query-model.js";
+import { CypherQueryModel, CreateClause, MergeClause, SetClause, SetItem, DeleteClause, RemoveClause, MatchClause, ProjectionClause, QueryPart, ReadingClause, ReturnItem, SortItem, UnwindClause, WhereClause } from "./query-model.js";
 
 // Binding strength of an expression's top-level form, mirroring the parser's precedence ladder (higher binds tighter).
 enum Prec
@@ -48,6 +48,13 @@ export class CypherUnparser
     private static readonly KwMatch = "MATCH";
     private static readonly KwOptional = "OPTIONAL";
     private static readonly KwUnwind = "UNWIND";
+    private static readonly KwCreate = "CREATE";
+    private static readonly KwMerge = "MERGE";
+    private static readonly KwSet = "SET";
+    private static readonly KwDelete = "DELETE";
+    private static readonly KwDetach = "DETACH DELETE";
+    private static readonly KwRemove = "REMOVE";
+    private static readonly KwPlusEq = "+=";
     private static readonly KwAs = "AS";
     private static readonly KwWhere = "WHERE";
     private static readonly KwReturn = "RETURN";
@@ -98,7 +105,23 @@ export class CypherUnparser
     {
         if (clause instanceof MatchClause) return this.Match(clause);
         if (clause instanceof UnwindClause) return this.Unwind(clause);
+        if (clause instanceof CreateClause) return `${CypherUnparser.KwCreate} ${clause.Paths.map((p) => this.Path(p)).join(CypherUnparser.Comma)}`;
+        if (clause instanceof MergeClause) return `${CypherUnparser.KwMerge} ${this.Path(clause.Pattern)}`;
+        if (clause instanceof SetClause) return `${CypherUnparser.KwSet} ${clause.Items.map((i) => this.SetItem(i)).join(CypherUnparser.Comma)}`;
+        if (clause instanceof DeleteClause)
+        {
+            const kw = clause.Detach ? CypherUnparser.KwDetach : CypherUnparser.KwDelete;
+            return `${kw} ${clause.Targets.map((t) => this.Expr(t, Prec.Or)).join(CypherUnparser.Comma)}`;
+        }
+        if (clause instanceof RemoveClause) return `${CypherUnparser.KwRemove} ${clause.Items.map((i) => this.Expr(i, Prec.Or)).join(CypherUnparser.Comma)}`;
         throw new CypherSemanticError(clause.constructor.name);
+    }
+
+    private SetItem(item: SetItem): string
+    {
+        const value = this.Expr(item.Value, Prec.Or);
+        if (item.Mode === SetMode.MergeMap) return `${item.Variable} ${CypherUnparser.KwPlusEq} ${value}`;
+        return `${item.Variable}${CypherUnparser.Dot}${item.Property!} ${CypherUnparser.Equals} ${value}`;
     }
 
     private Match(clause: MatchClause): string

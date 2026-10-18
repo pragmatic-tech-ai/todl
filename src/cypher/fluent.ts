@@ -1,8 +1,8 @@
 import type { Scalar } from "../manifest/logical.js";
 import { CypherSemanticError } from "./errors.js";
-import { RelDirection, ComparisonOp, ArithmeticOp } from "./enums.js";
+import { RelDirection, ComparisonOp, ArithmeticOp, SetMode } from "./enums.js";
 import { NodePattern, RelPattern, PatternPath } from "./patterns.js";
-import { CypherQueryModel, MatchClause, WhereClause, ProjectionClause, QueryPart, ReturnItem, ReadingClause, UnwindClause, SortItem } from "./query-model.js";
+import { CypherQueryModel, CreateClause, MergeClause, SetClause, SetItem, DeleteClause, RemoveClause, WritingClause, MatchClause, WhereClause, ProjectionClause, QueryPart, ReturnItem, ReadingClause, UnwindClause, SortItem } from "./query-model.js";
 import { CypherUnparser } from "./unparser.js";
 import { Expression, Parameter, VariableRef, PropertyAccess, Literal, Comparison, FunctionCall, ListLiteral, MapLiteral, IndexAccess, ArithmeticExpression } from "./expressions.js";
 
@@ -355,6 +355,8 @@ class PendingProjection
 export class CypherQuery
 {
     private static readonly MissingReturnMessage = "CypherQuery requires a Return clause";
+    private static readonly SetTargetMessage = "Set target must be a property access (Expr.Prop)";
+    private static readonly RemoveTargetMessage = "Remove targets must be property accesses (Expr.Prop)";
     private static readonly AfterReturnMessage = "no clauses may follow Return";
     private static readonly NoProjectionMessage = "projection modifier requires a preceding With or Return";
     private static readonly WhereNeedsMatchMessage = "Where must directly follow a Match or OptionalMatch";
@@ -384,19 +386,73 @@ export class CypherQuery
         return new CypherQuery().Unwind(expr, variable);
     }
 
+    public static Create(...anchors: NodeBuilder[]): CypherQuery
+    {
+        return new CypherQuery().Create(...anchors);
+    }
+
+    public static Merge(anchor: NodeBuilder): CypherQuery
+    {
+        return new CypherQuery().Merge(anchor);
+    }
+
+    public Create(...anchors: NodeBuilder[]): CypherQuery
+    {
+        return this.AddClause(new CreateClause(anchors.map((a) => a.BuildPath())));
+    }
+
+    public Merge(anchor: NodeBuilder): CypherQuery
+    {
+        return this.AddClause(new MergeClause(anchor.BuildPath()));
+    }
+
+    // SET n.p = value.
+    public Set(target: ExprBuilder, value: ExprArg): CypherQuery
+    {
+        const access = target.Inner;
+        if (!(access instanceof PropertyAccess)) throw new Error(CypherQuery.SetTargetMessage);
+        return this.AddSetItem(new SetItem(access.Variable, access.Property, ExprBuilder.Unwrap(value), SetMode.Property));
+    }
+
+    // SET n += map.
+    public SetMerge(variable: string, map: ExprArg): CypherQuery
+    {
+        return this.AddSetItem(new SetItem(variable, undefined, ExprBuilder.Unwrap(map), SetMode.MergeMap));
+    }
+
+    public Delete(...variables: string[]): CypherQuery
+    {
+        return this.AddClause(new DeleteClause(variables.map((v) => new VariableRef(v)), false));
+    }
+
+    public DetachDelete(...variables: string[]): CypherQuery
+    {
+        return this.AddClause(new DeleteClause(variables.map((v) => new VariableRef(v)), true));
+    }
+
+    public Remove(...targets: ExprBuilder[]): CypherQuery
+    {
+        const items = targets.map((t) =>
+        {
+            if (!(t.Inner instanceof PropertyAccess)) throw new Error(CypherQuery.RemoveTargetMessage);
+            return t.Inner;
+        });
+        return this.AddClause(new RemoveClause(items));
+    }
+
     public Match(...anchors: NodeBuilder[]): CypherQuery
     {
-        return this.AddReading(new MatchClause(anchors.map((a) => a.BuildPath()), undefined, false));
+        return this.AddClause(new MatchClause(anchors.map((a) => a.BuildPath()), undefined, false));
     }
 
     public OptionalMatch(...anchors: NodeBuilder[]): CypherQuery
     {
-        return this.AddReading(new MatchClause(anchors.map((a) => a.BuildPath()), undefined, true));
+        return this.AddClause(new MatchClause(anchors.map((a) => a.BuildPath()), undefined, true));
     }
 
     public Unwind(expr: ExprArg, variable: string): CypherQuery
     {
-        return this.AddReading(new UnwindClause(ExprBuilder.Unwrap(expr), variable));
+        return this.AddClause(new UnwindClause(ExprBuilder.Unwrap(expr), variable));
     }
 
     // After a WITH, sets that projection's post-projection predicate; otherwise attaches to the preceding Match.
@@ -456,6 +512,10 @@ export class CypherQuery
 
     public ToModel(): CypherQueryModel
     {
+        if (this.projection === undefined && this.reading[this.reading.length - 1] instanceof WritingClause)
+        {
+            return new CypherQueryModel([...this.parts, new QueryPart([...this.reading])]);
+        }
         if (this.projection === undefined || !this.projection.IsReturn) throw new Error(CypherQuery.MissingReturnMessage);
         return new CypherQueryModel([...this.parts, new QueryPart([...this.reading], this.projection.Build())]);
     }
@@ -466,7 +526,19 @@ export class CypherQuery
         return new CypherUnparser().Text(this.ToModel());
     }
 
-    private AddReading(clause: ReadingClause): CypherQuery
+    // Consecutive Set calls accumulate into one SET clause (SET a = 1, b = 2), matching the parsed form.
+    private AddSetItem(item: SetItem): CypherQuery
+    {
+        const last = this.reading[this.reading.length - 1];
+        if (this.projection === undefined && last instanceof SetClause)
+        {
+            this.reading[this.reading.length - 1] = new SetClause([...last.Items, item]);
+            return this;
+        }
+        return this.AddClause(new SetClause([item]));
+    }
+
+    private AddClause(clause: ReadingClause): CypherQuery
     {
         this.CloseWith();
         this.reading.push(clause);
