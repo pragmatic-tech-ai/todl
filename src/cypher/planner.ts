@@ -196,16 +196,16 @@ export class LogicalPlanner
         if (clause instanceof CreateClause)
         {
             for (const v of clause.DeclaredVariables()) bound.add(v);
-            return new CreateOperator(op, clause, g, writer, p);
+            return new CreateOperator(op, clause, g, writer);
         }
         if (clause instanceof MergeClause)
         {
             for (const v of clause.DeclaredVariables()) bound.add(v);
-            return new MergeOperator(op, clause, g, writer, p);
+            return new MergeOperator(op, clause, g, writer);
         }
         if (clause instanceof SetClause) return new SetOperator(op, clause, g, writer, p);
-        if (clause instanceof DeleteClause) return new DeleteOperator(op, clause, g, writer, p);
-        if (clause instanceof RemoveClause) return new RemoveOperator(op, clause, g, writer, p);
+        if (clause instanceof DeleteClause) return new DeleteOperator(op, clause, writer, p);
+        if (clause instanceof RemoveClause) return new RemoveOperator(op, clause, writer);
         throw new CypherSemanticError(LogicalPlanner.WritesNotExecutable);
     }
 

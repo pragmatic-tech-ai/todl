@@ -140,6 +140,13 @@ class WriteFixture
         return new MemGraph([WriteFixture.Ada, WriteFixture.Old, WriteFixture.Fresh], { c1: { orders: ["o1"] } });
     }
 
+    public static Plan(cypher: string): { Mutations: import("../operators.js").IOperator }
+    {
+        const graph = WriteFixture.Graph();
+        const planner = new LogicalPlanner(graph, new Map(), undefined, undefined, false, new FakeCypherWriter(graph));
+        return planner.PlanForWrite(new CypherParser(cypher).Parse());
+    }
+
     public static Run(cypher: string, graph: ICypherGraph = WriteFixture.Graph()): { Calls: string[]; Rows: Binding[] }
     {
         const writer = new FakeCypherWriter(graph);
@@ -231,5 +238,59 @@ describe("cypher write operators", () =>
     {
         const planner = new LogicalPlanner(WriteFixture.Graph(), new Map());
         assert.throws(() => planner.Plan(new CypherParser("CREATE (n:Customer)").Parse()), CypherSemanticError);
+    });
+
+    test("CREATE rejects undirected, untyped and variable-length relationships at plan time, before any write", () =>
+    {
+        for (const q of [
+            "MATCH (a:shop.Customer) CREATE (a)-[:orders]-(o:shop.Order)",
+            "MATCH (a:shop.Customer) CREATE (a)-->(o:shop.Order)",
+            "MATCH (a:shop.Customer) CREATE (a)-[:orders*1..2]->(o:shop.Order)",
+        ])
+        {
+            assert.throws(() => WriteFixture.Plan(q), CypherSemanticError, q);
+        }
+    });
+
+    test("incoming-direction CREATE swaps from/to", () =>
+    {
+        const r = WriteFixture.Run("MATCH (a:shop.Customer) CREATE (a)<-[:m]-(b:shop.Order)");
+        assert.deepEqual(r.Calls, ["CreateNode(shop.Order,[])=n0", "CreateRelationship(n0,m,c1)"]);
+    });
+
+    test("CREATE from a variable bound to null (empty OPTIONAL MATCH) throws", () =>
+    {
+        assert.throws(
+            () => WriteFixture.Run("OPTIONAL MATCH (a:shop.Customer {name: 'Nobody'}) CREATE (a)-[:orders]->(o:shop.Order)"),
+            CypherSemanticError);
+    });
+
+    test("MERGE on an already-bound variable keeps the bound node (no match, no create)", () =>
+    {
+        const r = WriteFixture.Run("MATCH (n:shop.Customer) MERGE (n:shop.Customer {name: 'Zed'})");
+        assert.deepEqual(r.Calls, []);
+        assert.equal((r.Rows[0]!.Get("n") as NodeValue).Id, "c1");
+    });
+
+    test("SET ref onto a node created in the same query only creates the relationship", () =>
+    {
+        const r = WriteFixture.Run("CREATE (a:shop.Customer), (o:shop.Order) SET a.orders = o");
+        assert.deepEqual(r.Calls, ["CreateNode(shop.Customer,[])=n0", "CreateNode(shop.Order,[])=n1", "CreateRelationship(n0,orders,n1)"]);
+    });
+
+    test("SET ref on a node with no prior edge only creates the relationship", () =>
+    {
+        const r = WriteFixture.Run("MATCH (n:shop.Customer), (o:shop.Order {ref: 'new'}) SET n.items = o");
+        assert.deepEqual(r.Calls, ["CreateRelationship(c1,items,o2)"]);
+    });
+
+    test("SET ref replaces edges this operator created for an earlier row (no leak)", () =>
+    {
+        const r = WriteFixture.Run("MATCH (n:shop.Customer), (o:shop.Order) SET n.items = o");
+        assert.deepEqual(r.Calls, [
+            "CreateRelationship(c1,items,o1)",
+            "DeleteRelationship(c1,items,o1)",
+            "CreateRelationship(c1,items,o2)",
+        ]);
     });
 });

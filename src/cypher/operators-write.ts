@@ -22,6 +22,9 @@ class WriteSupport
     public static readonly VarLengthCreate = "variable-length relationships cannot be created";
     public static readonly NotAScalar = "property value must be a scalar, null, or a node";
     public static readonly MergeMapNotMap = "SET n += requires a map";
+    public static readonly NullEndpoint = "cannot create a relationship from a null node variable";
+    public static readonly MergeNeedsNode = "MERGE requires a node pattern";
+    public static readonly MergeBoundNull = "MERGE variable is bound to null";
 
     public static NodeId(value: CypherValue | undefined): string | undefined
     {
@@ -50,9 +53,20 @@ export class CreateOperator implements IOperator
         private readonly clause: CreateClause,
         private readonly graph: ICypherGraph,
         private readonly writer: ICypherWriter,
-        private readonly parameters: ReadonlyMap<string, CypherValue>,
     )
     {
+        for (const path of clause.Paths) CreateOperator.ValidateRels(path);
+    }
+
+    // Fail fast, before any write: every created relationship needs a type and a direction, and cannot be variable-length.
+    private static ValidateRels(path: PatternPath): void
+    {
+        for (const rel of path.Rels)
+        {
+            if (rel.IsVariableLength) throw new CypherSemanticError(WriteSupport.VarLengthCreate);
+            if (rel.RelType === undefined) throw new CypherSemanticError(WriteSupport.RelTypeRequired);
+            if (rel.Direction === RelDirection.Undirected) throw new CypherSemanticError(WriteSupport.RelDirectionRequired);
+        }
     }
 
     public *Rows(): Iterable<Binding>
@@ -72,6 +86,7 @@ export class CreateOperator implements IOperator
         for (const node of path.Nodes)
         {
             const existing = node.Variable === undefined ? undefined : current.Get(node.Variable);
+            if (existing instanceof NullValue) throw new CypherSemanticError(`${WriteSupport.NullEndpoint}: "${node.Variable}"`);
             const existingId = WriteSupport.NodeId(existing);
             if (existingId !== undefined)
             {
@@ -85,13 +100,10 @@ export class CreateOperator implements IOperator
         for (let i = 0; i < path.Rels.length; i++)
         {
             const rel = path.Rels[i]!;
-            if (rel.IsVariableLength) throw new CypherSemanticError(WriteSupport.VarLengthCreate);
-            if (rel.RelType === undefined) throw new CypherSemanticError(WriteSupport.RelTypeRequired);
-            if (rel.Direction === RelDirection.Undirected) throw new CypherSemanticError(WriteSupport.RelDirectionRequired);
             const left = ids[i]!;
             const right = ids[i + 1]!;
-            if (rel.Direction === RelDirection.Outgoing) this.writer.CreateRelationship(left, rel.RelType, right);
-            else this.writer.CreateRelationship(right, rel.RelType, left);
+            if (rel.Direction === RelDirection.Outgoing) this.writer.CreateRelationship(left, rel.RelType!, right);
+            else this.writer.CreateRelationship(right, rel.RelType!, left);
         }
         return current;
     }
@@ -114,9 +126,9 @@ export class MergeOperator implements IOperator
         private readonly clause: MergeClause,
         private readonly graph: ICypherGraph,
         private readonly writer: ICypherWriter,
-        private readonly parameters: ReadonlyMap<string, CypherValue>,
     )
     {
+        if (clause.Pattern.Nodes.length === 0) throw new CypherSemanticError(WriteSupport.MergeNeedsNode);
     }
 
     public *Rows(): Iterable<Binding>
@@ -124,6 +136,14 @@ export class MergeOperator implements IOperator
         const node = this.clause.Pattern.Nodes[0]!;
         for (const row of this.child.Rows())
         {
+            // An already-bound variable keeps its node: no re-match, no create.
+            const bound = node.Variable === undefined ? undefined : row.Get(node.Variable);
+            if (bound instanceof NullValue) throw new CypherSemanticError(`${WriteSupport.MergeBoundNull}: "${node.Variable}"`);
+            if (bound !== undefined)
+            {
+                yield row;
+                continue;
+            }
             if (node.Label === undefined) throw new CypherSemanticError(WriteSupport.LabelRequired);
             const concept = this.graph.ResolveConcept(node.Label);
             const key = MergeOperator.Key(concept, node.Properties);
@@ -154,6 +174,9 @@ export class MergeOperator implements IOperator
 
 export class SetOperator implements IOperator
 {
+    // Edges this operator has created per (node, member), so a later row replacing the same member removes them too.
+    private readonly created = new Map<string, Set<string>>();
+
     constructor(
         private readonly child: IOperator,
         private readonly clause: SetClause,
@@ -210,15 +233,17 @@ export class SetOperator implements IOperator
 
     private replaceRef(id: string, member: string, targetId: string): void
     {
-        // A node created in this query has no visible edges yet; nothing to replace.
+        const stale = new Set<string>();
+        // A node created in this query has no visible pre-query edges; nothing to read from the graph.
         if (this.graph.Reflect(id) !== undefined)
         {
-            for (const existing of this.graph.Expand(id, member, RelDirection.Outgoing))
-            {
-                this.writer.DeleteRelationship(id, member, existing.node.id);
-            }
+            for (const existing of this.graph.Expand(id, member, RelDirection.Outgoing)) stale.add(existing.node.id);
         }
+        const key = JSON.stringify([id, member]);
+        for (const prior of this.created.get(key) ?? []) stale.add(prior);
+        for (const old of stale) this.writer.DeleteRelationship(id, member, old);
         this.writer.CreateRelationship(id, member, targetId);
+        this.created.set(key, new Set<string>([targetId]));
     }
 }
 
@@ -227,7 +252,6 @@ export class DeleteOperator implements IOperator
     constructor(
         private readonly child: IOperator,
         private readonly clause: DeleteClause,
-        private readonly graph: ICypherGraph,
         private readonly writer: ICypherWriter,
         private readonly parameters: ReadonlyMap<string, CypherValue>,
     )
@@ -253,9 +277,7 @@ export class RemoveOperator implements IOperator
     constructor(
         private readonly child: IOperator,
         private readonly clause: RemoveClause,
-        private readonly graph: ICypherGraph,
         private readonly writer: ICypherWriter,
-        private readonly parameters: ReadonlyMap<string, CypherValue>,
     )
     {
     }
