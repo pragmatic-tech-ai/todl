@@ -92,6 +92,11 @@ class FakeGraph implements ICypherGraph
     {
         return true;
     }
+
+    public ResolveConcept(label: string): string
+    {
+        return label;
+    }
 }
 
 describe("VarLengthExpand", () =>

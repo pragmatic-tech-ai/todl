@@ -32,3 +32,12 @@ export class CypherSemanticError extends CypherError
         super(message);
     }
 }
+
+// Write-time semantic failure (distinct from CypherSemanticError so callers can classify it).
+export class CypherWriteError extends CypherError
+{
+    constructor(message: string)
+    {
+        super(message);
+    }
+}

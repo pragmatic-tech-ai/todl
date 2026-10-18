@@ -62,6 +62,11 @@ class FakeGraph implements ICypherGraph
     {
         return true;
     }
+
+    public ResolveConcept(label: string): string
+    {
+        return label;
+    }
 }
 
 const a = OperatorFixtures.Mirror("a", "Service", { name: "checkout" });

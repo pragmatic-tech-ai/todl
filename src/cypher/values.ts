@@ -2,6 +2,7 @@ import type { Scalar } from "../manifest/logical.js";
 import type { IInstanceMirror } from "../manifest/reflection/reflection.js";
 import type { EntityReader, EntityHost } from "../reflection-client/index.js";
 import { ReflectedEntity, MirrorReader } from "../reflection-client/index.js";
+import { CypherWriteError } from "./errors.js";
 import { Snapshot, type MirrorSnapshot } from "../graph-api/index.js";
 
 export type CypherValueDto = MirrorSnapshot | Scalar | null | CypherValueDto[] | { [k: string]: CypherValueDto };
@@ -97,8 +98,8 @@ export class NullValue extends CypherValue
 
 export class NodeValue extends CypherValue
 {
-    private static readonly GroupKeyPrefix = "node:";
-    private static readonly NodeRank = 3;
+    public static readonly GroupKeyPrefix = "node:";
+    public static readonly NodeRank = 3;
 
     constructor(private readonly mirror: IInstanceMirror)
     {
@@ -150,6 +151,50 @@ export class NodeValue extends CypherValue
         const o = (other as NodeValue).Id;
         if (this.Id < o) return -1;
         if (this.Id > o) return 1;
+        return 0;
+    }
+}
+
+// Id-only placeholder for a just-created node; re-resolved to a NodeValue after commit.
+export class NodeRefValue extends CypherValue
+{
+    private static readonly Unresolved = "unresolved node reference";
+
+    constructor(private readonly id: string)
+    {
+        super();
+    }
+
+    public get Id(): string
+    {
+        return this.id;
+    }
+
+    public Equals(other: CypherValue): boolean
+    {
+        return this.GroupKey() === other.GroupKey();
+    }
+
+    public ToDto(): CypherValueDto
+    {
+        throw new CypherWriteError(`${NodeRefValue.Unresolved} "${this.id}"`);
+    }
+
+    public GroupKey(): string
+    {
+        return `${NodeValue.GroupKeyPrefix}${this.id}`;
+    }
+
+    protected TypeRank(): number
+    {
+        return NodeValue.NodeRank;
+    }
+
+    protected CompareSameType(other: CypherValue): number
+    {
+        const o = (other as NodeValue | NodeRefValue).Id;
+        if (this.id < o) return -1;
+        if (this.id > o) return 1;
         return 0;
     }
 }

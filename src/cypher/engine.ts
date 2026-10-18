@@ -100,11 +100,16 @@ export class CypherEngine
 
     public static ToDto(result: CypherResult): CypherResultDto
     {
-        return {
+        const dto: CypherResultDto = {
             Columns: [...result.Columns],
             Rows: result.Rows.map((row) => row.map((v) => v.ToDto())),
             Truncated: result.Truncated,
             HasMore: result.HasMore,
         };
+        if (result.Stats !== undefined)
+        {
+            dto.Stats = result.Stats.ToDto();
+        }
+        return dto;
     }
 }

@@ -27,6 +27,7 @@ class FakeGraph implements ICypherGraph
     public Expand(nodeId: string): InstanceMirror[] { return (this.edges[nodeId] ?? []).map((t) => this.Reflect(t)!); }
     public IsInstanceOf(m: InstanceMirror, label: string): boolean { return m.type.fullName === label; }
     public HasRelationshipType(relType: string): boolean { return relType === "calls"; }
+    public ResolveConcept(label: string): string { return label; }
 }
 
 class PlannerHarness

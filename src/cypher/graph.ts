@@ -11,6 +11,8 @@ export interface ICypherGraph
     Expand(nodeId: string, relType: string | undefined, direction: RelDirection): IInstanceMirror[];
     IsInstanceOf(mirror: IInstanceMirror, label: string): boolean;
     HasRelationshipType(relType: string): boolean;
+    // Resolves a label (exact fullName, else unique simple name) to the concept fullName; throws CypherSemanticError if unknown/ambiguous.
+    ResolveConcept(label: string): string;
 }
 
 export class GraphQueryAdapter implements ICypherGraph
@@ -73,6 +75,16 @@ export class GraphQueryAdapter implements ICypherGraph
             }
         }
         return false;
+    }
+
+    public ResolveConcept(label: string): string
+    {
+        const type = this.ResolveLabel(label);
+        if (type === undefined)
+        {
+            throw new CypherSemanticError(`${GraphQueryAdapter.UnknownLabel} "${label}"`);
+        }
+        return type.fullName;
     }
 
     private ResolveLabel(label: string): ReturnType<IGraphQuery["Type"]>
