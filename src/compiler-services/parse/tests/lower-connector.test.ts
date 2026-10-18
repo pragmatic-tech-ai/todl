@@ -126,6 +126,43 @@ test("connector and population nodes land in the model with expected attrs", () 
     assert.deepEqual(JSON.parse(String(p.get(Builder.BindingFieldMapAttr))), { id: "id", name: "name" });
 });
 
+test("a GraphQL connector authoring the write-config keys lowers them into Config", () =>
+{
+    const { model, diagnostics } = Harness.compile(
+        `connect gql; populate Order;`,
+        `datasource gql { kind = rest; style = "graphql"; endpoint = "https://api/graphql"; source = "orders"; queryField = "orders";
+            upsertMutation = "upsertOrder"; upsertInputType = "OrderInput"; upsertInputArg = "input"; upsertReturn = "id total";
+            deleteMutation = "deleteOrder"; deleteIdType = "ID"; deleteIdArg = "id";
+            errorConflictCodes = "CONFLICT,DUPLICATE"; errorUnsupportedCodes = "UNSUPPORTED"; }`);
+    assert.deepEqual(diagnostics, []);
+    const c = model.resolve("d@connector:gql")!.attrs;
+    const config = JSON.parse(String(c.get(Builder.ConnectorConfigAttr)));
+    assert.equal(config.style, "graphql");
+    assert.equal(config.upsertInputType, "OrderInput");
+    assert.equal(config.upsertInputArg, "input");
+    assert.equal(config.upsertReturn, "id total");
+    assert.equal(config.deleteIdType, "ID");
+    assert.equal(config.deleteIdArg, "id");
+    assert.equal(config.errorConflictCodes, "CONFLICT,DUPLICATE");
+    assert.equal(config.errorUnsupportedCodes, "UNSUPPORTED");
+});
+
+test("omitting the GraphQL write-config keys reproduces defaults + raw-Config back-compat", () =>
+{
+    const { model, diagnostics } = Harness.compile(
+        `connect gql; populate Order;`,
+        `datasource gql { kind = rest; style = "graphql"; endpoint = "https://api/graphql"; source = "orders"; queryField = "orders"; }`);
+    assert.deepEqual(diagnostics, []);
+    const config = JSON.parse(String(model.resolve("d@connector:gql")!.attrs.get(Builder.ConnectorConfigAttr)));
+    // No write-config keys authored -> absent from Config, so the adapter falls back to JSON!/ID!/input/id defaults.
+    assert.equal(config.upsertInputType, undefined);
+    assert.equal(config.deleteIdType, undefined);
+    assert.equal(config.upsertReturn, undefined);
+    // Raw config keys (style/endpoint/source/queryField) still land verbatim (back-compat).
+    assert.equal(config.style, "graphql");
+    assert.equal(config.endpoint, "https://api/graphql");
+});
+
 test("binding carries its model id; two models populating one concept keep distinct nodes", () =>
 {
     const { model, diagnostics } = Harness.compile(

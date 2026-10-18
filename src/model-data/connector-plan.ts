@@ -265,15 +265,86 @@ export class ConnectorPlanValidator
     private static readonly GraphQlStyleKey = "style";
     private static readonly GraphQlStyleValue = "graphql";
 
-    /** Throws on the first optimistic binding that cannot be honored. */
+    // GraphQL write-config keys carried in ConnectorSpec.Config, mirrored from the host adapter's
+    // GraphQlConnectionConfig (a higher layer we cannot import). An authored value that would make
+    // the adapter throw at construction is caught here instead, as a plan-build error (#5).
+    private static readonly UpsertInputTypeKey = "upsertInputType";
+    private static readonly UpsertInputArgKey = "upsertInputArg";
+    private static readonly UpsertReturnKey = "upsertReturn";
+    private static readonly DeleteIdTypeKey = "deleteIdType";
+    private static readonly DeleteIdArgKey = "deleteIdArg";
+    // The four single-identifier keys; upsertReturn (a space/comma list) is validated field-by-field.
+    private static readonly GraphQlIdentifierKeys: readonly string[] = [
+        ConnectorPlanValidator.UpsertInputTypeKey,
+        ConnectorPlanValidator.UpsertInputArgKey,
+        ConnectorPlanValidator.DeleteIdTypeKey,
+        ConnectorPlanValidator.DeleteIdArgKey,
+    ];
+    // GraphQL identifier rule, mirrored from the host's GraphQlName.Pattern (no upward import).
+    private static readonly GraphQlNamePattern = /^[_A-Za-z][_0-9A-Za-z]*$/;
+    // upsertReturn is a space-or-comma-separated field list (matches the adapter's ReturnFieldSeparator).
+    private static readonly ReturnFieldSeparator = /[\s,]+/;
+    private static readonly InvalidIdentifierPrefix = "graphql connector '";
+    private static readonly InvalidIdentifierKeyMiddle = "' config key '";
+    private static readonly InvalidIdentifierValueMiddle = "' is not a valid GraphQL identifier: '";
+    private static readonly InvalidIdentifierSuffix = "'";
+
+    /** Throws on the first write-mode or GraphQL write-config violation that cannot be honored. */
     public static Validate(plan: ModelConnectorPlan): void
     {
+        for (const connector of plan.Connectors)
+        {
+            if (ConnectorPlanValidator.IsGraphQl(connector))
+            {
+                ConnectorPlanValidator.ValidateGraphQlWriteConfig(connector);
+            }
+        }
         for (const binding of plan.Bindings)
         {
             if (binding.Concurrency === WriteConcurrency.Optimistic)
             {
                 ConnectorPlanValidator.ValidateOptimistic(plan.Connectors, binding);
             }
+        }
+    }
+
+    /** Validates the authored GraphQL write-config keys on a connector: the input/id type and arg
+     *  names and each upsertReturn field must be valid GraphQL identifiers. The errorConflictCodes /
+     *  errorUnsupportedCodes comma-lists are accepted LENIENTLY (parsed the way the adapter parses
+     *  them — empty items ignored; a wholly empty/separator-only value is simply "no codes") and so
+     *  can never be a plan-build error. Absent keys reproduce the adapter's JSON!/ID!/input/id
+     *  defaults, and a connector authored with only raw Config keys still validates (back-compat). */
+    private static ValidateGraphQlWriteConfig(spec: ConnectorSpec): void
+    {
+        for (const key of ConnectorPlanValidator.GraphQlIdentifierKeys)
+        {
+            const value = spec.Config[key];
+            if (value !== undefined)
+            {
+                ConnectorPlanValidator.RequireGraphQlName(spec.Name, key, value);
+            }
+        }
+        const returnList = spec.Config[ConnectorPlanValidator.UpsertReturnKey];
+        if (returnList !== undefined)
+        {
+            for (const field of returnList.split(ConnectorPlanValidator.ReturnFieldSeparator))
+            {
+                if (field.length > 0)
+                {
+                    ConnectorPlanValidator.RequireGraphQlName(spec.Name, ConnectorPlanValidator.UpsertReturnKey, field);
+                }
+            }
+        }
+    }
+
+    private static RequireGraphQlName(connector: string, key: string, value: string): void
+    {
+        if (!ConnectorPlanValidator.GraphQlNamePattern.test(value))
+        {
+            throw new Error(`${ConnectorPlanValidator.InvalidIdentifierPrefix}${connector}`
+                + `${ConnectorPlanValidator.InvalidIdentifierKeyMiddle}${key}`
+                + `${ConnectorPlanValidator.InvalidIdentifierValueMiddle}${value}`
+                + ConnectorPlanValidator.InvalidIdentifierSuffix);
         }
     }
 

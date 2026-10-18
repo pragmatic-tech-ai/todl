@@ -157,3 +157,64 @@ test("a LastWriteWins binding without a version field passes plan-build", () =>
     };
     assert.doesNotThrow(() => ConnectorPlanValidator.Validate(ValidatorHarness.Plan(binding, ValidatorHarness.Sql)));
 });
+
+class GraphQlWriteConfigHarness
+{
+    public static Plan(config: Record<string, string>): ModelConnectorPlan
+    {
+        const connector: ConnectorSpec = { Name: "api", Kind: DataSourceKind.Rest, Config: { style: "graphql", ...config } };
+        return { Model: "Sales", Version: "0.0.0", Connectors: [connector], Bindings: [] };
+    }
+}
+
+test("an invalid GraphQL identifier (input type / arg / return field) is a plan-build error", () =>
+{
+    assert.throws(() => ConnectorPlanValidator.Validate(GraphQlWriteConfigHarness.Plan({ upsertInputType: "not a type!" })),
+        /not a valid GraphQL identifier/);
+    assert.throws(() => ConnectorPlanValidator.Validate(GraphQlWriteConfigHarness.Plan({ deleteIdType: "1Bad" })),
+        /not a valid GraphQL identifier/);
+    assert.throws(() => ConnectorPlanValidator.Validate(GraphQlWriteConfigHarness.Plan({ upsertInputArg: "has-dash" })),
+        /not a valid GraphQL identifier/);
+    assert.throws(() => ConnectorPlanValidator.Validate(GraphQlWriteConfigHarness.Plan({ deleteIdArg: "" })),
+        /not a valid GraphQL identifier/);
+    assert.throws(() => ConnectorPlanValidator.Validate(GraphQlWriteConfigHarness.Plan({ upsertReturn: "id total$" })),
+        /not a valid GraphQL identifier/);
+});
+
+test("valid GraphQL write-config identifiers pass plan-build", () =>
+{
+    assert.doesNotThrow(() => ConnectorPlanValidator.Validate(GraphQlWriteConfigHarness.Plan({
+        upsertInputType: "OrderInput", upsertInputArg: "input", upsertReturn: "id total",
+        deleteIdType: "ID", deleteIdArg: "id",
+    })));
+});
+
+test("a messy error-code list is accepted leniently (empty items ignored, not a plan-build error)", () =>
+{
+    assert.doesNotThrow(() => ConnectorPlanValidator.Validate(GraphQlWriteConfigHarness.Plan({
+        errorConflictCodes: ",,CONFLICT, , DUPLICATE,", errorUnsupportedCodes: "",
+    })));
+});
+
+test("omitting the GraphQL write-config keys passes plan-build (defaults reproduce at the adapter)", () =>
+{
+    assert.doesNotThrow(() => ConnectorPlanValidator.Validate(GraphQlWriteConfigHarness.Plan({})));
+});
+
+test("write-config identifier rules apply only to GraphQL connectors, not plain REST or SQL", () =>
+{
+    const sql: ModelConnectorPlan =
+    {
+        Model: "Sales", Version: "0.0.0",
+        Connectors: [{ Name: "pg", Kind: DataSourceKind.Sql, Config: { upsertInputType: "not a type!" } }],
+        Bindings: [],
+    };
+    const rest: ModelConnectorPlan =
+    {
+        Model: "Sales", Version: "0.0.0",
+        Connectors: [{ Name: "svc", Kind: DataSourceKind.Rest, Config: { upsertInputType: "not a type!" } }],
+        Bindings: [],
+    };
+    assert.doesNotThrow(() => ConnectorPlanValidator.Validate(sql));
+    assert.doesNotThrow(() => ConnectorPlanValidator.Validate(rest));
+});
