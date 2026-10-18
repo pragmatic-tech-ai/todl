@@ -21,6 +21,9 @@ export abstract class ModelDataSource implements EntityHost
     private static readonly NoConnectorMessage =
         "ModelDataSource.Prepare requires a connector; construct the source with one, or use the synchronous document path.";
 
+    private static readonly NotRefreshableMessage =
+        "ModelDataSource.Refresh requires a connector that supports Refresh.";
+
     private prepared = false;
     private graph!: FrozenGraph;
     private query!: GraphQuery;
@@ -45,6 +48,23 @@ export abstract class ModelDataSource implements EntityHost
         }
         this.loadDocument(await this.connector.Prepare(services));
         this.prepared = true;
+    }
+
+    /** In-place re-pull: re-materialize this model's document via the connector, rebuild the graph, and drop
+     *  cached entity handles so they rebuild against the new graph. Prepares first if not yet prepared. */
+    public async Refresh(services: IServiceProvider): Promise<void>
+    {
+        if (!this.prepared)
+        {
+            await this.Prepare(services);
+            return;
+        }
+        if (this.connector?.Refresh === undefined)
+        {
+            throw new Error(ModelDataSource.NotRefreshableMessage);
+        }
+        this.loadDocument(await this.connector.Refresh(services));
+        this.entities.clear();
     }
 
     /** Build the single-package reflection substrate from a document in hand (SYNC). */
