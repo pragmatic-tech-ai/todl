@@ -189,7 +189,7 @@ export class ModelDraft
   }
 
   /** Delete an attr from an OWN instance (no-op if absent). Throws for a base (frozen) or unknown id. */
-  removeField(id: NodeId, name: string): void
+  RemoveField(id: NodeId, name: string): void
   {
     const node = this.ownNode(id);
     delete (node.attrs as Record<string, Scalar>)[name];
@@ -197,13 +197,13 @@ export class ModelDraft
   }
 
   /** True when `id` is an own (writable) instance of this draft. */
-  owns(id: NodeId): boolean
+  Owns(id: NodeId): boolean
   {
     return !this.baseIds.has(id) && this.own.nodes.some((n) => n.id === id);
   }
 
   /** How many own edges touch `id` (as source or target). */
-  incidentEdgeCount(id: NodeId): number
+  IncidentEdgeCount(id: NodeId): number
   {
     return this.own.edges.filter((e) => e.from === id || e.to === id).length;
   }

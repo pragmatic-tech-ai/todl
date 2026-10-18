@@ -1,5 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
+import { Severity } from "../../compiler-services/diagnostics/diagnostic.js";
 import { check } from "../../compiler-services/api.js";
 import { toJSON } from "../../compiler-services/emit/json.js";
 import { FakeIdGenerator } from "../../compiler-services/model/tests/fake-id-generator.js";
@@ -22,6 +23,7 @@ class Fixture
         text: `namespace shop {
             concept Customer { name : string?; email : string?; tier : string?; orders : Order[]; }
             concept Order { total : string?; placedBy : Customer?; }
+            concept Invoice { number : string; }
         }`,
     };
 
@@ -102,7 +104,7 @@ describe("ModelDraftWriter end-to-end", () =>
         assert.equal(f.Engine.Execute("MATCH (n:shop.Customer) RETURN n").Rows.length, 3);
     });
 
-    test("SET n.tier then REMOVE n.tier round-trips (removeField)", () =>
+    test("SET n.tier then REMOVE n.tier round-trips (RemoveField)", () =>
     {
         const f = new Fixture();
         f.Engine.Execute("MATCH (n:shop.Customer {name:'Ada'}) SET n.tier = 'gold'");
@@ -115,12 +117,12 @@ describe("ModelDraftWriter end-to-end", () =>
     {
         const f = new Fixture();
         f.Engine.Execute("MATCH (c:shop.Customer {name:'Ada'}), (o:shop.Order {total:'10'}) CREATE (c)-[:orders]->(o)");
-        assert.equal(f.Draft.incidentEdgeCount("app.o1"), 1);
+        assert.equal(f.Draft.IncidentEdgeCount("app.o1"), 1);
         const r = f.Engine.Execute("MATCH (o:shop.Order {total:'10'}) DETACH DELETE o");
         assert.equal(r.Stats!.NodesDeleted, 1);
         assert.equal(f.Draft.has("app.o1"), false);
         assert.deepEqual(f.Draft.entity("app.c1")!.refs("orders"), []);
-        assert.equal(f.Draft.incidentEdgeCount("app.c1"), 0);
+        assert.equal(f.Draft.IncidentEdgeCount("app.c1"), 0);
     });
 
     test("DELETE of a node that still has edges without DETACH throws and rolls back", () =>
@@ -162,7 +164,11 @@ describe("ModelDraftWriter end-to-end", () =>
     {
         const f = new Fixture();
         const before = structuredClone(f.Draft.toJSON());
-        assert.throws(() => f.Engine.Execute("CREATE (n:shop.Nope {name:'x'}) RETURN n"));
+        assert.throws(() => f.Engine.Execute("CREATE (n:shop.Nope {name:'x'}) RETURN n"), /unknown label/);
+        assert.deepEqual(f.Draft.toJSON(), before);
+        f.Writer.Begin();
+        assert.throws(() => f.Writer.CreateNode("shop.Nope", new Map()), /unknown concept/);
+        f.Writer.Rollback();
         assert.deepEqual(f.Draft.toJSON(), before);
     });
 
@@ -179,6 +185,21 @@ describe("ModelDraftWriter end-to-end", () =>
         assert.throws(() => f.Writer.CreateRelationship("app.c1", "orders", "app.c2"), CypherWriteError);
         f.Writer.Rollback();
         assert.deepEqual(f.Draft.toJSON(), before);
+    });
+
+    test("a write that introduces a genuine new model error is rejected at Commit and fully reverted", () =>
+    {
+        const f = new Fixture();
+        const before = structuredClone(f.Draft.toJSON());
+        assert.throws(() => f.Engine.Execute("CREATE (i:shop.Invoice) RETURN i"), CypherWriteError);
+        assert.deepEqual(f.Draft.toJSON(), before);
+        assert.equal(f.Engine.Execute("MATCH (i:shop.Invoice) RETURN i").Rows.length, 0);
+        // A second identical violation on top of a pre-existing identical error is still caught (multiset baseline).
+        f.Draft.create("shop.Invoice", "app.bad");
+        const dirty = structuredClone(f.Draft.toJSON());
+        assert.throws(() => f.Engine.Execute("CREATE (i:shop.Invoice) RETURN i"), CypherWriteError);
+        assert.deepEqual(f.Draft.toJSON(), dirty);
+        f.Engine.Execute("CREATE (n:shop.Customer {name:'ok'}) RETURN n");
     });
 
     test("Stats count accurately; a MERGE that only matched reports zero changes", () =>
@@ -200,7 +221,7 @@ describe("ModelDraftWriter end-to-end", () =>
         const f = new Fixture();
         f.Engine.Execute("MATCH (o:shop.Order {total:'10'}), (c:shop.Customer) SET o.placedBy = c");
         assert.equal(f.Draft.entity("app.o1")!.refs("placedBy").length, 1);
-        assert.deepEqual(f.Draft.diagnostics.filter((d) => d.severity === "error"), []);
+        assert.deepEqual(f.Draft.diagnostics.filter((d) => d.severity === Severity.Error), []);
         f.Engine.Execute("MATCH (o:shop.Order {total:'10'}), (c:shop.Customer {name:'Ada'}) SET o.placedBy = c");
         assert.deepEqual(f.Draft.entity("app.o1")!.refs("placedBy").map((e) => e.id), ["app.c1"]);
         f.Engine.Execute("MATCH (o:shop.Order {total:'10'}), (c:shop.Customer {name:'Bob'}) SET o.placedBy = c");
