@@ -64,6 +64,8 @@ export class LogicalPlanner
 
     private readonly maxVarLength: number;
     private readonly strictWithScope: boolean;
+    // Query-scoped: edges created by earlier SET clauses, shared so a later SET of the same (node, member) replaces them.
+    private readonly createdEdges = new Map<string, Set<string>>();
 
     constructor(
         private readonly graph: ICypherGraph,
@@ -203,7 +205,7 @@ export class LogicalPlanner
             for (const v of clause.DeclaredVariables()) bound.add(v);
             return new MergeOperator(op, clause, g, writer);
         }
-        if (clause instanceof SetClause) return new SetOperator(op, clause, g, writer, p);
+        if (clause instanceof SetClause) return new SetOperator(op, clause, g, writer, p, this.createdEdges);
         if (clause instanceof DeleteClause) return new DeleteOperator(op, clause, writer, p);
         if (clause instanceof RemoveClause) return new RemoveOperator(op, clause, writer);
         throw new CypherSemanticError(LogicalPlanner.WritesNotExecutable);

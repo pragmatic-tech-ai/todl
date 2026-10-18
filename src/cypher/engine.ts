@@ -6,6 +6,7 @@ import { CypherQuery } from "./fluent.js";
 import { LogicalPlanner } from "./planner.js";
 import type { IOperator } from "./operators.js";
 import { BindingRows } from "./operators.js";
+import { ListValue, MapValue } from "./values-structured.js";
 import type { ICypherWriter } from "./writer.js";
 import type { Binding } from "./binding.js";
 import type { PlannerOptions } from "./planner.js";
@@ -107,6 +108,16 @@ export class CypherEngine
         {
             const mirror = graph.Reflect(value.Id);
             return mirror === undefined ? NullValue.Instance : new NodeValue(mirror);
+        }
+        if (value instanceof ListValue)
+        {
+            return new ListValue(value.Items.map((i) => CypherEngine.Resolve(graph, i)));
+        }
+        if (value instanceof MapValue)
+        {
+            const entries = new Map<string, CypherValue>();
+            for (const [k, v] of value.Entries) entries.set(k, CypherEngine.Resolve(graph, v));
+            return new MapValue(entries);
         }
         return value;
     }

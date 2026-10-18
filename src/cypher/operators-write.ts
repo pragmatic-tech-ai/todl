@@ -179,15 +179,14 @@ export class MergeOperator implements IOperator
 
 export class SetOperator implements IOperator
 {
-    // Edges this operator has created per (node, member), so a later row replacing the same member removes them too.
-    private readonly created = new Map<string, Set<string>>();
-
     constructor(
         private readonly child: IOperator,
         private readonly clause: SetClause,
         private readonly graph: ICypherGraph,
         private readonly writer: ICypherWriter,
         private readonly parameters: ReadonlyMap<string, CypherValue>,
+        // Edges created per (node, member), shared across all SetOperators of one query so a later row or clause replacing the same member removes them too.
+        private readonly created: Map<string, Set<string>> = new Map<string, Set<string>>(),
     )
     {
     }

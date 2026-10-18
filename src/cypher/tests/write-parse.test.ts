@@ -4,10 +4,50 @@ import { CypherParser } from "../parser.js";
 import { SetMode } from "../enums.js";
 import { CypherSyntaxError } from "../errors.js";
 import { LogicalPlanner } from "../planner.js";
+import type { ICypherGraph } from "../graph.js";
+import type { IInstanceMirror } from "../../manifest/reflection/reflection.js";
 import { ReferencedLabels } from "../referenced-labels.js";
 import {
     CreateClause, MergeClause, MatchClause, SetClause, DeleteClause, RemoveClause, ProjectionClause,
 } from "../query-model.js";
+
+class EmptyGraph implements ICypherGraph
+{
+    public NodesByLabel(): IInstanceMirror[]
+    {
+        return [];
+    }
+
+    public AllInstances(): IInstanceMirror[]
+    {
+        return [];
+    }
+
+    public Reflect(): IInstanceMirror | undefined
+    {
+        return undefined;
+    }
+
+    public Expand(): IInstanceMirror[]
+    {
+        return [];
+    }
+
+    public IsInstanceOf(): boolean
+    {
+        return false;
+    }
+
+    public HasRelationshipType(): boolean
+    {
+        return true;
+    }
+
+    public ResolveConcept(label: string): string
+    {
+        return label;
+    }
+}
 
 class P
 {
@@ -129,7 +169,7 @@ describe("cypher write parse", () =>
 
     it("an unexecutable write clause fails planning loudly", () =>
     {
-        assert.throws(() => new LogicalPlanner({} as never, new Map()).Plan(P.Parse("MATCH (n) DELETE n")));
+        assert.throws(() => new LogicalPlanner(new EmptyGraph(), new Map()).Plan(P.Parse("MATCH (n) DELETE n")));
     });
 
     it("ReferencedLabels includes CREATE/MERGE labels", () =>

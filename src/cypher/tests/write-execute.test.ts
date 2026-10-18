@@ -8,6 +8,7 @@ import type { ICypherWriter } from "../writer.js";
 import type { ICypherGraph } from "../graph.js";
 import { RelDirection } from "../enums.js";
 import { CypherSemanticError } from "../errors.js";
+import { ListValue, MapValue } from "../values-structured.js";
 import { NodeRefValue, NodeValue, NullValue } from "../values.js";
 
 class NodeState
@@ -267,5 +268,34 @@ describe("cypher two-phase write execution", () =>
         const r = Fixture.Engine(writer).Execute("UNWIND [1,2,3,4,5] AS i CREATE (n:shop.Customer {name: 'x'})", new Map(), { RowCap: 1, Skip: 1 });
         assert.equal(writer.Creates, 5);
         assert.equal(r.Truncated, false);
+    });
+
+    test("a collect/list of created nodes in the final projection is re-resolved (no throw, no rollback)", () =>
+    {
+        const writer = new FakeCypherWriter();
+        const r = Fixture.Engine(writer).Execute("UNWIND [1,2] AS i CREATE (n:shop.Customer {name: 'x'}) WITH collect(n) AS ns RETURN ns");
+        assert.equal(writer.Rollbacks, 0);
+        assert.equal(writer.Commits, 1);
+        const list = r.Rows[0]![0]! as ListValue;
+        assert.ok(list instanceof ListValue);
+        assert.equal(list.Items.length, 2);
+        assert.ok(list.Items.every((i) => i instanceof NodeValue));
+    });
+
+    test("a map holding a node deleted earlier re-resolves that entry to null", () =>
+    {
+        const writer = new FakeCypherWriter(Fixture.Seed());
+        const r = Fixture.Engine(writer).Execute("MATCH (n:shop.Customer {name: 'Ada'}) DELETE n RETURN {k: n} AS m");
+        const m = r.Rows[0]![0]! as MapValue;
+        assert.equal(m.Get("k"), NullValue.Instance);
+    });
+
+    test("intra-query read-your-writes is out of scope: WITH reading a property off a just-created node yields null (no committed access mid-query)", () =>
+    {
+        const writer = new FakeCypherWriter();
+        const r = Fixture.Engine(writer).Execute("CREATE (n:shop.Customer {name: 'Ada'}) WITH n.name AS v RETURN v");
+        assert.equal(r.Rows.length, 1);
+        assert.equal(r.Rows[0]![0], NullValue.Instance);
+        assert.equal(writer.Commits, 1);
     });
 });

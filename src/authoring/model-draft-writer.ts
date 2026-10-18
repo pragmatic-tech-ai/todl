@@ -30,6 +30,7 @@ export class ModelDraftWriter implements ICypherWriter
     private static readonly SingleValued = "member is single-valued and already set";
     private static readonly HasEdges = "cannot delete a node that still has relationships; use DETACH DELETE";
     private static readonly InvalidModel = "write rejected, the model would be invalid";
+    private static readonly ErrorsCodes = " new error(s), codes ";
     private static readonly NoTransaction = "no write transaction is active";
     private static readonly DraftRejected = "write rejected by the model";
 
@@ -59,7 +60,7 @@ export class ModelDraftWriter implements ICypherWriter
         const fresh = this.NewErrors();
         if (fresh.length > 0)
         {
-            throw new CypherWriteError(`${ModelDraftWriter.InvalidModel}${ModelDraftWriter.Colon}${fresh.map((d) => d.message).join(ModelDraftWriter.Semicolon)}`);
+            throw new CypherWriteError(`${ModelDraftWriter.InvalidModel}${ModelDraftWriter.Colon}${fresh.length}${ModelDraftWriter.ErrorsCodes}${[...new Set(fresh.map((d) => d.code))].join(ModelDraftWriter.Semicolon)}`);
         }
         // The snapshot is deliberately kept: Rollback() must still work if the projection fails after this.
         return this.bake(this.draft);

@@ -209,6 +209,14 @@ describe("cypher write operators", () =>
         assert.deepEqual(r.Calls, ["DeleteRelationship(c1,orders,o1)", "CreateRelationship(c1,orders,o2)"]);
     });
 
+    test("SET n.m = a then a later SET n.m = b deletes the edge the earlier clause created (query-scoped last-wins)", () =>
+    {
+        const r = WriteFixture.Run("MATCH (n:shop.Customer), (a:shop.Order {ref: 'new'}), (b:shop.Order {ref: 'old'}) SET n.orders = a SET n.orders = b");
+        assert.ok(r.Calls.includes("CreateRelationship(c1,orders,o2)"));
+        assert.ok(r.Calls.includes("DeleteRelationship(c1,orders,o2)"));
+        assert.equal(r.Calls[r.Calls.length - 1], "CreateRelationship(c1,orders,o1)");
+    });
+
     test("DELETE n calls DeleteNode(id,false); DETACH DELETE calls DeleteNode(id,true)", () =>
     {
         assert.deepEqual(WriteFixture.Run("MATCH (n:shop.Customer) DELETE n").Calls, ["DeleteNode(c1,false)"]);
