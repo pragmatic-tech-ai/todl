@@ -567,7 +567,7 @@ test("Rebind keeps a pending op whose instance survives and drops one whose inst
     const dropped = wc.Rebind(RebindFixture.Document(Nodes.Order("a", "A-1")), RebindFixture.Targets(["a", "A-1"]));
     assert.equal(dropped.length, 1);
     assert.equal(dropped[0]!.code, DiagnosticCode.ConnectorRefreshDropped);
-    assert.match(dropped[0]!.message, /b/);
+    assert.match(dropped[0]!.message, /\(b\)/);
     await wc.Flush(fx.Catalog, fx.Services);
     assert.deepEqual(fx.Factory.Batches[0]!.Operations.map(o => o.Key), ["A-1"]);
 });
