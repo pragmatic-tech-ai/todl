@@ -230,3 +230,9 @@ test("Refresh reuses adapters via Open and never invalidates the catalog", async
     assert.equal(catalog.OpenCount, 2);
     assert.equal(catalog.InvalidateCount, 0);
 });
+
+test("Refresh before Prepare throws NotPrepared", async () =>
+{
+    const services = FederatedTestFixture.Services(RefreshFixture.Factory());
+    await assert.rejects(() => RefreshFixture.Connector().Refresh(services), /Prepare must complete before accessing connector results/);
+});

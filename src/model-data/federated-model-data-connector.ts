@@ -86,15 +86,17 @@ export class FederatedModelDataConnector implements IModelDataConnector
     /** In-place data refresh: re-pull every binding and resolve into a NEW document, then atomically swap
      *  the built document + resolution, rebind the working copy (pruning vanished pending ops), and re-emit
      *  audit. On any query/resolution failure the previous state is left intact and the error rethrows.
-     *  Adapters are reused (no catalog eviction). */
+     *  Adapters are reused (no catalog eviction). Must not be called before Prepare completes, and is not
+     *  safe to call concurrently with an in-flight Prepare (callers serialize). */
     public async Refresh(services: IServiceProvider): Promise<TodlDocument>
     {
+        if (!this.built) throw new Error(FederatedModelDataConnector.NotPreparedMessage);
         const resolution = await this.Materialize(services); // may throw - nothing mutated yet
-        this.resolution = resolution;
-        this.built = resolution.document;
         this.lastRefreshDiagnostics = this.workingCopy === undefined
             ? []
             : this.workingCopy.Rebind(resolution.document, resolution.writeTargets);
+        this.resolution = resolution;
+        this.built = resolution.document;
         await this.EmitAudit(services, resolution);
         return this.built;
     }
