@@ -17,6 +17,7 @@ export class ConnectorWorkingCopy
     private static readonly ReadOnlyMessage = "Cannot edit read-only connector binding for";
     private static readonly ConflictMessage = "Write conflict on";
     private static readonly WriteFailedMessage = "Write failed on";
+    private static readonly DroppedMessage = "Pending edit dropped on refresh: instance no longer present";
     private static readonly KeySeparator = "\u0000";
 
     private readonly bindingsByKey = new Map<string, ConnectorBinding>();
@@ -26,7 +27,7 @@ export class ConnectorWorkingCopy
     public constructor(
         private readonly plan: ModelConnectorPlan,
         document: TodlDocument,
-        private readonly writeTargets: ReadonlyMap<string, readonly WriteTarget[]>,
+        private writeTargets: ReadonlyMap<string, readonly WriteTarget[]>,
     )
     {
         for (const binding of plan.Bindings)
@@ -46,6 +47,27 @@ export class ConnectorWorkingCopy
     public MarkDeleted(instanceId: string): Diagnostic | undefined
     {
         return this.Record(instanceId, WriteOperationKind.Delete);
+    }
+
+    /** Re-points this working copy at a refreshed document + write-targets. Pending ops whose instance id
+     *  still exists are kept (they will flush the refreshed attrs); an op whose instance vanished upstream
+     *  is dropped and reported as a connector.refresh-dropped diagnostic. Returns the dropped-op diagnostics. */
+    public Rebind(document: TodlDocument, writeTargets: ReadonlyMap<string, readonly WriteTarget[]>): readonly Diagnostic[]
+    {
+        this.writeTargets = writeTargets;
+        this.nodes.clear();
+        for (const node of document.nodes) this.nodes.set(node.id, node);
+        const dropped: Diagnostic[] = [];
+        for (const instanceId of [...this.pending.keys()])
+        {
+            if (!this.nodes.has(instanceId))
+            {
+                this.pending.delete(instanceId);
+                dropped.push(this.BuildDiagnostic(DiagnosticCode.ConnectorRefreshDropped,
+                    `${ConnectorWorkingCopy.DroppedMessage} (${instanceId})`, null));
+            }
+        }
+        return dropped;
     }
 
     /** Flushes pending edits to every source a canonical was drawn from, one binding at a time and

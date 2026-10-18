@@ -112,6 +112,7 @@ export enum DiagnosticCode
   ConnectorReadOnly = "connector.read-only",
   ConnectorWriteConflict = "connector.write-conflict",
   ConnectorWriteFailed = "connector.write-failed",
+  ConnectorRefreshDropped = "connector.refresh-dropped",
   ResolutionUnmergedConflict = "resolution.unmerged-conflict",
   // Solution composition phase (SPEC-06): a member/dependency package could not
   // be resolved or loaded into the composed Domain.

@@ -542,3 +542,56 @@ test("a binding whose connection cannot open is isolated: its ops stay pending, 
     assert.equal(retry.Results.reduce((n, r) => n + r.Applied, 0), 0, "only the still-un-openable binding remains, applying nothing");
     assert.ok(retry.Diagnostics.some(d => d.code === DiagnosticCode.ConnectorWriteFailed), "ops stayed pending: the open failure recurs rather than being silently dropped");
 });
+
+class RebindFixture
+{
+    public static Document(...nodes: JsonNode[]): TodlDocument
+    {
+        return { nodes, edges: [] } as unknown as TodlDocument;
+    }
+
+    public static Targets(...entries: [string, string][]): Map<string, { Connector: string; Source: string; StorageId: string }[]>
+    {
+        return new Map(entries.map(([id, storageId]) => [id, [{ Connector: "pg", Source: "order", StorageId: storageId }]]));
+    }
+}
+
+test("Rebind keeps a pending op whose instance survives and drops one whose instance vanished", async () =>
+{
+    const fx = new WorkingCopyFixture(true);
+    const a = Nodes.Order("a", "A-1");
+    const b = Nodes.Order("b", "B-1");
+    const wc = new ConnectorWorkingCopy(fx.Plan(), RebindFixture.Document(a, b), RebindFixture.Targets(["a", "A-1"], ["b", "B-1"]));
+    wc.MarkDirty("a");
+    wc.MarkDirty("b");
+    const dropped = wc.Rebind(RebindFixture.Document(Nodes.Order("a", "A-1")), RebindFixture.Targets(["a", "A-1"]));
+    assert.equal(dropped.length, 1);
+    assert.equal(dropped[0]!.code, DiagnosticCode.ConnectorRefreshDropped);
+    assert.match(dropped[0]!.message, /b/);
+    await wc.Flush(fx.Catalog, fx.Services);
+    assert.deepEqual(fx.Factory.Batches[0]!.Operations.map(o => o.Key), ["A-1"]);
+});
+
+test("Rebind re-points nodes so a surviving op flushes the REFRESHED attrs", async () =>
+{
+    const fx = new WorkingCopyFixture(true);
+    const old = Nodes.Order("a", "A-1");
+    old.attrs["label"] = "old";
+    const wc = new ConnectorWorkingCopy(fx.Plan(), RebindFixture.Document(old), RebindFixture.Targets(["a", "A-1"]));
+    wc.MarkDirty("a");
+    const fresh = Nodes.Order("a", "A-1");
+    fresh.attrs["label"] = "new";
+    wc.Rebind(RebindFixture.Document(fresh), RebindFixture.Targets(["a", "A-1"]));
+    await wc.Flush(fx.Catalog, fx.Services);
+    assert.deepEqual(fx.Factory.Batches[0]!.Operations[0]!.Fields, { display_name: "new" });
+});
+
+test("Rebind re-points write-targets", async () =>
+{
+    const fx = new WorkingCopyFixture(true);
+    const wc = new ConnectorWorkingCopy(fx.Plan(), RebindFixture.Document(Nodes.Order("a", "A-1")), RebindFixture.Targets(["a", "A-1"]));
+    wc.MarkDirty("a");
+    wc.Rebind(RebindFixture.Document(Nodes.Order("a", "A-2")), RebindFixture.Targets(["a", "A-2"]));
+    await wc.Flush(fx.Catalog, fx.Services);
+    assert.equal(fx.Factory.Batches[0]!.Operations[0]!.Key, "A-2");
+});
