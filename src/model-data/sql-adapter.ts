@@ -17,6 +17,7 @@ export class SqlQueryTranslator
     private static readonly OrderByKeyword = " ORDER BY ";
     private static readonly LimitKeyword = " LIMIT ";
     private static readonly GreaterOperator = " > ";
+    private static readonly InvalidLimitMessage = "QueryPage Limit must be a positive integer";
     private static readonly EqualsOperator = " = ";
     private static readonly NotEqualsOperator = " <> ";
     private static readonly PlaceholderPrefix = "$";
@@ -61,6 +62,10 @@ export class SqlQueryTranslator
     /** Keyset page: seeks strictly after `page.After` on the order key, ANDed with Where (keyset term last). */
     public async QueryPage(request: QueryRequest, page: PageQuery): Promise<PageSlice>
     {
+        if (!Number.isInteger(page.Limit) || page.Limit <= 0)
+        {
+            throw new Error(SqlQueryTranslator.InvalidLimitMessage);
+        }
         const orderKey = request.OrderKey ?? request.Fields[0]!;
         let sql = SqlQueryTranslator.SelectKeyword
             + request.Fields.map((f) => SqlQueryTranslator.QuoteIdent(f)).join(SqlQueryTranslator.ListSeparator)
@@ -96,7 +101,7 @@ export class SqlQueryTranslator
     private static SliceOf(records: readonly ExternalRecord[], orderKey: string, limit: number): PageSlice
     {
         const nextAfter = records.length === limit && limit > 0 ? records[records.length - 1]![orderKey] : undefined;
-        return nextAfter === undefined ? { Records: records } : { Records: records, NextAfter: nextAfter };
+        return nextAfter == null ? { Records: records } : { Records: records, NextAfter: nextAfter };
     }
 
     private static OperatorSql(op: QueryCompareOp): string
@@ -179,7 +184,10 @@ export class SqlAdapter implements IDataSourceAdapter
     }
 
     /** Whether this adapter can serve keyset-paged reads: true. */
-    public readonly CanPage = true;
+    public get CanPage(): boolean
+    {
+        return true;
+    }
 
     public QueryPage(request: QueryRequest, page: PageQuery): Promise<PageSlice>
     {

@@ -68,9 +68,24 @@ test("a short slice (fewer than Limit rows) reports NextAfter undefined", async 
     const slice = await new SqlAdapter(session).QueryPage({ Source: "t", Fields: ["id"] }, { Limit: 2 });
     assert.equal(slice.NextAfter, undefined);
     assert.equal(slice.Records.length, 1);
+    assert.ok(session.calls[0]!.sql.includes("ORDER BY \"id\""));
 });
 
 test("SqlAdapter.CanPage is true", () =>
 {
     assert.equal(new SqlAdapter(new RecordingSqlSession()).CanPage, true);
+});
+
+test("QueryPage rejects a non-positive or non-integer Limit", async () =>
+{
+    const adapter = new SqlAdapter(new RecordingSqlSession());
+    await assert.rejects(adapter.QueryPage({ Source: "t", Fields: ["id"] }, { Limit: 0 }));
+    await assert.rejects(adapter.QueryPage({ Source: "t", Fields: ["id"] }, { Limit: 1.5 }));
+});
+
+test("a null order-key value on a full page yields no NextAfter", async () =>
+{
+    const session = new RecordingSqlSession([{ id: null }]);
+    const slice = await new SqlAdapter(session).QueryPage({ Source: "t", Fields: ["id"] }, { Limit: 1 });
+    assert.equal(slice.NextAfter, undefined);
 });
