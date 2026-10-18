@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { SqlAdapter } from "../sql-adapter.js";
+import { QueryCompareOp } from "../connector-plan.js";
 import { ConnectionFailureKind } from "../connection-reconnect.js";
 import { RecordingSqlSession } from "./sql-fakes.js";
 import type { ISqlSession, SqlRow } from "../sql-session.js";
@@ -26,4 +27,50 @@ test("SqlAdapter.ClassifyFailure delegates to the session's classifier", () =>
 test("SqlAdapter.ClassifyFailure is Permanent when the session has no classifier", () =>
 {
     assert.equal(new SqlAdapter(new RecordingSqlSession()).ClassifyFailure(new Error("x")), ConnectionFailureKind.Permanent);
+});
+
+test("QueryPage emits ORDER BY the order key with LIMIT and no After on the first page", async () =>
+{
+    const session = new RecordingSqlSession([{ id: "k1", name: "a" }, { id: "k2", name: "b" }]);
+    const slice = await new SqlAdapter(session).QueryPage({ Source: "t", Fields: ["id", "name"], OrderKey: "id" }, { Limit: 2 });
+    assert.equal(session.calls[0]!.sql, "SELECT \"id\", \"name\" FROM \"t\" ORDER BY \"id\" LIMIT 2");
+    assert.deepEqual(session.calls[0]!.params, []);
+    assert.deepEqual(slice.Records, [{ id: "k1", name: "a" }, { id: "k2", name: "b" }]);
+    assert.equal(slice.NextAfter, "k2");
+});
+
+test("QueryPage adds a keyset predicate when After is set", async () =>
+{
+    const session = new RecordingSqlSession([]);
+    await new SqlAdapter(session).QueryPage({ Source: "t", Fields: ["id", "name"], OrderKey: "id" }, { After: "k5", Limit: 2 });
+    assert.equal(session.calls[0]!.sql, "SELECT \"id\", \"name\" FROM \"t\" WHERE \"id\" > $1 ORDER BY \"id\" LIMIT 2");
+    assert.deepEqual(session.calls[0]!.params, ["k5"]);
+});
+
+test("QueryPage ANDs Where with the keyset predicate", async () =>
+{
+    const session = new RecordingSqlSession([]);
+    await new SqlAdapter(session).QueryPage(
+        {
+            Source: "t",
+            Fields: ["id"],
+            OrderKey: "id",
+            Where: { All: [{ Field: "active", Op: QueryCompareOp.Eq, Value: true }] },
+        },
+        { After: "k5", Limit: 3 });
+    assert.equal(session.calls[0]!.sql, "SELECT \"id\" FROM \"t\" WHERE \"active\" = $1 AND \"id\" > $2 ORDER BY \"id\" LIMIT 3");
+    assert.deepEqual(session.calls[0]!.params, [true, "k5"]);
+});
+
+test("a short slice (fewer than Limit rows) reports NextAfter undefined", async () =>
+{
+    const session = new RecordingSqlSession([{ id: "k1" }]);
+    const slice = await new SqlAdapter(session).QueryPage({ Source: "t", Fields: ["id"] }, { Limit: 2 });
+    assert.equal(slice.NextAfter, undefined);
+    assert.equal(slice.Records.length, 1);
+});
+
+test("SqlAdapter.CanPage is true", () =>
+{
+    assert.equal(new SqlAdapter(new RecordingSqlSession()).CanPage, true);
 });

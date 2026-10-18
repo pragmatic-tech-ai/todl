@@ -1,7 +1,21 @@
 import { ServiceKey } from "@pragmatic-tech-ai/todl-runtime";
 import type { IServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
-import type { ConnectorSpec, DataSourceKind, ExternalRecord, QueryRequest, ResolvedConnection, WriteBatch, WriteResult } from "./connector-plan.js";
+import type { ConnectorSpec, DataSourceKind, ExternalFieldValue, ExternalRecord, QueryRequest, ResolvedConnection, WriteBatch, WriteResult } from "./connector-plan.js";
 import type { ConnectionFailureKind } from "./connection-reconnect.js";
+
+/** A keyset page request: rows strictly after `After` (by the order key), at most `Limit`. */
+export interface PageQuery
+{
+    After?: ExternalFieldValue;
+    Limit: number;
+}
+
+/** One keyset page; `NextAfter` is set only when a full page came back (more may exist). */
+export interface PageSlice
+{
+    Records: readonly ExternalRecord[];
+    NextAfter?: ExternalFieldValue;
+}
 
 /** A live connection to one external data source. */
 export interface IDataSourceAdapter
@@ -19,6 +33,10 @@ export interface IDataSourceAdapter
     /** Classifies a thrown driver error so the reconnecting catalog can retry/reopen. Optional so existing
      *  fakes and the adapter-pack ABI keep compiling; absent -> every error is treated as Permanent. */
     ClassifyFailure?(error: unknown): ConnectionFailureKind;
+    /** Whether this adapter can serve keyset-paged reads (QueryPage). Optional; absent -> false. */
+    readonly CanPage?: boolean;
+    /** Keyset page: rows with OrderKey > page.After, sorted by OrderKey asc, at most page.Limit. Optional. */
+    QueryPage?(request: QueryRequest, page: PageQuery): Promise<PageSlice>;
 }
 
 /** Opens adapters for one kind of data source. */

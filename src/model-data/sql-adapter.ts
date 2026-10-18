@@ -1,7 +1,7 @@
 import { QueryCompareOp, WriteAtomicity, WriteConcurrency, WriteFailureKind, WriteOperationKind } from "./connector-plan.js";
 import type { ExternalFieldValue, ExternalRecord, QueryRequest, WriteBatch, WriteFailure, WriteOperation, WriteResult } from "./connector-plan.js";
 import { ConnectionFailureKind } from "./connection-reconnect.js";
-import type { IDataSourceAdapter } from "./data-source-adapter.js";
+import type { IDataSourceAdapter, PageQuery, PageSlice } from "./data-source-adapter.js";
 import { RollbackSignal } from "./rollback-signal.js";
 import type { ISqlSession, SqlRow } from "./sql-session.js";
 import { WriteCapability } from "./write-capability.js";
@@ -14,6 +14,9 @@ export class SqlQueryTranslator
     private static readonly ListSeparator = ", ";
     private static readonly WhereKeyword = " WHERE ";
     private static readonly AndKeyword = " AND ";
+    private static readonly OrderByKeyword = " ORDER BY ";
+    private static readonly LimitKeyword = " LIMIT ";
+    private static readonly GreaterOperator = " > ";
     private static readonly EqualsOperator = " = ";
     private static readonly NotEqualsOperator = " <> ";
     private static readonly PlaceholderPrefix = "$";
@@ -53,6 +56,47 @@ export class SqlQueryTranslator
         }
         const rows = await this.session.Query(sql, params);
         return rows.map(row => SqlQueryTranslator.ToRecord(row));
+    }
+
+    /** Keyset page: seeks strictly after `page.After` on the order key, ANDed with Where (keyset term last). */
+    public async QueryPage(request: QueryRequest, page: PageQuery): Promise<PageSlice>
+    {
+        const orderKey = request.OrderKey ?? request.Fields[0]!;
+        let sql = SqlQueryTranslator.SelectKeyword
+            + request.Fields.map((f) => SqlQueryTranslator.QuoteIdent(f)).join(SqlQueryTranslator.ListSeparator)
+            + SqlQueryTranslator.FromKeyword
+            + SqlQueryTranslator.QuoteIdent(request.Source);
+        const params: ExternalFieldValue[] = [];
+        const terms: string[] = [];
+        for (const comparison of request.Where?.All ?? [])
+        {
+            params.push(comparison.Value);
+            terms.push(SqlQueryTranslator.QuoteIdent(comparison.Field)
+                + SqlQueryTranslator.OperatorSql(comparison.Op)
+                + SqlQueryTranslator.PlaceholderPrefix + params.length);
+        }
+        if (page.After !== undefined)
+        {
+            params.push(page.After);
+            terms.push(SqlQueryTranslator.QuoteIdent(orderKey)
+                + SqlQueryTranslator.GreaterOperator
+                + SqlQueryTranslator.PlaceholderPrefix + params.length);
+        }
+        if (terms.length > 0)
+        {
+            sql += SqlQueryTranslator.WhereKeyword + terms.join(SqlQueryTranslator.AndKeyword);
+        }
+        sql += SqlQueryTranslator.OrderByKeyword + SqlQueryTranslator.QuoteIdent(orderKey)
+            + SqlQueryTranslator.LimitKeyword + page.Limit;
+        const rows = await this.session.Query(sql, params);
+        const records = rows.map(row => SqlQueryTranslator.ToRecord(row));
+        return SqlQueryTranslator.SliceOf(records, orderKey, page.Limit);
+    }
+
+    private static SliceOf(records: readonly ExternalRecord[], orderKey: string, limit: number): PageSlice
+    {
+        const nextAfter = records.length === limit && limit > 0 ? records[records.length - 1]![orderKey] : undefined;
+        return nextAfter === undefined ? { Records: records } : { Records: records, NextAfter: nextAfter };
     }
 
     private static OperatorSql(op: QueryCompareOp): string
@@ -132,6 +176,14 @@ export class SqlAdapter implements IDataSourceAdapter
     public Query(request: QueryRequest): Promise<readonly ExternalRecord[]>
     {
         return this.translator.Query(request);
+    }
+
+    /** Whether this adapter can serve keyset-paged reads: true. */
+    public readonly CanPage = true;
+
+    public QueryPage(request: QueryRequest, page: PageQuery): Promise<PageSlice>
+    {
+        return this.translator.QueryPage(request, page);
     }
 
     /** Dispatches on the batch's atomicity axis: resilient Sequential apply, or all-or-nothing Transactional. */

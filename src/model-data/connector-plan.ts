@@ -106,6 +106,8 @@ export interface QueryRequest
     Source: string;
     Fields: readonly string[];
     Where?: QueryFilter;
+    /** The id column to sort/seek on when paging; absent -> falls back to Fields[0]. */
+    OrderKey?: string;
 }
 
 /** The kind of write an adapter applies to one record. */
