@@ -10,6 +10,7 @@ import type { IServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
 import type { TodlDocument } from "../compiler-services/emit/json.js";
 import { FrozenGraph } from "../domain/graph.js";
 import { GraphQuery } from "../graph-api/graph-query-engine.js";
+import type { TypeInfo } from "../manifest/reflection/reflection.js";
 import { Manifest, type TaxonomyInfo } from "../manifest/reflection/reflection.js";
 import { PackageManifestBridge } from "../solution-services/package-manager/package-manifest-bridge.js";
 import { ReflectedEntity, MirrorReader, TermReader, type EntityReader, type EntityHost } from "../reflection-client/reflected-entity.js";
@@ -98,6 +99,12 @@ export abstract class ModelDataSource implements EntityHost
     public ConceptNames(): readonly string[]
     {
         return this.query.Concepts().map((c) => c.fullName);
+    }
+
+    /** Reflected concept type lookup over the loaded base document (the schema surface the app-data path reaches via IGraphQuery.Type). */
+    public Type(concept: string): TypeInfo | undefined
+    {
+        return this.query.Type(concept);
     }
 
     /** Public read of a concept's instances (the generic-host surface over protected instancesOf). */

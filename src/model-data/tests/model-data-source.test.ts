@@ -75,6 +75,15 @@ test("Prepare materializes through a connector and preserves reference identity"
     assert.equal(src.entity("subscription"), src.billings()[0]);
 });
 
+test("Type returns the reflected concept type, undefined for a missing concept", () =>
+{
+    const src = MiniSource.viaDocument(toJSON(miniRepo()));
+    const type = src.Type("billing");
+    assert.ok(type !== undefined);
+    assert.equal(type.fullName, "billing");
+    assert.equal(src.Type("Missing"), undefined);
+});
+
 test("Prepare without a connector throws a clear error", async () =>
 {
     const src = new MiniSource();
