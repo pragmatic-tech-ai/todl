@@ -116,6 +116,12 @@ export class SqlAdapter implements IDataSourceAdapter
         return this.session.Transaction !== undefined;
     }
 
+    /** Whether this adapter can enforce an optimistic version guard: true (it emits the versioned WHERE guard). */
+    public get CanVersion(): boolean
+    {
+        return true;
+    }
+
     public Query(request: QueryRequest): Promise<readonly ExternalRecord[]>
     {
         return this.translator.Query(request);
