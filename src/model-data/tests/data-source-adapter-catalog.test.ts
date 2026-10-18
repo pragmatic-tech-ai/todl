@@ -1,6 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DataSourceKind, type ConnectorSpec, type ResolvedConnection } from "../connector-plan.js";
+import {
+    DataSourceKind,
+    type ConnectorSpec,
+    type ExternalRecord,
+    type QueryRequest,
+    type ResolvedConnection,
+    type WriteBatch,
+    type WriteResult,
+} from "../connector-plan.js";
 import { DataSourceAdapterCatalog } from "../data-source-adapter-catalog.js";
 import {
     ConnectionResolverKey,
@@ -12,8 +20,8 @@ import {
 import { InMemoryAdapter, InMemoryAdapterFactory, RegisteredAdapterProvider } from "./fakes.js";
 import { describeDataSourceAdapter } from "./data-source-adapter-conformance.js";
 import { ServiceProvider, type IServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
-import { ConnectionFailureKind } from "../connection-reconnect.js";
-import type { ExternalRecord, QueryRequest, WriteBatch, WriteResult } from "../connector-plan.js";
+import { ConnectionFailureKind, ReconnectObserverKey } from "../connection-reconnect.js";
+import type { IReconnectObserver, ReconnectEvent } from "../connection-reconnect.js";
 
 describeDataSourceAdapter("InMemoryAdapter", () =>
 {
@@ -317,4 +325,44 @@ test("Dispose still disposes all memoized adapters", async () =>
     await catalog.Open({ Name: "b", Kind: DataSourceKind.Sql, Config: {} }, services);
     await catalog.Dispose();
     assert.deepEqual(factory.Created.map(a => a.Disposed), [1, 1]);
+});
+
+class RecordingObserver implements IReconnectObserver
+{
+    public readonly Events: ReconnectEvent[] = [];
+
+    public OnReconnect(event: ReconnectEvent): void
+    {
+        this.Events.push(event);
+    }
+}
+
+test("Invalidate of one spec leaves another spec's memoized adapter untouched", async () =>
+{
+    const factory = new SecretCapturingFactory(DataSourceKind.Sql);
+    const catalog = new DataSourceAdapterCatalog().Register(factory);
+    const services = new ServiceProvider();
+    const specA = { Name: "a", Kind: DataSourceKind.Sql, Config: {} };
+    const specB = { Name: "b", Kind: DataSourceKind.Sql, Config: {} };
+    const wrapperA = await catalog.Open(specA, services);
+    const wrapperB = await catalog.Open(specB, services);
+    await catalog.Invalidate(specA);
+    assert.equal(factory.Created[0]?.Disposed, 1);
+    assert.equal(factory.Created[1]?.Disposed, 0);
+    assert.equal(await catalog.Open(specB, services), wrapperB);
+    assert.notEqual(await catalog.Open(specA, services), wrapperA);
+    assert.equal(factory.Created.length, 3);
+});
+
+test("a registered reconnect observer is passed through to the wrapper", async () =>
+{
+    const factory = new SecretCapturingFactory(DataSourceKind.Sql, true);
+    const catalog = new DataSourceAdapterCatalog().Register(factory);
+    const observer = new RecordingObserver();
+    const services = new ServiceProvider();
+    services.registerInstance(ReconnectObserverKey, observer);
+    const adapter = await catalog.Open({ Name: "pg", Kind: DataSourceKind.Sql, Config: {} }, services);
+    await adapter.Query({ Source: "t", Fields: ["secret"] });
+    assert.ok(observer.Events.length >= 1);
+    assert.equal(observer.Events[0]?.Connector, "pg");
 });

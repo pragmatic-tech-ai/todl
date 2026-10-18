@@ -84,7 +84,7 @@ test("Dispose disposes every memoized adapter and clears the cache", async () =>
     const catalog = new DataSourceAdapterCatalog().Register(new SingleAdapterFactory(DataSourceKind.Sql, adapter));
     const services = new ServiceProvider();
     const opened = await catalog.Open(DisposeSpecs.Of("a"), services);
-    assert.ok(opened);
+    assert.notEqual(opened, adapter);
     await catalog.Dispose();
     assert.equal(adapter.disposed, 1);
     await catalog.Dispose();
