@@ -118,6 +118,7 @@ export { type ISqlSession, type SqlRow } from './model-data/sql-session.js';
 export { SqlAdapter, SqlQueryTranslator } from './model-data/sql-adapter.js';
 export { DataSourceAdapterCatalog, InlineConnectionResolver } from './model-data/data-source-adapter-catalog.js';
 export { ConnectionFailureKind, ConnectionRetryBackoff, ReconnectObserverKey, type ConnectionRetryPolicy, type ReconnectEvent, type IReconnectObserver } from './model-data/connection-reconnect.js';
+export { ReconnectingAdapter } from './model-data/reconnecting-adapter.js';
 
 export { ApplicationBootstrapper } from './application/application-bootstrapper.js';
 export { ApplicationEntryPoint } from './application/application-entry-point.js';
