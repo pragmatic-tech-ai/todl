@@ -164,10 +164,20 @@ export class CypherParser
     {
         this.expect(TokenKind.LParen);
         const variable = this.peek().Kind === TokenKind.Identifier ? this.advance().Text : undefined;
-        const label = this.accept(TokenKind.Colon) ? this.expect(TokenKind.Identifier).Text : undefined;
+        const label = this.accept(TokenKind.Colon) ? this.parseQualifiedLabel() : undefined;
         const props = this.peek().Kind === TokenKind.LBrace ? this.parsePropMap() : new Map<string, Scalar>();
         this.expect(TokenKind.RParen);
         return new NodePattern(variable, label, props);
+    }
+
+    private parseQualifiedLabel(): string
+    {
+        let label = this.expect(TokenKind.Identifier).Text;
+        while (this.accept(TokenKind.Dot))
+        {
+            label += "." + this.expect(TokenKind.Identifier).Text;
+        }
+        return label;
     }
 
     private parseRel(): RelPattern
