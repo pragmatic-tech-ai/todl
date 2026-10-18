@@ -79,8 +79,8 @@ test("SqlAdapter.CanPage is true", () =>
 test("QueryPage rejects a non-positive or non-integer Limit", async () =>
 {
     const adapter = new SqlAdapter(new RecordingSqlSession());
-    await assert.rejects(adapter.QueryPage({ Source: "t", Fields: ["id"] }, { Limit: 0 }));
-    await assert.rejects(adapter.QueryPage({ Source: "t", Fields: ["id"] }, { Limit: 1.5 }));
+    await assert.rejects(adapter.QueryPage({ Source: "t", Fields: ["id"] }, { Limit: 0 }), { message: "QueryPage Limit must be a positive integer" });
+    await assert.rejects(adapter.QueryPage({ Source: "t", Fields: ["id"] }, { Limit: 1.5 }), { message: "QueryPage Limit must be a positive integer" });
 });
 
 test("a null order-key value on a full page yields no NextAfter", async () =>
