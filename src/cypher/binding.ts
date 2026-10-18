@@ -18,6 +18,16 @@ export class Binding
         return new Binding(next);
     }
 
+    public MapValues(map: (value: CypherValue) => CypherValue): Binding
+    {
+        const next = new Map<string, CypherValue>();
+        for (const [variable, value] of this.values)
+        {
+            next.set(variable, map(value));
+        }
+        return new Binding(next);
+    }
+
     /** Overlays other onto this; undefined when a shared variable holds different values (by GroupKey). */
     public Merge(other: Binding): Binding | undefined
     {

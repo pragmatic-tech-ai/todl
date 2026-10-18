@@ -207,3 +207,15 @@ export class BindingRow implements IOperator
         yield this.row;
     }
 }
+
+export class BindingRows implements IOperator
+{
+    constructor(private readonly rows: readonly Binding[])
+    {
+    }
+
+    public *Rows(): Iterable<Binding>
+    {
+        yield* this.rows;
+    }
+}

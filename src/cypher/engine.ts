@@ -5,14 +5,17 @@ import { CypherParser } from "./parser.js";
 import { CypherQuery } from "./fluent.js";
 import { LogicalPlanner } from "./planner.js";
 import type { IOperator } from "./operators.js";
+import { BindingRows } from "./operators.js";
+import type { ICypherWriter } from "./writer.js";
 import type { Binding } from "./binding.js";
 import type { PlannerOptions } from "./planner.js";
-import { CypherValue, NullValue } from "./values.js";
+import { CypherValue, NodeRefValue, NodeValue, NullValue } from "./values.js";
 import type { ParameterValue } from "./values.js";
 import { ParameterBinder } from "./parameter-binder.js";
 import { CypherResult } from "./result.js";
 import type { CypherResultDto } from "./result.js";
 import { CancelProbe } from "./execution-limits.js";
+import type { CypherQueryModel } from "./query-model.js";
 import { CypherSemanticError } from "./errors.js";
 import type { ExecutionLimits } from "./execution-limits.js";
 
@@ -22,7 +25,9 @@ export class CypherEngine
     private static readonly InvalidSkip = "paging Skip must be a non-negative integer";
     private static readonly InvalidPageSize = "paging RowCap must be a positive integer when Skip is supplied";
 
-    constructor(private readonly graph: ICypherGraph, private readonly options?: PlannerOptions)
+    private static readonly WritesRequireWriter = "write clauses require an ICypherWriter; this engine was built without one";
+
+    constructor(private readonly graph: ICypherGraph, private readonly options?: PlannerOptions, private readonly writer?: ICypherWriter)
     {
     }
 
@@ -34,11 +39,66 @@ export class CypherEngine
     public Execute(source: string | CypherQuery, parameters: ReadonlyMap<string, ParameterValue> = CypherEngine.EmptyParams, limits?: ExecutionLimits): CypherResult
     {
         const model = typeof source === "string" ? new CypherParser(source).Parse() : source.ToModel();
+        if (model.HasWrites())
+        {
+            return this.ExecuteWrite(model, parameters, limits);
+        }
         const paging = limits?.Skip !== undefined;
         if (paging) CypherEngine.ValidatePaging(limits!);
         const plan = new LogicalPlanner(this.graph, ParameterBinder.FromInputMap(parameters), this.options, limits?.Cancel, paging).Plan(model);
         const columns = model.FinalColumns();
         return paging ? this.Page(plan, columns, limits!) : this.Collect(plan, columns, limits);
+    }
+
+    // Two phases: (1) drain the mutating pipeline eagerly (a write is never paged or truncated), commit, then
+    // (2) re-resolve node references against the committed graph and run the final projection over the full stream.
+    private ExecuteWrite(model: CypherQueryModel, parameters: ReadonlyMap<string, ParameterValue>, limits?: ExecutionLimits): CypherResult
+    {
+        if (this.writer === undefined) throw new CypherSemanticError(CypherEngine.WritesRequireWriter);
+        const writer = this.writer;
+        writer.Begin();
+        try
+        {
+            const binder = ParameterBinder.FromInputMap(parameters);
+            const { Mutations, Projection } = new LogicalPlanner(this.graph, binder, this.options, limits?.Cancel, false, writer).PlanForWrite(model);
+            const probe = new CancelProbe(limits?.Cancel);
+            const raw: Binding[] = [];
+            for (const binding of Mutations.Rows())
+            {
+                probe.Tick();
+                raw.push(binding);
+            }
+            const committed = writer.Commit();
+            let columns: readonly string[] = [];
+            const rows: CypherValue[][] = [];
+            if (Projection !== undefined)
+            {
+                const resolved = raw.map((b) => b.MapValues((v) => CypherEngine.Resolve(committed, v)));
+                columns = model.FinalColumns();
+                const projected = new LogicalPlanner(committed, binder, this.options, limits?.Cancel, false).ProjectOver(new BindingRows(resolved), Projection);
+                for (const binding of projected.Rows())
+                {
+                    probe.Tick();
+                    rows.push(CypherEngine.Materialize(binding, columns));
+                }
+            }
+            return new CypherResult(columns, rows, false, false, writer.Stats());
+        }
+        catch (e)
+        {
+            writer.Rollback();
+            throw e;
+        }
+    }
+
+    private static Resolve(graph: ICypherGraph, value: CypherValue): CypherValue
+    {
+        if (value instanceof NodeValue || value instanceof NodeRefValue)
+        {
+            const mirror = graph.Reflect(value.Id);
+            return mirror === undefined ? NullValue.Instance : new NodeValue(mirror);
+        }
+        return value;
     }
 
     private Collect(plan: IOperator, columns: readonly string[], limits?: ExecutionLimits): CypherResult
