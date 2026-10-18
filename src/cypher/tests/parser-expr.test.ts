@@ -11,7 +11,7 @@ class ExprHelper
     public static Eval(query: string): unknown
     {
         const model = new CypherParser(query).Parse();
-        const expr = model.Parts[0]!.Projection.Items[0]!.Expr;
+        const expr = model.Parts[0]!.Projection!.Items[0]!.Expr;
         const value = expr.Evaluate(new EvalContext(new Binding(), new Map()));
         if (value instanceof ScalarValue) return value.Value;
         if (value instanceof NullValue) return null;

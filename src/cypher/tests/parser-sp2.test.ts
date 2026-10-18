@@ -11,10 +11,10 @@ describe("cypher parser SP2 (query-part loop + projection)", () =>
     {
         const model = new CypherParser("MATCH (a) WITH a AS a2 RETURN a2").Parse();
         assert.equal(model.Parts.length, 2);
-        assert.equal(model.Parts[0]!.Projection.IsReturn, false);
-        assert.equal(model.Parts[0]!.Projection.Items[0]!.Alias, "a2");
+        assert.equal(model.Parts[0]!.Projection!.IsReturn, false);
+        assert.equal(model.Parts[0]!.Projection!.Items[0]!.Alias, "a2");
         assert.ok(model.Parts[0]!.Reading[0] instanceof MatchClause);
-        assert.equal(model.Parts[1]!.Projection.IsReturn, true);
+        assert.equal(model.Parts[1]!.Projection!.IsReturn, true);
         assert.equal(model.Parts[1]!.Reading.length, 0);
         assert.deepEqual(model.FinalColumns(), ["a2"]);
     });
@@ -22,7 +22,7 @@ describe("cypher parser SP2 (query-part loop + projection)", () =>
     test("DISTINCT + ORDER BY ... DESC + SKIP + LIMIT parse onto the projection", () =>
     {
         const model = new CypherParser("MATCH (a) RETURN DISTINCT a.x ORDER BY a.x DESC SKIP 1 LIMIT 2").Parse();
-        const proj = model.Parts[0]!.Projection;
+        const proj = model.Parts[0]!.Projection!;
         assert.equal(proj.Distinct, true);
         assert.equal(proj.OrderBy?.length, 1);
         assert.equal(proj.OrderBy?.[0]!.Descending, true);
@@ -42,12 +42,12 @@ describe("cypher parser SP2 (query-part loop + projection)", () =>
     test("function call with DISTINCT and star parse into FunctionCall", () =>
     {
         const star = new CypherParser("MATCH (a) RETURN count(*)").Parse();
-        const starCall = star.Parts[0]!.Projection.Items[0]!.Expr as FunctionCall;
+        const starCall = star.Parts[0]!.Projection!.Items[0]!.Expr as FunctionCall;
         assert.ok(starCall instanceof FunctionCall);
         assert.equal(starCall.Star, true);
 
         const distinct = new CypherParser("MATCH (a) RETURN count(DISTINCT a.x)").Parse();
-        const distinctCall = distinct.Parts[0]!.Projection.Items[0]!.Expr as FunctionCall;
+        const distinctCall = distinct.Parts[0]!.Projection!.Items[0]!.Expr as FunctionCall;
         assert.equal(distinctCall.Distinct, true);
         assert.equal(distinctCall.Args.length, 1);
     });
@@ -127,9 +127,9 @@ describe("cypher parser SP2 (expression edge cases)", () =>
     test("coalesce(...) IN [list] and count(*) IN [list] both parse", () =>
     {
         const c = new CypherParser("RETURN coalesce(null, 2) IN [2, 3] AS x").Parse();
-        assert.equal(c.Parts[0]!.Projection.Items[0]!.Alias, "x");
+        assert.equal(c.Parts[0]!.Projection!.Items[0]!.Alias, "x");
         const agg = new CypherParser("MATCH (a) RETURN count(*) IN [1] AS x").Parse();
-        assert.equal(agg.Parts[0]!.Projection.Items[0]!.Alias, "x");
+        assert.equal(agg.Parts[0]!.Projection!.Items[0]!.Alias, "x");
     });
 
     test("IN with a non-literal right side is a clear syntax error", () =>
@@ -147,10 +147,10 @@ describe("cypher parser SP2 (expression edge cases)", () =>
 
     test("WITH ... WHERE parses a post-projection predicate; RETURN ... WHERE is a syntax error", () =>
     {
-        const proj = new CypherParser("MATCH (a) WITH a, count(*) AS c WHERE c > 1 RETURN a").Parse().Parts[0]!.Projection;
+        const proj = new CypherParser("MATCH (a) WITH a, count(*) AS c WHERE c > 1 RETURN a").Parse().Parts[0]!.Projection!;
         assert.ok(proj.Where !== undefined);
         assert.ok(proj.Where.Predicate instanceof Comparison);
-        assert.equal(new CypherParser("MATCH (a) WITH a RETURN a").Parse().Parts[0]!.Projection.Where, undefined);
+        assert.equal(new CypherParser("MATCH (a) WITH a RETURN a").Parse().Parts[0]!.Projection!.Where, undefined);
         assert.throws(() => new CypherParser("MATCH (a) RETURN a WHERE a").Parse(), CypherSyntaxError);
         assert.throws(() => new CypherParser("MATCH (a) WITH a LIMIT 1 WHERE a > 1 RETURN a").Parse(), (e: unknown) => e instanceof CypherSyntaxError && /before ORDER BY/.test(e.message));
         assert.throws(() => new CypherParser("MATCH (a) WITH a ORDER BY a WHERE a RETURN a").Parse(), CypherSyntaxError);

@@ -20,8 +20,8 @@ describe("cypher parser", () =>
         assert.equal(path.Rels[0]!.RelType, "calls");
         assert.equal(path.Rels[0]!.Direction, RelDirection.Outgoing);
         assert.ok(match.Where !== undefined);
-        assert.equal(model.Parts[0]!.Projection.Items.length, 2);
-        assert.equal(model.Parts[0]!.Projection.Items[1]!.Alias, "n");
+        assert.equal(model.Parts[0]!.Projection!.Items.length, 2);
+        assert.equal(model.Parts[0]!.Projection!.Items[1]!.Alias, "n");
     });
 
     test("undirected and incoming relationships", () =>

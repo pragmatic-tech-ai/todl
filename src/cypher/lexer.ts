@@ -8,6 +8,8 @@ export class Token
         public readonly Text: string,
         public readonly Line: number,
         public readonly Column: number,
+        // Original source spelling; differs from Text only for keywords (Text is upper-cased).
+        public readonly Raw: string = Text,
     )
     {
     }
@@ -19,11 +21,12 @@ export class CypherLexer
         [
             "MATCH", "OPTIONAL", "UNWIND", "WHERE", "RETURN", "AS", "AND", "OR", "NOT", "IS", "NULL", "IN", "TRUE", "FALSE",
             "WITH", "ORDER", "BY", "ASC", "DESC", "SKIP", "LIMIT", "DISTINCT",
+            "CREATE", "MERGE", "SET", "DELETE", "DETACH", "REMOVE",
         ],
     );
     private static readonly TwoCharKinds: ReadonlyMap<string, TokenKind> = new Map([
         ["->", TokenKind.ArrowRight], ["<-", TokenKind.ArrowLeft],
-        ["<=", TokenKind.Lte], [">=", TokenKind.Gte], ["<>", TokenKind.Neq],
+        ["+=", TokenKind.PlusEq], ["<=", TokenKind.Lte], [">=", TokenKind.Gte], ["<>", TokenKind.Neq],
     ]);
     private static readonly OneCharKinds: ReadonlyMap<string, TokenKind> = new Map([
         ["(", TokenKind.LParen], [")", TokenKind.RParen],
@@ -144,7 +147,7 @@ export class CypherLexer
             this.advance(1);
         }
         const upper = value.toUpperCase();
-        if (CypherLexer.Keywords.has(upper)) return new Token(TokenKind.Keyword, upper, line, column);
+        if (CypherLexer.Keywords.has(upper)) return new Token(TokenKind.Keyword, upper, line, column, value);
         return new Token(TokenKind.Identifier, value, line, column);
     }
 

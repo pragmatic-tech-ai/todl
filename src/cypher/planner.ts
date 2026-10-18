@@ -86,6 +86,7 @@ export class LogicalPlanner
             if (this.strictWithScope) this.checkStrictScope(part, inScope, everBound);
             op = this.compilePart(part, op, inScope, part === model.Parts[model.Parts.length - 1]);
             for (const v of this.readingVariables(part)) everBound.add(v);
+            if (part.Projection === undefined) continue;
             for (const item of part.Projection.Items) everBound.add(item.ColumnName());
             if (!part.Projection.IsReturn)
             {
@@ -141,6 +142,7 @@ export class LogicalPlanner
             }
         }
         if (op === undefined) op = new SingleRow();
+        if (part.Projection === undefined) return op;
         return this.buildProjection(op, part.Projection, isFinal && this.ensureOrder);
     }
 
@@ -152,7 +154,7 @@ export class LogicalPlanner
             if (clause instanceof MatchClause) clause.Where?.Predicate.CollectVariables(referenced);
             else if (clause instanceof UnwindClause) clause.Expr.CollectVariables(referenced);
         }
-        for (const item of part.Projection.Items) item.Expr.CollectVariables(referenced);
+        for (const item of part.Projection?.Items ?? []) item.Expr.CollectVariables(referenced);
         // ORDER BY / SKIP / LIMIT may refer to projection aliases, so they are not scope-checked here.
         for (const v of referenced)
         {

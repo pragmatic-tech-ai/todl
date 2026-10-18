@@ -1,4 +1,4 @@
-import type { Expression } from "./expressions.js";
+import type { Expression, PropertyAccess } from "./expressions.js";
 import type { PatternPath } from "./patterns.js";
 
 export class ReturnItem
@@ -14,6 +14,11 @@ export class ReturnItem
 }
 
 export abstract class ReadingClause
+{
+}
+
+// Marker base for clauses that mutate the graph. A WritingClause IS-A ReadingClause so it flows through QueryPart.Reading.
+export abstract class WritingClause extends ReadingClause
 {
 }
 
@@ -56,6 +61,89 @@ export class UnwindClause extends ReadingClause
     }
 }
 
+export class CreateClause extends WritingClause
+{
+    constructor(public readonly Paths: readonly PatternPath[])
+    {
+        super();
+    }
+
+    public DeclaredVariables(): string[]
+    {
+        return WritingPatterns.Variables(this.Paths);
+    }
+}
+
+export class MergeClause extends WritingClause
+{
+    constructor(public readonly Pattern: PatternPath)
+    {
+        super();
+    }
+
+    public DeclaredVariables(): string[]
+    {
+        return WritingPatterns.Variables([this.Pattern]);
+    }
+}
+
+export enum SetMode
+{
+    Property,
+    MergeMap,
+}
+
+export class SetItem
+{
+    constructor(
+        public readonly Variable: string,
+        // Defined for "n.p = expr" (SetMode.Property); undefined for "n += map" (SetMode.MergeMap).
+        public readonly Property: string | undefined,
+        public readonly Value: Expression,
+        public readonly Mode: SetMode,
+    )
+    {
+    }
+}
+
+export class SetClause extends WritingClause
+{
+    constructor(public readonly Items: readonly SetItem[])
+    {
+        super();
+    }
+}
+
+export class DeleteClause extends WritingClause
+{
+    constructor(public readonly Targets: readonly Expression[], public readonly Detach: boolean)
+    {
+        super();
+    }
+}
+
+export class RemoveClause extends WritingClause
+{
+    constructor(public readonly Items: readonly PropertyAccess[])
+    {
+        super();
+    }
+}
+
+class WritingPatterns
+{
+    public static Variables(paths: readonly PatternPath[]): string[]
+    {
+        const out: string[] = [];
+        for (const path of paths)
+        {
+            for (const n of path.Nodes) if (n.Variable !== undefined) out.push(n.Variable);
+            for (const r of path.Rels) if (r.Variable !== undefined) out.push(r.Variable);
+        }
+        return out;
+    }
+}
+
 export class SortItem
 {
     constructor(public readonly Expr: Expression, public readonly Descending: boolean)
@@ -81,7 +169,7 @@ export class ProjectionClause
 
 export class QueryPart
 {
-    constructor(public readonly Reading: readonly ReadingClause[], public readonly Projection: ProjectionClause)
+    constructor(public readonly Reading: readonly ReadingClause[], public readonly Projection: ProjectionClause | undefined = undefined)
     {
     }
 }
@@ -94,8 +182,14 @@ export class CypherQueryModel
 
     public FinalColumns(): string[]
     {
-        // Parse/fluent invariants guarantee at least one part whose final projection is a RETURN.
+        // Parse/fluent invariants guarantee at least one part; a write-only final part has no projection.
         const last = this.Parts[this.Parts.length - 1]!;
+        if (last.Projection === undefined) return [];
         return last.Projection.Items.map((i) => i.ColumnName());
+    }
+
+    public HasWrites(): boolean
+    {
+        return this.Parts.some((p) => p.Reading.some((c) => c instanceof WritingClause));
     }
 }

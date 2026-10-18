@@ -2,7 +2,7 @@ export enum TokenKind
 {
     LParen, RParen, LBracket, RBracket, LBrace, RBrace,
     Colon, Comma, Dot, Dollar, Dash, ArrowRight, ArrowLeft,
-    Eq, Neq, Lt, Lte, Gt, Gte, Star, Plus, Slash, Percent,
+    Eq, Neq, Lt, Lte, Gt, Gte, Star, Plus, PlusEq, Slash, Percent,
     Identifier, Keyword, String, Number, Eof,
 }
 

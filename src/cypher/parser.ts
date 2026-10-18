@@ -6,6 +6,7 @@ import { NodePattern, RelPattern, PatternPath } from "./patterns.js";
 import {
     CypherQueryModel, MatchClause, WhereClause, ReadingClause,
     ProjectionClause, QueryPart, UnwindClause, SortItem, ReturnItem,
+    CreateClause, MergeClause, SetClause, SetItem, SetMode, DeleteClause, RemoveClause, WritingClause,
 } from "./query-model.js";
 import {
     Expression, VariableRef, PropertyAccess, Literal, Parameter,
@@ -37,6 +38,14 @@ export class CypherParser
     private static readonly KwSkip = "SKIP";
     private static readonly KwLimit = "LIMIT";
     private static readonly KwDistinct = "DISTINCT";
+    private static readonly KwCreate = "CREATE";
+    private static readonly KwMerge = "MERGE";
+    private static readonly KwSet = "SET";
+    private static readonly KwDelete = "DELETE";
+    private static readonly KwDetach = "DETACH";
+    private static readonly KwRemove = "REMOVE";
+    private static readonly RelPropsNotAllowed = "relationships carry no properties in CREATE/MERGE";
+    private static readonly MergeSingleNodeOnly = "MERGE supports a single node pattern only";
     private static readonly AdditiveOps: ReadonlyMap<TokenKind, ArithmeticOp> = new Map([
         [TokenKind.Plus, ArithmeticOp.Add], [TokenKind.Dash, ArithmeticOp.Sub],
     ]);
@@ -64,6 +73,12 @@ export class CypherParser
         for (;;)
         {
             const reading = this.parseReadingClauses();
+            if (reading[reading.length - 1] instanceof WritingClause && !this.peekProjection())
+            {
+                // A part closed by a write clause needs no RETURN; it must be the end of the query.
+                parts.push(new QueryPart(reading));
+                break;
+            }
             const projection = this.parseProjection();
             parts.push(new QueryPart(reading, projection));
             if (projection.IsReturn)
@@ -89,11 +104,104 @@ export class CypherParser
             {
                 out.push(this.parseUnwind());
             }
+            else if (this.peekKeyword(CypherParser.KwCreate))
+            {
+                out.push(this.parseCreate());
+            }
+            else if (this.peekKeyword(CypherParser.KwMerge))
+            {
+                out.push(this.parseMerge());
+            }
+            else if (this.peekKeyword(CypherParser.KwSet))
+            {
+                out.push(this.parseSet());
+            }
+            else if (this.peekKeyword(CypherParser.KwDelete) || this.peekKeyword(CypherParser.KwDetach))
+            {
+                out.push(this.parseDelete());
+            }
+            else if (this.peekKeyword(CypherParser.KwRemove))
+            {
+                out.push(this.parseRemove());
+            }
             else
             {
                 return out;
             }
         }
+    }
+
+    private peekProjection(): boolean
+    {
+        return this.peekKeyword(CypherParser.KwReturn) || this.peekKeyword(CypherParser.KwWith);
+    }
+
+    private parseCreate(): CreateClause
+    {
+        this.expectKeyword(CypherParser.KwCreate);
+        const paths = [this.parseWritePath()];
+        while (this.accept(TokenKind.Comma)) paths.push(this.parseWritePath());
+        return new CreateClause(paths);
+    }
+
+    private parseMerge(): MergeClause
+    {
+        this.expectKeyword(CypherParser.KwMerge);
+        const path = this.parseWritePath();
+        if (path.Rels.length > 0) throw this.error(CypherParser.MergeSingleNodeOnly);
+        return new MergeClause(path);
+    }
+
+    private parseWritePath(): PatternPath
+    {
+        const path = this.parsePath();
+        for (const rel of path.Rels)
+        {
+            if (rel.Properties.size > 0) throw this.error(CypherParser.RelPropsNotAllowed);
+        }
+        return path;
+    }
+
+    private parseSet(): SetClause
+    {
+        this.expectKeyword(CypherParser.KwSet);
+        const items = [this.parseSetItem()];
+        while (this.accept(TokenKind.Comma)) items.push(this.parseSetItem());
+        return new SetClause(items);
+    }
+
+    private parseSetItem(): SetItem
+    {
+        const variable = this.expect(TokenKind.Identifier).Text;
+        if (this.accept(TokenKind.PlusEq)) return new SetItem(variable, undefined, this.parseExpression(), SetMode.MergeMap);
+        this.expect(TokenKind.Dot);
+        const property = this.expect(TokenKind.Identifier).Text;
+        this.expect(TokenKind.Eq);
+        return new SetItem(variable, property, this.parseExpression(), SetMode.Property);
+    }
+
+    private parseDelete(): DeleteClause
+    {
+        const detach = this.acceptKeyword(CypherParser.KwDetach);
+        this.expectKeyword(CypherParser.KwDelete);
+        const targets = [this.parseExpression()];
+        while (this.accept(TokenKind.Comma)) targets.push(this.parseExpression());
+        return new DeleteClause(targets, detach);
+    }
+
+    private parseRemove(): RemoveClause
+    {
+        this.expectKeyword(CypherParser.KwRemove);
+        const items = [this.parseRemoveItem()];
+        while (this.accept(TokenKind.Comma)) items.push(this.parseRemoveItem());
+        return new RemoveClause(items);
+    }
+
+    private parseRemoveItem(): PropertyAccess
+    {
+        const variable = this.expect(TokenKind.Identifier).Text;
+        this.expect(TokenKind.Dot);
+        return new PropertyAccess(variable, this.expect(TokenKind.Identifier).Text);
     }
 
     private parseUnwind(): UnwindClause
@@ -172,10 +280,10 @@ export class CypherParser
 
     private parseQualifiedLabel(): string
     {
-        let label = this.expect(TokenKind.Identifier).Text;
+        let label = this.expectName();
         while (this.accept(TokenKind.Dot))
         {
-            label += "." + this.expect(TokenKind.Identifier).Text;
+            label += "." + this.expectName();
         }
         return label;
     }
@@ -194,7 +302,7 @@ export class CypherParser
         if (this.accept(TokenKind.LBracket))
         {
             variable = this.peek().Kind === TokenKind.Identifier ? this.advance().Text : undefined;
-            relType = this.accept(TokenKind.Colon) ? this.expect(TokenKind.Identifier).Text : undefined;
+            relType = this.accept(TokenKind.Colon) ? this.expectName() : undefined;
             if (this.accept(TokenKind.Star)) [minHops, maxHops] = this.parseHops();
             if (this.peek().Kind === TokenKind.LBrace) props = this.parsePropMap();
             this.expect(TokenKind.RBracket);
@@ -536,6 +644,18 @@ export class CypherParser
     {
         if (this.peek().Kind !== kind) throw this.error(`${CypherParser.Expected} ${TokenKind[kind]}`);
         return this.advance();
+    }
+
+    // A name position (label segment, rel type) where a keyword spelling such as "Order" is just a name.
+    private expectName(): string
+    {
+        const t = this.peek();
+        if (t.Kind === TokenKind.Keyword)
+        {
+            this.index++;
+            return t.Raw;
+        }
+        return this.expect(TokenKind.Identifier).Text;
     }
 
     private peekKeyword(word: string): boolean

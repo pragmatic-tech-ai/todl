@@ -56,13 +56,13 @@ describe("cypher fluent SP2 read-plus", () =>
             const b = built.Parts[i]!;
             const p = parsed.Parts[i]!;
             assert.deepEqual(b.Reading.map((r) => r.constructor.name), p.Reading.map((r) => r.constructor.name));
-            assert.deepEqual(b.Projection.Items.map((x) => x.ColumnName()), p.Projection.Items.map((x) => x.ColumnName()));
-            assert.equal(b.Projection.Distinct, p.Projection.Distinct);
-            assert.equal(b.Projection.IsReturn, p.Projection.IsReturn);
-            assert.equal(b.Projection.OrderBy?.length, p.Projection.OrderBy?.length);
-            assert.deepEqual(b.Projection.OrderBy?.map((s) => s.Descending), p.Projection.OrderBy?.map((s) => s.Descending));
-            assert.deepEqual(b.Projection.Skip, p.Projection.Skip);
-            assert.deepEqual(b.Projection.Limit, p.Projection.Limit);
+            assert.deepEqual(b.Projection!.Items.map((x) => x.ColumnName()), p.Projection!.Items.map((x) => x.ColumnName()));
+            assert.equal(b.Projection!.Distinct, p.Projection!.Distinct);
+            assert.equal(b.Projection!.IsReturn, p.Projection!.IsReturn);
+            assert.equal(b.Projection!.OrderBy?.length, p.Projection!.OrderBy?.length);
+            assert.deepEqual(b.Projection!.OrderBy?.map((s) => s.Descending), p.Projection!.OrderBy?.map((s) => s.Descending));
+            assert.deepEqual(b.Projection!.Skip, p.Projection!.Skip);
+            assert.deepEqual(b.Projection!.Limit, p.Projection!.Limit);
         }
         const bm = built.Parts[0]!.Reading[0] as MatchClause;
         const pm = parsed.Parts[0]!.Reading[0] as MatchClause;
@@ -83,7 +83,7 @@ describe("cypher fluent SP2 read-plus", () =>
     {
         const m = CypherQuery.Match(Pattern.Node("a").Label("S")).Return(Return.Node("a")).ToModel();
         assert.equal(m.Parts.length, 1);
-        assert.equal(m.Parts[0]!.Projection.IsReturn, true);
+        assert.equal(m.Parts[0]!.Projection!.IsReturn, true);
     });
 
     test("ToModel requires a Return", () =>
@@ -131,7 +131,7 @@ describe("cypher fluent SP2 read-plus", () =>
             .ToModel();
         const parsed = new CypherParser("MATCH (a:Service) RETURN sum(a.x) AS s, avg(a.x) AS v, min(a.x) AS lo, max(a.x) AS hi").Parse();
         assert.deepStrictEqual(built, parsed);
-        const names = built.Parts[0]!.Projection.Items.map((i) => (i.Expr as FunctionCall).Name);
+        const names = built.Parts[0]!.Projection!.Items.map((i) => (i.Expr as FunctionCall).Name);
         assert.deepEqual(names, ["sum", "avg", "min", "max"]);
     });
 

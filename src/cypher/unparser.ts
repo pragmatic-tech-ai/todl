@@ -90,7 +90,7 @@ export class CypherUnparser
     private Part(part: QueryPart): string
     {
         const pieces = part.Reading.map((r) => this.Reading(r));
-        pieces.push(this.Projection(part.Projection));
+        if (part.Projection !== undefined) pieces.push(this.Projection(part.Projection));
         return pieces.join(CypherUnparser.Space);
     }
 

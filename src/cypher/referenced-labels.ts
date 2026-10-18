@@ -1,5 +1,6 @@
 import { CypherParser } from "./parser.js";
-import { MatchClause } from "./query-model.js";
+import { MatchClause, CreateClause, MergeClause } from "./query-model.js";
+import type { PatternPath } from "./patterns.js";
 import type { CypherQueryModel } from "./query-model.js";
 
 export class ReferencedLabels
@@ -30,18 +31,18 @@ export class ReferencedLabels
         return { labels: [...labels], wildcard, parseFailed: false };
     }
 
-    // Walk MATCH / OPTIONAL MATCH node patterns; yield each node's Label (undefined when absent).
+    // Walk MATCH / CREATE / MERGE node patterns; yield each node's Label (undefined when absent).
     private static *NodeLabels(model: CypherQueryModel): Iterable<string | undefined>
     {
         for (const part of model.Parts)
         {
             for (const clause of part.Reading)
             {
-                if (!(clause instanceof MatchClause))
-                {
-                    continue;
-                }
-                for (const path of clause.Paths)
+                let paths: readonly PatternPath[];
+                if (clause instanceof MatchClause || clause instanceof CreateClause) paths = clause.Paths;
+                else if (clause instanceof MergeClause) paths = [clause.Pattern];
+                else continue;
+                for (const path of paths)
                 {
                     for (const node of path.Nodes)
                     {

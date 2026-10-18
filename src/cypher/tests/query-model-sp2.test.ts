@@ -39,9 +39,9 @@ test("QueryPart composes reading clauses and projection", () =>
     assert.ok(unwind instanceof ReadingClause);
     assert.equal(sort.Descending, true);
     assert.equal(part.Reading.length, 2);
-    assert.equal(part.Projection.Distinct, true);
-    assert.equal(part.Projection.OrderBy?.[0], sort);
-    assert.equal(part.Projection.Skip, skip);
-    assert.equal(part.Projection.Limit, limit);
-    assert.equal(part.Projection.IsReturn, true);
+    assert.equal(part.Projection!.Distinct, true);
+    assert.equal(part.Projection!.OrderBy?.[0], sort);
+    assert.equal(part.Projection!.Skip, skip);
+    assert.equal(part.Projection!.Limit, limit);
+    assert.equal(part.Projection!.IsReturn, true);
 });

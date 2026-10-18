@@ -28,8 +28,8 @@ describe("cypher fluent builder", () =>
         assert.equal(bp.Rels[0]!.RelType, pp.Rels[0]!.RelType);
         assert.equal(bp.Rels[0]!.Direction, RelDirection.Outgoing);
         assert.equal(
-            built.Parts[0]!.Projection.Items[1]!.ColumnName(),
-            parsed.Parts[0]!.Projection.Items[1]!.ColumnName(),
+            built.Parts[0]!.Projection!.Items[1]!.ColumnName(),
+            parsed.Parts[0]!.Projection!.Items[1]!.ColumnName(),
         );
         assert.ok(builtMatch.Where !== undefined && parsedMatch.Where !== undefined);
     });
