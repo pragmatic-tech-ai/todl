@@ -2,7 +2,7 @@ import type { Scalar } from "../manifest/logical.js";
 import type { ICypherGraph } from "./graph.js";
 import type { NodePattern, PatternPath } from "./patterns.js";
 import type { CypherQueryModel, QueryPart, ProjectionClause, ReturnItem } from "./query-model.js";
-import { MatchClause, UnwindClause, WritingClause, SortItem } from "./query-model.js";
+import { MatchClause, UnwindClause, WritingClause, SortItem, CreateClause, MergeClause, SetClause, DeleteClause, RemoveClause } from "./query-model.js";
 import { CypherSemanticError } from "./errors.js";
 import { ComparisonOp } from "./enums.js";
 import type { Expression } from "./expressions.js";
@@ -12,6 +12,8 @@ import { CypherValue, ScalarValue } from "./values.js";
 import { VarLengthExpand } from "./operators-varlength.js";
 import { IOperator, AllNodesScan, LabelScan, Expand, ExpandInto, Filter, LabelFilter, Project, SingleRow, BindingRow } from "./operators.js";
 import { Unwind } from "./operators-unwind.js";
+import { CreateOperator, MergeOperator, SetOperator, DeleteOperator, RemoveOperator } from "./operators-write.js";
+import type { ICypherWriter } from "./writer.js";
 import { CartesianProduct } from "./operators-join.js";
 import { OptionalApply } from "./operators-optional.js";
 import type { IOptionalPlan } from "./operators-optional.js";
@@ -45,7 +47,7 @@ class OptionalMatchPlan implements IOptionalPlan
 
 export class LogicalPlanner
 {
-    private static readonly WritesNotExecutable = "write clauses are not executable yet";
+    private static readonly WritesNotExecutable = "write clauses require a writer";
     private static readonly AnonPrefix = "__n";
     private static readonly RelPropsUnsupported = "relationship properties are not supported";
     private static readonly UnknownRelType = "unknown relationship type";
@@ -70,6 +72,8 @@ export class LogicalPlanner
         private readonly cancel?: ICancellation,
         // Paging needs a stable order: when set, an unordered final RETURN is sorted by its first column (ascending).
         private readonly ensureOrder: boolean = false,
+        // Optional: only write-capable plans (PlanForWrite) supply one; read planning omits it.
+        private readonly writer?: ICypherWriter,
     )
     {
         // Variable-length wiring lands in a later task; the cap is accepted and carried now.
@@ -98,6 +102,37 @@ export class LogicalPlanner
         return op!;
     }
 
+    // Builds the full clause pipeline across all parts, but returns the FINAL part's projection separately so the
+    // caller can run it post-commit via ProjectOver. Intermediate WITH projections stay inline (pre-query graph reads).
+    public PlanForWrite(model: CypherQueryModel): { Mutations: IOperator; Projection: ProjectionClause | undefined }
+    {
+        let inScope = new Set<string>();
+        const everBound = new Set<string>();
+        let op: IOperator | undefined = undefined;
+        let projection: ProjectionClause | undefined = undefined;
+        const last = model.Parts[model.Parts.length - 1];
+        for (const part of model.Parts)
+        {
+            const isFinal = part === last;
+            if (this.strictWithScope) this.checkStrictScope(part, inScope, everBound);
+            op = this.compilePart(part, op, inScope, isFinal, isFinal);
+            if (isFinal) projection = part.Projection;
+            for (const v of this.readingVariables(part)) everBound.add(v);
+            if (part.Projection === undefined) continue;
+            for (const item of part.Projection.Items) everBound.add(item.ColumnName());
+            if (!part.Projection.IsReturn)
+            {
+                inScope = new Set<string>(part.Projection.Items.map((i) => i.ColumnName()));
+            }
+        }
+        return { Mutations: op!, Projection: projection };
+    }
+
+    public ProjectOver(source: IOperator, projection: ProjectionClause): IOperator
+    {
+        return this.buildProjection(source, projection, this.ensureOrder);
+    }
+
     private readingVariables(part: QueryPart): Set<string>
     {
         const out = new Set<string>();
@@ -105,6 +140,7 @@ export class LogicalPlanner
         {
             if (clause instanceof MatchClause) for (const v of clause.DeclaredVariables()) out.add(v);
             else if (clause instanceof UnwindClause) out.add(clause.Variable);
+            else if (clause instanceof CreateClause || clause instanceof MergeClause) for (const v of clause.DeclaredVariables()) out.add(v);
         }
         return out;
     }
@@ -122,7 +158,7 @@ export class LogicalPlanner
         }
     }
 
-    private compilePart(part: QueryPart, input: IOperator | undefined, inScope: ReadonlySet<string>, isFinal: boolean): IOperator
+    private compilePart(part: QueryPart, input: IOperator | undefined, inScope: ReadonlySet<string>, isFinal: boolean, deferProjection: boolean = false): IOperator
     {
         const declared = new Set<string>(inScope);
         for (const v of this.readingVariables(part)) declared.add(v);
@@ -143,12 +179,34 @@ export class LogicalPlanner
             }
             else if (clause instanceof WritingClause)
             {
-                throw new CypherSemanticError(LogicalPlanner.WritesNotExecutable);
+                op = this.compileWrite(op ?? new SingleRow(), clause, pipelineBound);
             }
         }
         if (op === undefined) op = new SingleRow();
-        if (part.Projection === undefined) return op;
+        if (part.Projection === undefined || deferProjection) return op;
         return this.buildProjection(op, part.Projection, isFinal && this.ensureOrder);
+    }
+
+    private compileWrite(op: IOperator, clause: WritingClause, bound: Set<string>): IOperator
+    {
+        const writer = this.writer;
+        if (writer === undefined) throw new CypherSemanticError(LogicalPlanner.WritesNotExecutable);
+        const g = this.graph;
+        const p = this.parameters;
+        if (clause instanceof CreateClause)
+        {
+            for (const v of clause.DeclaredVariables()) bound.add(v);
+            return new CreateOperator(op, clause, g, writer, p);
+        }
+        if (clause instanceof MergeClause)
+        {
+            for (const v of clause.DeclaredVariables()) bound.add(v);
+            return new MergeOperator(op, clause, g, writer, p);
+        }
+        if (clause instanceof SetClause) return new SetOperator(op, clause, g, writer, p);
+        if (clause instanceof DeleteClause) return new DeleteOperator(op, clause, g, writer, p);
+        if (clause instanceof RemoveClause) return new RemoveOperator(op, clause, g, writer, p);
+        throw new CypherSemanticError(LogicalPlanner.WritesNotExecutable);
     }
 
     private validateScope(part: QueryPart, available: ReadonlySet<string>): void
@@ -158,6 +216,16 @@ export class LogicalPlanner
         {
             if (clause instanceof MatchClause) clause.Where?.Predicate.CollectVariables(referenced);
             else if (clause instanceof UnwindClause) clause.Expr.CollectVariables(referenced);
+            else if (clause instanceof SetClause)
+            {
+                for (const item of clause.Items)
+                {
+                    referenced.add(item.Variable);
+                    item.Value.CollectVariables(referenced);
+                }
+            }
+            else if (clause instanceof DeleteClause) for (const t of clause.Targets) t.CollectVariables(referenced);
+            else if (clause instanceof RemoveClause) for (const i of clause.Items) referenced.add(i.Variable);
         }
         for (const item of part.Projection?.Items ?? []) item.Expr.CollectVariables(referenced);
         // ORDER BY / SKIP / LIMIT may refer to projection aliases, so they are not scope-checked here.
