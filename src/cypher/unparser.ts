@@ -66,7 +66,8 @@ export class CypherUnparser
     private static readonly KwNull = "NULL";
     private static readonly KwTrue = "TRUE";
     private static readonly KwFalse = "FALSE";
-    private static readonly ExponentMarker = "e";
+    private static readonly Zero = "0";
+    private static readonly ExponentPattern = /^(-?)(\d+)(?:\.(\d+))?e([+-]?\d+)$/;
     private static readonly UnsupportedValueLiteral = "cannot render a bound value literal as Cypher text";
     private static readonly UnsupportedNumber = "cannot render number as Cypher text: ";
     private static readonly UnsupportedInItem = "IN list items must be scalar literals to render as Cypher text";
@@ -287,13 +288,22 @@ export class CypherUnparser
         return this.Number(value);
     }
 
-    // The lexer reads plain decimals only: no exponent, NaN, or Infinity. Large integers expand exactly via BigInt.
+    // The lexer reads plain decimals only (no exponent), so exponent-form numbers are expanded digit-by-digit from the
+    // shortest round-trip representation. NaN and Infinity have no text form.
     private Number(n: number): string
     {
         if (!Number.isFinite(n)) throw new CypherSemanticError(CypherUnparser.UnsupportedNumber + String(n));
         const text = String(n);
-        if (!text.includes(CypherUnparser.ExponentMarker)) return text;
-        if (Number.isInteger(n)) return BigInt(n).toString();
-        throw new CypherSemanticError(CypherUnparser.UnsupportedNumber + text);
+        const match = CypherUnparser.ExponentPattern.exec(text);
+        if (match === null) return text;
+        const sign = match[1]!;
+        const whole = match[2]!;
+        const fraction = match[3] ?? CypherUnparser.Empty;
+        const exponent = Number(match[4]!);
+        const digits = whole + fraction;
+        const point = whole.length + exponent;
+        if (point <= 0) return sign + CypherUnparser.Zero + CypherUnparser.Dot + CypherUnparser.Zero.repeat(-point) + digits;
+        if (point >= digits.length) return sign + digits + CypherUnparser.Zero.repeat(point - digits.length);
+        return sign + digits.slice(0, point) + CypherUnparser.Dot + digits.slice(point);
     }
 }

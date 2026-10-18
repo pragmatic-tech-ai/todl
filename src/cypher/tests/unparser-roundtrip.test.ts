@@ -138,6 +138,25 @@ describe("CypherQuery.ToCypherText round trip", () =>
         RoundTripFixture.Check(CypherQuery.Match(S("a")).Where(new IsNullExpression(new PropertyAccess("a", "zzz"), false)).Return(Return.Prop("a", "name")));
     });
 
+    test("exponent-form and tiny/huge numbers expand to plain decimals", () =>
+    {
+        for (const n of [1e-7, 0.0000001, 1.5e-9, -2.5e-8, 1e21, 1.5e22, -3e25])
+        {
+            const q = CypherQuery.Unwind(Expr.List(Expr.Lit(1)), "x").Return(Return.Item(Expr.Lit(n), "n"));
+            RoundTripFixture.Check(q);
+            assert.equal(RoundTripFixture.Engine.Execute(q.ToCypherText()).Rows[0]![0]!.ToDto()?.toString(), RoundTripFixture.Engine.Execute(q).Rows[0]![0]!.ToDto()?.toString());
+            RoundTripFixture.Check(CypherQuery.Match(S("a").Prop("age", n)).Return(Return.Node("a")));
+            RoundTripFixture.Check(CypherQuery.Match(S("a")).Where(Expr.Prop("a", "age").Eq(n)).Return(Return.Node("a")));
+        }
+    });
+
+    test("negative literal as an index target is parenthesized", () =>
+    {
+        const q = CypherQuery.Unwind(Expr.List(Expr.Lit(1)), "x").Return(Return.Item(Expr.Lit(-2).At(Expr.Lit(0)), "i"), Return.Item(Expr.Lit(-2).Add(Expr.Lit(1)), "j"));
+        const text = RoundTripFixture.Check(q);
+        assert.match(text, /\(-2\)\[0\]/);
+    });
+
     test("negative property-map literal", () =>
     {
         RoundTripFixture.Check(CypherQuery.Match(S("a").Prop("age", -2)).Return(Return.Prop("a", "name")));
