@@ -56,7 +56,10 @@ export class CypherEngine
     {
         if (this.writer === undefined) throw new CypherSemanticError(CypherEngine.WritesRequireWriter);
         const writer = this.writer;
+        // Writes are never paged: ValidatePaging is intentionally skipped and limits.Skip/RowCap are ignored for the apply drain.
         writer.Begin();
+        // The try intentionally covers the post-commit projection too, so ANY throw (incl. an ORDER BY/type error in the
+        // projection) rolls back; this relies on ICypherWriter.Rollback() remaining valid after Commit().
         try
         {
             const binder = ParameterBinder.FromInputMap(parameters);
@@ -86,7 +89,14 @@ export class CypherEngine
         }
         catch (e)
         {
-            writer.Rollback();
+            try
+            {
+                writer.Rollback();
+            }
+            catch
+            {
+                // A failed rollback must not mask the original error.
+            }
             throw e;
         }
     }

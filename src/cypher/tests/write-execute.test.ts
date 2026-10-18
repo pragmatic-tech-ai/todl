@@ -70,6 +70,40 @@ class MemGraph implements ICypherGraph
     }
 }
 
+class SpyGraph extends MemGraph
+{
+    public Calls = 0;
+
+    constructor()
+    {
+        super([]);
+    }
+
+    public override NodesByLabel(label: string): InstanceMirror[]
+    {
+        this.Calls++;
+        return super.NodesByLabel(label);
+    }
+
+    public override AllInstances(): InstanceMirror[]
+    {
+        this.Calls++;
+        return super.AllInstances();
+    }
+
+    public override Reflect(id: string): InstanceMirror | undefined
+    {
+        this.Calls++;
+        return super.Reflect(id);
+    }
+
+    public override ResolveConcept(label: string): string
+    {
+        this.Calls++;
+        return super.ResolveConcept(label);
+    }
+}
+
 class FakeCypherWriter implements ICypherWriter
 {
     public Commits = 0;
@@ -164,8 +198,18 @@ describe("cypher two-phase write execution", () =>
 {
     test("a write query with no writer throws WritesRequireWriter", () =>
     {
-        const engine = new CypherEngine(new MemGraph([]));
-        assert.throws(() => engine.Execute("CREATE (n:shop.Customer {name: 'Ada'})"), CypherSemanticError);
+        const graph = new SpyGraph();
+        const engine = new CypherEngine(graph);
+        assert.throws(() => engine.Execute("CREATE (n:shop.Customer {name: 'Ada'})"), (e: unknown) => e instanceof CypherSemanticError && /require an ICypherWriter/.test(e.message));
+        assert.equal(graph.Calls, 0);
+    });
+
+    test("a failing Rollback does not mask the original error", () =>
+    {
+        const writer = new FakeCypherWriter();
+        writer.FailOnCreateNumber = 0;
+        writer.Rollback = () => { throw new Error("rollback failed"); };
+        assert.throws(() => Fixture.Engine(writer).Execute("CREATE (n:shop.Customer {name: 'x'})"), /boom/);
     });
 
     test("CREATE ... RETURN n returns the created node re-resolved from the committed graph", () =>
