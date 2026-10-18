@@ -12,6 +12,8 @@ import {
 import { InMemoryAdapter, InMemoryAdapterFactory, RegisteredAdapterProvider } from "./fakes.js";
 import { describeDataSourceAdapter } from "./data-source-adapter-conformance.js";
 import { ServiceProvider, type IServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
+import { ConnectionFailureKind } from "../connection-reconnect.js";
+import type { ExternalRecord, QueryRequest, WriteBatch, WriteResult } from "../connector-plan.js";
 
 describeDataSourceAdapter("InMemoryAdapter", () =>
 {
@@ -84,9 +86,10 @@ test("a registered factory wins over the provider", async () =>
     const provided = new InMemoryAdapterFactory(DataSourceKind.Sql);
     const provider = new RegisteredAdapterProvider().Add(provided);
     const catalog = new DataSourceAdapterCatalog(provider).Register(registered);
+    registered.Adapter.Seed("t", [{ id: "registered" }]);
+    provided.Adapter.Seed("t", [{ id: "provided" }]);
     const opened = await catalog.Open({ Name: "pg", Kind: DataSourceKind.Sql, Config: {} }, new ServiceProvider());
-    assert.equal(opened, registered.Adapter);
-    assert.notEqual(opened, provided.Adapter);
+    assert.deepEqual(await opened.Query({ Source: "t", Fields: ["id"] }), [{ id: "registered" }]);
 });
 
 class RecordingFactory implements IDataSourceAdapterFactory
@@ -160,12 +163,13 @@ test("a connector that names a provider resolves through the provider, not a Kin
 {
     const registered = new InMemoryAdapterFactory(DataSourceKind.Sql);
     const packFactory = new InMemoryAdapterFactory(DataSourceKind.Sql);
+    registered.Adapter.Seed("t", [{ id: "registered" }]);
+    packFactory.Adapter.Seed("t", [{ id: "pack" }]);
     const provider = new RegisteredAdapterProvider().Add(packFactory);
     const catalog = new DataSourceAdapterCatalog(provider).Register(registered);
     const opened = await catalog.Open(
         { Name: "pg", Kind: DataSourceKind.Sql, Config: {}, Provider: "@x/pg@1.0.0" }, new ServiceProvider());
-    assert.equal(opened, packFactory.Adapter);
-    assert.notEqual(opened, registered.Adapter);
+    assert.deepEqual(await opened.Query({ Source: "t", Fields: ["id"] }), [{ id: "pack" }]);
 });
 
 test("a named provider with no provider configured is fail-closed", async () =>
@@ -184,4 +188,133 @@ test("a named provider that rejects is fail-closed (no fall back to a Kind facto
     await assert.rejects(
         () => catalog.Open({ Name: "pg", Kind: DataSourceKind.Sql, Config: {}, Provider: "@x/pg@1.0.0" }, new ServiceProvider()),
         /pack boom/);
+});
+
+class TaggedAuthError extends Error
+{
+}
+
+class SecretCapturingAdapter implements IDataSourceAdapter
+{
+    public Disposed = 0;
+
+    public constructor(public readonly Secret: string | undefined, private readonly failAuthOnce: boolean)
+    {
+    }
+
+    public async Query(_request: QueryRequest): Promise<readonly ExternalRecord[]>
+    {
+        if (this.failAuthOnce) throw new TaggedAuthError("auth");
+        return [{ secret: this.Secret ?? null }];
+    }
+
+    public async Apply(_batch: WriteBatch): Promise<WriteResult>
+    {
+        return { Applied: 0, Failures: [] };
+    }
+
+    public async Dispose(): Promise<void>
+    {
+        this.Disposed++;
+    }
+
+    public ClassifyFailure(error: unknown): ConnectionFailureKind
+    {
+        return error instanceof TaggedAuthError ? ConnectionFailureKind.Auth : ConnectionFailureKind.Permanent;
+    }
+}
+
+class SecretCapturingFactory implements IDataSourceAdapterFactory
+{
+    public readonly Created: SecretCapturingAdapter[] = [];
+
+    public constructor(public readonly Kind: DataSourceKind, private readonly firstFailsAuth: boolean = false)
+    {
+    }
+
+    public async Open(connection: ResolvedConnection): Promise<IDataSourceAdapter>
+    {
+        const adapter = new SecretCapturingAdapter(connection.Secret, this.firstFailsAuth && this.Created.length === 0);
+        this.Created.push(adapter);
+        return adapter;
+    }
+}
+
+class FlippableResolver implements IConnectionResolver
+{
+    public constructor(public Secret: string)
+    {
+    }
+
+    public async Resolve(spec: ConnectorSpec, _services: IServiceProvider): Promise<ResolvedConnection>
+    {
+        return { Kind: spec.Kind, Config: spec.Config, Secret: this.Secret };
+    }
+}
+
+test("Invalidate disposes and drops the memoized adapter so the next Open rebuilds it", async () =>
+{
+    const factory = new SecretCapturingFactory(DataSourceKind.Sql);
+    const catalog = new DataSourceAdapterCatalog().Register(factory);
+    const services = new ServiceProvider();
+    const spec = { Name: "pg", Kind: DataSourceKind.Sql, Config: {} };
+    const first = await catalog.Open(spec, services);
+    assert.equal(await catalog.Open(spec, services), first);
+    await catalog.Invalidate(spec);
+    assert.equal(factory.Created[0]?.Disposed, 1);
+    const third = await catalog.Open(spec, services);
+    assert.notEqual(third, first);
+    assert.equal(factory.Created.length, 2);
+});
+
+test("Invalidate uses the same key as Open for an Id-bearing and a bare-Name spec", async () =>
+{
+    const factory = new SecretCapturingFactory(DataSourceKind.Sql);
+    const catalog = new DataSourceAdapterCatalog().Register(factory);
+    const services = new ServiceProvider();
+    const withId = { Id: "shop.pg", Name: "pg", Kind: DataSourceKind.Sql, Config: {} };
+    const bare = { Name: "pg", Kind: DataSourceKind.Sql, Config: {} };
+    await catalog.Open(withId, services);
+    await catalog.Invalidate(withId);
+    await catalog.Open(withId, services);
+    assert.equal(factory.Created.length, 2);
+    await catalog.Open(bare, services);
+    await catalog.Invalidate(bare);
+    await catalog.Open(bare, services);
+    assert.equal(factory.Created.length, 4);
+});
+
+test("Invalidate on an unopened spec is a no-op", async () =>
+{
+    const factory = new SecretCapturingFactory(DataSourceKind.Sql);
+    const catalog = new DataSourceAdapterCatalog().Register(factory);
+    await assert.doesNotReject(() => catalog.Invalidate({ Name: "pg", Kind: DataSourceKind.Sql, Config: {} }));
+    assert.equal(factory.Created.length, 0);
+});
+
+test("a reopen after an Auth failure re-resolves the secret", async () =>
+{
+    const factory = new SecretCapturingFactory(DataSourceKind.Sql, true);
+    const catalog = new DataSourceAdapterCatalog().Register(factory);
+    const resolver = new FlippableResolver("old");
+    const services = new ServiceProvider();
+    services.registerInstance(ConnectionResolverKey, resolver);
+    const adapter = await catalog.Open({ Name: "pg", Kind: DataSourceKind.Sql, Config: {} }, services);
+    resolver.Secret = "new";
+    const rows = await adapter.Query({ Source: "t", Fields: ["secret"] });
+    assert.deepEqual(rows, [{ secret: "new" }]);
+    assert.equal(factory.Created.length, 2);
+    assert.equal(factory.Created[0]?.Secret, "old");
+    assert.equal(factory.Created[1]?.Secret, "new");
+});
+
+test("Dispose still disposes all memoized adapters", async () =>
+{
+    const factory = new SecretCapturingFactory(DataSourceKind.Sql);
+    const catalog = new DataSourceAdapterCatalog().Register(factory);
+    const services = new ServiceProvider();
+    await catalog.Open({ Name: "a", Kind: DataSourceKind.Sql, Config: {} }, services);
+    await catalog.Open({ Name: "b", Kind: DataSourceKind.Sql, Config: {} }, services);
+    await catalog.Dispose();
+    assert.deepEqual(factory.Created.map(a => a.Disposed), [1, 1]);
 });

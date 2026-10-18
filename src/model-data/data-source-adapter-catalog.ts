@@ -8,6 +8,9 @@ import {
     type IDataSourceAdapterFactory,
     type IDataSourceAdapterProvider,
 } from "./data-source-adapter.js";
+import { ReconnectingAdapter } from "./reconnecting-adapter.js";
+import { ReconnectObserverKey } from "./connection-reconnect.js";
+import type { ConnectionRetryPolicy } from "./connection-reconnect.js";
 
 /** Plan-1 resolver: uses the spec's inline values as-is. */
 export class InlineConnectionResolver implements IConnectionResolver
@@ -28,6 +31,8 @@ export class DataSourceAdapterCatalog
     private static readonly NoAdapterMessage = "connector '{0}': no data-source adapter available for kind '{1}'";
     private static readonly NoProviderMessage = "connector '{0}': names provider '{1}' but no adapter provider is configured";
     private static readonly PlaceholderPattern = /\{(\d)\}/g;
+    private static readonly DefaultRetryPolicy: ConnectionRetryPolicy =
+        { InitialDelayMs: 200, Factor: 2, MaxDelayMs: 2000, MaxAttempts: 3 };
 
     private readonly factories = new Map<DataSourceKind, IDataSourceAdapterFactory>();
     private readonly opened = new Map<string, Promise<IDataSourceAdapter>>();
@@ -48,11 +53,11 @@ export class DataSourceAdapterCatalog
         // Memoize per connector DECLARATION: the namespace-qualified id when present
         // (so e.g. shop.pg and inventory.pg stay distinct), falling back to the bare
         // Name for hand-written specs that carry no Id.
-        const key = spec.Id ?? spec.Name;
+        const key = this.KeyFor(spec);
         let pending = this.opened.get(key);
         if (!pending)
         {
-            pending = this.OpenCore(spec, services);
+            pending = this.OpenReconnecting(spec, services);
             this.opened.set(key, pending);
             pending.catch(() =>
             {
@@ -60,6 +65,43 @@ export class DataSourceAdapterCatalog
             });
         }
         return pending;
+    }
+
+    private async OpenReconnecting(spec: ConnectorSpec, services: IServiceProvider): Promise<IDataSourceAdapter>
+    {
+        const inner = await this.OpenCore(spec, services);
+        const observer = services.get(ReconnectObserverKey);
+        return new ReconnectingAdapter(
+            spec.Name,
+            inner,
+            () => this.OpenCore(spec, services),
+            DataSourceAdapterCatalog.DefaultRetryPolicy,
+            observer,
+        );
+    }
+
+    /** Disposes and drops the memoized adapter for one connector so the next Open re-resolves and re-opens
+     *  it (fresh credentials + pool). Idempotent; a failed open or a Dispose throw is swallowed. */
+    public async Invalidate(spec: ConnectorSpec): Promise<void>
+    {
+        const key = this.KeyFor(spec);
+        const pending = this.opened.get(key);
+        if (!pending) return;
+        this.opened.delete(key);
+        try
+        {
+            const adapter = await pending;
+            await adapter.Dispose();
+        }
+        catch
+        {
+            // A failed open produced no adapter, or Dispose threw; the entry is already dropped.
+        }
+    }
+
+    private KeyFor(spec: ConnectorSpec): string
+    {
+        return spec.Id ?? spec.Name;
     }
 
     /** Disposes every memoized adapter and clears the cache. Idempotent; per-adapter failures are swallowed. */
