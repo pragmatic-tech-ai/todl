@@ -1,7 +1,7 @@
 import type { Scalar } from "../manifest/logical.js";
 import { ComparisonOp, BooleanOp, ArithmeticOp } from "./enums.js";
 import { EvalContext } from "./binding.js";
-import { CypherValue, ScalarValue, NullValue, NodeValue } from "./values.js";
+import { CypherValue, ScalarValue, NullValue, NodeValue, NodeRefValue } from "./values.js";
 import { CypherSemanticError } from "./errors.js";
 import { ListValue, MapValue } from "./values-structured.js";
 import { FunctionRegistry } from "./functions.js";
@@ -64,6 +64,7 @@ export class VariableRef extends Expression
 export class PropertyAccess extends Expression
 {
     private static readonly Separator = ".";
+    private static readonly NoReadYourWrites = "cannot read a property of a node created in the same query before RETURN; intra-query read-your-writes is not supported";
 
     constructor(public readonly Variable: string, public readonly Property: string)
     {
@@ -74,6 +75,7 @@ export class PropertyAccess extends Expression
     {
         const target = ctx.Binding.Get(this.Variable);
         if (target instanceof MapValue) return target.Get(this.Property) ?? NullValue.Instance;
+        if (target instanceof NodeRefValue) throw new CypherSemanticError(PropertyAccess.NoReadYourWrites);
         if (!(target instanceof NodeValue)) return NullValue.Instance;
         const value = target.Field(this.Property);
         return value === undefined ? NullValue.Instance : new ScalarValue(value);

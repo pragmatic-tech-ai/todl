@@ -290,12 +290,19 @@ describe("cypher two-phase write execution", () =>
         assert.equal(m.Get("k"), NullValue.Instance);
     });
 
-    test("intra-query read-your-writes is out of scope: WITH reading a property off a just-created node yields null (no committed access mid-query)", () =>
+    test("intra-query read-your-writes is unsupported: WITH reading a property off a just-created node throws and rolls back", () =>
     {
         const writer = new FakeCypherWriter();
-        const r = Fixture.Engine(writer).Execute("CREATE (n:shop.Customer {name: 'Ada'}) WITH n.name AS v RETURN v");
-        assert.equal(r.Rows.length, 1);
-        assert.equal(r.Rows[0]![0], NullValue.Instance);
-        assert.equal(writer.Commits, 1);
+        assert.throws(() => Fixture.Engine(writer).Execute("CREATE (n:shop.Customer {name: 'Ada'}) WITH n.name AS v RETURN v"), (e: unknown) => e instanceof CypherSemanticError && /read-your-writes/.test(e.message));
+        assert.equal(writer.Rollbacks, 1);
+        assert.equal(writer.Commits, 0);
+    });
+
+    test("the final projection may read a property off a just-created node (re-resolved before projecting)", () =>
+    {
+        const writer = new FakeCypherWriter();
+        const r = Fixture.Engine(writer).Execute("CREATE (n:shop.Customer {name: 'Ada'}) RETURN n.name");
+        assert.equal(r.Rows[0]![0]!.ToDto(), "Ada");
+        assert.equal(writer.Rollbacks, 0);
     });
 });
