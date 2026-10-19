@@ -11,6 +11,17 @@ export class HtmlShell
 
     public static Render(appJson: string, bundleJs: string): string
     {
+        return HtmlShell.Page(`<script>window.${HtmlShell.AppGlobal} = ${appJson};</script>`, bundleJs);
+    }
+
+    /** Payload-free page for a remote app: the bundle fetches its data live, nothing is inlined. */
+    public static RenderRemote(bundleJs: string): string
+    {
+        return HtmlShell.Page(undefined, bundleJs);
+    }
+
+    private static Page(payloadScript: string | undefined, bundleJs: string): string
+    {
         return [
             "<!doctype html>",
             "<html lang=\"en\">",
@@ -21,7 +32,7 @@ export class HtmlShell
             "</head>",
             "<body>",
             `<div id="${HtmlShell.RootId}"></div>`,
-            `<script>window.${HtmlShell.AppGlobal} = ${appJson};</script>`,
+            ...(payloadScript === undefined ? [] : [payloadScript]),
             `<script>${bundleJs}</script>`,
             "</body>",
             "</html>",

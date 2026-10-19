@@ -13,6 +13,9 @@ import { CompileMuralAction } from "./compile-mural-action.js";
 import { BundleAppAction } from "./bundle-app-action.js";
 import { EmitBundledHostAction } from "./emit-bundled-host-action.js";
 import { TypeCheckAction } from "./type-check-action.js";
+import { EmitRemoteDataAction } from "./emit-remote-data-action.js";
+import { EmitRemoteEntryAction } from "./emit-remote-entry-action.js";
+import { EmitRemoteHostAction } from "./emit-remote-host-action.js";
 import { TypeCheckerKey, type ITypeChecker } from "../../build-system-core/type-checker.js";
 
 // Builds a self-contained single-page HTML app for an ARCHITECTURE project: resolve bases
@@ -23,6 +26,9 @@ export class HtmlBundleBuildSystem implements IBuildSystem<TodlBuildContext, Pro
     private static readonly SystemId = "html-bundle";
     private static readonly Display = "HTML app";
     private static readonly Output = "html-bundle";
+    private static readonly RemoteFlavorId = "html-bundle-remote";
+    private static readonly RemoteDisplay = "HTML app (remote)";
+    private static readonly RemoteOutput = "html-bundle-remote";
 
     // The "require, never create" boundary (spec §per-project-app-build, task 11): the
     // model DTO and default app UI are now project content the generators (DtoGenerator/
@@ -36,6 +42,12 @@ export class HtmlBundleBuildSystem implements IBuildSystem<TodlBuildContext, Pro
     private static readonly AppViewModelGeneratorId = "app-view-model";
     private static readonly AppUiPath = "src/app.mu";
     private static readonly AppUiGeneratorId = "app-ui";
+    // Remote flavor: generated/data.ts is NOT required; the build supplies its own in the sandbox.
+    private static readonly RemoteRequiredContent: readonly RequiredContent[] = [
+        { Path: HtmlBundleBuildSystem.ModelDtoPath, GeneratorId: HtmlBundleBuildSystem.ModelDtoGeneratorId },
+        { Path: HtmlBundleBuildSystem.AppViewModelPath, GeneratorId: HtmlBundleBuildSystem.AppViewModelGeneratorId },
+        { Path: HtmlBundleBuildSystem.AppUiPath, GeneratorId: HtmlBundleBuildSystem.AppUiGeneratorId },
+    ];
     private static readonly RequiredContent: readonly RequiredContent[] = [
         { Path: HtmlBundleBuildSystem.ModelDtoPath, GeneratorId: HtmlBundleBuildSystem.ModelDtoGeneratorId },
         { Path: HtmlBundleBuildSystem.ModelDataPath, GeneratorId: HtmlBundleBuildSystem.ModelDataGeneratorId },
@@ -50,6 +62,11 @@ export class HtmlBundleBuildSystem implements IBuildSystem<TodlBuildContext, Pro
     // entry -> compile mural (reading src/app.mu required above) -> bundle -> emit.
     private readonly actions: readonly IBuildAction<TodlBuildContext>[];
 
+    // The remote flavor: no inlined snapshot. The sandbox generated/data.ts (shadowing the
+    // project's) reads the live tenant; the entry awaits the first fetch before mounting.
+    // EmitRemoteData runs before the bundle so the bundler sees the shadowing file.
+    private readonly remoteActions: readonly IBuildAction<TodlBuildContext>[];
+
     constructor(bundler: IBundler, typeChecker: ITypeChecker)
     {
         this.actions = [
@@ -60,6 +77,16 @@ export class HtmlBundleBuildSystem implements IBuildSystem<TodlBuildContext, Pro
             new BundleAppAction(bundler),
             new TypeCheckAction(typeChecker),
             new EmitBundledHostAction(),
+        ];
+        this.remoteActions = [
+            new ResolveBasesAction(),
+            new CompileModelAction(),
+            new EmitRemoteDataAction(),
+            new EmitRemoteEntryAction(),
+            new CompileMuralAction(),
+            new BundleAppAction(bundler),
+            new TypeCheckAction(typeChecker),
+            new EmitRemoteHostAction(),
         ];
     }
 
@@ -77,12 +104,21 @@ export class HtmlBundleBuildSystem implements IBuildSystem<TodlBuildContext, Pro
 
     public Flavors(): readonly BuildFlavor<TodlBuildContext>[]
     {
-        return [new StaticBuildFlavor(
-            HtmlBundleBuildSystem.SystemId,
-            HtmlBundleBuildSystem.Display,
-            HtmlBundleBuildSystem.Output,
-            this.actions,
-            HtmlBundleBuildSystem.RequiredContent,
-        )];
+        return [
+            new StaticBuildFlavor(
+                HtmlBundleBuildSystem.SystemId,
+                HtmlBundleBuildSystem.Display,
+                HtmlBundleBuildSystem.Output,
+                this.actions,
+                HtmlBundleBuildSystem.RequiredContent,
+            ),
+            new StaticBuildFlavor(
+                HtmlBundleBuildSystem.RemoteFlavorId,
+                HtmlBundleBuildSystem.RemoteDisplay,
+                HtmlBundleBuildSystem.RemoteOutput,
+                this.remoteActions,
+                HtmlBundleBuildSystem.RemoteRequiredContent,
+            ),
+        ];
     }
 }
