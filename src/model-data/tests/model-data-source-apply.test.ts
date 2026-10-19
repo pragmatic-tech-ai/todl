@@ -49,7 +49,7 @@ test("Apply delegates ops to the connector then re-reads", async () =>
     source.DataChanged.subscribe(() => { changed += 1; });
     const result = await source.Apply([{ Kind: ConnectorWriteOpKind.Create, Concept: "acme.Svc", Fields: { label: "A" } }]);
     assert.equal(connector.LastOps.length, 1);
-    assert.equal(result.Results[0].Status, ConnectorWriteStatus.Applied);
+    assert.equal(result.Results[0]?.Status, ConnectorWriteStatus.Applied);
     assert.equal(connector.RefreshCount, 1);
     assert.equal(changed, 1);
 });
