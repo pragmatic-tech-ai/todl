@@ -10,8 +10,12 @@ export class AppUiTemplate
 {
     private static readonly ClassPlaceholder = "__APP_CLASS__";
 
+    /** First line of the pristine scaffold — the marker the UI generation service
+     *  uses to detect a never-yet-wired `src/app.mu` before it rewrites the app root. */
+    public static readonly PristineMarker = "// src/app.mu — your application UI. Edit freely; it is never regenerated.";
+
     private static readonly Template = [
-        "// src/app.mu — your application UI. Edit freely; it is never regenerated.",
+        AppUiTemplate.PristineMarker,
         "// The view-model class lives in ./main.ts; bind to its members with $Name.",
         "import __APP_CLASS__ from \"./main.js\"",
         "",

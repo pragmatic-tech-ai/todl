@@ -66,6 +66,12 @@ describe("concept view generators", () =>
         assert.ok(mu.includes("Text = $name"));
         assert.ok(mu.includes("import CustomerVM from \"./Customer-vm.js\""));
         assert.ok(mu.includes("DataType = CustomerVM"));
+        // Referenceable construct: a keyed DataTemplate in a named ResourceDictionary the
+        // app root merges and hosts, with the container VM as the template's DataContext type.
+        assert.ok(mu.includes("resources CustomerListView"));
+        assert.ok(mu.includes("DataTemplate x:key=\"CustomerListTemplate\""));
+        assert.ok(mu.includes("DataType = CustomerListVM"));
+        assert.ok(mu.includes("import CustomerListVM from \"./Customer-vm.js\""));
         assert.doesNotThrow(() => Fixture.Compiles(mu));
 
         await project.WriteText(path, "hand edited");
@@ -85,6 +91,10 @@ describe("concept view generators", () =>
         assert.ok(mu.includes("Text = $Selected.name"));
         assert.ok(mu.includes("IsChecked = $Selected.active"));
         assert.ok(mu.includes("Command = $DeleteCommand"));
+        // Referenceable construct: a keyed DataTemplate in a named ResourceDictionary.
+        assert.ok(mu.includes("resources CustomerFormView"));
+        assert.ok(mu.includes("DataTemplate x:key=\"CustomerFormTemplate\""));
+        assert.ok(mu.includes("DataType = CustomerListVM"));
         assert.ok(mu.includes("TextBox [ Text = $Selected.name ]"));
         assert.ok(mu.includes("TextBox [ Text = $Selected.nickname ]"));
         assert.ok(mu.includes("TextBox [ Text = $Selected.age ]"));

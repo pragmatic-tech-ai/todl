@@ -15,8 +15,11 @@ export class AppViewModelGenerator implements IProjectContentGenerator
     private static readonly Display = "Application view-model";
     private static readonly OutputFile = "src/main.ts";
     private static readonly Eol = "\n";
+    /** First line of the pristine scaffold — the marker the UI generation service
+     *  uses to detect a never-yet-wired `src/main.ts` before it rewrites the app root. */
+    public static readonly PristineMarker = "import { Application } from \"@pragmatic-tech-ai/mural\";";
     private static readonly Template = [
-        "import { Application } from \"@pragmatic-tech-ai/mural\";",
+        AppViewModelGenerator.PristineMarker,
         "import { Observable } from \"@pragmatic-tech-ai/mural/runtime\";",
         "import { model } from \"../generated/data.js\";",
         "",
