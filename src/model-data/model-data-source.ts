@@ -16,6 +16,7 @@ import { Manifest, type TaxonomyInfo } from "../manifest/reflection/reflection.j
 import { PackageManifestBridge } from "../solution-services/package-manager/package-manifest-bridge.js";
 import { ReflectedEntity, MirrorReader, TermReader, type EntityReader, type EntityHost } from "../reflection-client/reflected-entity.js";
 import type { IModelDataConnector } from "./model-data-connector.js";
+import type { ConnectorWriteOp, ConnectorWriteResult } from "./connector-write-op.js";
 import type { IInstanceFilter, IInstanceView } from "./instance-filter.js";
 
 export abstract class ModelDataSource implements EntityHost
@@ -26,7 +27,11 @@ export abstract class ModelDataSource implements EntityHost
     private static readonly NotRefreshableMessage =
         "ModelDataSource.Refresh requires a connector that supports Refresh.";
 
+    private static readonly NotWritableMessage =
+        "ModelDataSource.Apply failed: the source is not prepared, or its connector does not support write operations (no Apply).";
+
     private prepared = false;
+    private preparedServices: IServiceProvider | undefined;
     private graph: FrozenGraph | undefined;
     private query: GraphQuery | undefined;
     private readonly entities = new Map<string, ReflectedEntity>();
@@ -59,6 +64,20 @@ export abstract class ModelDataSource implements EntityHost
         }
         this.loadDocument(await this.connector.Prepare(services));
         this.prepared = true;
+        this.preparedServices = services;
+    }
+
+    /** Write path: delegate the ops to the connector, then re-read so the graph reflects the outcome
+     *  (Refresh re-materializes and emits DataChanged). Requires a Prepared source with a write-capable connector. */
+    public async Apply(ops: readonly ConnectorWriteOp[]): Promise<ConnectorWriteResult>
+    {
+        if (!this.prepared || this.connector?.Apply === undefined)
+        {
+            throw new Error(ModelDataSource.NotWritableMessage);
+        }
+        const result = await this.connector.Apply(ops);
+        await this.Refresh(this.preparedServices!);
+        return result;
     }
 
     /** In-place re-pull: re-materialize this model's document via the connector, rebuild the graph, and drop
