@@ -6,6 +6,8 @@
 import type { IServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
 import type { TodlDocument } from "../../compiler-services/emit/json.js";
 import type { IModelDataConnector } from "../../model-data/model-data-connector.js";
+import type { ConnectorWriteOp, ConnectorWriteResult } from "../../model-data/connector-write-op.js";
+import type { ITenantWriteClient } from "./tenant-write-client.js";
 
 /**
  * Minimal read seam onto a live tenant. The row type is TodlDocument: it is what
@@ -34,7 +36,10 @@ export class RemoteTenantConnector implements IModelDataConnector
 {
     private cached: Promise<TodlDocument> | undefined;
 
-    constructor(private readonly client: ITenantReadClient)
+    constructor(
+        private readonly client: ITenantReadClient,
+        private readonly writeClient?: ITenantWriteClient,
+    )
     {
     }
 
@@ -56,9 +61,13 @@ export class RemoteTenantConnector implements IModelDataConnector
         return this.Prepare(services);
     }
 
-    /** Writes are not supported against a remote tenant yet. */
-    public Apply(): never
+    /** Forwards writes to the write client; throws when none was supplied (read-only). */
+    public async Apply(ops: readonly ConnectorWriteOp[]): Promise<ConnectorWriteResult>
     {
-        throw new RemoteWriteUnsupportedError();
+        if (!this.writeClient)
+        {
+            throw new RemoteWriteUnsupportedError();
+        }
+        return this.writeClient.WriteDocument(ops);
     }
 }

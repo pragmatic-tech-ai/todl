@@ -74,10 +74,10 @@ test("RemoteTenantConnector.Refresh re-reads from the client", async () =>
     assert.equal(client.Calls, 2);
 });
 
-test("RemoteTenantConnector.Apply throws RemoteWriteUnsupportedError", () =>
+test("RemoteTenantConnector.Apply rejects with RemoteWriteUnsupportedError", async () =>
 {
     const connector = new RemoteTenantConnector(new FakeClient({ nodes: [], edges: [] }));
-    assert.throws(() => connector.Apply(), (e: unknown) =>
+    await assert.rejects(() => connector.Apply([]), (e: unknown) =>
         e instanceof RemoteWriteUnsupportedError && /SP1/.test(e.message));
 });
 
