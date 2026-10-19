@@ -69,6 +69,7 @@ class Fixture
         const ctx = Fixture.Context(options);
         ctx.Artifacts.Set(NpmArtifacts.CompiledModel, Fixture.Compiled());
         ctx.Artifacts.Set(HtmlArtifacts.AppBundle, SentinelBundle);
+        ctx.Artifacts.Set(NpmArtifacts.ResolvedClosure, []);
         return ctx;
     }
 
@@ -123,11 +124,13 @@ class Fixture
 
 class MapPackageSource implements IPackageSource
 {
+    private static readonly KeySeparator = "@";
+
     constructor(private readonly packages: ReadonlyMap<string, SourcedPackage>) {}
 
     public TryGet(ref: PackageRef): Promise<SourcedPackage | undefined>
     {
-        return Promise.resolve(this.packages.get(ref.id + "@" + ref.version));
+        return Promise.resolve(this.packages.get(ref.id + MapPackageSource.KeySeparator + ref.version));
     }
 }
 
@@ -166,6 +169,50 @@ describe("remote flavor package closure", () =>
         }
         const shapes = JSON.parse(await ctx.Sandbox.ReadText("packages/shapes/2.0.0/model.json"));
         assert.deepEqual(shapes.dependencies, [Prelude], "dependency edges are carried in model.json");
+        const compiled = ctx.Artifacts.Get(NpmArtifacts.CompiledModel)!;
+        const appText = await ctx.Sandbox.ReadText("packages/my-arch/0.1.0/model.json");
+        assert.ok(appText.endsWith("\n"), "trailing newline like the npm flavor");
+        assert.deepEqual(JSON.parse(appText), JSON.parse(JSON.stringify(compiled.document)));
+        assert.deepEqual(shapes, { ...Doc, dependencies: [Prelude] });
+        assert.deepEqual(JSON.parse(await ctx.Sandbox.ReadText("packages/prelude/1.0.0/model.json")), Doc);
+    });
+
+    test("a diamond dependency (reached by two paths) is emitted exactly once", async () =>
+    {
+        const base = Fixture.Ready({ Remote });
+        const ctx: TodlBuildContext =
+        {
+            ...base,
+            Manifest: { ...base.Manifest, libraries: [{ id: "left", version: "1.0.0" }, { id: "right", version: "1.0.0" }] },
+            Source: new MapPackageSource(new Map<string, SourcedPackage>([
+                ["left@1.0.0", { Document: Doc, Dependencies: [Prelude] }],
+                ["right@1.0.0", { Document: Doc, Dependencies: [Prelude] }],
+                ["prelude@1.0.0", { Document: Doc, Dependencies: [] }],
+            ])),
+        };
+        await new ResolveBasesAction().Execute(ctx);
+        await new EmitRemoteHostAction().Execute(ctx);
+        const manifest = JSON.parse(await ctx.Sandbox.ReadText("servable-manifest.json"));
+        assert.deepEqual(manifest.packages.map((p: { id: string }) => p.id), ["my-arch", "left", "right", "prelude"]);
+        // Even a closure artifact that lists a member twice must not duplicate it.
+        ctx.Artifacts.Set(NpmArtifacts.ResolvedClosure, [
+            { Ref: Prelude, Package: { Document: Doc, Dependencies: [] } },
+            { Ref: Prelude, Package: { Document: Doc, Dependencies: [] } },
+        ]);
+        await new EmitRemoteHostAction().Execute(ctx);
+        const again = JSON.parse(await ctx.Sandbox.ReadText("servable-manifest.json"));
+        assert.deepEqual(again.packages.map((p: { id: string }) => p.id), ["my-arch", "prelude"]);
+    });
+
+    test("a missing ResolvedClosure is a build error and writes nothing servable", async () =>
+    {
+        const ctx = Fixture.Context({ Remote });
+        ctx.Artifacts.Set(NpmArtifacts.CompiledModel, Fixture.Compiled());
+        ctx.Artifacts.Set(HtmlArtifacts.AppBundle, SentinelBundle);
+        await new EmitRemoteHostAction().Execute(ctx);
+        assert.ok(ctx.Diagnostics.All().some(d => d.severity === Severity.Error));
+        assert.equal(await ctx.Sandbox.Exists("servable-manifest.json"), false);
+        assert.equal(await ctx.Sandbox.Exists("index.html"), false);
     });
 
     test("a project with no dependencies emits only its own model.json", async () =>
