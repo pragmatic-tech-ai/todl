@@ -1,7 +1,14 @@
 import { PackageKind, type PackageRef } from '../../../publish/publish.js'
 import { type TodlDocument } from '../../../compiler-services/emit/json.js'
 import { type ProjectBaseModelBindings } from './base-binding.js'
-import { type IPackageSource } from '../../todl-build-system/package-source.js'
+import { type IPackageSource, type SourcedPackage } from '../../todl-build-system/package-source.js'
+
+// One resolved closure member: the ref it was reached by and the package the source produced.
+export interface ResolvedClosureMember
+{
+    Ref: PackageRef;
+    Package: SourcedPackage;
+}
 
 // Resolves a project's declared bases into parsed TodlDocuments, walking each package's
 // recorded `dependencies` transitively. Reads through the single IPackageSource seam
@@ -9,16 +16,27 @@ import { type IPackageSource } from '../../todl-build-system/package-source.js'
 // headless and unaware of where a package physically comes from.
 export class RecursiveProjectReferencesResolver
 {
-    // Own-only packages record the bases they were compiled against; this reassembles
-    // the full closure. Deduped by `kind:id@version` (cycle-safe). A binding the source
-    // can't produce is collected in `problems` rather than thrown — a consuming project
-    // stays usable while its bases are being published.
+    // As Resolve, but keeps each member's ref + sourced package (so a caller can emit the
+    // per-package model.json). Resolve is the documents-only view of this walk.
     public static async Resolve(
         source: IPackageSource,
         bindings: ProjectBaseModelBindings,
     ): Promise<{ bases: TodlDocument[]; problems: string[] }>
     {
-        const bases: TodlDocument[] = []
+        const { members, problems } = await RecursiveProjectReferencesResolver.ResolveClosure(source, bindings);
+        return { bases: members.map(m => m.Package.Document), problems };
+    }
+
+    // Own-only packages record the bases they were compiled against; this reassembles
+    // the full closure. Deduped by `kind:id@version` (cycle-safe). A binding the source
+    // can't produce is collected in `problems` rather than thrown — a consuming project
+    // stays usable while its bases are being published.
+    public static async ResolveClosure(
+        source: IPackageSource,
+        bindings: ProjectBaseModelBindings,
+    ): Promise<{ members: ResolvedClosureMember[]; problems: string[] }>
+    {
+        const members: ResolvedClosureMember[] = []
         const problems: string[] = []
         const visited = new Set<string>()
 
@@ -43,9 +61,9 @@ export class RecursiveProjectReferencesResolver
                 problems.push(`${kind} "${ref.id}@${ref.version}" is not published`)
                 continue
             }
-            bases.push(pkg.Document)
+            members.push({ Ref: ref, Package: pkg })
             for (const dep of pkg.Dependencies) queue.push(dep)
         }
-        return { bases, problems }
+        return { members, problems }
     }
 }

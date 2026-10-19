@@ -22,7 +22,9 @@ import { ProjectType } from "../../../package-manager/manifest.js";
 import type { TodlBuildContext } from "../../todl-build-context.js";
 import { NpmArtifacts } from "../../npm/npm-artifacts.js";
 import { HtmlArtifacts } from "../html-artifacts.js";
-import { compilePackage, type CompiledPackage } from "../../../../publish/publish.js";
+import { compilePackage, PackageKind, type CompiledPackage, type PackageRef } from "../../../../publish/publish.js";
+import { ResolveBasesAction } from "../../npm/resolve-bases-action.js";
+import type { IPackageSource, SourcedPackage } from "../../package-source.js";
 
 const SentinelBundle = "/*BUNDLE*/(()=>{})();";
 const BundledFlavorId = "html-bundle";
@@ -118,6 +120,63 @@ class Fixture
     public static readonly TodlSrc = join(dirname(fileURLToPath(import.meta.url)), "../../../..");
     public static readonly ProtocolRoot = join(Fixture.TodlSrc, "../../pragmatic-protocol");
 }
+
+class MapPackageSource implements IPackageSource
+{
+    constructor(private readonly packages: ReadonlyMap<string, SourcedPackage>) {}
+
+    public TryGet(ref: PackageRef): Promise<SourcedPackage | undefined>
+    {
+        return Promise.resolve(this.packages.get(ref.id + "@" + ref.version));
+    }
+}
+
+describe("remote flavor package closure", () =>
+{
+    const Prelude: PackageRef = { kind: PackageKind.Library, id: "prelude", version: "1.0.0" };
+    const Shapes: PackageRef = { kind: PackageKind.Library, id: "shapes", version: "2.0.0" };
+    const Doc = { nodes: [], edges: [] };
+
+    test("emits model.json for the app and every transitive dependency; manifest lists exactly them", async () =>
+    {
+        const base = Fixture.Ready({ Remote });
+        const ctx: TodlBuildContext =
+        {
+            ...base,
+            Manifest: { ...base.Manifest, libraries: [{ id: "shapes", version: "2.0.0" }] },
+            Source: new MapPackageSource(new Map<string, SourcedPackage>([
+                ["shapes@2.0.0", { Document: Doc, Dependencies: [Prelude] }],
+                ["prelude@1.0.0", { Document: Doc, Dependencies: [] }],
+            ])),
+        };
+        await new ResolveBasesAction().Execute(ctx);
+        assert.equal(ctx.Diagnostics.Count, 0, JSON.stringify(ctx.Diagnostics.All()));
+        await new EmitRemoteHostAction().Execute(ctx);
+        assert.equal(ctx.Diagnostics.Count, 0, JSON.stringify(ctx.Diagnostics.All()));
+        const manifest = JSON.parse(await ctx.Sandbox.ReadText("servable-manifest.json"));
+        assert.deepEqual(manifest.packages, [
+            { id: "my-arch", version: "0.1.0" },
+            { id: "shapes", version: "2.0.0" },
+            { id: "prelude", version: "1.0.0" },
+        ]);
+        for (const p of manifest.packages)
+        {
+            const model = JSON.parse(await ctx.Sandbox.ReadText(`packages/${p.id}/${p.version}/model.json`));
+            assert.ok(Array.isArray(model.nodes), p.id);
+        }
+        const shapes = JSON.parse(await ctx.Sandbox.ReadText("packages/shapes/2.0.0/model.json"));
+        assert.deepEqual(shapes.dependencies, [Prelude], "dependency edges are carried in model.json");
+    });
+
+    test("a project with no dependencies emits only its own model.json", async () =>
+    {
+        const ctx = Fixture.Ready({ Remote });
+        await new EmitRemoteHostAction().Execute(ctx);
+        assert.equal(await ctx.Sandbox.Exists("packages/my-arch/0.1.0/model.json"), true);
+        const manifest = JSON.parse(await ctx.Sandbox.ReadText("servable-manifest.json"));
+        assert.equal(manifest.packages.length, 1);
+    });
+});
 
 describe("remote flavor registration", () =>
 {
