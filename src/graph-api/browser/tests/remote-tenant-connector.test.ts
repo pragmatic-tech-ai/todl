@@ -88,6 +88,15 @@ test("connector source imports nothing from protocol/server/identity", () =>
     assert.doesNotMatch(src, forbidden);
 });
 
+test("tenant-write-client source imports nothing from protocol/server/identity", () =>
+{
+    const src = readFileSync(new URL("../tenant-write-client.ts", import.meta.url), "utf8");
+    const forbidden = /(?:from\s*|import\s*\(?\s*|require\s*\(\s*)["'][^"']*(?:pragmatic-protocol|pragmatic-server|pragmatic-identity|\/server\/|\/identity\/)[^"']*["']/;
+    assert.doesNotMatch(src, forbidden);
+    const imports = [...src.matchAll(/from\s*["']([^"']+)["']/g)].map((m) => m[1]);
+    assert.ok(imports.every((i) => i === "../../model-data/connector-write-op.js"), `unexpected imports: ${imports.join(", ")}`);
+});
+
 test("ServableManifest.For produces the exact shape", () =>
 {
     const m = ServableManifest.For("app", "1.0.0", [{ id: "p", version: "2" }], "main.js", ["a.css"]);

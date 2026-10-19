@@ -60,3 +60,15 @@ test("Apply throws a clear error when the connector is write-incapable", async (
     await source.Prepare({} as IServiceProvider);
     await assert.rejects(() => source.Apply([]), /connector.*not.*support.*write/i);
 });
+
+test("Apply on a Refresh-less connector returns the write result without throwing", async () =>
+{
+    const ops: ConnectorWriteOp[] = [{ Kind: ConnectorWriteOpKind.Create, Concept: "acme.Svc", Fields: { label: "A" } }];
+    const source = new TestSource({
+        Prepare: async () => ({ nodes: [], edges: [] }),
+        Apply: async () => ({ Results: [{ Status: ConnectorWriteStatus.Applied, Id: "y" }] }),
+    });
+    await source.Prepare({} as IServiceProvider);
+    const result = await source.Apply(ops);
+    assert.equal(result.Results[0]?.Id, "y");
+});

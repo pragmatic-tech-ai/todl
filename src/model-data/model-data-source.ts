@@ -76,7 +76,10 @@ export abstract class ModelDataSource implements EntityHost
             throw new Error(ModelDataSource.NotWritableMessage);
         }
         const result = await this.connector.Apply(ops);
-        await this.Refresh(this.preparedServices!);
+        if (this.connector.Refresh !== undefined)
+        {
+            await this.Refresh(this.preparedServices!);
+        }
         return result;
     }
 

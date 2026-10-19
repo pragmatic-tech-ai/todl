@@ -44,6 +44,14 @@ class FakeModel
 
     public async Apply(ops: readonly ConnectorWriteOp[]): Promise<ConnectorWriteResult>
     {
+        const result = this.ApplyOps(ops);
+        // Mirror the real ModelDataSource.Apply -> Refresh -> loadDocument -> DataChanged.emit().
+        this.DataChanged.emit();
+        return result;
+    }
+
+    private ApplyOps(ops: readonly ConnectorWriteOp[]): ConnectorWriteResult
+    {
         const op = ops[0]!;
         if (this.status !== ConnectorWriteStatus.Applied)
         {
@@ -77,7 +85,7 @@ class VmHarness
         const tempPath = join(here, `.tmp-customer-vm.${Date.now()}.${Math.random().toString(36).slice(2)}.ts`);
         await writeFile(tempPath, ts, "utf8");
         const mod = await import(pathToFileURL(tempPath).href);
-        return new VmHarness(mod.default, mod.CustomerListVM, tempPath);
+        return new VmHarness(mod.CustomerVM, mod.CustomerListVM, tempPath);
     }
 
     /** Let the awaited Apply continuation (RebuildItems + Selected reconcile) settle. */
