@@ -66,6 +66,30 @@ describe("TenantDocumentAssembler", () =>
         await source.Prepare({} as IServiceProvider);
         assert.equal(source.Instances("acme.Svc").length, 2);
     });
+
+    test("Assemble drops a ref to an unknown target so a dangling edge never fails the whole load", async () =>
+    {
+        const schema = TenantDocumentAssembler.SchemaOf(Fixture.Full());
+        const cells: TenantNodeCell[] = [
+            { id: "acme.a1", concept: "acme.Svc", fields: { label: { value: "A1" } }, refs: { uses: ["acme.ghost"] } },
+        ];
+        const doc = TenantDocumentAssembler.Assemble(schema, cells);
+        assert.ok(!doc.edges.some(e => e.to === "acme.ghost"), "the dangling ref edge is not emitted");
+        const source = new GenericModelDataSource("my-arch", new RemoteTenantConnector({ ReadDocument: async () => doc }));
+        await source.Prepare({} as IServiceProvider); // must not throw on the dropped dangling ref
+        assert.equal(source.Instances("acme.Svc").length, 1);
+    });
+
+    test("Assemble does not wire relationship edges from a cell whose id collides with a schema node", () =>
+    {
+        const schema = TenantDocumentAssembler.SchemaOf(Fixture.Full());
+        const cells: TenantNodeCell[] = [
+            { id: "acme.a1", concept: "acme.Svc", fields: {}, refs: {} },
+            { id: "acme.Svc", concept: "acme.Svc", fields: {}, refs: { uses: ["acme.a1"] } },
+        ];
+        const doc = TenantDocumentAssembler.Assemble(schema, cells);
+        assert.ok(!doc.edges.some(e => e.kind === "Relationship" && e.from === "acme.Svc"), "no ref edge originates from the colliding schema node");
+    });
 });
 
 describe("TodlAppBootstrap.PrepareAndMount", () =>

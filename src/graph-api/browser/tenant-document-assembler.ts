@@ -51,10 +51,15 @@ export class TenantDocumentAssembler
         const nodes: JsonNode[] = [...schema.nodes];
         const edges: JsonEdge[] = [...schema.edges];
         const known = new Set(nodes.map(n => n.id));
+        // The ids ADDED as live instances by this call — not schema-node collisions. Only these contribute
+        // relationship edges, so a cell whose id collides with a schema node never wires instance refs onto
+        // that ontology node.
+        const added = new Set<string>();
         const concepts = nodes.filter(n => n.metaKind === TenantDocumentAssembler.ConceptKind);
         const model = nodes.find(n => n.metaKind === TenantDocumentAssembler.ModelKind);
         // SP0 limitation (tracked as a Project Feature): a live cell whose id collides with a schema
-        // node, or whose concept is not in the embedded schema, is skipped silently. Full
+        // node, or whose concept is not in the embedded schema, is skipped silently; a ref whose target
+        // is not a known node is dropped (not emitted) so a dangling edge never fails the whole load. Full
         // reconstruction (inline objects, classes, taxonomy terms, instance annotations) is deferred.
         for (const cell of cells)
         {
@@ -62,15 +67,19 @@ export class TenantDocumentAssembler
             const concept = TenantDocumentAssembler.ResolveConcept(concepts, cell.concept);
             if (concept === undefined) continue;
             known.add(cell.id);
+            added.add(cell.id);
             nodes.push(TenantDocumentAssembler.InstanceNode(cell, concept));
             if (model !== undefined) edges.push({ kind: TenantDocumentAssembler.ContainsEdge, via: null, from: model.id, to: cell.id });
         }
         for (const cell of cells)
         {
-            if (!known.has(cell.id)) continue;
+            if (!added.has(cell.id)) continue;
             for (const [via, targets] of Object.entries(cell.refs ?? {}))
             {
-                for (const to of targets) edges.push({ kind: TenantDocumentAssembler.RelationshipEdge, via, from: cell.id, to });
+                for (const to of targets)
+                {
+                    if (known.has(to)) edges.push({ kind: TenantDocumentAssembler.RelationshipEdge, via, from: cell.id, to });
+                }
             }
         }
         return { nodes, edges };

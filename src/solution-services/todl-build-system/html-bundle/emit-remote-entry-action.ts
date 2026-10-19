@@ -26,7 +26,10 @@ export class EmitRemoteEntryAction implements IBuildAction<TodlBuildContext>
         `import { model } from "./generated/data.js";\n` +
         `import { TodlAppBootstrap } from "@pragmatic-tech-ai/todl";\n` +
         `new {App}();\n` +
-        `void TodlAppBootstrap.PrepareAndMount(app, model);\n`;
+        // PrepareAndMount rethrows after rendering the generic failure message in the host element, so the
+        // entry swallows the rejection here: the user-facing message is already shown and an unhandled
+        // promise rejection would only add console noise.
+        `TodlAppBootstrap.PrepareAndMount(app, model).catch(() => {});\n`;
 
     public readonly Name = EmitRemoteEntryAction.ActionName;
     public readonly Consumes: readonly ArtifactKey<unknown>[] = [];
