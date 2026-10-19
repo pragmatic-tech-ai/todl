@@ -35,14 +35,14 @@ interface RefMember
   many: boolean;
 }
 
-function scalarTsType(typeId: string): string
+export function scalarTsType(typeId: string): string
 {
   if (typeId === "integer" || typeId === "number") return "number";
   if (typeId === "boolean") return "boolean";
   return "string";
 }
 
-function isMany(cardinality: Cardinality): boolean
+export function isMany(cardinality: Cardinality): boolean
 {
   return cardinality === Cardinality.Many || cardinality === Cardinality.OneOrMore;
 }
