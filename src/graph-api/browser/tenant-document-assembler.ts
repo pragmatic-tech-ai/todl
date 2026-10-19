@@ -53,6 +53,9 @@ export class TenantDocumentAssembler
         const known = new Set(nodes.map(n => n.id));
         const concepts = nodes.filter(n => n.metaKind === TenantDocumentAssembler.ConceptKind);
         const model = nodes.find(n => n.metaKind === TenantDocumentAssembler.ModelKind);
+        // SP0 limitation (tracked as a Project Feature): a live cell whose id collides with a schema
+        // node, or whose concept is not in the embedded schema, is skipped silently. Full
+        // reconstruction (inline objects, classes, taxonomy terms, instance annotations) is deferred.
         for (const cell of cells)
         {
             if (known.has(cell.id)) continue;

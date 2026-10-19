@@ -3,9 +3,11 @@
 // credentials never travel through build options.
 export interface RemoteBuildTarget
 {
-    ServerUrl: string;
-    Tenant: string;
     AppName: string;
+    // Dev-only override for a non-same-origin tenant. By default the app connects to the
+    // origin that serves it and the server resolves tenant + principal from the session cookie.
+    ServerUrl?: string;
+    Tenant?: string;
 }
 
 // Invocation-time parameters threaded into every BuildActionContext (spec §10

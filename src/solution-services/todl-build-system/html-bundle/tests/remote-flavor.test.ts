@@ -1,4 +1,9 @@
 import { test, describe } from "node:test";
+import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import ts from "typescript";
 import assert from "node:assert/strict";
 import { FakeStorage } from "@pragmatic-tech-ai/todl-runtime";
 import { BuildArtifacts } from "../../../build-system-core/build-artifacts.js";
@@ -22,7 +27,8 @@ import { compilePackage, type CompiledPackage } from "../../../../publish/publis
 const SentinelBundle = "/*BUNDLE*/(()=>{})();";
 const BundledFlavorId = "html-bundle";
 const RemoteFlavorId = "html-bundle-remote";
-const Remote = { ServerUrl: "https://srv.example.com/ws", Tenant: "acme", AppName: "orders" };
+const Remote = { AppName: "orders" };
+const DevRemote = { ServerUrl: "https://srv.example.com/ws", Tenant: "acme", AppName: "orders" };
 
 class NoopTypeChecker implements ITypeChecker
 {
@@ -32,34 +38,85 @@ class NoopTypeChecker implements ITypeChecker
     }
 }
 
-function contextWith(options: BuildOptions): TodlBuildContext
+class Fixture
 {
-    return {
-        Project: new FakeStorage(),
-        Sandbox: new FakeStorage(),
-        Artifacts: new BuildArtifacts(),
-        Source: new EmptyPackageSource(),
-        Manifest: { type: ProjectType.Architecture, name: "my-arch", version: 1, id: "my-arch" },
-        Options: options,
-        Diagnostics: new DiagnosticSink(),
-    };
-}
+    public static Context(options: BuildOptions): TodlBuildContext
+    {
+        return {
+            Project: new FakeStorage(),
+            Sandbox: new FakeStorage(),
+            Artifacts: new BuildArtifacts(),
+            Source: new EmptyPackageSource(),
+            Manifest: { type: ProjectType.Architecture, name: "my-arch", version: 1, id: "my-arch" },
+            Options: options,
+            Diagnostics: new DiagnosticSink(),
+        };
+    }
 
-function compiledModelFixture(): CompiledPackage
-{
-    const outcome = compilePackage([], [{ uri: "model.todl", text:
-        `namespace acme { concept App { label : string?; } model M : acme { App a1 { label = "A1"; } } }` }],
-        { id: "my-arch", version: "0.1.0" });
-    assert.ok(outcome.ok && outcome.package, JSON.stringify(outcome.diagnostics));
-    return outcome.package!;
-}
+    public static Compiled(): CompiledPackage
+    {
+        const outcome = compilePackage([], [{ uri: "model.todl", text:
+            `namespace acme { concept App { label : string?; } model M : acme { App a1 { label = "A1"; } } }` }],
+            { id: "my-arch", version: "0.1.0" });
+        assert.ok(outcome.ok && outcome.package, JSON.stringify(outcome.diagnostics));
+        return outcome.package!;
+    }
 
-function readyContext(options: BuildOptions): TodlBuildContext
-{
-    const ctx = contextWith(options);
-    ctx.Artifacts.Set(NpmArtifacts.CompiledModel, compiledModelFixture());
-    ctx.Artifacts.Set(HtmlArtifacts.AppBundle, SentinelBundle);
-    return ctx;
+    public static Ready(options: BuildOptions): TodlBuildContext
+    {
+        const ctx = Fixture.Context(options);
+        ctx.Artifacts.Set(NpmArtifacts.CompiledModel, Fixture.Compiled());
+        ctx.Artifacts.Set(HtmlArtifacts.AppBundle, SentinelBundle);
+        return ctx;
+    }
+
+    // Type-checks the emitted data.ts against the real engine + protocol typings (a stub DTO
+    // stands in for the generated model.ts). Returns only diagnostics located in data.ts.
+    public static TypeCheckEmitted(dataTs: string): string[]
+    {
+        const stage = mkdtempSync(join(tmpdir(), "todl-remote-data-"));
+        try
+        {
+            const dataPath = join(stage, "data.ts");
+            writeFileSync(dataPath, dataTs);
+            writeFileSync(join(stage, "model.ts"),
+                `import { ModelDataSource, type IModelDataConnector } from "@pragmatic-tech-ai/todl";\n` +
+                `export class MyArch extends ModelDataSource { constructor(c?: IModelDataConnector) { super(c); } }\n`);
+            const options: ts.CompilerOptions = {
+                target: ts.ScriptTarget.ES2022,
+                module: ts.ModuleKind.NodeNext,
+                moduleResolution: ts.ModuleResolutionKind.NodeNext,
+                lib: ["lib.es2022.d.ts", "lib.dom.d.ts", "lib.dom.asynciterable.d.ts"],
+                strict: true,
+                noUncheckedIndexedAccess: true,
+                exactOptionalPropertyTypes: true,
+                skipLibCheck: true,
+                noEmit: true,
+                baseUrl: stage,
+                paths: {
+                    "@pragmatic-tech-ai/todl": [join(Fixture.TodlSrc, "index.ts")],
+                    "@pragmatic-tech-ai/pragmatic-protocol/browser": [join(Fixture.ProtocolRoot, "dist", "browser.d.ts")],
+                },
+            };
+            const program = ts.createProgram([dataPath], options);
+            const wanted = [dataPath, join(stage, "model.ts")].map(f => Fixture.Normalize(f));
+            return ts.getPreEmitDiagnostics(program)
+                .filter(d => d.file !== undefined && wanted.includes(Fixture.Normalize(d.file.fileName)))
+                .map(d => `${d.file!.fileName}: ${ts.flattenDiagnosticMessageText(d.messageText, "\n")}`);
+        }
+        finally
+        {
+            rmSync(stage, { recursive: true, force: true });
+        }
+    }
+
+    private static Normalize(path: string): string
+    {
+        return path.split("\\").join("/").toLowerCase();
+    }
+
+    public static readonly TodlSrc = join(dirname(fileURLToPath(import.meta.url)), "../../../..");
+    public static readonly ProtocolRoot = join(Fixture.TodlSrc, "../../pragmatic-protocol");
 }
 
 describe("remote flavor registration", () =>
@@ -90,7 +147,7 @@ describe("remote flavor emitters", () =>
 {
     test("host page carries NO inlined snapshot payload but the bundle", async () =>
     {
-        const ctx = readyContext({ Remote });
+        const ctx = Fixture.Ready({ Remote });
         await new EmitRemoteHostAction().Execute(ctx);
         assert.equal(ctx.Diagnostics.Count, 0, JSON.stringify(ctx.Diagnostics.All()));
         const html = await ctx.Sandbox.ReadText("index.html");
@@ -101,7 +158,7 @@ describe("remote flavor emitters", () =>
 
     test("servable manifest matches the {name,version,packages,ui} shape", async () =>
     {
-        const ctx = readyContext({ Remote });
+        const ctx = Fixture.Ready({ Remote });
         await new EmitRemoteHostAction().Execute(ctx);
         const manifest = JSON.parse(await ctx.Sandbox.ReadText("servable-manifest.json"));
         assert.equal(manifest.name, "orders");
@@ -113,7 +170,7 @@ describe("remote flavor emitters", () =>
 
     test("generated data.ts uses RemoteTenantConnector over the cypher/query client, not the snapshot", async () =>
     {
-        const ctx = readyContext({ Remote });
+        const ctx = Fixture.Ready({ Remote });
         await new EmitRemoteDataAction().Execute(ctx);
         assert.equal(ctx.Diagnostics.Count, 0, JSON.stringify(ctx.Diagnostics.All()));
         const src = await ctx.Sandbox.ReadText("generated/data.ts");
@@ -121,7 +178,9 @@ describe("remote flavor emitters", () =>
         assert.ok(src.includes("BrowserSocketDialer"));
         assert.ok(src.includes("@pragmatic-tech-ai/pragmatic-protocol/browser"));
         assert.ok(src.includes("QueryAll"));
-        assert.ok(src.includes("wss://srv.example.com/ws?tenant=acme"));
+        assert.ok(src.includes("location.host"), "socket is derived from the serving origin at runtime");
+        assert.ok(src.includes("UrlOverride: string | null = null"), "no baked absolute URL");
+        assert.ok(!src.includes("tenant="), "the app sends no tenant");
         assert.ok(src.includes("\"orders\""));
         assert.ok(src.includes("new MyArch("), "constructs the DTO with the connector");
         assert.ok(!src.includes("__TODL_APP__"));
@@ -132,7 +191,7 @@ describe("remote flavor emitters", () =>
 
     test("entry awaits PrepareAndMount instead of mounting synchronously", async () =>
     {
-        const ctx = readyContext({ Remote });
+        const ctx = Fixture.Ready({ Remote });
         await new EmitRemoteEntryAction().Execute(ctx);
         const src = await ctx.Sandbox.ReadText("entry.ts");
         assert.ok(src.includes("PrepareAndMount(app, model"));
@@ -140,9 +199,9 @@ describe("remote flavor emitters", () =>
         assert.equal(ctx.Artifacts.Get(HtmlArtifacts.AppEntry), "entry.ts");
     });
 
-    test("missing Remote options is a Severity.Error and writes nothing", async () =>
+    test("missing Remote options (no AppName) is a Severity.Error and writes nothing", async () =>
     {
-        const ctx = readyContext({});
+        const ctx = Fixture.Ready({});
         await new EmitRemoteDataAction().Execute(ctx);
         await new EmitRemoteHostAction().Execute(ctx);
         assert.ok(ctx.Diagnostics.All().filter(d => d.severity === Severity.Error).length >= 2);
@@ -150,9 +209,51 @@ describe("remote flavor emitters", () =>
         assert.equal(await ctx.Sandbox.Exists("index.html"), false);
     });
 
+    test("remote pipeline places EmitRemoteData before BundleApp", () =>
+    {
+        const remote = new HtmlBundleBuildSystem(new EsbuildBundler(), new NoopTypeChecker()).Flavors()[1]!;
+        const names = remote.Actions().map(a => a.constructor.name);
+        assert.ok(names.indexOf("EmitRemoteDataAction") >= 0);
+        assert.ok(names.indexOf("EmitRemoteDataAction") < names.indexOf("BundleAppAction"));
+    });
+
+    test("dev override bakes an absolute ws URL with the tenant", async () =>
+    {
+        const ctx = Fixture.Ready({ Remote: DevRemote });
+        await new EmitRemoteDataAction().Execute(ctx);
+        assert.equal(ctx.Diagnostics.Count, 0, JSON.stringify(ctx.Diagnostics.All()));
+        const src = await ctx.Sandbox.ReadText("generated/data.ts");
+        assert.ok(src.includes("wss://srv.example.com/ws?tenant=acme"));
+    });
+
+    test("an override with an unsupported scheme or garbage is a build diagnostic, not a throw", async () =>
+    {
+        for (const bad of ["ftp://x.example.com", "not a url"])
+        {
+            const ctx = Fixture.Ready({ Remote: { AppName: "orders", ServerUrl: bad } });
+            await assert.doesNotReject(() => new EmitRemoteDataAction().Execute(ctx));
+            assert.ok(ctx.Diagnostics.All().some(d => d.severity === Severity.Error), bad);
+            assert.equal(await ctx.Sandbox.Exists("generated/data.ts"), false);
+        }
+    });
+
+    test("the EMITTED data.ts type-checks against the real engine and protocol typings", async () =>
+    {
+        const ctx = Fixture.Ready({ Remote });
+        await new EmitRemoteDataAction().Execute(ctx);
+        const errors = Fixture.TypeCheckEmitted(await ctx.Sandbox.ReadText("generated/data.ts"));
+        assert.deepEqual(errors, []);
+    });
+
+    test("the type-check helper really catches errors (negative control)", () =>
+    {
+        const errors = Fixture.TypeCheckEmitted("const x: number = 'not a number'; export {};");
+        assert.ok(errors.length > 0);
+    });
+
     test("bundled host still inlines the snapshot (no regression)", async () =>
     {
-        const ctx = readyContext({});
+        const ctx = Fixture.Ready({});
         await new EmitBundledHostAction().Execute(ctx);
         const html = await ctx.Sandbox.ReadText("index.html");
         assert.ok(html.includes("window.__TODL_APP__ ="));

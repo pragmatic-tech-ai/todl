@@ -6,12 +6,12 @@ import { Severity } from "../../build-system-core/diagnostic-sink.js";
 // it is absent or incomplete so a remote action never emits a half-configured app.
 export class RemoteTargetReader
 {
-    private static readonly MissingMessage = "remote build requires Options.Remote with ServerUrl, Tenant and AppName";
+    private static readonly MissingMessage = "remote build requires Options.Remote with an AppName";
 
     public static Read(ctx: TodlBuildContext, source: string): RemoteBuildTarget | undefined
     {
         const remote = ctx.Options.Remote;
-        if (remote === undefined || !remote.ServerUrl || !remote.Tenant || !remote.AppName)
+        if (remote === undefined || !remote.AppName)
         {
             ctx.Diagnostics.Report({ severity: Severity.Error, message: RemoteTargetReader.MissingMessage, source });
             return undefined;

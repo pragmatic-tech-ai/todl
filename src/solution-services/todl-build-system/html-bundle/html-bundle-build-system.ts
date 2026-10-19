@@ -42,18 +42,15 @@ export class HtmlBundleBuildSystem implements IBuildSystem<TodlBuildContext, Pro
     private static readonly AppViewModelGeneratorId = "app-view-model";
     private static readonly AppUiPath = "src/app.mu";
     private static readonly AppUiGeneratorId = "app-ui";
-    // Remote flavor: generated/data.ts is NOT required; the build supplies its own in the sandbox.
-    private static readonly RemoteRequiredContent: readonly RequiredContent[] = [
-        { Path: HtmlBundleBuildSystem.ModelDtoPath, GeneratorId: HtmlBundleBuildSystem.ModelDtoGeneratorId },
-        { Path: HtmlBundleBuildSystem.AppViewModelPath, GeneratorId: HtmlBundleBuildSystem.AppViewModelGeneratorId },
-        { Path: HtmlBundleBuildSystem.AppUiPath, GeneratorId: HtmlBundleBuildSystem.AppUiGeneratorId },
-    ];
     private static readonly RequiredContent: readonly RequiredContent[] = [
         { Path: HtmlBundleBuildSystem.ModelDtoPath, GeneratorId: HtmlBundleBuildSystem.ModelDtoGeneratorId },
         { Path: HtmlBundleBuildSystem.ModelDataPath, GeneratorId: HtmlBundleBuildSystem.ModelDataGeneratorId },
         { Path: HtmlBundleBuildSystem.AppViewModelPath, GeneratorId: HtmlBundleBuildSystem.AppViewModelGeneratorId },
         { Path: HtmlBundleBuildSystem.AppUiPath, GeneratorId: HtmlBundleBuildSystem.AppUiGeneratorId },
     ];
+    // Remote flavor: generated/data.ts is NOT required; the build supplies its own in the sandbox.
+    private static readonly RemoteRequiredContent: readonly RequiredContent[] =
+        HtmlBundleBuildSystem.RequiredContent.filter(r => r.Path !== HtmlBundleBuildSystem.ModelDataPath);
 
     public readonly Id = HtmlBundleBuildSystem.SystemId;
     public readonly DisplayName = HtmlBundleBuildSystem.Display;
