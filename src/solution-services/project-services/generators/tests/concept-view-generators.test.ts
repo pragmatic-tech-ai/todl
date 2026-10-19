@@ -11,7 +11,7 @@ import type { ConceptGeneratorContext } from "../concept-ui-generator.js";
 import { ConceptListViewGenerator } from "../concept-list-view-generator.js";
 import { ConceptFormGenerator } from "../concept-form-generator.js";
 
-const MODEL = "namespace acme { concept Customer { name : string; nickname : string?; age : integer?; active : boolean?; } }";
+const MODEL = "namespace acme { concept Empty { } concept Flag { on : boolean?; } concept Customer { name : string; nickname : string?; age : integer?; active : boolean?; } }";
 
 class FakeModelProvider implements IProjectModelProvider
 {
@@ -32,7 +32,7 @@ class FakeModelProvider implements IProjectModelProvider
 
 class Fixture
 {
-    public static Context(project: FakeStorage): ConceptGeneratorContext
+    public static Context(project: FakeStorage, concept = "acme.Customer"): ConceptGeneratorContext
     {
         const doc = toJSON(check([{ uri: "m.todl", text: MODEL }]).model);
         const pkg = { fullDocument: doc } as unknown as CompiledPackage;
@@ -40,7 +40,7 @@ class Fixture
             Project: project,
             Manifest: { type: ProjectType.Architecture, name: "Customers", version: 1 },
             Model: new FakeModelProvider({ package: pkg, errors: [] }),
-            Concept: "acme.Customer",
+            Concept: concept,
         };
     }
 
@@ -64,6 +64,8 @@ describe("concept view generators", () =>
         assert.ok(mu.includes("SelectedItem = $Selected"));
         assert.ok(mu.includes("Command = $NewCommand"));
         assert.ok(mu.includes("Text = $name"));
+        assert.ok(mu.includes("import CustomerVM from \"./Customer-vm.mjs\""));
+        assert.ok(mu.includes("DataType = CustomerVM"));
         assert.doesNotThrow(() => Fixture.Compiles(mu));
 
         await project.WriteText(path, "hand edited");
@@ -80,11 +82,30 @@ describe("concept view generators", () =>
         assert.deepEqual(result.Written, [path]);
         const mu = await project.ReadText(path);
         assert.ok(mu.includes("Command = $SaveCommand"));
+        assert.ok(mu.includes("Text = $Selected.name"));
+        assert.ok(mu.includes("IsChecked = $Selected.active"));
         assert.ok(mu.includes("Command = $DeleteCommand"));
         assert.ok(mu.includes("TextBox [ Text = $Selected.name ]"));
         assert.ok(mu.includes("TextBox [ Text = $Selected.nickname ]"));
         assert.ok(mu.includes("TextBox [ Text = $Selected.age ]"));
         assert.ok(mu.includes("Checkbox [ IsChecked = $Selected.active ]"));
         assert.doesNotThrow(() => Fixture.Compiles(mu));
+    });
+
+    test("empty-field and boolean-only concepts still emit compilable list and form", async () =>
+    {
+        for (const concept of ["acme.Empty", "acme.Flag"])
+        {
+            const project = new FakeStorage();
+            const ctx = Fixture.Context(project, concept);
+            const list = await new ConceptListViewGenerator().Generate(ctx);
+            const form = await new ConceptFormGenerator().Generate(ctx);
+            for (const path of [...list.Written, ...form.Written])
+            {
+                const mu = await project.ReadText(path);
+                assert.doesNotThrow(() => Fixture.Compiles(mu), path);
+            }
+            assert.equal(list.Written.length + form.Written.length, 2);
+        }
     });
 });
