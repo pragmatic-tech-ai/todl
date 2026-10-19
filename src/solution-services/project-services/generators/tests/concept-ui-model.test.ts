@@ -4,17 +4,14 @@ import { check } from "../../../../compiler-services/api.js";
 import { fromJSON, toJSON } from "../../../../compiler-services/emit/json.js";
 import { ConceptUiModel, UiFieldType } from "../concept-ui-model.js";
 
-const PRELUDE_FIELDS = ["label", "description"];
 const MODEL = "namespace acme { concept Order { total : number?; } concept Customer { name : string; age : integer?; active : boolean?; tags : string*; orders : Order*; class : string?; } }";
 
 test("ConceptUiModel keeps single-valued scalars, drops references and many-valued, sanitizes identifiers", () =>
 {
     const repo = fromJSON(toJSON(check([{ uri: "m.todl", text: MODEL }]).model));
     const ui = ConceptUiModel.For(repo, "acme.Customer");
-    // effectiveSchema also yields the prelude base fields (label, description); assert the declared ones.
     const names = ui.Fields.map(f => f.Name);
-    assert.deepEqual(names.filter(n => PRELUDE_FIELDS.indexOf(n) < 0), ["active", "age", "class", "name"]);
-    assert.deepEqual(names, [...names].sort());
+    assert.deepEqual(names, ["active", "age", "class", "name"]);
     assert.equal(ui.ClassName, "Customer");
     assert.equal(ui.Fields.find(f => f.Name === "age")!.Type, UiFieldType.Number);
     assert.equal(ui.Fields.find(f => f.Name === "active")!.Type, UiFieldType.Boolean);
@@ -22,4 +19,14 @@ test("ConceptUiModel keeps single-valued scalars, drops references and many-valu
     assert.equal(ui.Fields.find(f => f.Name === "age")!.Required, false);
     assert.notEqual(ui.Fields.find(f => f.Name === "class")!.BindingName, "class");
     assert.equal(ConceptUiModel.SafeIdentifier("a-b c"), "abc");
+});
+
+test("ConceptUiModel gives colliding sanitized names distinct BindingNames", () =>
+{
+    assert.equal(ConceptUiModel.SafeIdentifier("a-b"), ConceptUiModel.SafeIdentifier("ab"));
+    // "class" sanitizes to "classField", colliding with the real field of that name.
+    const repo = fromJSON(toJSON(check([{ uri: "m.todl", text: "namespace acme { concept Odd { class : string?; classField : string?; } }" }]).model));
+    const ui = ConceptUiModel.For(repo, "acme.Odd");
+    assert.deepEqual(ui.Fields.map(f => f.Name), ["class", "classField"]);
+    assert.equal(new Set(ui.Fields.map(f => f.BindingName)).size, 2);
 });
