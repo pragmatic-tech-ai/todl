@@ -141,8 +141,9 @@ describe("concept CRUD view-model generator", () =>
 
         const ts = await project.ReadText(path);
 
-        // Row + container classes.
-        assert.ok(ts.includes("export default class CustomerVM extends Observable"));
+        // Row + container classes — both named exports so the generated list.mu's
+        // `import CustomerVM from "./Customer-vm.js"` (a mural NAMED import) resolves at bundle time.
+        assert.ok(ts.includes("export class CustomerVM extends Observable"));
         assert.ok(ts.includes("export class CustomerListVM extends Observable"));
 
         // Observable + RelayCommand come from the real emitted-app import paths.

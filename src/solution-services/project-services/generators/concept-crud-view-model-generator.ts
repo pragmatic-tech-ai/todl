@@ -1,7 +1,7 @@
 /**
  * Emits `src/ui/<Class>/<Class>-vm.ts`: the TypeScript view-models that back the
  * Task-5 list.mu / form.mu. Two classes per concept:
- *   - `<Class>VM` (default export) — the ROW/record VM list rows and `$Selected`
+ *   - `<Class>VM` (named export) — the ROW/record VM list rows and `$Selected`
  *     bind to: a two-way property per scalar field plus `ToWriteOp()`.
  *   - `<Class>ListVM` — the CONTAINER: `Items`, `Selected`, `ErrorText`, and the
  *     `New`/`Save`/`Delete` `RelayCommand`s wired through `ModelDataSource.Apply`.
@@ -81,7 +81,7 @@ export class ConceptCrudViewModelGenerator implements IConceptUiGenerator
         "import { ConnectorWriteOpKind, ConnectorWriteStatus } from \"@pragmatic-tech-ai/todl\";",
         "import type { ConnectorWriteOp, ModelDataSource, ReflectedEntity } from \"@pragmatic-tech-ai/todl\";",
         "",
-        "export default class {Class}VM extends Observable",
+        "export class {Class}VM extends Observable",
         "{",
         "    public static readonly Concept = \"{Concept}\";",
         "",
