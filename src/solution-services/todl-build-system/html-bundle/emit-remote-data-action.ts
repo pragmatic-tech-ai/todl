@@ -47,7 +47,7 @@ export class EmitRemoteDataAction implements IBuildAction<TodlBuildContext>
         `    private static readonly Query = "MATCH (n) RETURN n";\n` +
         `    private static readonly Schema: TodlDocument = {SCHEMA} as TodlDocument;\n` +
         `\n` +
-        `    private client: PragmaticClient | undefined;\n` +
+        `    private connecting: Promise<PragmaticClient> | undefined;\n` +
         `\n` +
         `    // Same-origin by default: the page's own origin, so the session cookie authenticates the\n` +
         `    // socket and the server resolves tenant + principal from it. UrlOverride is dev-only.\n` +
@@ -58,14 +58,22 @@ export class EmitRemoteDataAction implements IBuildAction<TodlBuildContext>
         `        return scheme + "//" + location.host;\n` +
         `    }\n` +
         `\n` +
-        `    private async Connected(): Promise<PragmaticClient>\n` +
+        `    // The in-flight connect promise is cached, so concurrent first calls share one connection.\n` +
+        `    private Connected(): Promise<PragmaticClient>\n` +
         `    {\n` +
-        `        if (this.client === undefined)\n` +
+        `        if (this.connecting === undefined)\n` +
         `        {\n` +
-        `            this.client = await PragmaticClient.ConnectReconnecting(new BrowserSocketDialer(CypherTenantClient.SocketUrl()));\n` +
-        `            await this.client.OpenApplication(CypherTenantClient.AppName);\n` +
+        `            this.connecting = this.Connect();\n` +
+        `            this.connecting.catch(() => { this.connecting = undefined; });\n` +
         `        }\n` +
-        `        return this.client;\n` +
+        `        return this.connecting;\n` +
+        `    }\n` +
+        `\n` +
+        `    private async Connect(): Promise<PragmaticClient>\n` +
+        `    {\n` +
+        `        const client = await PragmaticClient.ConnectReconnecting(new BrowserSocketDialer(CypherTenantClient.SocketUrl()));\n` +
+        `        await client.OpenApplication(CypherTenantClient.AppName);\n` +
+        `        return client;\n` +
         `    }\n` +
         `\n` +
         `    public async ReadDocument(): ReturnType<ITenantReadClient["ReadDocument"]>\n` +

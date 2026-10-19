@@ -306,7 +306,13 @@ describe("remote flavor emitters", () =>
         for (const k of ["Create", "Update", "Delete"]) assert.ok(src.includes(`[ConnectorWriteOpKind.${k}]: AppWriteOpKind.${k}`), k);
         for (const k of ["Applied", "Conflict", "Denied", "Invalid", "Failed"]) assert.ok(src.includes(`[AppWriteStatus.${k}]: ConnectorWriteStatus.${k}`), k);
         assert.ok(src.includes("new RemoteTenantConnector(client, client)"), "same instance for read and write");
-        assert.ok(src.includes("private async Connected(): Promise<PragmaticClient>"));
+        assert.ok(src.includes("private Connected(): Promise<PragmaticClient>"));
+        assert.ok(src.includes("this.connecting = this.Connect();"), "the in-flight connect promise is cached");
+        assert.equal(src.split("OpenApplication(").length - 1, 1, "OpenApplication is issued from one place only");
+        assert.ok(src.includes("wire.id = op.Id"), "Id passes through to the wire op");
+        assert.ok(src.includes("wire.fields = op.Fields"), "Fields pass through to the wire op");
+        assert.ok(src.includes("mapped.Id = result.id"), "id passes back onto the result");
+        assert.ok(src.includes("mapped.Reason = result.reason"), "reason passes back onto the result");
     });
 
     test("entry constructs the view-model synchronously, then awaits PrepareAndMount", async () =>
