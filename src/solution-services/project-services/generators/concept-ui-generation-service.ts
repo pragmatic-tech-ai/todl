@@ -156,28 +156,34 @@ export class ConceptUiGenerationService
 
     private RenderAppUi(className: string, appClass: string): string
     {
-        return this.FillTemplate(ConceptUiGenerationService.AppUiRewrite, className, appClass);
+        return this.FillAppClass(this.FillViewNames(ConceptUiGenerationService.AppUiRewrite, className), appClass);
     }
 
     private RenderAppViewModel(className: string, appClass: string): string
     {
-        return this.FillTemplate(ConceptUiGenerationService.AppViewModelRewrite, className, appClass);
+        return this.FillAppClass(this.FillViewNames(ConceptUiGenerationService.AppViewModelRewrite, className), appClass);
     }
 
+    /** The warning references only the generated view + VM names — no app class — so it fills the
+     *  view-name tokens alone, keeping the general filler free of an empty-argument sentinel. */
     private RenderHandEditedMessage(className: string): string
     {
-        return this.FillTemplate(ConceptUiGenerationService.HandEditedMessage, className, "");
+        return this.FillViewNames(ConceptUiGenerationService.HandEditedMessage, className);
     }
 
-    private FillTemplate(template: string, className: string, appClass: string): string
+    private FillViewNames(template: string, className: string): string
     {
         return template
-            .split(ConceptUiGenerationService.AppClassToken).join(appClass)
             .split(ConceptUiGenerationService.ListVmToken).join(AppNaming.ListViewModel(className))
             .split(ConceptUiGenerationService.ListViewToken).join(AppNaming.ListViewDictionary(className))
             .split(ConceptUiGenerationService.FormViewToken).join(AppNaming.FormViewDictionary(className))
             .split(ConceptUiGenerationService.ListKeyToken).join(AppNaming.ListTemplateKey(className))
             .split(ConceptUiGenerationService.FormKeyToken).join(AppNaming.FormTemplateKey(className))
             .split(ConceptUiGenerationService.ClassToken).join(className);
+    }
+
+    private FillAppClass(template: string, appClass: string): string
+    {
+        return template.split(ConceptUiGenerationService.AppClassToken).join(appClass);
     }
 }

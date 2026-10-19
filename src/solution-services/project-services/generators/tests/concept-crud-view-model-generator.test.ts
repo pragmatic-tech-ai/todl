@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { writeFile, rm } from "node:fs/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
-import { FakeStorage } from "@pragmatic-tech-ai/todl-runtime";
+import { FakeStorage, Signal } from "@pragmatic-tech-ai/todl-runtime";
 import { check } from "../../../../compiler-services/api.js";
 import { toJSON } from "../../../../compiler-services/emit/json.js";
 import { ProjectType } from "../../../package-manager/manifest.js";
@@ -28,12 +28,14 @@ class FakeEntity
     }
 }
 
-/** A minimal ModelDataSource stand-in: the emitted container VM only calls `Instances` + `Apply`. */
+/** A minimal ModelDataSource stand-in: the emitted container VM calls `Instances` + `Apply`
+ *  and subscribes to `DataChanged`. `emit()` simulates an async live load / external Refresh. */
 class FakeModel
 {
     public records: FakeEntity[] = [];
     public status: ConnectorWriteStatus = ConnectorWriteStatus.Applied;
     public assignId = "generated-id";
+    public readonly DataChanged = new Signal<void>();
 
     public Instances(_concept: string): readonly FakeEntity[]
     {
@@ -216,6 +218,47 @@ describe("concept CRUD view-model generator", () =>
             assert.equal(list.Selected?.Id, "c2");
             assert.equal(list.Selected?.IsNew, false);
             assert.ok(list.Items.includes(list.Selected));
+        }
+        finally
+        {
+            await harness.Dispose();
+        }
+    });
+
+    test("async load: a DataChanged emit populates Items, and an IsNew Selected survives the rebuild", async () =>
+    {
+        const project = new FakeStorage();
+        await new ConceptCrudViewModelGenerator().Generate(Fixture.Context(project));
+        const ts = await project.ReadText("src/ui/Customer/Customer-vm.ts");
+        const harness = await VmHarness.Load(ts);
+        try
+        {
+            // Remote model: no data at construction (live fetch has not landed yet).
+            const model = new FakeModel();
+            const list = new harness.ListVm(model);
+            assert.equal(list.Items.length, 0);
+
+            // The live data lands and the model emits DataChanged → the list re-reads.
+            model.records = [new FakeEntity("c1", { name: "A" }), new FakeEntity("c2", { name: "B" })];
+            model.DataChanged.emit();
+            await VmHarness.Flush();
+            assert.equal(list.Items.length, 2);
+
+            // A non-new Selected re-points to the rebuilt row with the same Id.
+            list.Selected = list.Items.find((row: { Id?: string }) => row.Id === "c1");
+            model.DataChanged.emit();
+            await VmHarness.Flush();
+            assert.equal(list.Selected?.Id, "c1");
+            assert.ok(list.Items.includes(list.Selected));
+
+            // An unsaved new row in progress is NOT wiped by an external rebuild.
+            list.NewCommand.Execute();
+            list.Selected.name = "draft";
+            assert.equal(list.Selected.IsNew, true);
+            model.DataChanged.emit();
+            await VmHarness.Flush();
+            assert.equal(list.Selected?.IsNew, true);
+            assert.equal(list.Selected?.name, "draft");
         }
         finally
         {
