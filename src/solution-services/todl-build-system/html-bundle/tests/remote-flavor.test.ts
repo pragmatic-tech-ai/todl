@@ -295,13 +295,18 @@ describe("remote flavor emitters", () =>
         assert.ok(!src.includes("\"A1\""), "instance data is not embedded");
     });
 
-    test("entry awaits PrepareAndMount instead of mounting synchronously", async () =>
+    test("entry constructs the view-model synchronously, then awaits PrepareAndMount", async () =>
     {
         const ctx = Fixture.Ready({ Remote });
         await new EmitRemoteEntryAction().Execute(ctx);
         const src = await ctx.Sandbox.ReadText("entry.ts");
         assert.ok(src.includes("PrepareAndMount(app, model"));
         assert.ok(!src.includes("TodlAppBootstrap.Mount("));
+        // The view-model MUST be constructed synchronously (and so registered in Application.current.Services)
+        // before the async prepare, or the app.mu `$service` binding — which resolves once, within a microtask —
+        // misses it and the view never binds.
+        assert.ok(src.includes("new MyArchApp();"), "view-model is constructed synchronously");
+        assert.ok(src.indexOf("new MyArchApp();") < src.indexOf("PrepareAndMount"), "view-model is constructed before PrepareAndMount");
         assert.equal(ctx.Artifacts.Get(HtmlArtifacts.AppEntry), "entry.ts");
     });
 

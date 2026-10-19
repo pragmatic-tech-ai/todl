@@ -7,6 +7,7 @@
 // a reference always resolves to the same sibling object.
 
 import type { IServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
+import { Signal } from "@pragmatic-tech-ai/todl-runtime";
 import type { TodlDocument } from "../compiler-services/emit/json.js";
 import { FrozenGraph } from "../domain/graph.js";
 import { GraphQuery } from "../graph-api/graph-query-engine.js";
@@ -26,9 +27,10 @@ export abstract class ModelDataSource implements EntityHost
         "ModelDataSource.Refresh requires a connector that supports Refresh.";
 
     private prepared = false;
-    private graph!: FrozenGraph;
-    private query!: GraphQuery;
+    private graph: FrozenGraph | undefined;
+    private query: GraphQuery | undefined;
     private readonly entities = new Map<string, ReflectedEntity>();
+    private readonly dataChanged = new Signal<void>();
 
     private instanceFilter: IInstanceFilter | undefined;
 
@@ -37,6 +39,14 @@ export abstract class ModelDataSource implements EntityHost
 
     protected constructor(private readonly connector?: IModelDataConnector)
     {
+    }
+
+    /** Fires after each successful materialization (Prepare / Refresh / a direct document load). A reactive
+     *  consumer — e.g. a remote app's view-model whose data arrives asynchronously — subscribes and re-reads
+     *  when it emits, so the view updates once the live fetch lands. */
+    public get DataChanged(): Signal<void>
+    {
+        return this.dataChanged;
     }
 
     /** Startup hook: pull this model's document via the connector, then materialize. */
@@ -79,10 +89,12 @@ export abstract class ModelDataSource implements EntityHost
         if (resolved.seed !== undefined) graph.BindSeed(resolved.seed, { model: this.modelName, version: this.modelVersion });
         this.graph = graph;
         this.query = new GraphQuery(graph);
+        this.dataChanged.emit();
     }
 
     protected instancesOf(concept: string): readonly ReflectedEntity[]
     {
+        if (this.query === undefined) return [];
         return this.query.InstancesOf(concept)
             .map((m) => new MirrorReader(m))
             .filter((reader) => this.admits(reader))
@@ -98,13 +110,14 @@ export abstract class ModelDataSource implements EntityHost
     /** Domain concept ids in this source (excludes the prelude root), usable with Instances(). */
     public ConceptNames(): readonly string[]
     {
+        if (this.query === undefined) return [];
         return this.query.Concepts().map((c) => c.fullName);
     }
 
     /** Reflected concept type lookup over the loaded base document (the schema surface the app-data path reaches via IGraphQuery.Type). */
     public Type(concept: string): TypeInfo | undefined
     {
-        return this.query.Type(concept);
+        return this.query?.Type(concept);
     }
 
     /** Public read of a concept's instances (the generic-host surface over protected instancesOf). */
@@ -115,6 +128,7 @@ export abstract class ModelDataSource implements EntityHost
 
     public entity(id: string): ReflectedEntity | undefined
     {
+        if (this.graph === undefined) return undefined;
         const node = this.graph.getNode(id);
         if (node === undefined) return undefined;
         const reader = new MirrorReader(this.graph.reflect(node));
@@ -152,6 +166,7 @@ export abstract class ModelDataSource implements EntityHost
 
     private taxonomyOf(name: string): TaxonomyInfo | undefined
     {
+        if (this.graph === undefined) return undefined;
         for (const m of this.graph.manifests)
         {
             const tax = m.getTaxonomy(name);

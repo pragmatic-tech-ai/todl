@@ -5,9 +5,15 @@ import { HtmlArtifacts } from "./html-artifacts.js";
 import { AppNaming } from "../../project-services/generators/app-naming.js";
 
 // Remote-flavor counterpart of EmitEntryAction: same import order (load-bearing, see
-// EmitEntryAction), but the app is mounted through the async TodlAppBootstrap.PrepareAndMount,
-// which awaits the model's first live fetch. The view-model is constructed in the
-// beforeMount callback so it never reads the model before its data has arrived.
+// EmitEntryAction), and — like the bundled entry — the view-model is constructed
+// SYNCHRONOUSLY at entry load, before mounting. This registers it in
+// Application.current.Services within the same tick the app module loaded, so the
+// app.mu ContentPresenter's `$service(App)` binding resolves it on its first
+// (next-microtask) retry. Constructing it later (e.g. in a beforeMount that runs
+// after an awaited live fetch) misses that retry window — the service stays
+// unresolved and the view renders empty. The view-model reads its model data only
+// through bindings/getters, which evaluate at render time; PrepareAndMount still
+// awaits the first live fetch before mounting, so the data is present by then.
 export class EmitRemoteEntryAction implements IBuildAction<TodlBuildContext>
 {
     private static readonly ActionName = "emit-remote-entry";
@@ -19,7 +25,8 @@ export class EmitRemoteEntryAction implements IBuildAction<TodlBuildContext>
         `import { {App} } from "./src/main.js";\n` +
         `import { model } from "./generated/data.js";\n` +
         `import { TodlAppBootstrap } from "@pragmatic-tech-ai/todl";\n` +
-        `void TodlAppBootstrap.PrepareAndMount(app, model, () => { new {App}(); });\n`;
+        `new {App}();\n` +
+        `void TodlAppBootstrap.PrepareAndMount(app, model);\n`;
 
     public readonly Name = EmitRemoteEntryAction.ActionName;
     public readonly Consumes: readonly ArtifactKey<unknown>[] = [];
