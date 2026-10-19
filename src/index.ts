@@ -410,6 +410,17 @@ export {
 export { WritePolicyWriter } from './solution-services/project-services/generators/write-policy-writer.js';
 export { ProjectModelProvider } from './solution-services/project-services/generators/project-model-provider.js';
 export {
+    ConceptUiGenerationService,
+    type ConceptGenerationResult,
+} from './solution-services/project-services/generators/concept-ui-generation-service.js';
+export type {
+    IConceptUiGenerator,
+    ConceptGeneratorContext,
+} from './solution-services/project-services/generators/concept-ui-generator.js';
+export { ConceptListViewGenerator } from './solution-services/project-services/generators/concept-list-view-generator.js';
+export { ConceptFormGenerator } from './solution-services/project-services/generators/concept-form-generator.js';
+export { ConceptCrudViewModelGenerator } from './solution-services/project-services/generators/concept-crud-view-model-generator.js';
+export {
     ProjectGeneratorRegistry,
     ProjectGeneratorRegistryKey,
 } from './solution-services/project-services/generators/project-generator-registry.js';
