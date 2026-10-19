@@ -22,7 +22,7 @@ class FakeReadWriteClient implements ITenantReadClient, ITenantWriteClient
     public WriteDocument(ops: readonly ConnectorWriteOp[]): Promise<ConnectorWriteResult>
     {
         this.LastOps = ops;
-        return Promise.resolve({ Results: ops.map(o => ({ Status: ConnectorWriteStatus.Applied, Id: o.Id })) });
+        return Promise.resolve({ Results: ops.map(o => (o.Id === undefined ? { Status: ConnectorWriteStatus.Applied } : { Status: ConnectorWriteStatus.Applied, Id: o.Id })) });
     }
 }
 
@@ -31,9 +31,9 @@ test("Apply forwards to the write client", async () =>
     const client = new FakeReadWriteClient();
     const connector = new RemoteTenantConnector(client, client);
     const result = await connector.Apply([{ Kind: ConnectorWriteOpKind.Delete, Concept: "acme.Svc", Id: "a1" }]);
-    assert.equal(client.LastOps[0].Id, "a1");
+    assert.equal(client.LastOps[0]?.Id, "a1");
     assert.equal(result.Results.length, 1);
-    assert.equal(result.Results[0].Status, ConnectorWriteStatus.Applied);
+    assert.equal(result.Results[0]?.Status, ConnectorWriteStatus.Applied);
 });
 
 test("Apply without a write client throws RemoteWriteUnsupportedError", async () =>
