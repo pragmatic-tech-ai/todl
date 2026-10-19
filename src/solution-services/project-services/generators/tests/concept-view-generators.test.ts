@@ -64,7 +64,7 @@ describe("concept view generators", () =>
         assert.ok(mu.includes("SelectedItem = $Selected"));
         assert.ok(mu.includes("Command = $NewCommand"));
         assert.ok(mu.includes("Text = $name"));
-        assert.ok(mu.includes("import CustomerVM from \"./Customer-vm.mjs\""));
+        assert.ok(mu.includes("import CustomerVM from \"./Customer-vm.js\""));
         assert.ok(mu.includes("DataType = CustomerVM"));
         assert.doesNotThrow(() => Fixture.Compiles(mu));
 

@@ -15,7 +15,7 @@ export class ConceptListViewGenerator implements IConceptUiGenerator
     private static readonly ImportsToken = "{imports}";
     private static readonly ClassToken = "{class}";
     private static readonly RowsToken = "{rows}";
-    private static readonly ImportTemplate = "import {0}VM from \"./{0}-vm.mjs\"";
+    private static readonly ImportTemplate = "import {0}VM from \"./{0}-vm.js\"";
     private static readonly Newline = "\n";
     private static readonly RowIndent = "                ";
     private static readonly RowTextTemplate = "TextBlock [ Text = ${0}, Margin = (0,0,12,0) ]";
