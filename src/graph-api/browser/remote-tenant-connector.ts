@@ -38,22 +38,22 @@ export class RemoteTenantConnector implements IModelDataConnector
     {
     }
 
-    public Prepare(_services: IServiceProvider): Promise<TodlDocument>
+    public Prepare(services: IServiceProvider): Promise<TodlDocument>
     {
         if (!this.cached)
         {
             const pending = this.client.ReadDocument();
             // Reset on failure so a later Prepare can retry.
-            pending.catch(() => { this.cached = undefined; });
+            pending.catch(() => { if (this.cached === pending) this.cached = undefined; });
             this.cached = pending;
         }
         return this.cached;
     }
 
-    public Refresh(_services: IServiceProvider): Promise<TodlDocument>
+    public Refresh(services: IServiceProvider): Promise<TodlDocument>
     {
         this.cached = undefined;
-        return this.Prepare(_services);
+        return this.Prepare(services);
     }
 
     /** Writes are not supported against a remote tenant yet. */
