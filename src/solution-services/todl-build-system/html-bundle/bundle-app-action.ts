@@ -75,18 +75,38 @@ export class BundleAppAction implements IBuildAction<TodlBuildContext>
     // compiled modules and the entry (Sandbox — build output/glue). Sandbox files are added
     // last and win on a path collision, so a project file can never clobber a compiled
     // sibling *.mu.js.
+    //
+    // A build action may also emit a SHADOWING source file into the Sandbox at a project
+    // path — the remote flavor's EmitRemoteDataAction replaces generated/data.ts with the
+    // live-data variant. When Project and Sandbox are the same overlay storage the project
+    // read already sees it, but when they are distinct storages (e.g. a host building into a
+    // separate output dir) the project read returns the stale snapshot. So each gathered
+    // project file prefers the Sandbox copy when one exists there — the sandbox-wins rule the
+    // emitters rely on, independent of the storage topology.
     private async Collect(ctx: TodlBuildContext, entry: string, compiled: readonly string[]): Promise<StagedFile[]>
     {
         const projectFiles: StagedFile[] = [];
         await this.GatherTree(ctx.Project, BundleAppAction.SourceDirectory, projectFiles);
         await this.GatherTree(ctx.Project, BundleAppAction.GeneratedDirectory, projectFiles);
+        const overlaid = await Promise.all(projectFiles.map((f) => this.PreferSandbox(ctx, f)));
 
         const sandboxFiles: StagedFile[] = [];
         for (const path of compiled) sandboxFiles.push({ Path: path, Text: await ctx.Sandbox.ReadText(path) });
         sandboxFiles.push({ Path: entry, Text: await ctx.Sandbox.ReadText(entry) });
 
         const sandboxPaths = new Set(sandboxFiles.map((f) => f.Path));
-        return [...projectFiles.filter((f) => !sandboxPaths.has(f.Path)), ...sandboxFiles];
+        return [...overlaid.filter((f) => !sandboxPaths.has(f.Path)), ...sandboxFiles];
+    }
+
+    // Returns the Sandbox copy of a gathered project file when the Sandbox shadows it,
+    // else the project file unchanged.
+    private async PreferSandbox(ctx: TodlBuildContext, file: StagedFile): Promise<StagedFile>
+    {
+        if (await ctx.Sandbox.Exists(file.Path))
+        {
+            return { Path: file.Path, Text: await ctx.Sandbox.ReadText(file.Path) };
+        }
+        return file;
     }
 
     private async GatherTree(storage: IStorage, dir: string, out: StagedFile[]): Promise<void>

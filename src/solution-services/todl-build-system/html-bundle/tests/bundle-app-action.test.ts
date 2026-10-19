@@ -166,6 +166,25 @@ describe("BundleAppAction", () =>
         assert.equal(matches[0]!.Text, CompiledAppRoot);
     });
 
+    test("a sandbox-shadowed source file (remote generated/data.ts) wins over the project snapshot", async () =>
+    {
+        // EmitRemoteDataAction writes the live-data generated/data.ts into the Sandbox to shadow
+        // the project's snapshot one. With Project and Sandbox distinct storages (a host building
+        // into a separate output dir), the Sandbox copy must still be the one bundled.
+        const ctx = Fixture.Context();
+        await Fixture.StageValidInputs(ctx);
+        const RemoteData = `export const data = "remote";
+`;
+        await ctx.Sandbox.WriteText(DataPath, RemoteData);
+
+        const fake = Fixture.Ok();
+        await new BundleAppAction(fake).Execute(ctx);
+
+        const dataFiles = fake.Last!.Files.filter((f) => f.Path === DataPath);
+        assert.equal(dataFiles.length, 1, "exactly one generated/data.ts is staged");
+        assert.equal(dataFiles[0]!.Text, RemoteData, "the sandbox (remote) generated/data.ts must shadow the project snapshot");
+    });
+
     test("a second module mentioning app no longer rejects the bundle", async () =>
     {
         const ctx = Fixture.Context();
