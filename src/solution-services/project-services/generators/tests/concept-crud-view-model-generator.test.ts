@@ -1,14 +1,97 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
+import { writeFile, rm } from "node:fs/promises";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { dirname, join } from "node:path";
 import { FakeStorage } from "@pragmatic-tech-ai/todl-runtime";
 import { check } from "../../../../compiler-services/api.js";
 import { toJSON } from "../../../../compiler-services/emit/json.js";
 import { ProjectType } from "../../../package-manager/manifest.js";
+import { ConnectorWriteOpKind, ConnectorWriteStatus } from "../../../../model-data/connector-write-op.js";
+import type { ConnectorWriteOp, ConnectorWriteResult } from "../../../../model-data/connector-write-op.js";
 import type { CompiledPackage } from "../../../../publish/publish.js";
 import type { IProjectModelProvider, ProjectModel } from "../project-content-generator.js";
 import type { ConceptGeneratorContext } from "../concept-ui-generator.js";
 import { ConceptCrudViewModelGenerator } from "../concept-crud-view-model-generator.js";
 import { ConceptListViewGenerator } from "../concept-list-view-generator.js";
+
+/** A minimal ReflectedEntity stand-in: the emitted row VM only reads `id` + `Snapshot()`. */
+class FakeEntity
+{
+    public constructor(public readonly id: string, private readonly snap: Record<string, unknown>)
+    {
+    }
+
+    public Snapshot(): Record<string, unknown>
+    {
+        return this.snap;
+    }
+}
+
+/** A minimal ModelDataSource stand-in: the emitted container VM only calls `Instances` + `Apply`. */
+class FakeModel
+{
+    public records: FakeEntity[] = [];
+    public status: ConnectorWriteStatus = ConnectorWriteStatus.Applied;
+    public assignId = "generated-id";
+
+    public Instances(_concept: string): readonly FakeEntity[]
+    {
+        return this.records;
+    }
+
+    public async Apply(ops: readonly ConnectorWriteOp[]): Promise<ConnectorWriteResult>
+    {
+        const op = ops[0]!;
+        if (this.status !== ConnectorWriteStatus.Applied)
+        {
+            return { Results: [{ Status: this.status, Reason: "rejected" }] };
+        }
+        if (op.Kind === ConnectorWriteOpKind.Create)
+        {
+            this.records = [...this.records, new FakeEntity(this.assignId, { ...(op.Fields ?? {}) })];
+            return { Results: [{ Status: ConnectorWriteStatus.Applied, Id: this.assignId }] };
+        }
+        if (op.Kind === ConnectorWriteOpKind.Delete)
+        {
+            this.records = this.records.filter((r) => r.id !== op.Id);
+            return { Results: [{ Status: ConnectorWriteStatus.Applied, Id: op.Id! }] };
+        }
+        return { Results: [{ Status: ConnectorWriteStatus.Applied, Id: op.Id! }] };
+    }
+}
+
+/** An emitted, dynamically-imported VM module plus the behavioural drivers the tests need. */
+class VmHarness
+{
+    private constructor(public readonly RowVm: new () => any, public readonly ListVm: new (model: unknown) => any, private readonly tempPath: string)
+    {
+    }
+
+    /** Emit `<Class>-vm.ts`, write it next to this test (so its bare imports resolve), and import it. */
+    public static async Load(ts: string): Promise<VmHarness>
+    {
+        const here = dirname(fileURLToPath(import.meta.url));
+        const tempPath = join(here, `.tmp-customer-vm.${Date.now()}.${Math.random().toString(36).slice(2)}.ts`);
+        await writeFile(tempPath, ts, "utf8");
+        const mod = await import(pathToFileURL(tempPath).href);
+        return new VmHarness(mod.default, mod.CustomerListVM, tempPath);
+    }
+
+    /** Let the awaited Apply continuation (RebuildItems + Selected reconcile) settle. */
+    public static async Flush(): Promise<void>
+    {
+        for (let i = 0; i < 8; i++)
+        {
+            await Promise.resolve();
+        }
+    }
+
+    public async Dispose(): Promise<void>
+    {
+        await rm(this.tempPath, { force: true });
+    }
+}
 
 const MODEL = "namespace acme { concept Customer { name : string; nickname : string?; age : integer?; active : boolean?; } }";
 
@@ -107,5 +190,64 @@ describe("concept CRUD view-model generator", () =>
         const mu = await project.ReadText("src/ui/Customer/list.mu");
         assert.ok(mu.includes("import CustomerVM from \"./Customer-vm.js\""));
         assert.ok(!mu.includes("./Customer-vm.mjs"));
+    });
+
+    test("Selected is reconciled to the rebuilt row after a successful Save", async () =>
+    {
+        const project = new FakeStorage();
+        await new ConceptCrudViewModelGenerator().Generate(Fixture.Context(project));
+        const ts = await project.ReadText("src/ui/Customer/Customer-vm.ts");
+        const harness = await VmHarness.Load(ts);
+        try
+        {
+            const model = new FakeModel();
+            model.records = [new FakeEntity("c1", { name: "A" })];
+            model.assignId = "c2";
+            const list = new harness.ListVm(model);
+
+            list.NewCommand.Execute();          // Selected := blank, IsNew = true, Id = undefined
+            assert.equal(list.Selected.IsNew, true);
+            list.Selected.name = "B";
+
+            list.SaveCommand.Execute();
+            await VmHarness.Flush();
+
+            // Selected now points at a rebuilt row (fresh, IsNew = false) whose Id matches the saved record.
+            assert.equal(list.Selected?.Id, "c2");
+            assert.equal(list.Selected?.IsNew, false);
+            assert.ok(list.Items.includes(list.Selected));
+        }
+        finally
+        {
+            await harness.Dispose();
+        }
+    });
+
+    test("Selected is cleared after a successful Delete", async () =>
+    {
+        const project = new FakeStorage();
+        await new ConceptCrudViewModelGenerator().Generate(Fixture.Context(project));
+        const ts = await project.ReadText("src/ui/Customer/Customer-vm.ts");
+        const harness = await VmHarness.Load(ts);
+        try
+        {
+            const model = new FakeModel();
+            model.records = [new FakeEntity("c1", { name: "A" }), new FakeEntity("c2", { name: "B" })];
+            const list = new harness.ListVm(model);
+
+            list.Selected = list.Items.find((row: { Id?: string }) => row.Id === "c1");
+            assert.equal(list.Selected?.Id, "c1");
+
+            list.DeleteCommand.Execute();
+            await VmHarness.Flush();
+
+            assert.equal(list.Selected, undefined);
+            assert.equal(list.Items.length, 1);
+            assert.equal(list.Items[0].Id, "c2");
+        }
+        finally
+        {
+            await harness.Dispose();
+        }
     });
 });
