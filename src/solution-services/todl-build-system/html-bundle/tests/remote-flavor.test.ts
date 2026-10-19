@@ -295,6 +295,20 @@ describe("remote flavor emitters", () =>
         assert.ok(!src.includes("\"A1\""), "instance data is not embedded");
     });
 
+    test("generated data.ts emits the tenant write adapter over WriteAppData", async () =>
+    {
+        const ctx = Fixture.Ready({ Remote });
+        await new EmitRemoteDataAction().Execute(ctx);
+        const src = await ctx.Sandbox.ReadText("generated/data.ts");
+        assert.ok(src.includes("implements ITenantReadClient, ITenantWriteClient"));
+        assert.ok(src.includes("WriteDocument("));
+        assert.ok(src.includes("client.WriteAppData("));
+        for (const k of ["Create", "Update", "Delete"]) assert.ok(src.includes(`[ConnectorWriteOpKind.${k}]: AppWriteOpKind.${k}`), k);
+        for (const k of ["Applied", "Conflict", "Denied", "Invalid", "Failed"]) assert.ok(src.includes(`[AppWriteStatus.${k}]: ConnectorWriteStatus.${k}`), k);
+        assert.ok(src.includes("new RemoteTenantConnector(client, client)"), "same instance for read and write");
+        assert.ok(src.includes("private async Connected(): Promise<PragmaticClient>"));
+    });
+
     test("entry constructs the view-model synchronously, then awaits PrepareAndMount", async () =>
     {
         const ctx = Fixture.Ready({ Remote });

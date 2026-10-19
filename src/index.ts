@@ -129,6 +129,8 @@ export type { IContributionSource } from './application/contribution-source.js';
 export { MuralHost } from './application/mural-host.js';
 export { TodlAppBootstrap } from './graph-api/browser/todl-app-bootstrap.js';
 export { RemoteTenantConnector, RemoteWriteUnsupportedError, type ITenantReadClient } from './graph-api/browser/remote-tenant-connector.js';
+export type { ITenantWriteClient } from './graph-api/browser/tenant-write-client.js';
+export { ConnectorWriteOpKind, ConnectorWriteStatus, type ConnectorWriteOp, type ConnectorWriteOpResult, type ConnectorWriteResult } from './model-data/connector-write-op.js';
 export { TenantDocumentAssembler, type TenantNodeCell, type TenantFieldCell } from './graph-api/browser/tenant-document-assembler.js';
 export { MuralViewContribution } from './application/mural-view-contribution.js';
 export { ModelBrowserVM, ConceptHeaderVM, InstanceRowVM } from './application/model-browser-vm.js';
