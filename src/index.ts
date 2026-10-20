@@ -462,6 +462,9 @@ export { BuildSystemRegistryKey } from './solution-services/project-services/com
 // IBundler. Guarded browser-safe by browser-safe-composition.test.ts.
 export { HtmlBundleBuildSystem } from './solution-services/todl-build-system/html-bundle/html-bundle-build-system.js';
 export { BuildStorageProviderKey } from './solution-services/todl-build-system/build-storage-provider-key.js';
+// Remote-app bind mode + the build-options shapes it rides with (Application vs Environment graph);
+// defined once in build-system-core, re-exported here so hosts import it from the package root.
+export { RemoteBindMode, type BuildOptions, type RemoteBuildTarget } from './solution-services/build-system-core/build-options.js';
 // The project build runner a browser host drives to publish one project (npm-publish
 // flavor). Browser-safe (build-system-core + todl-build-context types only) — exposed
 // here so renderer hosts need not import the ./todl-build-system barrel, which also
