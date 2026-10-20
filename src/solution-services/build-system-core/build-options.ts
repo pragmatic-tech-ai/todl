@@ -1,6 +1,3 @@
-// The live tenant a "remote" app build targets: where the app reads its data at
-// runtime instead of carrying an inlined snapshot. Non-secret by construction —
-// credentials never travel through build options.
 // Which graph a remote app binds to at runtime. Application opens the app's own
 // per-app graph; Environment skips OpenApplication so reads resolve to the environment graph.
 export enum RemoteBindMode
@@ -9,6 +6,9 @@ export enum RemoteBindMode
     Environment = 'environment',
 }
 
+// The live tenant a "remote" app build targets: where the app reads its data at
+// runtime instead of carrying an inlined snapshot. Non-secret by construction —
+// credentials never travel through build options.
 export interface RemoteBuildTarget
 {
     AppName: string;
