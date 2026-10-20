@@ -322,6 +322,7 @@ describe("remote flavor emitters", () =>
         assert.equal(ctx.Diagnostics.Count, 0, JSON.stringify(ctx.Diagnostics.All()));
         const src = await ctx.Sandbox.ReadText("generated/data.ts");
         assert.ok(!src.includes("OpenApplication("));
+        assert.ok(!src.includes("AppName"), "the dead AppName field is not emitted in environment mode");
         assert.ok(src.includes("MATCH (n) RETURN n"));
         assert.ok(src.includes("acme.App"), "ontology schema is still embedded");
         assert.ok(src.includes("QueryAll"));
@@ -337,6 +338,7 @@ describe("remote flavor emitters", () =>
         const a = await absent.Sandbox.ReadText("generated/data.ts");
         const e = await explicit.Sandbox.ReadText("generated/data.ts");
         assert.ok(a.includes("client.OpenApplication("));
+        assert.ok(a.includes("    private static readonly AppName = \"orders\";\n    private static readonly Query"));
         assert.equal(e, a, "explicit Application is byte-identical to absent");
         assert.ok(a.includes("PragmaticClient.ConnectReconnecting(new BrowserSocketDialer(CypherTenantClient.SocketUrl()));\n        await client.OpenApplication(CypherTenantClient.AppName);\n        return client;"));
     });
