@@ -1,7 +1,7 @@
 import type { IStorage } from "@pragmatic-tech-ai/todl-runtime";
 import type { IBuildAction } from "../../build-system-core/build-action.js";
 import type { ArtifactKey } from "../../build-system-core/artifact-key.js";
-import type { IBundler, StagedFile } from "../../build-system-core/bundler.js";
+import type { IBundler, StagedFile, BundleAsset } from "../../build-system-core/bundler.js";
 import { Severity } from "../../build-system-core/diagnostic-sink.js";
 import type { TodlBuildContext } from "../todl-build-context.js";
 import { HtmlArtifacts } from "./html-artifacts.js";
@@ -26,13 +26,14 @@ export class BundleAppAction implements IBuildAction<TodlBuildContext>
     private static readonly MissingAppRootMessage =
         `no ${BundleAppAction.AppRootModule} among the compiled UI modules to bundle as the app root`;
     private static readonly BundleFailedMessagePrefix = "failed to bundle the app: ";
+    private static readonly AssetWriteFailedPrefix = "could not write bundle asset ";
 
     public readonly Name = BundleAppAction.ActionName;
     public readonly Consumes: readonly ArtifactKey<unknown>[] = [
         HtmlArtifacts.AppEntry,
         HtmlArtifacts.CompiledUi,
     ];
-    public readonly Produces: readonly ArtifactKey<unknown>[] = [HtmlArtifacts.AppBundle];
+    public readonly Produces: readonly ArtifactKey<unknown>[] = [HtmlArtifacts.AppBundle, HtmlArtifacts.FontAssets];
 
     constructor(private readonly bundler: IBundler)
     {
@@ -63,6 +64,11 @@ export class BundleAppAction implements IBuildAction<TodlBuildContext>
             const result = await this.bundler.BundleApp({ Entry: entry, Files: files });
             for (const diagnostic of result.Diagnostics) ctx.Diagnostics.Report(diagnostic);
             if (result.Text !== undefined) ctx.Artifacts.Set(HtmlArtifacts.AppBundle, result.Text);
+            // The bundler also hands back the theme's font woff2s (reachable only node-side); write
+            // them into the bundle at their registered relative paths and publish the list so the
+            // remote host lists them in the servable manifest. Without the fonts mural's text
+            // measurement NaNs and the served app renders nothing.
+            ctx.Artifacts.Set(HtmlArtifacts.FontAssets, await this.WriteAssets(ctx, result.Assets ?? []));
         }
         catch (err)
         {
@@ -83,6 +89,38 @@ export class BundleAppAction implements IBuildAction<TodlBuildContext>
     // separate output dir) the project read returns the stale snapshot. So each gathered
     // project file prefers the Sandbox copy when one exists there — the sandbox-wins rule the
     // emitters rely on, independent of the storage topology.
+    // Writes each bundler-emitted binary asset (base64) into the Sandbox at its bundle-relative
+    // path and returns the paths written. Decoding uses `atob` (present in the renderer where this
+    // action runs, and in node >=16) so no Buffer dependency leaks into this browser-safe action.
+    private async WriteAssets(ctx: TodlBuildContext, assets: readonly BundleAsset[]): Promise<string[]>
+    {
+        const written: string[] = [];
+        for (const asset of assets)
+        {
+            try
+            {
+                const slash = asset.Path.lastIndexOf(BundleAppAction.PathSeparator);
+                if (slash > 0)
+                {
+                    try { await ctx.Sandbox.CreateDirectory(asset.Path.slice(0, slash)); }
+                    catch { /* WriteBytes creates parents on most storages; the dir may already exist. */ }
+                }
+                const binary = atob(asset.Base64);
+                const bytes = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                await ctx.Sandbox.WriteBytes(asset.Path, bytes);
+                written.push(asset.Path);
+            }
+            catch (err)
+            {
+                const detail = err instanceof Error ? err.message : String(err);
+                // Non-fatal: a font that fails to write degrades rendering, it does not break the build.
+                ctx.Diagnostics.Report({ severity: Severity.Warning, message: `${BundleAppAction.AssetWriteFailedPrefix}${asset.Path}: ${detail}`, source: BundleAppAction.ActionName });
+            }
+        }
+        return written;
+    }
+
     private async Collect(ctx: TodlBuildContext, entry: string, compiled: readonly string[]): Promise<StagedFile[]>
     {
         const projectFiles: StagedFile[] = [];

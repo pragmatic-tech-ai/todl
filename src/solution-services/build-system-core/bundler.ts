@@ -16,9 +16,20 @@ export interface BundleAppRequest
     Files: readonly StagedFile[];
 }
 
+// A binary file the bundler emits ALONGSIDE the JS bundle, bundle-root-relative, carried as
+// base64 so the result stays plain-serializable across the IPC seam. The html-bundle build uses
+// this for the theme's font woff2s (resolved from the mural package on disk — reachable only
+// from the node-side bundler), which the served app fetches by relative url.
+export interface BundleAsset
+{
+    Path: string;
+    Base64: string;
+}
+
 export interface BundleAppResult
 {
     Text?: string;
+    Assets?: readonly BundleAsset[];
     Diagnostics: readonly BuildDiagnostic[];
 }
 

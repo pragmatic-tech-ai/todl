@@ -1,9 +1,9 @@
 import { build, type Plugin } from "esbuild";
-import { existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Severity, type BuildDiagnostic } from "../../../build-system-core/diagnostic-sink.js";
-import type { IBundler, BundleAppRequest, BundleAppResult } from "../../../build-system-core/bundler.js";
+import type { IBundler, BundleAppRequest, BundleAppResult, BundleAsset } from "../../../build-system-core/bundler.js";
 
 // Node-only IBundler: stages the request's files into an on-disk dir created INSIDE the
 // nearest node_modules-bearing root (so esbuild's upward node_modules walk resolves bare
@@ -44,6 +44,22 @@ export class EsbuildBundler implements IBundler
         "could not locate a node_modules root to resolve the app's package imports against";
     private static readonly BundleFailedMessagePrefix = "failed to bundle the app: ";
 
+    // The active theme registers its font faces by RELATIVE url (`fonts/<name>.woff2`), which the
+    // served app fetches from its own origin. Only the node-side bundler can reach the actual
+    // bytes (they live in the mural package on disk, not in any staged/imported module), so it
+    // emits them here as bundle assets. Candidate dirs cover a source checkout (src/ or build/),
+    // a dist-only install (dist/), and a flattened layout (resources/). First existing wins.
+    private static readonly MuralPackageDir = "@pragmatic-tech-ai/mural";
+    private static readonly FontDirCandidates: readonly string[] = [
+        "resources/pragmatic/fonts",
+        "build/resources/pragmatic/fonts",
+        "src/resources/pragmatic/fonts",
+        "dist/resources/pragmatic/fonts",
+    ];
+    private static readonly FontOutputPrefix = "fonts/";
+    private static readonly Woff2Extension = ".woff2";
+    private static readonly Base64Encoding = "base64";
+
     public async BundleApp(request: BundleAppRequest): Promise<BundleAppResult>
     {
         const resolutionRoot = this.ResolutionRoot();
@@ -79,7 +95,7 @@ export class EsbuildBundler implements IBundler
                 conditions: EsbuildBundler.ResolveConditions(resolutionRoot),
                 plugins: [this.MuralDedupPlugin(resolutionRoot)],
             });
-            return { Text: result.outputFiles[0]!.text, Diagnostics: [] };
+            return { Text: result.outputFiles[0]!.text, Assets: EsbuildBundler.ReadThemeFonts(resolutionRoot), Diagnostics: [] };
         }
         catch (err)
         {
@@ -129,6 +145,50 @@ export class EsbuildBundler implements IBundler
     {
         const diagnostic: BuildDiagnostic = { severity: Severity.Error, message, source: EsbuildBundler.ActionName };
         return { Diagnostics: [diagnostic] };
+    }
+
+    // Reads the theme's woff2 fonts from the resolvable mural package and returns them as
+    // base64 bundle assets keyed by the SAME relative path the theme registers them under
+    // (`fonts/<name>.woff2`). Best-effort: a missing/unreadable font dir yields [] (the served
+    // app degrades to fallback metrics) rather than failing the whole build.
+    private static ReadThemeFonts(resolutionRoot: string): readonly BundleAsset[]
+    {
+        const muralRoot = EsbuildBundler.LocateMuralRoot(resolutionRoot);
+        if (muralRoot === undefined) return [];
+        for (const candidate of EsbuildBundler.FontDirCandidates)
+        {
+            const dir = join(muralRoot, candidate);
+            if (!existsSync(dir)) continue;
+            try
+            {
+                return readdirSync(dir)
+                    .filter((name) => name.endsWith(EsbuildBundler.Woff2Extension))
+                    .map((name) => ({
+                        Path: EsbuildBundler.FontOutputPrefix + name,
+                        Base64: readFileSync(join(dir, name)).toString(EsbuildBundler.Base64Encoding),
+                    }));
+            }
+            catch
+            {
+                return [];
+            }
+        }
+        return [];
+    }
+
+    // Walks up from resolutionRoot for the first node_modules/@pragmatic-tech-ai/mural with a
+    // package.json — mural may be hoisted above the staging root.
+    private static LocateMuralRoot(resolutionRoot: string): string | undefined
+    {
+        let dir = resolutionRoot;
+        while (true)
+        {
+            const candidate = join(dir, EsbuildBundler.NodeModulesDirectory, EsbuildBundler.MuralPackageDir);
+            if (existsSync(join(candidate, EsbuildBundler.PackageJsonFile))) return candidate;
+            const parent = dirname(dir);
+            if (parent === dir) return undefined;
+            dir = parent;
+        }
     }
 
     // Walks up from this module to the nearest ancestor directory that contains a

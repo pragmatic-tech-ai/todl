@@ -29,7 +29,7 @@ export class EmitRemoteHostAction implements IBuildAction<TodlBuildContext>
     private static readonly NoAppBundleMessage = "no app bundle to emit a remote host from";
 
     public readonly Name = EmitRemoteHostAction.ActionName;
-    public readonly Consumes: readonly ArtifactKey<unknown>[] = [NpmArtifacts.CompiledModel, HtmlArtifacts.AppBundle, NpmArtifacts.ResolvedClosure];
+    public readonly Consumes: readonly ArtifactKey<unknown>[] = [NpmArtifacts.CompiledModel, HtmlArtifacts.AppBundle, NpmArtifacts.ResolvedClosure, HtmlArtifacts.FontAssets];
     public readonly Produces: readonly ArtifactKey<unknown>[] = [];
 
     public async Execute(ctx: TodlBuildContext): Promise<void>
@@ -56,12 +56,15 @@ export class EmitRemoteHostAction implements IBuildAction<TodlBuildContext>
         }
         await ctx.Sandbox.WriteText(EmitRemoteHostAction.HostFile, HtmlShell.RenderRemote(appBundle));
         const packages = await EmitRemoteHostAction.EmitClosure(ctx, compiled, closure);
+        // The theme fonts EmitFontsAction wrote (if any) must be served alongside the page, or
+        // mural's glyph-geometry text measurement NaNs and the whole layout collapses.
+        const fonts = ctx.Artifacts.Get(HtmlArtifacts.FontAssets) ?? [];
         const manifest = ServableManifest.For(
             remote.AppName,
             compiled.version,
             packages,
             EmitRemoteHostAction.HostFile,
-            [EmitRemoteHostAction.HostFile],
+            [EmitRemoteHostAction.HostFile, ...fonts],
         );
         await ctx.Sandbox.WriteText(EmitRemoteHostAction.ManifestFile, JSON.stringify(manifest, null, EmitRemoteHostAction.JsonIndent));
     }
