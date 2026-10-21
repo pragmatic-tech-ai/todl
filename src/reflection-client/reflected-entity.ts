@@ -2,7 +2,7 @@
 // instance or taxonomy term. Scalars come from the reflection FieldView; references
 // are resolved to sibling entities through the identity-mapped host (ReflectedRepository).
 
-import type { InstanceMirror, TermInfo } from "../manifest/reflection/reflection.js";
+import type { IInstanceMirror, TermInfo } from "../manifest/reflection/reflection.js";
 import type { Scalar } from "../manifest/logical.js";
 
 /** The read source behind a ReflectedEntity: a heap instance or a taxonomy term. */
@@ -12,6 +12,7 @@ export interface EntityReader
     readonly concept: string;
     field(name: string): Scalar | undefined;
     targets(member: string): readonly string[];
+    fieldNames(): readonly string[];
 }
 
 /** The identity-mapped entity resolver a ReflectedEntity follows refs through. */
@@ -35,6 +36,18 @@ export class ReflectedEntity
     public get concept(): string
     {
         return this.reader.concept;
+    }
+
+    /** The entity's own declared scalar field values as a plain name->value map; fields with no value are omitted. No refs/relationships are included. */
+    public Snapshot(): Record<string, Scalar>
+    {
+        const out: Record<string, Scalar> = {};
+        for (const name of this.reader.fieldNames())
+        {
+            const value = this.reader.field(name);
+            if (value !== undefined) { out[name] = value; }
+        }
+        return out;
     }
 
     protected field(name: string): Scalar | undefined
@@ -63,7 +76,7 @@ export class ReflectedEntity
 /** An EntityReader over a heap instance. */
 export class MirrorReader implements EntityReader
 {
-    constructor(private readonly mirror: InstanceMirror)
+    constructor(private readonly mirror: IInstanceMirror)
     {
     }
 
@@ -88,6 +101,11 @@ export class MirrorReader implements EntityReader
         // concept-typed reference FIELDS materialise into node.refs, and only some
         // are declared in getRelationships() — node.refs is the uniform source.
         return this.mirror.node.refs?.[member] ?? [];
+    }
+
+    public fieldNames(): readonly string[]
+    {
+        return this.mirror.fields().map((view) => view.field.name);
     }
 }
 
@@ -117,5 +135,10 @@ export class TermReader implements EntityReader
     public targets(): readonly string[]
     {
         return [];
+    }
+
+    public fieldNames(): readonly string[]
+    {
+        return this.term.concept?.getFields().map((f) => f.name) ?? [];
     }
 }

@@ -79,10 +79,14 @@ test('createProject lays down the architecture CLAUDE.md over the shared TODL sc
     assert.equal(await storage.Exists('.claude/todl-rules.md'), true)
 })
 
-test('declares its content generators: app UI then model DTO', () => {
+test('declares its content generators: DTO, data, app view-model, app UI', () => {
     const f = factory()
     assert.equal(providesGenerators(f), true)
-    assert.deepEqual(f.Generators().map((g) => g.Id), ['app-ui', 'model-dto'])
+    const generators = f.Generators()
+    assert.deepEqual(generators.map((g) => g.Id), ['model-dto', 'model-data', 'app-view-model', 'app-ui'])
+    assert.deepEqual(
+        generators.flatMap((g) => g.Produces),
+        ['generated/model.ts', 'generated/data.ts', 'src/main.ts', 'src/app.mu'])
 })
 
 test('a factory with no Generators() does not satisfy providesGenerators', () => {

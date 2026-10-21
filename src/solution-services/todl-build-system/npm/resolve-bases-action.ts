@@ -15,12 +15,12 @@ export class ResolveBasesAction implements IBuildAction<TodlBuildContext>
 
     public readonly Name = ResolveBasesAction.ActionName;
     public readonly Consumes: readonly ArtifactKey<unknown>[] = [];
-    public readonly Produces: readonly ArtifactKey<unknown>[] = [NpmArtifacts.ResolvedBases];
+    public readonly Produces: readonly ArtifactKey<unknown>[] = [NpmArtifacts.ResolvedBases, NpmArtifacts.ResolvedClosure];
 
     public async Execute(ctx: TodlBuildContext): Promise<void>
     {
         const provider = new ProjectModelProvider(ctx.Project, ctx.Manifest, ctx.Source);
-        const { bases, problems } = await provider.ResolveBases();
+        const { members, problems } = await provider.ResolveClosure();
         if (problems.length > 0)
         {
             for (const problem of problems)
@@ -29,6 +29,7 @@ export class ResolveBasesAction implements IBuildAction<TodlBuildContext>
             }
             return;
         }
-        ctx.Artifacts.Set(NpmArtifacts.ResolvedBases, bases);
+        ctx.Artifacts.Set(NpmArtifacts.ResolvedBases, members.map(m => m.Package.Document));
+        ctx.Artifacts.Set(NpmArtifacts.ResolvedClosure, members);
     }
 }

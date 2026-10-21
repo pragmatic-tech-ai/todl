@@ -43,6 +43,7 @@ export {
   type IPackageRegistry,
   type PublishablePackage,
   type ConnectionStatus,
+  type RegistryInspection,
 } from "./engine/package-registry.js";
 export {
   ConnectionFieldKind,

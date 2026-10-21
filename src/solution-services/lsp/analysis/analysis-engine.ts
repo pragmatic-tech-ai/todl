@@ -2,7 +2,7 @@ import type { Position, Range } from "vscode-languageserver-types";
 import type { TodlDocument } from "../../../compiler-services/emit/json.js";
 import type { IAnalysisEngine } from "../host/i-analysis-engine.js";
 import { AnalysisSnapshot } from "./analysis-snapshot.js";
-import { AnalyzeKind, type AnalyzeRequest, type AnalyzeResponse } from "./protocol.js";
+import { AnalyzeKind, type AnalyzeContext, type AnalyzeRequest, type AnalyzeResponse } from "./protocol.js";
 import { NavigationProvider } from "./navigation-provider.js";
 import { HoverProvider } from "./hover-provider.js";
 import { CompletionProvider } from "./completion-provider.js";
@@ -61,8 +61,7 @@ export class AnalysisEngine implements IAnalysisEngine
 
     public async Analyze(request: AnalyzeRequest): Promise<AnalyzeResponse>
     {
-        const bases = this.ResolveBases(request);
-        const a = AnalysisSnapshot.Build(request.Context.Documents, bases);
+        const a = this.SnapshotFor(request);
         const uri = request.Uri;
         switch (request.Kind)
         {
@@ -97,6 +96,25 @@ export class AnalysisEngine implements IAnalysisEngine
         }
     }
 
+    // Prefer the shared SolutionGraph slice when the host attached one (the warm
+    // path: the model was already compiled incrementally). Fall back to the
+    // per-request `checkAgainst` compile otherwise — defensive during rollout and for
+    // a project the shared graph does not represent.
+    private SnapshotFor(request: AnalyzeRequest): AnalysisSnapshot
+    {
+        const slice = request.Context.Graph;
+        if (slice !== undefined)
+        {
+            // Keep the base-set cache warm even on the graph path, so a later Build
+            // fallback (graph went unhealthy) still has the bases it needs. The graph
+            // supplies the model directly, so a stale token never throws here.
+            this.TryCacheBases(request.Context);
+            return AnalysisSnapshot.FromGraph(request.Context.Documents, slice);
+        }
+        const bases = this.ResolveBases(request);
+        return AnalysisSnapshot.Build(request.Context.Documents, bases);
+    }
+
     private ResolveBases(request: AnalyzeRequest): readonly TodlDocument[]
     {
         const ctx = request.Context;
@@ -106,9 +124,7 @@ export class AnalysisEngine implements IAnalysisEngine
             // cache — a late request carrying a stale token would otherwise answer a
             // newer request from a regressed base-set. Still serve this request from
             // its own carried bases, but leave the newer cached copy in place.
-            if (ctx.BaseSetToken < (this.cachedToken ?? Number.NEGATIVE_INFINITY)) return ctx.Bases;
-            this.cachedBases = ctx.Bases;
-            this.cachedToken = ctx.BaseSetToken;
+            if (!this.TryCacheBases(ctx)) return ctx.Bases;
             return this.cachedBases;
         }
         if (this.cachedToken === null || ctx.BaseSetToken !== this.cachedToken)
@@ -116,6 +132,19 @@ export class AnalysisEngine implements IAnalysisEngine
             throw new StaleBaseSetError();
         }
         return this.cachedBases;
+    }
+
+    // Update the token-keyed base-set cache from a context that carries Bases, unless the
+    // carried token is OLDER than the one already cached (an out-of-order late request).
+    // Returns true when the cache now reflects this request's bases, false when the
+    // carried bases are stale and must not displace the newer cached copy.
+    private TryCacheBases(ctx: AnalyzeContext): boolean
+    {
+        if (ctx.Bases === undefined) return false;
+        if (ctx.BaseSetToken < (this.cachedToken ?? Number.NEGATIVE_INFINITY)) return false;
+        this.cachedBases = ctx.Bases;
+        this.cachedToken = ctx.BaseSetToken;
+        return true;
     }
 
     private static RequirePosition(request: AnalyzeRequest): Position

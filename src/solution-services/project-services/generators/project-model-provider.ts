@@ -13,7 +13,7 @@ import type { SourceFile } from "../../../compiler-services/diagnostics/span.js"
 import { compilePackage, PackageKind, type PackageIdentity, type PackageRef } from "../../../publish/publish.js";
 import { ProjectType, type ProjectManifest } from "../../package-manager/manifest.js";
 import { toPackageJson } from "../../package-manager/package-json.js";
-import { RecursiveProjectReferencesResolver } from "../core/base-resolver.js";
+import { RecursiveProjectReferencesResolver, type ResolvedClosureMember } from "../core/base-resolver.js";
 import type { ProjectBaseModelBindings } from "../core/base-binding.js";
 import { TodlProjectSourceFiles } from "../core/todl-sources.js";
 import type { IPackageSource } from "../../todl-build-system/package-source.js";
@@ -49,12 +49,20 @@ export class ProjectModelProvider implements IProjectModelProvider
     // (ResolvedBases, CompiledModel) is preserved.
     public async ResolveBases(): Promise<{ bases: readonly TodlDocument[]; problems: readonly string[] }>
     {
+        const { members, problems } = await this.ResolveClosure();
+        return { bases: members.map(m => m.Package.Document), problems };
+    }
+
+    // The same walk as ResolveBases, keeping each member's ref + sourced package so a
+    // build can emit the per-package model.json for the whole closure.
+    public async ResolveClosure(): Promise<{ members: readonly ResolvedClosureMember[]; problems: readonly string[] }>
+    {
         const bindings: ProjectBaseModelBindings = {
             ...(this.manifest.metaModels !== undefined ? { metaModels: this.manifest.metaModels } : {}),
             ...(this.manifest.libraries !== undefined ? { libraries: this.manifest.libraries } : {}),
             ...(this.manifest.architectures !== undefined ? { architectures: this.manifest.architectures } : {}),
         };
-        return RecursiveProjectReferencesResolver.Resolve(this.source, bindings);
+        return RecursiveProjectReferencesResolver.ResolveClosure(this.source, bindings);
     }
 
     // Compiles the project's .todl sources against the given (already-resolved) bases.

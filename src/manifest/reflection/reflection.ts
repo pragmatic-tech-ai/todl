@@ -720,8 +720,18 @@ export class AnnotationInfo
     constructor(readonly type: TypeInfo, readonly args: ReadonlyMap<string, Scalar>) {}
 }
 
+/** The read surface a graph query exposes per instance, so field access can be decorated (masked). */
+export interface IInstanceMirror
+{
+    readonly node: ReflectedNode;
+    readonly type: TypeInfo;
+    readonly class: TermInfo | undefined;
+    fields(): FieldView[];
+    field(name: string): FieldView | undefined;
+}
+
 /** The object that answers both provenance axes at the point of use. */
-export class InstanceMirror
+export class InstanceMirror implements IInstanceMirror
 {
     constructor(private readonly manifest: Manifest, readonly node: ReflectedNode) {}
 

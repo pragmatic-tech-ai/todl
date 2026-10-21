@@ -23,6 +23,7 @@ test("a taxonomy with no represented concept is flagged", () => {
     isClass: false,
     class: null,
     storageId: null,
+    canonicalId: null,
     fields: [],
     attrs: new Map(),
   });

@@ -1,6 +1,6 @@
 {
   "name": "@pragmatic-tech-ai/todl",
-  "version": "0.46.0",
+  "version": "0.53.1",
   "description": "Typed substrate for authoring and reasoning over ontologies and taxonomies",
   "type": "module",
   "main": "dist/index.js",
@@ -89,6 +89,14 @@
         "default": "./dist/graph-api/index.js"
       },
       "require": "./dist/graph-api/index.js"
+    },
+    "./adapter-pack": {
+      "types": "./dist/model-data/adapter-pack.d.ts",
+      "import": {
+        "development": "./src/model-data/adapter-pack.ts",
+        "default": "./dist/model-data/adapter-pack.js"
+      },
+      "require": "./dist/model-data/adapter-pack.js"
     }
   },
   "files": [
@@ -115,15 +123,18 @@
     "build": "npm run gen:prelude && npm run gen:scaffold && npm run compile:mu && tsc -p tsconfig.build.json",
     "clean": "rimraf dist",
     "clean:smoke": "rimraf --glob \"user-smoke-tests/*/\"",
-    "prepublishOnly": "npm run clean && npm run build"
+    "prepublishOnly": "npm run clean && npm run build",
+    "prepack": "node scripts/strip-dev-exports.mjs strip",
+    "postpack": "node scripts/strip-dev-exports.mjs restore"
   },
   "engines": {
     "node": ">=20"
   },
   "license": "Apache-2.0",
   "dependencies": {
-    "@pragmatic-tech-ai/mural": "^0.61.4",
+    "@pragmatic-tech-ai/mural": "^0.62.6",
     "@pragmatic-tech-ai/todl-runtime": "^0.7.0",
+    "typescript": "^5.7.0",
     "vscode-languageserver": "^9.0.1",
     "vscode-languageserver-textdocument": "^1.0.12",
     "vscode-languageserver-types": "3.17.5"

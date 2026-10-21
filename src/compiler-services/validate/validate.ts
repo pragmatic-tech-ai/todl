@@ -43,6 +43,9 @@ export function validate(model: Repository): Diagnostic[]
   const diagnostics: Diagnostic[] = [];
   for (const node of model.allNodes())
   {
+    // Merged-away aliases are represented by their canonical; validating them would
+    // double-report and raise false cardinality errors on folded fields.
+    if (node.canonicalId != null) continue;
     if (node.tier === Tier.Ontology && node.metaKind === MetaKind.Taxonomy)
     {
       checkRepresents(diagnostics, model, node);

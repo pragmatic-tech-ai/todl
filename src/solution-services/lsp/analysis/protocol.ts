@@ -5,6 +5,7 @@ import type {
 import type { SourceFile } from "../../../compiler-services/diagnostics/span.js";
 import type { TodlDocument } from "../../../compiler-services/emit/json.js";
 import type { RenameError } from "./rename-provider.js";
+import type { GraphSlice } from "./graph-slice.js";
 
 export enum AnalyzeKind
 {
@@ -25,12 +26,15 @@ export enum AnalyzeKind
 }
 
 // Bases are sent only when the base-set changed; otherwise the engine reuses its
-// cached copy provided BaseSetToken still matches.
+// cached copy provided BaseSetToken still matches. `Graph`, when present, carries the
+// shared SolutionGraph's per-project slice: the engine then builds the snapshot from
+// it (reusing the already-compiled model) instead of a fresh per-request compile.
 export interface AnalyzeContext
 {
     BaseSetToken: number;
     Bases?: readonly TodlDocument[];
     Documents: readonly SourceFile[];
+    Graph?: GraphSlice;
 }
 
 export interface AnalyzeRequest

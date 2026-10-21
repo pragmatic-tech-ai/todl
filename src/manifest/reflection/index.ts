@@ -9,6 +9,7 @@ export {
     TaxonomyInfo,
     AnnotationInfo,
     InstanceMirror,
+    type IInstanceMirror,
     FieldView,
     Tokens,
     type Token,

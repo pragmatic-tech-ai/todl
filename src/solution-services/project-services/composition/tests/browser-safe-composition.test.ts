@@ -18,9 +18,26 @@ class BrowserBundleProbe
     // Imports (and uses, so nothing is dropped) exactly what the renderer host consumes.
     public static readonly BarrelEntry = [
         "import { TodlProjectSystemModule, ProjectSystemComposer, BuildSystemRegistryKey,",
-        "  TodlProjectBuildManager, LocalNpmRegistry, StoragePackagePacker, WebTgz, TarArchive } from './index.ts';",
+        "  TodlProjectBuildManager, LocalNpmRegistry, StoragePackagePacker, WebTgz, TarArchive,",
+        "  HtmlBundleBuildSystem, BuildStorageProviderKey } from './index.ts';",
         "globalThis.__probe = [TodlProjectSystemModule, ProjectSystemComposer, BuildSystemRegistryKey,",
-        "  TodlProjectBuildManager, LocalNpmRegistry, StoragePackagePacker, WebTgz, TarArchive];",
+        "  TodlProjectBuildManager, LocalNpmRegistry, StoragePackagePacker, WebTgz, TarArchive,",
+        "  HtmlBundleBuildSystem, BuildStorageProviderKey];",
+    ].join("\n");
+
+    public static readonly HtmlBundleEntry =
+        "import { HtmlBundleBuildSystem } from './solution-services/todl-build-system/html-bundle/html-bundle-build-system.ts'; "
+        + "globalThis.__probe = [HtmlBundleBuildSystem];";
+
+    // The ./todl-build-system BARREL: plexus-core's renderer (SolutionPackageBuilder,
+    // disk-build-storage-provider) imports these browser-safe symbols from it, so the barrel
+    // must not statically re-export the node-only TodlBuildSystemRegistry / TodlBuildSystemEngine
+    // (-> EsbuildBundler -> esbuild). Import real VALUES so nothing is tree-shaken before the probe.
+    public static readonly TodlBuildSystemBarrelEntry = [
+        "import { SolutionBuildManager, BuildStorageProviderKey, PackageStoreKey, TodlProjectBuildManager,",
+        "  CompositePackageSource } from './solution-services/todl-build-system/index.ts';",
+        "globalThis.__probe = [SolutionBuildManager, BuildStorageProviderKey, PackageStoreKey,",
+        "  TodlProjectBuildManager, CompositePackageSource];",
     ].join("\n");
 
     public static readonly NodeSubpathEntryContents =
@@ -28,7 +45,13 @@ class BrowserBundleProbe
 
     // Bundles `contents` (resolved from src/) for the browser; returns the metafile, or
     // the resolve-error texts if esbuild refused.
-    public static async Bundle(contents: string): Promise<{ Metafile?: Metafile; Errors: string[] }>
+    // Node builtins a renderer host stubs (RendererNodeBoundary) rather than bans — the
+    // todl-build-system barrel legitimately reaches node:zlib via the registry tar-reader,
+    // which the real renderer stubs. Externalizing them lets that probe resolve so the
+    // esbuild-specific assertion can run; the MAIN-barrel probe passes [] and bans them all.
+    private static readonly StubbedBuiltins = ["node:*"];
+
+    public static async Bundle(contents: string, externalBuiltins = false): Promise<{ Metafile?: Metafile; Errors: string[] }>
     {
         try
         {
@@ -42,6 +65,7 @@ class BrowserBundleProbe
                 metafile: true,
                 logLevel: "silent",
                 conditions: ["development"],
+                external: externalBuiltins ? BrowserBundleProbe.StubbedBuiltins : [],
             });
             return { Metafile: result.metafile, Errors: [] };
         }
@@ -66,6 +90,24 @@ describe("browser-safe project-system composition (main barrel)", () =>
         const { Metafile: metafile, Errors: errors } = await BrowserBundleProbe.Bundle(BrowserBundleProbe.BarrelEntry);
 
         assert.deepEqual(errors, [], `the main barrel's composition graph reached a node-only module:\n${errors.join("\n")}`);
+        assert.ok(metafile !== undefined);
+        assert.deepEqual(BrowserBundleProbe.EsbuildInputs(metafile), [], "esbuild must not be bundled into the browser graph");
+    });
+
+    test("HtmlBundleBuildSystem (with BundleAppAction) bundles for the browser with no node builtin and no esbuild", async () =>
+    {
+        const { Metafile: metafile, Errors: errors } = await BrowserBundleProbe.Bundle(BrowserBundleProbe.HtmlBundleEntry);
+
+        assert.deepEqual(errors, [], `HtmlBundleBuildSystem reached a node-only module:\n${errors.join("\n")}`);
+        assert.ok(metafile !== undefined);
+        assert.deepEqual(BrowserBundleProbe.EsbuildInputs(metafile), [], "esbuild must not be bundled into the browser graph");
+    });
+
+    test("the ./todl-build-system barrel (SolutionBuildManager + build keys) bundles for the browser with no esbuild", async () =>
+    {
+        const { Metafile: metafile, Errors: errors } = await BrowserBundleProbe.Bundle(BrowserBundleProbe.TodlBuildSystemBarrelEntry, true);
+
+        assert.deepEqual(errors, [], `the todl-build-system barrel reached an unstubbable node-only module:\n${errors.join("\n")}`);
         assert.ok(metafile !== undefined);
         assert.deepEqual(BrowserBundleProbe.EsbuildInputs(metafile), [], "esbuild must not be bundled into the browser graph");
     });

@@ -1,5 +1,6 @@
 export { LspServicesEngine } from './lsp-module.mu.js';
 export type { ILanguageService } from './host/i-language-service.js';
+export { GraphBuildState } from './host/graph-build-state.js';
 export { SolutionLanguageService } from './host/solution-language-service.js';
 export { AnalysisEngineKey, type IAnalysisEngine } from './host/i-analysis-engine.js';
 export { AnalysisEngine } from './analysis/analysis-engine.js';

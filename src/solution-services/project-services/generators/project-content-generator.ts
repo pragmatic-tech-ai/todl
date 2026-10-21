@@ -46,6 +46,11 @@ export interface ProjectModel
 export interface IProjectModelProvider
 {
     Compile(): Promise<ProjectModel>;
+    // Compile for symbols only, with a synthetic local identity (id falls back to the
+    // project name). Content generators use THIS: they need the compiled model, not a
+    // publishable package — and an architecture project (a consumer, with no publishable
+    // `id`) makes the publishable Compile() throw. Symbols are identical to Compile().
+    CompileLocal(): Promise<ProjectModel>;
 }
 
 /** Everything a generator needs to produce its content for one run. */

@@ -38,6 +38,16 @@ export class DocumentSymbolProvider
                 return null; // a package block has no name to surface as a symbol
             case DeclKind.Operator:
                 return this.leaf(decl.glyph, LspSymbolKind.Operator, range, this.nameRange(decl.glyphSpan, range));
+            case DeclKind.Identity:
+                return null; // an identity declaration has no name of its own to surface
+            case DeclKind.Match:
+                return null; // a match declaration has no name of its own to surface
+            case DeclKind.Merge:
+                return null; // a merge declaration has no name of its own to surface
+            case DeclKind.Policy:
+                return null; // a policy declaration has no name of its own to surface
+            case DeclKind.Connector:
+                return this.leaf(decl.name, LspSymbolKind.Interface, range, this.nameRange(decl.nameSpan, range));
         }
     }
 

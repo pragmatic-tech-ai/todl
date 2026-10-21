@@ -30,8 +30,15 @@ class FakeRegistry implements HttpTransport
   private readonly tarballs = new Map<string, Uint8Array>();
   private readonly packageNames = new Set<string>();
 
+  /** Headers returned on `GET {github}/user` (tests vary the scopes header). */
+  public userHeaders: Record<string, string> = { "x-oauth-scopes": "read:packages, repo" };
+
   request(req: HttpRequest): Promise<HttpResponse>
   {
+    if (req.url === `${GITHUB}/user`)
+    {
+      return Promise.resolve({ status: 200, headers: this.userHeaders, body: enc.encode(JSON.stringify({ login: "octocat" })) });
+    }
     if (req.url.startsWith(`${GITHUB}/orgs/`)) return Promise.resolve(this.listPackages());
     if (req.url.includes("/-/")) return Promise.resolve(this.getTarball(req.url));
     const key = req.url.slice(REGISTRY.length + 1); // encoded package name
@@ -192,6 +199,27 @@ test("deleteVersion throws when the version is not published", async () => {
     request: () => Promise.resolve({ status: 200, headers: {}, body: enc.encode(JSON.stringify([{ id: 12, name: "0.2.0" }])) }),
   };
   await assert.rejects(client(transport).deleteVersion(`${SCOPE}/aws`, "0.1.0"), /not a published version/);
+});
+
+test("githubUser returns the login and parsed oauth scopes", async () => {
+  const who = await client(new FakeRegistry()).githubUser();
+  assert.equal(who.identity, "octocat");
+  assert.deepEqual(who.scopes, ["read:packages", "repo"]);
+});
+
+test("githubUser yields no scopes when the header is absent", async () => {
+  const fake = new FakeRegistry();
+  fake.userHeaders = {};
+  const who = await client(fake).githubUser();
+  assert.equal(who.identity, "octocat");
+  assert.deepEqual(who.scopes, []);
+});
+
+test("githubUser reads the scopes header case-insensitively", async () => {
+  const fake = new FakeRegistry();
+  fake.userHeaders = { "X-OAuth-Scopes": "read:packages, repo" };
+  const who = await client(fake).githubUser();
+  assert.deepEqual(who.scopes, ["read:packages", "repo"]);
 });
 
 test("publishDir tars a packed directory and publishes it", async () => {

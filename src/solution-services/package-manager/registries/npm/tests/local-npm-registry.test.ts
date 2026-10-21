@@ -102,3 +102,21 @@ test('publishes an in-memory IStorage layout packed by StoragePackagePacker, ful
     assert.equal(await storage.ReadText('@x/mem/2.0.0/src/model.todl'), 'namespace acme {}')
     assert.equal((await registry.GetManifest({ name: '@x/mem' })).version, '2.0.0')
 })
+
+test('Inspect reports the local registry as ok with its packages and no identity or scopes', async () =>
+{
+    const storage = new FakeStorage()
+    const registry = new LocalNpmRegistry(storage)
+    await registry.Publish(publishable('@x/one', '1.0.0', { id: 'one' }))
+    await registry.Publish(publishable('@x/two', '1.0.0', { id: 'two' }))
+
+    const result = await registry.Inspect()
+
+    assert.equal(result.Ok, true)
+    assert.equal(result.Identity, '')
+    assert.deepEqual(result.Scopes, [])
+    assert.equal(result.ScopesSupported, false)
+    assert.deepEqual(result.Packages, await registry.ListPackages())
+    assert.deepEqual([...result.Packages].sort(), ['@x/one', '@x/two'])
+    assert.equal(result.PackagesSupported, true)
+})

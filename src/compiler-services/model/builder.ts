@@ -56,6 +56,42 @@ export class Builder
   /** Reserved primitive-node attr keys: the refined base type and literal regex. */
   public static readonly PrimitiveBaseAttr = "base";
   public static readonly PrimitiveRegexAttr = "regex";
+  /** Reserved identity-node attr keys: the identified concept and its key attr. */
+  public static readonly IdentityConceptAttr = "concept";
+  public static readonly IdentityKeyAttr = "key";
+  public static readonly StorageIdKey = "storageId";
+  /** Reserved match-node attr keys (the concept reuses the identity key) and the
+   *  two candidate variable names a `same when` rule may reference. */
+  public static readonly MatchConceptAttr = Builder.IdentityConceptAttr;
+  public static readonly MatchRulesAttr = "rules";
+  public static readonly MergeRulesAttr = "rules";
+  /** Reserved policy-node attr keys (the concept reuses the identity key). */
+  public static readonly PolicyConceptAttr = Builder.IdentityConceptAttr;
+  public static readonly PolicyRulesAttr = "rules";
+  /** Reserved connector-node attr keys. `config` is a JSON object of the inline
+   *  NON-secret assignments (everything except kind/connection/secret). */
+  public static readonly ConnectorNameAttr = "name";
+  public static readonly DefaultIdKey = "id";
+  /** The reserved FieldMap member naming the entity id. */
+  public static readonly IdMember = "id";
+  public static readonly ConnectorKindAttr = "kind";
+  public static readonly ConnectorConfigAttr = "config";
+  public static readonly ConnectorConnectionAttr = "connection";
+  public static readonly ConnectorSecretAttr = "secret";
+  public static readonly ConnectorProviderAttr = "provider";
+  /** Reserved population-binding attr keys (`fieldMap` is a JSON member->field object). */
+  public static readonly BindingConceptAttr = Builder.IdentityConceptAttr;
+  public static readonly BindingModelAttr = "model";
+  public static readonly BindingConnectorAttr = "connector";
+  public static readonly BindingSourceAttr = "source";
+  public static readonly BindingIdKeyAttr = "idKey";
+  public static readonly BindingFieldMapAttr = "fieldMap";
+  public static readonly BindingWritableAttr = "writable";
+  public static readonly BindingVersionAttr = "versionField";
+  public static readonly BindingConcurrencyAttr = "concurrency";
+  public static readonly BindingAtomicityAttr = "atomicity";
+  public static readonly MatchLeftVar = "a";
+  public static readonly MatchRightVar = "b";
 
   private readonly stagedNodes: Node[] = [];
   private readonly stagedAttrs: StagedAttr[] = [];
@@ -279,6 +315,98 @@ export class Builder
     return this;
   }
 
+  /** Define an identity node (Ontology-tier) naming the `key` attr that identifies
+   *  entities of `concept`. Both are carried as attrs on the node `id`. */
+  defineIdentity(id: NodeId, concept: NodeId, key: string): this
+  {
+    this.stagedNodes.push(this.makeNode(id, Tier.Ontology, { metaKind: MetaKind.Identity }));
+    this.stagedAttrs.push({ id, name: Builder.IdentityConceptAttr, value: concept });
+    this.stagedAttrs.push({ id, name: Builder.IdentityKeyAttr, value: key });
+    return this;
+  }
+
+  /** Define a match node (Ontology-tier) carrying `concept`'s match rules as a JSON
+   *  `string[][]` (each inner array one rule's sorted agree-on field names). */
+  defineMatch(id: NodeId, concept: NodeId, rulesJson: string): this
+  {
+    this.stagedNodes.push(this.makeNode(id, Tier.Ontology, { metaKind: MetaKind.Match }));
+    this.stagedAttrs.push({ id, name: Builder.MatchConceptAttr, value: concept });
+    this.stagedAttrs.push({ id, name: Builder.MatchRulesAttr, value: rulesJson });
+    return this;
+  }
+
+  /** Define a merge node (Ontology-tier) carrying `concept`'s survivorship rules as a
+   *  JSON array of `{ field, strategy, source }`. */
+  defineMerge(id: NodeId, concept: NodeId, rulesJson: string): this
+  {
+    this.stagedNodes.push(this.makeNode(id, Tier.Ontology, { metaKind: MetaKind.Merge }));
+    this.stagedAttrs.push({ id, name: Builder.MatchConceptAttr, value: concept });
+    this.stagedAttrs.push({ id, name: Builder.MergeRulesAttr, value: rulesJson });
+    return this;
+  }
+
+  /** Define a policy node (Ontology-tier) carrying `concept`'s access rules as a
+   *  JSON array of `{ effect, action, predicate }`. */
+  definePolicy(id: NodeId, concept: NodeId, rulesJson: string): this
+  {
+    this.stagedNodes.push(this.makeNode(id, Tier.Ontology, { metaKind: MetaKind.Policy }));
+    this.stagedAttrs.push({ id, name: Builder.PolicyConceptAttr, value: concept });
+    this.stagedAttrs.push({ id, name: Builder.PolicyRulesAttr, value: rulesJson });
+    return this;
+  }
+
+  /** Define a connector node (Ontology-tier). Id scheme: `<namespace>@connector:<name>`
+   *  (namespace-scoped so two namespaces may name connectors independently). */
+  defineConnector(
+    id: NodeId,
+    name: string,
+    kind: string | null,
+    configJson: string,
+    connection: string | null,
+    secret: string | null,
+    provider: string | null = null,
+  ): this
+  {
+    this.stagedNodes.push(this.makeNode(id, Tier.Ontology, { metaKind: MetaKind.Connector }));
+    this.stagedAttrs.push({ id, name: Builder.ConnectorNameAttr, value: name });
+    if (kind !== null) this.stagedAttrs.push({ id, name: Builder.ConnectorKindAttr, value: kind });
+    this.stagedAttrs.push({ id, name: Builder.ConnectorConfigAttr, value: configJson });
+    if (connection !== null) this.stagedAttrs.push({ id, name: Builder.ConnectorConnectionAttr, value: connection });
+    if (secret !== null) this.stagedAttrs.push({ id, name: Builder.ConnectorSecretAttr, value: secret });
+    if (provider !== null) this.stagedAttrs.push({ id, name: Builder.ConnectorProviderAttr, value: provider });
+    return this;
+  }
+
+  /** Define a population binding node (Ontology-tier): `concept` is populated from
+   *  `source` of `connector` (a connector node id), with a total member->field map. */
+  defineBinding(
+    id: NodeId,
+    modelId: NodeId,
+    concept: NodeId,
+    connector: NodeId,
+    source: string,
+    idKey: string,
+    fieldMapJson: string,
+    writable: boolean,
+    versionField: string | null = null,
+    concurrency: string | null = null,
+    atomicity: string | null = null,
+  ): this
+  {
+    this.stagedNodes.push(this.makeNode(id, Tier.Ontology, { metaKind: MetaKind.Population }));
+    this.stagedAttrs.push({ id, name: Builder.BindingModelAttr, value: modelId });
+    this.stagedAttrs.push({ id, name: Builder.BindingConceptAttr, value: concept });
+    this.stagedAttrs.push({ id, name: Builder.BindingConnectorAttr, value: connector });
+    this.stagedAttrs.push({ id, name: Builder.BindingSourceAttr, value: source });
+    this.stagedAttrs.push({ id, name: Builder.BindingIdKeyAttr, value: idKey });
+    this.stagedAttrs.push({ id, name: Builder.BindingFieldMapAttr, value: fieldMapJson });
+    this.stagedAttrs.push({ id, name: Builder.BindingWritableAttr, value: writable });
+    if (versionField !== null) this.stagedAttrs.push({ id, name: Builder.BindingVersionAttr, value: versionField });
+    if (concurrency !== null) this.stagedAttrs.push({ id, name: Builder.BindingConcurrencyAttr, value: concurrency });
+    if (atomicity !== null) this.stagedAttrs.push({ id, name: Builder.BindingAtomicityAttr, value: atomicity });
+    return this;
+  }
+
   /** Define a viewpoint node framing the given concepts (one Frames edge each). */
   defineViewpoint(name: NodeId, frames: readonly NodeId[]): this
   {
@@ -396,6 +524,7 @@ export class Builder
       isClass: opts.isClass ?? false,
       class: opts.class ?? null,
       storageId: null,
+      canonicalId: null,
       fields: [],
       attrs: new Map<string, Scalar>(),
     };

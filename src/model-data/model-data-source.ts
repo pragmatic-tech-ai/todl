@@ -7,29 +7,51 @@
 // a reference always resolves to the same sibling object.
 
 import type { IServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
+import { Signal } from "@pragmatic-tech-ai/todl-runtime";
 import type { TodlDocument } from "../compiler-services/emit/json.js";
 import { FrozenGraph } from "../domain/graph.js";
 import { GraphQuery } from "../graph-api/graph-query-engine.js";
+import type { TypeInfo } from "../manifest/reflection/reflection.js";
 import { Manifest, type TaxonomyInfo } from "../manifest/reflection/reflection.js";
 import { PackageManifestBridge } from "../solution-services/package-manager/package-manifest-bridge.js";
 import { ReflectedEntity, MirrorReader, TermReader, type EntityReader, type EntityHost } from "../reflection-client/reflected-entity.js";
 import type { IModelDataConnector } from "./model-data-connector.js";
+import type { ConnectorWriteOp, ConnectorWriteResult } from "./connector-write-op.js";
+import type { IInstanceFilter, IInstanceView } from "./instance-filter.js";
 
 export abstract class ModelDataSource implements EntityHost
 {
     private static readonly NoConnectorMessage =
         "ModelDataSource.Prepare requires a connector; construct the source with one, or use the synchronous document path.";
 
+    private static readonly NotRefreshableMessage =
+        "ModelDataSource.Refresh requires a connector that supports Refresh.";
+
+    private static readonly NotWritableMessage =
+        "ModelDataSource.Apply failed: the source is not prepared, or its connector does not support write operations (no Apply).";
+
     private prepared = false;
-    private graph!: FrozenGraph;
-    private query!: GraphQuery;
+    private preparedServices: IServiceProvider | undefined;
+    private graph: FrozenGraph | undefined;
+    private query: GraphQuery | undefined;
     private readonly entities = new Map<string, ReflectedEntity>();
+    private readonly dataChanged = new Signal<void>();
+
+    private instanceFilter: IInstanceFilter | undefined;
 
     protected modelName = "";
     protected modelVersion = "";
 
     protected constructor(private readonly connector?: IModelDataConnector)
     {
+    }
+
+    /** Fires after each successful materialization (Prepare / Refresh / a direct document load). A reactive
+     *  consumer — e.g. a remote app's view-model whose data arrives asynchronously — subscribes and re-reads
+     *  when it emits, so the view updates once the live fetch lands. */
+    public get DataChanged(): Signal<void>
+    {
+        return this.dataChanged;
     }
 
     /** Startup hook: pull this model's document via the connector, then materialize. */
@@ -42,6 +64,40 @@ export abstract class ModelDataSource implements EntityHost
         }
         this.loadDocument(await this.connector.Prepare(services));
         this.prepared = true;
+        this.preparedServices = services;
+    }
+
+    /** Write path: delegate the ops to the connector, then re-read so the graph reflects the outcome
+     *  (Refresh re-materializes and emits DataChanged). Requires a Prepared source with a write-capable connector. */
+    public async Apply(ops: readonly ConnectorWriteOp[]): Promise<ConnectorWriteResult>
+    {
+        if (!this.prepared || this.connector?.Apply === undefined)
+        {
+            throw new Error(ModelDataSource.NotWritableMessage);
+        }
+        const result = await this.connector.Apply(ops);
+        if (this.connector.Refresh !== undefined)
+        {
+            await this.Refresh(this.preparedServices!);
+        }
+        return result;
+    }
+
+    /** In-place re-pull: re-materialize this model's document via the connector, rebuild the graph, and drop
+     *  cached entity handles so they rebuild against the new graph. Prepares first if not yet prepared. */
+    public async Refresh(services: IServiceProvider): Promise<void>
+    {
+        if (!this.prepared)
+        {
+            await this.Prepare(services);
+            return;
+        }
+        if (this.connector?.Refresh === undefined)
+        {
+            throw new Error(ModelDataSource.NotRefreshableMessage);
+        }
+        this.loadDocument(await this.connector.Refresh(services));
+        this.entities.clear();
     }
 
     /** Build the single-package reflection substrate from a document in hand (SYNC). */
@@ -55,11 +111,16 @@ export abstract class ModelDataSource implements EntityHost
         if (resolved.seed !== undefined) graph.BindSeed(resolved.seed, { model: this.modelName, version: this.modelVersion });
         this.graph = graph;
         this.query = new GraphQuery(graph);
+        this.dataChanged.emit();
     }
 
     protected instancesOf(concept: string): readonly ReflectedEntity[]
     {
-        return this.query.InstancesOf(concept).map((m) => this.entityFor(new MirrorReader(m)));
+        if (this.query === undefined) return [];
+        return this.query.InstancesOf(concept)
+            .map((m) => new MirrorReader(m))
+            .filter((reader) => this.admits(reader))
+            .map((reader) => this.entityFor(reader));
     }
 
     protected termsOf(taxonomy: string): readonly ReflectedEntity[]
@@ -71,7 +132,14 @@ export abstract class ModelDataSource implements EntityHost
     /** Domain concept ids in this source (excludes the prelude root), usable with Instances(). */
     public ConceptNames(): readonly string[]
     {
+        if (this.query === undefined) return [];
         return this.query.Concepts().map((c) => c.fullName);
+    }
+
+    /** Reflected concept type lookup over the loaded base document (the schema surface the app-data path reaches via IGraphQuery.Type). */
+    public Type(concept: string): TypeInfo | undefined
+    {
+        return this.query?.Type(concept);
     }
 
     /** Public read of a concept's instances (the generic-host surface over protected instancesOf). */
@@ -82,11 +150,26 @@ export abstract class ModelDataSource implements EntityHost
 
     public entity(id: string): ReflectedEntity | undefined
     {
-        const cached = this.entities.get(id);
-        if (cached !== undefined) return cached;
+        if (this.graph === undefined) return undefined;
         const node = this.graph.getNode(id);
         if (node === undefined) return undefined;
-        return this.entityFor(new MirrorReader(this.graph.reflect(node)));
+        const reader = new MirrorReader(this.graph.reflect(node));
+        if (!this.admits(reader)) return undefined;
+        return this.entityFor(reader);
+    }
+
+    /** Install (or clear, with undefined) the access filter applied to Instances and entity(id). */
+    public UseInstanceFilter(filter: IInstanceFilter | undefined): void
+    {
+        this.instanceFilter = filter;
+    }
+
+    private admits(reader: EntityReader): boolean
+    {
+        const filter = this.instanceFilter;
+        if (filter === undefined) return true;
+        const view: IInstanceView = { Concept: reader.concept, Field: (name) => reader.field(name) };
+        return filter.Keep(view);
     }
 
     protected createEntity(reader: EntityReader): ReflectedEntity
@@ -105,6 +188,7 @@ export abstract class ModelDataSource implements EntityHost
 
     private taxonomyOf(name: string): TaxonomyInfo | undefined
     {
+        if (this.graph === undefined) return undefined;
         for (const m of this.graph.manifests)
         {
             const tax = m.getTaxonomy(name);

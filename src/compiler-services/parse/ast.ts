@@ -52,6 +52,11 @@ export enum DeclKind
   Annotation,
   Package,
   Operator,
+  Identity,
+  Match,
+  Merge,
+  Connector,
+  Policy,
 }
 
 /** The kind of an authored VALUE (the right-hand side of `name = …`, an array
@@ -243,6 +248,10 @@ export interface ModelDecl
   edges: EdgeApplication[];
   /** Model-level annotation applications (`annotate <Ann> { … }`). */
   annotations: AnnotationApplication[];
+  /** `connect <connector>;` statements — external connectors this model uses. */
+  connects: ConnectEntry[];
+  /** `populate <Concept> …;` statements — external-data population requests. */
+  populations: PopulateDecl[];
   /** The viewpoint this model conforms to (`… conforms <viewpoint>`), or null. */
   conforms: string | null;
   span: SourceSpan;
@@ -309,6 +318,155 @@ export interface OperatorDecl
   /** Relationship form: the relationship member on `concept`; null for the reified form. */
   relationship: string | null;
   span: SourceSpan;
+}
+
+/** One `same when <expr>;` clause of a match block. The predicate is the raw
+ * token slice between `when` and `;`, parsed later by the loader via parsePredicate. */
+export interface MatchRule
+{
+  predicate: Token[];
+  span: SourceSpan;
+}
+
+/** A `match <Concept> { same when <expr>; ... }` declaration — declarative
+ * cross-record equivalence rules beyond the identity key. Clauses OR together. */
+export interface MatchDecl
+{
+  kind: DeclKind.Match;
+  concept: string;
+  rules: MatchRule[];
+  span: SourceSpan;
+  conceptSpan?: SourceSpan;
+}
+
+/** Effect of one policy rule. */
+export enum PolicyEffect
+{
+  Allow = "allow",
+  Deny = "deny",
+}
+
+/** Action a policy rule governs. */
+export enum PolicyAction
+{
+  Read = "read",
+  Write = "write",
+}
+
+/** One `allow|deny read|write when <expr>;` clause of a policy block. The predicate
+ * is the raw token slice between `when` and `;`. */
+export interface PolicyRule
+{
+  effect: PolicyEffect;
+  action: PolicyAction;
+  predicate: Token[];
+  span: SourceSpan;
+}
+
+/** A `policy <Concept> { ... }` declaration — entity-level access rules. */
+export interface PolicyDecl
+{
+  kind: DeclKind.Policy;
+  concept: string;
+  rules: PolicyRule[];
+  span: SourceSpan;
+  conceptSpan?: SourceSpan;
+}
+
+/** Survivorship strategy for one merge rule. */
+export enum MergeStrategy
+{
+  Source = "source",
+  Latest = "latest",
+}
+
+/** One `prefer …` clause of a merge block. */
+export interface MergeRule
+{
+  strategy: MergeStrategy;
+  field: string;
+  source: string | null;   // the named source for `prefer source "x"`, else null
+  span: SourceSpan;
+  fieldSpan?: SourceSpan;
+}
+
+/** A `merge <Concept> { prefer … for <field>; }` declaration — attribute
+ * survivorship for entity resolution. */
+export interface MergeDecl
+{
+  kind: DeclKind.Merge;
+  concept: string;
+  rules: MergeRule[];
+  span: SourceSpan;
+  conceptSpan?: SourceSpan;
+}
+
+/** An `identity <Concept> key <attr>;` declaration — names the attribute whose
+ * value identifies an instance of the concept for entity-resolution. */
+export interface IdentityDecl
+{
+  kind: DeclKind.Identity;
+  concept: string;
+  key: string;
+  span: SourceSpan;
+  conceptSpan?: SourceSpan;
+  keySpan?: SourceSpan;
+}
+
+/** One `name = value;` assignment in a connector body; the value is the raw
+ * string-literal contents or bare identifier text. */
+export interface ConnectorAssignment
+{
+  name: string;
+  value: string;
+  span?: SourceSpan;
+}
+
+/** A `connector <name> { name = value; ... }` declaration — an external data
+ * connection (named or inline form). */
+export interface ConnectorDecl
+{
+  kind: DeclKind.Connector;
+  name: string;
+  assignments: ConnectorAssignment[];
+  span: SourceSpan;
+  nameSpan?: SourceSpan;
+}
+
+/** A model-body `connect <connector>;` statement. */
+export interface ConnectEntry
+{
+  connector: string;
+  span: SourceSpan;
+  connectorSpan?: SourceSpan;
+}
+
+/** One `<member> = "<field>";` override in a populate body. */
+export interface PopulateOverride
+{
+  member: string;
+  field: string;
+  span: SourceSpan;
+  memberSpan?: SourceSpan;
+}
+
+/** A model-body `populate <Concept> [from <connector>[.<source>]] [key <field>] [{ ... }];`. */
+export interface PopulateDecl
+{
+  concept: string;
+  connector: string | null;
+  source: string | null;
+  idKey: string | null;
+  overrides: PopulateOverride[];
+  readOnly: boolean;
+  /** `version <member>` — the FieldMap member naming the optimistic-write version field. */
+  versionField: string | null;
+  /** `concurrency last-write-wins|optimistic` — raw authored value (mirrors `WriteConcurrency`). */
+  concurrency: string | null;
+  /** `atomicity sequential|transactional` — raw authored value (mirrors `WriteAtomicity`). */
+  atomicity: string | null;
+  span: SourceSpan;
+  conceptSpan?: SourceSpan;
 }
 
 // ── Concept members (fields, relationships, invariants) ────────────────────────
@@ -454,7 +612,7 @@ export interface PrimitiveDecl
  * {@link DeclKind}). This is what a {@link NamespaceNode} holds. */
 export type Declaration =
   | ConceptDecl | TaxonomyDecl | ViewpointDecl | PrimitiveDecl | InstanceDecl | ModelDecl
-  | AnnotationDecl | PackageDecl | OperatorDecl;
+  | AnnotationDecl | PackageDecl | OperatorDecl | IdentityDecl | MatchDecl | MergeDecl | ConnectorDecl | PolicyDecl;
 
 // ═══════════════════════════════ FILE ROOT ════════════════════════════════════
 

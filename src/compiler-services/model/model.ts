@@ -29,7 +29,7 @@ import { validate as runValidation, type Diagnostic } from "../validate/validate
 import type { SourceSpan } from "../diagnostics/span.js";
 
 /** The prelude root concept — the virtual base of every parent-less concept (SPEC-02). */
-const ELEMENT_ID = "todl.Element";
+export const ELEMENT_ID = "todl.Element";
 
 /** The built-in scalar roots every primitive ultimately refines (spec §4). A
  *  field's authored literal is validated against its resolved base. */
@@ -164,7 +164,7 @@ export class Repository
 
   instancesOf(concept: NodeId): NodeId[]
   {
-    return this.graph.instancesOf(concept);
+    return this.graph.instancesOf(concept).filter((id) => this.resolve(id)?.canonicalId == null);
   }
 
   /** Every node whose `metaKind` is `kind` (concept declarations, taxonomies,
@@ -180,10 +180,40 @@ export class Repository
     return this.graph.allNodes();
   }
 
+  /** Remove node `id` (and its edges) from the model. */
+  remove(id: NodeId): void
+  {
+    this.graph.remove(id);
+  }
+
   /** All edges leaving `id` (forward adjacency). */
   outEdges(id: NodeId): Edge[]
   {
     return this.graph.outEdges(id);
+  }
+
+  /** All edges entering `id` (reverse adjacency). */
+  inEdges(id: NodeId): Edge[]
+  {
+    return this.graph.inEdges(id);
+  }
+
+  /** Write one scalar attribute onto node `id`; see {@link Graph.setAttr}. */
+  setAttr(id: NodeId, name: string, value: Scalar): void
+  {
+    this.graph.setAttr(id, name, value);
+  }
+
+  /** Add a relationship edge; see {@link Graph.addEdge}. */
+  addEdge(edge: Edge): void
+  {
+    this.graph.addEdge(edge);
+  }
+
+  /** Mark `aliasId` as a duplicate of `canonicalId`; see {@link Graph.alias}. */
+  alias(aliasId: NodeId, canonicalId: NodeId): void
+  {
+    this.graph.alias(aliasId, canonicalId);
   }
 
   related(id: NodeId, kind: EdgeKind, direction: Direction, via: NodeId | null = null): NodeId[]
@@ -424,10 +454,11 @@ export class Repository
     return this.effectiveRelationships(id).get(member) ?? [];
   }
 
-  /** Inbound reference sources (reverse adjacency), optionally filtered by member. */
+  /** Inbound reference sources (reverse adjacency), optionally filtered by member; excludes merged-away aliased sources (returns the canonical). */
   referrers(id: NodeId, member?: string): NodeId[]
   {
-    return this.related(id, EdgeKind.Relationship, Direction.In, member ?? null);
+    return this.related(id, EdgeKind.Relationship, Direction.In, member ?? null)
+      .filter((from) => this.resolve(from)?.canonicalId == null);
   }
 
   /** Every relationship edge whose target node is absent (bulk dangling report). */

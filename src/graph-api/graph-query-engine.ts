@@ -98,6 +98,17 @@ export class GraphQuery implements IGraphQuery
         return out;
     }
 
+    public AllInstances(): InstanceMirror[]
+    {
+        const out: InstanceMirror[] = [];
+        for (const node of this.graph.allNodes())
+        {
+            if (this.graph.ownerOf(node.type) === undefined) continue;
+            out.push(this.graph.reflect(node));
+        }
+        return out;
+    }
+
     public Term(id: string): TermInfo | undefined
     {
         for (const m of this.graph.manifests)

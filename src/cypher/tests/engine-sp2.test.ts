@@ -1,0 +1,712 @@
+import { test, describe } from "node:test";
+import assert from "node:assert/strict";
+import { GraphQuery } from "../../graph-api/graph-query-engine.js";
+import { FrozenGraph } from "../../domain/graph.js";
+import { Manifest } from "../../manifest/reflection/reflection.js";
+import { ManifestWriter } from "../../manifest/manifest-writer.js";
+import type { LogicalManifest } from "../../manifest/logical.js";
+import type { ReflectedNode } from "../../manifest/reflection/reflection.js";
+import type { MirrorSnapshot } from "../../graph-api/index.js";
+import { SnapshotReader } from "../../reflection-client/index.js";
+import { CypherEngine } from "../engine.js";
+import { CypherQuery, Pattern, Expr, Return, Sort, Fn } from "../fluent.js";
+import { CypherValue, NodeValue, ScalarValue, NullValue } from "../values.js";
+import { ListValue, MapValue, PathValue, RelValue } from "../values-structured.js";
+import { CypherSemanticError, CypherTimeout } from "../errors.js";
+import { Deadline } from "../execution-limits.js";
+import type { CypherResult } from "../result.js";
+import type { PlannerOptions } from "../planner.js";
+
+class Sp2Fixture
+{
+    private static readonly ModelName = "svc2";
+    private static readonly ModelVersion = "1.0.0";
+    private static readonly Format = "todl-manifest/1";
+    private static readonly RootConcept = "Element";
+    private static readonly ServiceConcept = "Service";
+    private static readonly CoreConcept = "CoreService";
+    private static readonly CallsRel = "calls";
+    private static readonly NameField = "name";
+    private static readonly KindField = "kind";
+    private static readonly StringType = "string";
+    private static readonly OptionalCard = "?";
+    private static readonly ManyCard = "*";
+    private static readonly KindApi = "api";
+    private static readonly KindCore = "core";
+    private static readonly UnexpectedCellMessage = "unexpected cell type in Plain()";
+
+    // Graph: checkout->ledger->billing->checkout (cycle), billing->audit, vault(Core)->ledger, lonely (isolated).
+    public static Engine(extraEdges: { from: string; rel: string; to: string }[] = [], options?: PlannerOptions): CypherEngine
+    {
+        const logical: LogicalManifest = {
+            format: Sp2Fixture.Format, model: Sp2Fixture.ModelName, version: Sp2Fixture.ModelVersion,
+            root: Sp2Fixture.RootConcept,
+            concepts: {
+                [Sp2Fixture.RootConcept]: { extends: null, fields: {}, relationships: {}, invariants: [], annotations: [] },
+                [Sp2Fixture.ServiceConcept]: {
+                    extends: Sp2Fixture.RootConcept,
+                    fields: {
+                        [Sp2Fixture.NameField]: { type: Sp2Fixture.StringType, card: Sp2Fixture.OptionalCard },
+                        [Sp2Fixture.KindField]: { type: Sp2Fixture.StringType, card: Sp2Fixture.OptionalCard },
+                    },
+                    relationships: { [Sp2Fixture.CallsRel]: { targets: [Sp2Fixture.ServiceConcept], card: Sp2Fixture.ManyCard, annotations: [] } },
+                    invariants: [], annotations: [],
+                },
+                [Sp2Fixture.CoreConcept]: { extends: Sp2Fixture.ServiceConcept, fields: {}, relationships: {}, invariants: [], annotations: [] },
+            },
+            classes: {}, taxonomies: {},
+        };
+        const g = new FrozenGraph();
+        const m = Manifest.load(ManifestWriter.fromLogical(logical).toJSON());
+        g.PreRegister(m);
+        g.Finalize(m);
+        const nodes: ReflectedNode[] = [
+            Sp2Fixture.Svc("s1", "checkout", Sp2Fixture.KindApi),
+            Sp2Fixture.Svc("s2", "ledger", Sp2Fixture.KindCore),
+            Sp2Fixture.Svc("s3", "billing", Sp2Fixture.KindCore),
+            Sp2Fixture.Svc("s4", "audit", Sp2Fixture.KindApi),
+            Sp2Fixture.Svc("s5", "lonely", Sp2Fixture.KindApi),
+            { id: "c1", type: Sp2Fixture.CoreConcept, attrs: { [Sp2Fixture.NameField]: "vault", [Sp2Fixture.KindField]: Sp2Fixture.KindCore } },
+        ];
+        const edges = [
+            { from: "s1", rel: Sp2Fixture.CallsRel, to: "s2" },
+            { from: "s2", rel: Sp2Fixture.CallsRel, to: "s3" },
+            { from: "s3", rel: Sp2Fixture.CallsRel, to: "s1" },
+            { from: "s3", rel: Sp2Fixture.CallsRel, to: "s4" },
+            { from: "c1", rel: Sp2Fixture.CallsRel, to: "s2" },
+            ...extraEdges,
+        ];
+        g.BindSeed({ nodes, edges }, { model: Sp2Fixture.ModelName, version: Sp2Fixture.ModelVersion });
+        return CypherEngine.OverQuery(new GraphQuery(g), options);
+    }
+
+    public static Svc(id: string, name: string, kind: string): ReflectedNode
+    {
+        return { id, type: Sp2Fixture.ServiceConcept, attrs: { [Sp2Fixture.NameField]: name, [Sp2Fixture.KindField]: kind } };
+    }
+
+    public static Col(result: CypherResult, index: number): unknown[]
+    {
+        return result.Rows.map((r) => Sp2Fixture.Plain(r[index]!));
+    }
+
+    public static Pairs(result: CypherResult): unknown[][]
+    {
+        return result.Rows.map((r) => r.map((v) => Sp2Fixture.Plain(v)));
+    }
+
+    public static Plain(v: CypherValue): unknown
+    {
+        if (v instanceof ScalarValue) return v.Value;
+        if (v instanceof NullValue) return null;
+        if (v instanceof ListValue) return v.Items.map((i) => Sp2Fixture.Plain(i));
+        if (v instanceof NodeValue) return v.Id;
+        throw new Error(`${Sp2Fixture.UnexpectedCellMessage}: ${v.constructor.name}`);
+    }
+}
+
+describe("CypherEngine SP2 read-plus (end-to-end)", () =>
+{
+    const e = Sp2Fixture.Engine();
+
+    test("subtype instances match the supertype label", () =>
+    {
+        const r = e.Execute("MATCH (a:Service) RETURN a.name AS n ORDER BY n");
+        assert.deepEqual(Sp2Fixture.Col(r, 0), ["audit", "billing", "checkout", "ledger", "lonely", "vault"]);
+        const c = e.Execute("MATCH (a:CoreService) RETURN a.name AS n");
+        assert.deepEqual(Sp2Fixture.Col(c, 0), ["vault"]);
+    });
+
+    test("WITH chaining carries projected variables", () =>
+    {
+        const r = e.Execute("MATCH (a:Service) WITH a.name AS n ORDER BY n SKIP 3 LIMIT 1 RETURN n");
+        assert.deepEqual(Sp2Fixture.Col(r, 0), ["ledger"]);
+        const r2 = e.Execute("MATCH (a:Service)-[:calls]->(b:Service) WITH b, count(*) AS c ORDER BY c DESC LIMIT 1 RETURN b.name AS n, c");
+        assert.deepEqual(Sp2Fixture.Pairs(r2), [["ledger", 2]]);
+    });
+
+    test("variable not carried through WITH is out of scope (semantic error)", () =>
+    {
+        assert.throws(() => e.Execute("MATCH (a:Service) WITH a.name AS n RETURN a"), CypherSemanticError);
+        assert.throws(() => e.Execute("MATCH (a:Service)-[:calls]->(b:Service) WITH a RETURN b.name"), CypherSemanticError);
+    });
+
+    test("aggregation with grouping: count and collect", () =>
+    {
+        const r = e.Execute("MATCH (a:Service) RETURN a.kind AS k, count(*) AS c, collect(a.name) AS names ORDER BY k");
+        assert.deepEqual(r.Columns, ["k", "c", "names"]);
+        assert.deepEqual(Sp2Fixture.Col(r, 0), ["api", "core"]);
+        assert.deepEqual(Sp2Fixture.Col(r, 1), [3, 3]);
+        const names = Sp2Fixture.Col(r, 2) as string[][];
+        assert.deepEqual([...names[0]!].sort(), ["audit", "checkout", "lonely"]);
+        assert.deepEqual([...names[1]!].sort(), ["billing", "ledger", "vault"]);
+    });
+
+    test("ORDER BY / SKIP / LIMIT / DISTINCT", () =>
+    {
+        const desc = e.Execute("MATCH (a:Service) RETURN a.name AS n ORDER BY n DESC");
+        assert.deepEqual(Sp2Fixture.Col(desc, 0), ["vault", "lonely", "ledger", "checkout", "billing", "audit"]);
+        const win = e.Execute("MATCH (a:Service) RETURN a.name AS n ORDER BY n SKIP 1 LIMIT 2");
+        assert.deepEqual(Sp2Fixture.Col(win, 0), ["billing", "checkout"]);
+        const distinct = e.Execute("MATCH (a:Service) RETURN DISTINCT a.kind AS k ORDER BY k");
+        assert.deepEqual(Sp2Fixture.Col(distinct, 0), ["api", "core"]);
+    });
+
+    test("OPTIONAL MATCH keeps the row with a null cell when nothing matches", () =>
+    {
+        const lonely = e.Execute("MATCH (a:Service) WHERE a.name = 'lonely' OPTIONAL MATCH (a)-[:calls]->(b:Service) RETURN a.name AS n, b.name AS m");
+        assert.equal(lonely.Rows.length, 1);
+        assert.equal((lonely.Rows[0]![0] as ScalarValue).Value, "lonely");
+        assert.ok(lonely.Rows[0]![1] instanceof NullValue);
+        const mixed = e.Execute("MATCH (a:Service) OPTIONAL MATCH (a)-[:calls]->(b:Service) RETURN a.name AS n, b.name AS m ORDER BY n, m");
+        assert.equal(mixed.Rows.length, 7);
+        const audit = mixed.Rows.find((row) => (row[0] as ScalarValue).Value === "audit")!;
+        assert.ok(audit[1] instanceof NullValue);
+    });
+
+    test("variable-length paths: bounds, path functions, cycle safety", () =>
+    {
+        const r = e.Execute("MATCH p = (a:Service)-[:calls*1..3]->(b) WHERE a.name = 'checkout' RETURN b.name AS n, length(p) AS len ORDER BY len, n");
+        assert.deepEqual(Sp2Fixture.Pairs(r), [["ledger", 1], ["billing", 2], ["audit", 3], ["checkout", 3]]);
+        const exact = e.Execute("MATCH p = (a:Service)-[:calls*2..2]->(b) WHERE a.name = 'checkout' RETURN b.name AS n");
+        assert.deepEqual(Sp2Fixture.Col(exact, 0), ["billing"]);
+        const all = e.Execute("MATCH p = (a:Service)-[:calls*1..3]->(b) RETURN length(p) AS len ORDER BY len");
+        assert.deepEqual(Sp2Fixture.Col(all, 0), [1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3]);
+        const unbounded = e.Execute("MATCH p = (a:Service)-[:calls*]->(b) WHERE a.name = 'checkout' RETURN b.name AS n, length(p) AS len, relationships(p) AS rs ORDER BY len, n");
+        assert.deepEqual(unbounded.Rows.map((r) => [Sp2Fixture.Plain(r[0]!), Sp2Fixture.Plain(r[1]!)]), [["ledger", 1], ["billing", 2], ["audit", 3], ["checkout", 3]]);
+        for (const row of unbounded.Rows)
+        {
+            const keys = (row[2] as ListValue).Items.map((x) => x.GroupKey());
+            assert.equal(new Set(keys).size, keys.length, "a relationship repeated within one path");
+        }
+    });
+
+    test("nodes(p) and relationships(p)", () =>
+    {
+        const r = e.Execute("MATCH p = (a:Service)-[:calls*2..2]->(b) WHERE a.name = 'checkout' RETURN nodes(p) AS ns, relationships(p) AS rs");
+        assert.equal(r.Rows.length, 1);
+        const ns = r.Rows[0]![0] as ListValue;
+        assert.deepEqual(ns.Items.map((n) => (n as NodeValue).Id), ["s1", "s2", "s3"]);
+        const rs = r.Rows[0]![1] as ListValue;
+        assert.deepEqual(rs.Items.map((x) => (x as RelValue).ToRelDto()), [
+            { from: "s1", type: "calls", to: "s2" },
+            { from: "s2", type: "calls", to: "s3" },
+        ]);
+    });
+
+    test("UNWIND list literal, scalar parameter, and null", () =>
+    {
+        assert.deepEqual(Sp2Fixture.Col(e.Execute("UNWIND [1, 2, 3] AS x RETURN x"), 0), [1, 2, 3]);
+        assert.deepEqual(Sp2Fixture.Col(e.Execute("UNWIND $xs AS x RETURN x", new Map([["xs", 7]])), 0), [7]);
+        assert.equal(e.Execute("UNWIND null AS x RETURN x").Rows.length, 0);
+    });
+
+    test("list/map literals and index access in RETURN", () =>
+    {
+        const r = e.Execute("RETURN [10, 20, 30][1] AS i, {a: 1, b: 'x'} AS m, [1, 2] AS l");
+        assert.equal((r.Rows[0]![0] as ScalarValue).Value, 20);
+        const m = r.Rows[0]![1] as MapValue;
+        assert.equal((m.Get("a") as ScalarValue).Value, 1);
+        assert.equal((m.Get("b") as ScalarValue).Value, "x");
+        assert.deepEqual(Sp2Fixture.Plain(r.Rows[0]![2]!), [1, 2]);
+        const mi = e.Execute("RETURN {a: 5}['a'] AS v");
+        assert.equal((mi.Rows[0]![0] as ScalarValue).Value, 5);
+    });
+
+    test("multi-path MATCH: cartesian product and shared-variable join", () =>
+    {
+        const cart = e.Execute("MATCH (a:Service), (b:Service) RETURN a, b");
+        assert.equal(cart.Rows.length, 36);
+        const join = e.Execute("MATCH (a:Service)-[:calls]->(b:Service), (b)-[:calls]->(c:Service) RETURN a.name AS x, c.name AS z ORDER BY x, z");
+        assert.deepEqual(Sp2Fixture.Pairs(join), [
+            ["billing", "ledger"],
+            ["checkout", "billing"],
+            ["ledger", "audit"],
+            ["ledger", "checkout"],
+            ["vault", "billing"],
+        ]);
+    });
+
+    test("converging join: two sources must reach the SAME bound target", () =>
+    {
+        // s2 (ledger) is reached by both s1 (checkout) and c1 (vault); the second path reuses the bound (b).
+        // Before the fix the second Expand clobbered b, so a and c were no longer required to share a target.
+        const r = e.Execute(
+            "MATCH (a:Service)-[:calls]->(b:Service), (c:Service)-[:calls]->(b) RETURN a.name AS x, b.name AS y, c.name AS z ORDER BY x, y, z");
+        assert.deepEqual(Sp2Fixture.Pairs(r), [
+            ["billing", "audit", "billing"],
+            ["billing", "checkout", "billing"],
+            ["checkout", "ledger", "checkout"],
+            ["checkout", "ledger", "vault"],
+            ["ledger", "billing", "ledger"],
+            ["vault", "ledger", "checkout"],
+            ["vault", "ledger", "vault"],
+        ]);
+        // Every row genuinely shares b; a non-sharing combination (e.g. billing/ledger/*) is excluded.
+        assert.ok(!Sp2Fixture.Pairs(r).some(([x, y]) => x === "billing" && y === "ledger"));
+    });
+
+    test("triangle: a 3-cycle only matches when the closing hop returns to the anchor", () =>
+    {
+        // s1->s2->s3->s1 is the only 3-cycle (up to rotation); the closing hop reuses the bound anchor (a).
+        // Before the fix the closing Expand overwrote a, turning this into every 3-hop path (6 rows).
+        const r = e.Execute(
+            "MATCH (a:Service)-[:calls]->(b:Service)-[:calls]->(c:Service)-[:calls]->(a) RETURN a.name AS x, b.name AS y, c.name AS z ORDER BY x, y, z");
+        assert.deepEqual(Sp2Fixture.Pairs(r), [
+            ["billing", "checkout", "ledger"],
+            ["checkout", "ledger", "billing"],
+            ["ledger", "billing", "checkout"],
+        ]);
+    });
+
+    test("converging join is order-independent regardless of which path binds the shared target", () =>
+    {
+        const first = e.Execute(
+            "MATCH (a:Service)-[:calls]->(b:Service), (c:Service)-[:calls]->(b) RETURN a.name AS x, b.name AS y, c.name AS z ORDER BY x, y, z");
+        const swapped = e.Execute(
+            "MATCH (c:Service)-[:calls]->(b:Service), (a:Service)-[:calls]->(b) RETURN a.name AS x, b.name AS y, c.name AS z ORDER BY x, y, z");
+        assert.deepEqual(Sp2Fixture.Pairs(first), Sp2Fixture.Pairs(swapped));
+    });
+
+    test("variable-length expansion into an already-bound node is a loud error", () =>
+    {
+        assert.throws(
+            () => e.Execute("MATCH (a:Service)-[:calls]->(b:Service), (a)-[:calls*1..2]->(b) RETURN a.name AS x"),
+            (err: unknown) => err instanceof CypherSemanticError && /already-bound node is not yet supported/.test((err as Error).message));
+    });
+
+    test("ToDto: list/map/rel/path cells have the documented shapes", () =>
+    {
+        const r = e.Execute("MATCH p = (a:Service)-[:calls*1..1]->(b) WHERE a.name = 'checkout' RETURN [1, 2] AS l, {k: 'v'} AS m, relationships(p) AS rs, p");
+        const dto = CypherEngine.ToDto(r);
+        assert.deepEqual(dto.Columns, ["l", "m", "rs", "p"]);
+        const row = dto.Rows[0]!;
+        assert.deepEqual(row[0], [1, 2]);
+        assert.deepEqual(row[1], { k: "v" });
+        assert.deepEqual(row[2], [{ from: "s1", type: "calls", to: "s2" }]);
+        const path = row[3] as unknown as { nodes: MirrorSnapshot[]; relationships: unknown[] };
+        assert.deepEqual(path.nodes.map((n) => n.id), ["s1", "s2"]);
+        assert.deepEqual(path.relationships, [{ from: "s1", type: "calls", to: "s2" }]);
+        assert.ok(r.Rows[0]![3] instanceof PathValue);
+    });
+
+    test("node nested in nodes(p) DTO is a MirrorSnapshot that SnapshotReader rehydrates", () =>
+    {
+        const r = e.Execute("MATCH p = (a:Service)-[:calls*2..2]->(b) WHERE a.name = 'checkout' RETURN nodes(p) AS ns");
+        const dto = CypherEngine.ToDto(r);
+        const list = dto.Rows[0]![0] as unknown as MirrorSnapshot[];
+        const reader = new SnapshotReader(list[1]!);
+        assert.equal(reader.id, "s2");
+        assert.equal(reader.concept, "Service");
+        assert.equal(reader.field("name"), "ledger");
+        assert.equal(reader.field("kind"), "core");
+    });
+
+    test("parity: text and fluent produce identical results on an aggregating query", () =>
+    {
+        const text = e.Execute(
+            "MATCH (a:Service)-[:calls]->(b:Service) WHERE a.kind = 'core' RETURN b.name AS n, count(*) AS c ORDER BY n",
+        );
+        const fluent = e.Execute(
+            CypherQuery
+                .Match(Pattern.Node("a").Label("Service").Out("calls", Pattern.Node("b").Label("Service")))
+                .Where(Expr.Prop("a", "kind").Eq("core"))
+                .Return(Return.Prop("b", "name", "n"), Return.Item(Fn.Count(), "c"))
+                .OrderBy(Sort.By(Expr.Var("n"))),
+        );
+        assert.deepEqual(text.Columns, fluent.Columns);
+        assert.deepEqual(CypherEngine.ToDto(text), CypherEngine.ToDto(fluent));
+    });
+
+    test("NodeValue compares by id and ranks between scalars and lists", () =>
+    {
+        const r = e.Execute("MATCH (a:Service) RETURN a ORDER BY a.name");
+        const nodes = r.Rows.map((row) => row[0] as NodeValue);
+        assert.equal(nodes.length, 6);
+        const byId = new Map(nodes.map((n) => [n.Id, n]));
+        assert.ok(CypherValue.Compare(byId.get("s1")!, byId.get("s2")!) < 0);
+        assert.ok(CypherValue.Compare(byId.get("s2")!, byId.get("s1")!) > 0);
+        assert.equal(CypherValue.Compare(byId.get("s3")!, byId.get("s3")!), 0);
+        const node = byId.get("s1")!;
+        assert.ok(CypherValue.Compare(new ScalarValue(true), node) < 0);
+        assert.ok(CypherValue.Compare(node, new ListValue([])) < 0);
+        assert.ok(CypherValue.Compare(node, NullValue.Instance) < 0);
+        const sorted = e.Execute("MATCH (a:Service) RETURN a ORDER BY a DESC");
+        assert.deepEqual(sorted.Rows.map((row) => (row[0] as NodeValue).Id), ["s5", "s4", "s3", "s2", "s1", "c1"]);
+    });
+
+    test("nested unary minus and decimals evaluate", () =>
+    {
+        assert.deepEqual(Sp2Fixture.Pairs(e.Execute("RETURN - -1 AS a, -(-2) AS b, - - -3 AS c, 2 - -1 AS d, 1.5 + 1 AS f")), [[1, 2, -3, 3, 2.5]]);
+    });
+
+    test("coalesce(...) IN [list] evaluates; aggregate inside IN is a clear semantic error", () =>
+    {
+        assert.deepEqual(Sp2Fixture.Pairs(e.Execute("RETURN coalesce(null, 2) IN [2, 3] AS yes, coalesce(null, 9) IN [2, 3] AS no")), [[true, false]]);
+        assert.throws(
+            () => e.Execute("MATCH (a:Service) RETURN count(*) IN [1] AS x"),
+            (err: unknown) => err instanceof CypherSemanticError && /direct call in a projection item/.test(err.message));
+    });
+
+    test("exact-hops *3 end-to-end", () =>
+    {
+        const r = e.Execute("MATCH p = (a:Service)-[:calls*3]->(b) WHERE a.name = 'checkout' RETURN b.name AS n, length(p) AS len ORDER BY n");
+        assert.deepEqual(Sp2Fixture.Pairs(r), [["audit", 3], ["checkout", 3]]);
+        const none = e.Execute("MATCH (a:Service)-[:calls*4]->(b) WHERE a.name = 'checkout' RETURN b.name AS n");
+        assert.equal(none.Rows.length, 0);
+    });
+
+    test("relationship variable on a variable-length pattern binds the list of traversed relationships", () =>
+    {
+        const r = e.Execute("MATCH (a:Service)-[r:calls*2]->(b) WHERE a.name = 'checkout' RETURN r");
+        assert.equal(r.Rows.length, 1);
+        const list = r.Rows[0]![0] as ListValue;
+        assert.ok(list instanceof ListValue);
+        assert.deepEqual(list.Items.map((x) => (x as RelValue).ToRelDto()), [
+            { from: "s1", type: "calls", to: "s2" },
+            { from: "s2", type: "calls", to: "s3" },
+        ]);
+    });
+
+    test("relationship variable on a fixed-length pattern binds a RelValue", () =>
+    {
+        const r = e.Execute("MATCH (a:Service)-[r:calls]->(b:Service) WHERE a.name = 'billing' RETURN r, b.name AS n ORDER BY n");
+        assert.equal(r.Rows.length, 2);
+        assert.ok(r.Rows.every((row) => row[0] instanceof RelValue));
+        assert.deepEqual(r.Rows.map((row) => (row[0] as RelValue).ToRelDto()), [
+            { from: "s3", type: "calls", to: "s4" },
+            { from: "s3", type: "calls", to: "s1" },
+        ]);
+    });
+
+    test("fixed-length rel variable DTO round-trips as a RelDto", () =>
+    {
+        const r = e.Execute("MATCH (a:Service)-[r:calls]->(b:Service) WHERE a.name = 'checkout' RETURN r");
+        assert.equal(r.Rows.length, 1);
+        assert.deepEqual((r.Rows[0]![0] as RelValue).ToDto(), { from: "s1", type: "calls", to: "s2" });
+    });
+
+    test("incoming fixed-length rel variable reports the real edge direction", () =>
+    {
+        const r = e.Execute("MATCH (b:Service)<-[r:calls]-(a:Service) WHERE b.name = 'ledger' RETURN r, a.name AS n ORDER BY n");
+        assert.deepEqual(r.Rows.map((row) => (row[0] as RelValue).ToRelDto()), [
+            { from: "s1", type: "calls", to: "s2" },
+            { from: "c1", type: "calls", to: "s2" },
+        ]);
+    });
+
+    test("untyped rel variable uses the empty type sentinel", () =>
+    {
+        const r = e.Execute("MATCH (a:Service)-[r]->(b:Service) WHERE a.name = 'checkout' RETURN r");
+        assert.deepEqual((r.Rows[0]![0] as RelValue).ToRelDto(), { from: "s1", type: "", to: "s2" });
+    });
+
+    test("rel variable binds when the target is already bound (ExpandInto path)", () =>
+    {
+        const r = e.Execute("MATCH (a:Service)-[:calls]->(b:Service), (a)-[r:calls]->(b) WHERE a.name = 'checkout' RETURN r");
+        assert.equal(r.Rows.length, 1);
+        assert.ok(r.Rows[0]![0] instanceof RelValue);
+        assert.deepEqual((r.Rows[0]![0] as RelValue).ToRelDto(), { from: "s1", type: "calls", to: "s2" });
+        const conv = e.Execute("MATCH (a:Service)-[:calls]->(b:Service), (c)-[r:calls]->(b) WHERE a.name = 'checkout' RETURN r, c.name AS n ORDER BY n");
+        assert.deepEqual(conv.Rows.map((row) => (row[0] as RelValue).ToRelDto()), [
+            { from: "s1", type: "calls", to: "s2" },
+            { from: "c1", type: "calls", to: "s2" },
+        ]);
+    });
+
+    test("incoming variable-length rel variable lists real-direction edges in path order", () =>
+    {
+        const r = e.Execute("MATCH (b:Service)<-[r:calls*2]-(a:Service) WHERE b.name = 'billing' RETURN r, a.name AS n ORDER BY n");
+        assert.equal(r.Rows.length, 2);
+        const dtos = r.Rows.map((row) => (row[0] as ListValue).Items.map((x) => (x as RelValue).ToRelDto()));
+        assert.deepEqual(dtos, [
+            [{ from: "s2", type: "calls", to: "s3" }, { from: "s1", type: "calls", to: "s2" }],
+            [{ from: "s2", type: "calls", to: "s3" }, { from: "c1", type: "calls", to: "s2" }],
+        ]);
+    });
+});
+
+describe("CypherEngine SP2 WITH ... WHERE", () =>
+{
+    const e = Sp2Fixture.Engine();
+    const base = "MATCH (a:Service) OPTIONAL MATCH (a)-[:calls]->(b) WITH a.name AS n, count(b) AS c";
+
+    test("WITH ... WHERE keeps only rows satisfying the predicate", () =>
+    {
+        const r = e.Execute(`${base} WHERE c > 0 RETURN n, c`);
+        assert.deepEqual(Sp2Fixture.Pairs(r).sort((x, y) => String(x[0]).localeCompare(String(y[0]))),
+            [["billing", 2], ["checkout", 1], ["ledger", 1], ["vault", 1]]);
+    });
+
+    test("WHERE filters before ORDER BY / LIMIT", () =>
+    {
+        const asc = e.Execute(`${base} WHERE c >= 1 ORDER BY c, n LIMIT 1 RETURN n, c`);
+        assert.deepEqual(Sp2Fixture.Pairs(asc), [["checkout", 1]]);
+        const desc = e.Execute(`${base} WHERE c >= 1 ORDER BY c DESC LIMIT 1 RETURN n, c`);
+        assert.deepEqual(Sp2Fixture.Pairs(desc), [["billing", 2]]);
+    });
+
+    test("WITH ... WHERE referencing a non-projected name is a semantic error", () =>
+    {
+        assert.throws(() => e.Execute("MATCH (a:Service) WITH a.name AS n WHERE zzz > 1 RETURN n"), CypherSemanticError);
+        assert.throws(() => e.Execute("MATCH (a:Service) WITH a.name AS n WHERE a.kind = 'x' RETURN n"), CypherSemanticError);
+    });
+
+    test("WHERE on an aggregate alias works as HAVING", () =>
+    {
+        const r = e.Execute("MATCH (a:Service)-[:calls]->(b:Service) WITH b.name AS n, count(*) AS c WHERE c > 1 RETURN n, c");
+        assert.deepEqual(Sp2Fixture.Pairs(r), [["ledger", 2]]);
+    });
+
+    test("WITH ... WHERE matches a projected expression structurally (ORDER BY symmetry)", () =>
+    {
+        const r = e.Execute("MATCH (a:Service) WITH a.name AS n WHERE a.name = 'checkout' RETURN n");
+        assert.deepEqual(Sp2Fixture.Col(r, 0), ["checkout"]);
+    });
+
+    test("WITH ... WHERE accepts a parameter on the projected alias", () =>
+    {
+        const q = "MATCH (a:Service) WITH a.name AS n WHERE n = $x RETURN n";
+        assert.deepEqual(Sp2Fixture.Col(e.Execute(q, new Map([["x", "checkout"]])), 0), ["checkout"]);
+        assert.equal(e.Execute(q, new Map([["x", "no-such-service"]])).Rows.length, 0);
+    });
+
+    test("WITH ... WHERE alias form still works", () =>
+    {
+        const r = e.Execute("MATCH (a:Service) WITH a.name AS n WHERE n = 'checkout' RETURN n");
+        assert.deepEqual(Sp2Fixture.Col(r, 0), ["checkout"]);
+    });
+
+    test("WITH ... WHERE matches a projected aggregate expression", () =>
+    {
+        const byAlias = e.Execute("MATCH (a:Service)-[:calls]->(b:Service) WITH b.name AS n, count(*) AS c WHERE c > 1 RETURN n, c");
+        const byExpr = e.Execute("MATCH (a:Service)-[:calls]->(b:Service) WITH b.name AS n, count(*) AS c WHERE count(*) > 1 RETURN n, c");
+        assert.deepEqual(Sp2Fixture.Pairs(byExpr), [["ledger", 2]]);
+        assert.deepEqual(Sp2Fixture.Pairs(byExpr), Sp2Fixture.Pairs(byAlias));
+    });
+
+    test("WITH ... WHERE mixed predicate rewrites only the matched part", () =>
+    {
+        const r = e.Execute(`${base} WHERE a.name = 'billing' AND c > 0 RETURN n, c`);
+        assert.deepEqual(Sp2Fixture.Pairs(r), [["billing", 2]]);
+    });
+
+    test("WITH ... WHERE unmatched expression over a non-projected property is still an error", () =>
+    {
+        assert.throws(() => e.Execute("MATCH (a:Service) WITH a.name AS n WHERE a.name = 'x' AND zzz > 1 RETURN n"), CypherSemanticError);
+    });
+
+    test("list parameter in UNWIND", () =>
+    {
+        const r = e.Execute("UNWIND $xs AS x RETURN x", new Map([["xs", [1, 2, 3]]]));
+        assert.deepEqual(Sp2Fixture.Col(r, 0), [1, 2, 3]);
+    });
+
+    test("fluent Expr.Param executes end-to-end", () =>
+    {
+        const q = CypherQuery.Unwind(Expr.Param("xs"), "x").Return(Return.Node("x"));
+        assert.deepEqual(Sp2Fixture.Col(e.Execute(q, new Map([["xs", [1, 2, 3]]])), 0), [1, 2, 3]);
+    });
+
+    test("fluent relationship variable binds and executes", () =>
+    {
+        const q = CypherQuery.Match(Pattern.Node("a").Label("Service").Out("calls", Pattern.Node("b").Label("Service"), undefined, "r"))
+            .Return(Fn.Count().As("n"));
+        const text = e.Execute("MATCH (a:Service)-[r:calls]->(b:Service) RETURN count(*) AS n");
+        assert.deepEqual(Sp2Fixture.Col(e.Execute(q), 0), Sp2Fixture.Col(text, 0));
+    });
+
+    test("list parameter indexing", () =>
+    {
+        const r = e.Execute("RETURN $xs[1] AS second", new Map([["xs", [10, 20, 30]]]));
+        assert.equal((r.Rows[0]![0] as ScalarValue).Value, 20);
+    });
+
+    test("map parameter property and index access", () =>
+    {
+        const params = new Map([["m", { k: "hi" }]]);
+        assert.equal((e.Execute("RETURN $m.k AS v", params).Rows[0]![0] as ScalarValue).Value, "hi");
+        assert.equal((e.Execute("RETURN $m['k'] AS v", params).Rows[0]![0] as ScalarValue).Value, "hi");
+    });
+
+    test("nested list parameter round-trips through ToDto", () =>
+    {
+        const r = e.Execute("UNWIND $xs AS pair RETURN pair", new Map([["xs", [[1, 2], [3]]]]));
+        assert.equal(r.Rows.length, 2);
+        assert.ok(r.Rows[0]![0] instanceof ListValue);
+        assert.deepEqual(CypherEngine.ToDto(r).Rows, [[[1, 2]], [[3]]]);
+        const whole = e.Execute("RETURN $xs AS xs", new Map([["xs", [1, "a", null]]]));
+        assert.deepEqual(CypherEngine.ToDto(whole).Rows, [[[1, "a", null]]]);
+    });
+
+    test("null parameter is NullValue", () =>
+    {
+        const r = e.Execute("RETURN $n AS n", new Map([["n", null]]));
+        assert.equal(r.Rows[0]![0], NullValue.Instance);
+    });
+
+    test("scalar parameter returned directly", () =>
+    {
+        const r = e.Execute("RETURN $one AS x", new Map([["one", 5]]));
+        assert.equal(r.Rows.length, 1);
+        assert.equal((r.Rows[0]![0] as ScalarValue).Value, 5);
+    });
+
+    test("non-plain-object parameter is rejected", () =>
+    {
+        const bad = new Map([["d", new Date() as unknown as null]]);
+        assert.throws(() => e.Execute("RETURN $d AS d", bad), CypherSemanticError);
+    });
+
+    test("scalar parameter back-compat and missing parameter", () =>
+    {
+        assert.deepEqual(Sp2Fixture.Col(e.Execute("UNWIND $one AS x RETURN x", new Map([["one", 5]])), 0), [5]);
+        assert.throws(() => e.Execute("RETURN $nope AS v"), CypherSemanticError);
+    });
+});
+
+class ReusedFixture
+{
+    // Adds checkout(s1)->vault(c1) so the CoreService vault is reachable as a call target.
+    public static readonly ExtraEdges = [{ from: "s1", rel: "calls", to: "c1" }];
+    public static readonly TripleCols = "a.name AS a, b.name AS b, c.name AS c";
+}
+
+describe("CypherEngine SP2 constraints on reused variable occurrences", () =>
+{
+    const e = Sp2Fixture.Engine(ReusedFixture.ExtraEdges);
+
+    test("reused target label excludes bound nodes that are not that label", () =>
+    {
+        const r = e.Execute(`MATCH (a:Service)-[:calls]->(b), (c:Service)-[:calls]->(b:CoreService) RETURN ${ReusedFixture.TripleCols} ORDER BY a, c`);
+        assert.deepEqual(Sp2Fixture.Pairs(r), [["checkout", "vault", "checkout"]]);
+    });
+
+    test("reused target property excludes non-matching bound nodes", () =>
+    {
+        const r = e.Execute(`MATCH (a)-[:calls]->(b), (c)-[:calls]->(b {kind: 'api'}) RETURN ${ReusedFixture.TripleCols} ORDER BY a, b, c`);
+        assert.deepEqual(Sp2Fixture.Pairs(r), [["billing", "audit", "billing"], ["billing", "checkout", "billing"]]);
+    });
+
+    test("reused anchor label constrains the bound variable", () =>
+    {
+        const r = e.Execute("MATCH (a:Service)-[:calls]->(b), (b:CoreService)-[:calls]->(x) RETURN a.name AS a, b.name AS b, x.name AS x");
+        assert.deepEqual(Sp2Fixture.Pairs(r), [["checkout", "vault", "ledger"]]);
+    });
+
+    test("reused anchor property constrains the bound variable", () =>
+    {
+        const r = e.Execute("MATCH (a)-[:calls]->(b), (b {kind: 'core'})-[:calls]->(x) RETURN a.name AS a, b.name AS b, x.name AS x ORDER BY a, b, x");
+        assert.deepEqual(Sp2Fixture.Pairs(r), [
+            ["checkout", "ledger", "billing"],
+            ["checkout", "vault", "ledger"],
+            ["ledger", "billing", "audit"],
+            ["ledger", "billing", "checkout"],
+            ["vault", "ledger", "billing"],
+        ]);
+    });
+
+    test("reused occurrences with no extra constraint are unchanged", () =>
+    {
+        const r = e.Execute(`MATCH (a)-[:calls]->(b), (c)-[:calls]->(b) WHERE a.name < c.name RETURN ${ReusedFixture.TripleCols} ORDER BY a, c`);
+        assert.deepEqual(Sp2Fixture.Pairs(r), [["checkout", "ledger", "vault"]]);
+        const r2 = e.Execute("MATCH (a)-[:calls]->(b), (b)-[:calls]->(x) RETURN count(*) AS n");
+        assert.deepEqual(Sp2Fixture.Col(r2, 0), [7]);
+    });
+});
+
+describe("CypherEngine strict WITH-segment scope (opt-in)", () =>
+{
+    const strict = Sp2Fixture.Engine([], { StrictWithScope: true });
+    const lax = Sp2Fixture.Engine();
+    const dropped = "MATCH (a:Service) WITH a.name AS n MATCH (a)-[:calls]->(b) RETURN b.name";
+
+    test("strict rejects reuse of a name dropped by WITH", () =>
+    {
+        assert.throws(() => strict.Execute(dropped), (e: unknown) => e instanceof CypherSemanticError && /dropped by an earlier WITH/.test(e.message));
+    });
+
+    test("default mode still allows the dropped-name reuse (fresh variable)", () =>
+    {
+        const r = lax.Execute(dropped);
+        assert.ok(r.Rows.length > 0);
+    });
+
+    test("strict allows a variable carried through WITH as a join", () =>
+    {
+        const r = strict.Execute("MATCH (a:Service) WITH a AS a MATCH (a)-[:calls]->(b) RETURN b.name");
+        assert.ok(r.Rows.length > 0);
+    });
+
+    test("strict allows a genuinely new variable in a later segment", () =>
+    {
+        const r = strict.Execute("MATCH (a:Service) WITH a.name AS n MATCH (x:Service) RETURN n, x.name");
+        assert.ok(r.Rows.length > 0);
+    });
+
+    test("strict leaves single-part queries alone", () =>
+    {
+        const r = strict.Execute("MATCH (a:Service)-[:calls]->(b:Service) RETURN a.name, b.name");
+        assert.ok(r.Rows.length > 0);
+    });
+});
+
+describe("Execute limits", () =>
+{
+    test("Execute RowCap truncates and flags Truncated", () =>
+    {
+        const engine = Sp2Fixture.Engine();
+        const all = engine.Execute("MATCH (a:Service) RETURN a.name");
+        assert.ok(all.Rows.length >= 3);
+        const capped = engine.Execute("MATCH (a:Service) RETURN a.name", undefined, { RowCap: 2 });
+        assert.equal(capped.Rows.length, 2);
+        assert.equal(capped.Truncated, true);
+        assert.equal(all.Truncated, false);
+        assert.equal(CypherEngine.ToDto(capped).Truncated, true);
+    });
+
+    test("RowCap equal to the row count keeps every row and is not flagged Truncated", () =>
+    {
+        const engine = Sp2Fixture.Engine();
+        const all = engine.Execute("MATCH (a:Service) RETURN a.name");
+        const capped = engine.Execute("MATCH (a:Service) RETURN a.name", undefined, { RowCap: all.Rows.length });
+        assert.equal(capped.Rows.length, all.Rows.length);
+        assert.equal(capped.Truncated, false);
+    });
+
+    test("an expired deadline aborts inside a buffering operator (Sort/Cartesian)", () =>
+    {
+        const engine = Sp2Fixture.Engine();
+        const expired = { Expired: () => true };
+        assert.throws(
+            () => engine.Execute("MATCH (a:Service), (b:Service) RETURN a.name ORDER BY a.name", undefined, { Cancel: expired }),
+            (e) => e instanceof CypherTimeout);
+    });
+
+    test("an expired deadline aborts Distinct, Aggregate and VarLengthExpand", () =>
+    {
+        const engine = Sp2Fixture.Engine();
+        const expired = { Expired: () => true };
+        const queries = [
+            "MATCH (a:Service) RETURN DISTINCT a.kind",
+            "MATCH (a:Service) RETURN count(a)",
+            "MATCH (a:Service)-[:calls*1..3]->(b:Service) RETURN b.name",
+        ];
+        for (const q of queries)
+        {
+            assert.throws(() => engine.Execute(q, undefined, { Cancel: expired }), (e) => e instanceof CypherTimeout, q);
+        }
+    });
+
+    test("a non-expired deadline lets the query complete with unchanged rows", () =>
+    {
+        const engine = Sp2Fixture.Engine();
+        const q = "MATCH (a:Service), (b:Service) RETURN a.name ORDER BY a.name";
+        const plain = engine.Execute(q);
+        const live = engine.Execute(q, undefined, { Cancel: Deadline.After(60000) });
+        const stub = engine.Execute(q, undefined, { Cancel: { Expired: () => false } });
+        assert.equal(live.Rows.length, plain.Rows.length);
+        assert.equal(stub.Rows.length, plain.Rows.length);
+        assert.equal(live.Truncated, false);
+    });
+});

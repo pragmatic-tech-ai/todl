@@ -32,6 +32,20 @@ export interface ConnectionStatus
     Message: string
 }
 
+// A richer probe result: connectivity plus the token's identity, its granted scopes,
+// and the packages visible to it. The *Supported flags say whether the backend can
+// report that facet at all (distinguishing "none" from "not applicable").
+export interface RegistryInspection
+{
+    Ok: boolean
+    Message: string
+    Identity: string
+    Scopes: string[]
+    ScopesSupported: boolean
+    Packages: string[]
+    PackagesSupported: boolean
+}
+
 // A live, per-connection client for one registry backend. Every registry TYPE
 // (npm, …) provides an implementation, built from a connection by an
 // IPackageRegistryFactory. This is the whole surface the engine needs: cross-package
@@ -45,4 +59,5 @@ export interface IPackageRegistry
     Publish(pkg: PublishablePackage): Promise<void>
     DeleteVersion(name: string, version: string): Promise<void>
     Test(): Promise<ConnectionStatus>
+    Inspect(): Promise<RegistryInspection>
 }

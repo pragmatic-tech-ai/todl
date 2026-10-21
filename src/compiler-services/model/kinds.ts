@@ -16,6 +16,12 @@ export enum MetaKind
   Annotation = "annotation",
   Package = "package",
   Operator = "operator",
+  Identity = "identity",
+  Match = "match",
+  Merge = "merge",
+  Connector = "connector",
+  Population = "population",
+  Policy = "policy",
 }
 
 /** Reserved id of the singleton package node that hosts package-level annotations. */

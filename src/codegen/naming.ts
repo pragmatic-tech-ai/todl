@@ -64,3 +64,27 @@ export function allocateNames(
   }
   return byId;
 }
+
+/**
+ * Make `names` unique, in order: the first occurrence keeps its name; a later
+ * duplicate takes the smallest numeric suffix (>= 2) that is still free
+ * (`a`, `a` -> `a`, `a2`). Identity when all names are distinct. Unlike
+ * allocateNames this never throws — used where a collision is legitimate
+ * (e.g. a concept plural and a taxonomy name) and must be disambiguated.
+ */
+export function allocateUnique(names: readonly string[]): string[]
+{
+  const used = new Set<string>();
+  const result: string[] = [];
+  for (const name of names)
+  {
+    let candidate = name;
+    for (let n = 2; used.has(candidate); n++)
+    {
+      candidate = `${name}${n}`;
+    }
+    used.add(candidate);
+    result.push(candidate);
+  }
+  return result;
+}

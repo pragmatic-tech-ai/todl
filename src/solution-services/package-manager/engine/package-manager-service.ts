@@ -8,6 +8,7 @@ import {
     type IPackageRegistry,
     type PublishablePackage,
     type ConnectionStatus,
+    type RegistryInspection,
     type PackageRef,
     type VersionList,
 } from './package-registry.js'
@@ -152,6 +153,12 @@ export class PackageManagerService extends ServiceBase
     {
         const registry = await this.RegistryFor(id)
         return registry.Test()
+    }
+
+    public async InspectConnection(id: string): Promise<RegistryInspection>
+    {
+        const registry = await this.RegistryFor(id)
+        return registry.Inspect()
     }
 
     // Every package name across every connection, each labelled by its connection.

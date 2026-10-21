@@ -3,7 +3,7 @@
 
 import { MetaKind, Cardinality } from "../manifest/enums.js";
 import type { Scalar } from "../manifest/logical.js";
-import type { InstanceMirror, TypeInfo } from "../manifest/reflection/reflection.js";
+import type { IInstanceMirror, TypeInfo } from "../manifest/reflection/reflection.js";
 
 /** One field's value plus its two provenance origins (Axis 1 / Axis 2). */
 export interface FieldSnapshot
@@ -51,13 +51,13 @@ export class Snapshot
     private static readonly SelfOrigin = "self";
 
     /** Display label: label -> name -> id (the reflection twin of the doc rule). */
-    public static LabelOf(mirror: InstanceMirror): string
+    public static LabelOf(mirror: IInstanceMirror): string
     {
         const v = mirror.field(Snapshot.LabelField)?.value ?? mirror.field(Snapshot.NameField)?.value;
         return v !== undefined ? String(v) : mirror.node.id;
     }
 
-    public static of(mirror: InstanceMirror): MirrorSnapshot
+    public static of(mirror: IInstanceMirror): MirrorSnapshot
     {
         const fields: Record<string, FieldSnapshot> = {};
         for (const fv of mirror.fields())

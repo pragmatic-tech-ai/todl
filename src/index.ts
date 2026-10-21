@@ -62,6 +62,7 @@ export {
     ReflectedRepository,
     ReflectedEntity,
     type EntityReader,
+    type EntityHost,
 } from './reflection-client/index.js';
 
 export { ModelDataSource } from './model-data/model-data-source.js';
@@ -69,9 +70,57 @@ export { DocumentModelDataConnector } from './model-data/document-model-data-con
 export { type IModelDataConnector } from './model-data/model-data-connector.js';
 export { BundledModelDataConnector } from './model-data/bundled-model-data-connector.js';
 export { ModelRegistry } from './model-data/model-registry.js';
+export { PopulationBuilder } from './model-data/population-builder.js';
+export { ConnectorWorkingCopy } from './model-data/connector-working-copy.js';
+export type { FlushOutcome } from './model-data/connector-working-copy.js';
+export { FederatedModelDataConnector, type IConnectorQueryFilterProvider } from './model-data/federated-model-data-connector.js';
+export type { IInstanceFilter, IInstanceView } from './model-data/instance-filter.js';
 export { ModelShardExtractor } from './model-data/model-shard-extractor.js';
 export { ApplicationRootResolver } from './model-data/application-root-resolver.js';
 export { GenericModelDataSource } from './model-data/generic-model-data-source.js';
+export {
+  DataSourceKind,
+  ConnectorPlanProjection,
+  ConnectorPlanValidator,
+  type ConnectorSpec,
+  type ConnectorBinding,
+  type ModelConnectorPlan,
+  type ExternalFieldValue,
+  type ExternalRecord,
+  type QueryRequest,
+  QueryCompareOp,
+  type QueryFilter,
+  type QueryComparison,
+  type ResolvedConnection,
+  WriteOperationKind,
+  type WriteOperation,
+  type WriteBatch,
+  type WriteFailure,
+  type WriteResult,
+  WriteConcurrency,
+  WriteAtomicity,
+  WriteFailureKind,
+} from './model-data/connector-plan.js';
+export {
+  ConnectionResolverKey,
+  type IDataSourceAdapter,
+  type IDataSourceAdapterFactory,
+  type PageQuery,
+  type PageSlice,
+  type IDataSourceAdapterProvider,
+  type AdapterResolutionRequest,
+  type IConnectionResolver,
+} from './model-data/data-source-adapter.js';
+export { WriteCapability, type IWriteCapable } from './model-data/write-capability.js';
+export { RollbackSignal } from './model-data/rollback-signal.js';
+export { AdapterPack, AdapterPackContract } from './model-data/adapter-pack.js';
+export type { IAdapterPack, AdapterPackManifest } from './model-data/adapter-pack.js';
+export { ConnectionResolver } from './model-data/connection-resolver.js';
+export { type ISqlSession, type SqlRow } from './model-data/sql-session.js';
+export { SqlAdapter, SqlQueryTranslator } from './model-data/sql-adapter.js';
+export { DataSourceAdapterCatalog, InlineConnectionResolver } from './model-data/data-source-adapter-catalog.js';
+export { ConnectionFailureKind, ConnectionRetryBackoff, ReconnectObserverKey, type ConnectionRetryPolicy, type ReconnectEvent, type IReconnectObserver } from './model-data/connection-reconnect.js';
+export { ReconnectingAdapter } from './model-data/reconnecting-adapter.js';
 
 export { ApplicationBootstrapper } from './application/application-bootstrapper.js';
 export { ApplicationEntryPoint } from './application/application-entry-point.js';
@@ -79,6 +128,10 @@ export { ModelRegistryContribution } from './application/model-registry-contribu
 export type { IContributionSource } from './application/contribution-source.js';
 export { MuralHost } from './application/mural-host.js';
 export { TodlAppBootstrap } from './graph-api/browser/todl-app-bootstrap.js';
+export { RemoteTenantConnector, RemoteWriteUnsupportedError, type ITenantReadClient } from './graph-api/browser/remote-tenant-connector.js';
+export type { ITenantWriteClient } from './graph-api/browser/tenant-write-client.js';
+export { ConnectorWriteOpKind, ConnectorWriteStatus, type ConnectorWriteOp, type ConnectorWriteOpResult, type ConnectorWriteResult } from './model-data/connector-write-op.js';
+export { TenantDocumentAssembler, type TenantNodeCell, type TenantFieldCell } from './graph-api/browser/tenant-document-assembler.js';
 export { MuralViewContribution } from './application/mural-view-contribution.js';
 export { ModelBrowserVM, ConceptHeaderVM, InstanceRowVM } from './application/model-browser-vm.js';
 
@@ -89,9 +142,13 @@ export {
 } from './codegen/read-client.js';
 
 export { ModelPackageGenerator } from './codegen/model-package.js';
+export { ConnectorPlanEmitter } from './codegen/connector-plan-emitter.js';
 export type { ModelPackageOptions } from './codegen/model-package.js';
 
-export { ModelDraft, type InstanceDescriptor } from './authoring/model-draft.js';
+export { ModelDraft, type InstanceDescriptor, type ModelDraftState } from './authoring/model-draft.js';
+export { ModelDraftWriter } from './authoring/model-draft-writer.js';
+export { ModelDraftBaker, type ModelDraftBakeOptions } from './authoring/model-draft-baker.js';
+export { SnowflakeIdGenerator, type IdGenerator } from './compiler-services/model/id-generator.js';
 
 export { TodlFileStore, type FileIO } from './authoring/file-store.js';
 export { deriveBindings, emitModelTodl, type ModelBindings } from './compiler-services/emit/todl.js';
@@ -114,7 +171,7 @@ export {
     type PackageStore,
     type PackageSink,
 } from './publish/stores.js';
-export { deriveClasses, projectAnnotations } from './publish/reflect.js';
+export { deriveClasses, projectAnnotations, AnnotationProjector } from './publish/reflect.js';
 export { StoragePackageSource } from './solution-services/package-manager/storage-package-source.js';
 export {
     ProjectType,
@@ -152,6 +209,14 @@ export { validate } from './compiler-services/validate/validate.js';
 export { Severity, DiagnosticCode, type Diagnostic } from './compiler-services/diagnostics/diagnostic.js';
 export type { Position, SourceSpan, SourceFile } from './compiler-services/diagnostics/span.js';
 export { check, checkAgainst } from './compiler-services/api.js';
+export { ResolutionPass } from './compiler-services/resolution/resolution-pass.js';
+export type { MergeDecision } from './compiler-services/resolution/resolution-pass.js';
+export { MergeStrategy } from './compiler-services/parse/ast.js';
+export type { WriteTarget } from './model-data/connector-plan.js';
+export { ResolutionAuditSinkKey } from './model-data/resolution-audit-sink.js';
+export type { IResolutionAuditSink, ResolutionAuditEvent } from './model-data/resolution-audit-sink.js';
+export { ConnectorResolutionDiagnosticSinkKey, ConnectorResolutionIssue } from './model-data/connector-resolution-diagnostic-sink.js';
+export type { IConnectorResolutionDiagnosticSink, ConnectorResolutionDiagnostic } from './model-data/connector-resolution-diagnostic-sink.js';
 
 export {
     toJSON,
@@ -182,6 +247,7 @@ export { tokenize, TokenKind, type Token } from './compiler-services/parse/lexer
 export { SolutionServicesEngine } from './solution-services/solution-services-module.mu.js';
 export { LspServicesEngine } from './solution-services/lsp/lsp-module.mu.js';
 export type { ILanguageService } from './solution-services/lsp/host/i-language-service.js';
+export { GraphBuildState } from './solution-services/lsp/host/graph-build-state.js';
 export { SolutionLanguageService } from './solution-services/lsp/host/solution-language-service.js';
 export { AnalysisEngineKey, type IAnalysisEngine } from './solution-services/lsp/host/i-analysis-engine.js';
 export { AnalysisEngine } from './solution-services/lsp/analysis/analysis-engine.js';
@@ -344,11 +410,24 @@ export {
 export { WritePolicyWriter } from './solution-services/project-services/generators/write-policy-writer.js';
 export { ProjectModelProvider } from './solution-services/project-services/generators/project-model-provider.js';
 export {
+    ConceptUiGenerationService,
+    type ConceptGenerationResult,
+} from './solution-services/project-services/generators/concept-ui-generation-service.js';
+export type {
+    IConceptUiGenerator,
+    ConceptGeneratorContext,
+} from './solution-services/project-services/generators/concept-ui-generator.js';
+export { ConceptListViewGenerator } from './solution-services/project-services/generators/concept-list-view-generator.js';
+export { ConceptFormGenerator } from './solution-services/project-services/generators/concept-form-generator.js';
+export { ConceptCrudViewModelGenerator } from './solution-services/project-services/generators/concept-crud-view-model-generator.js';
+export {
     ProjectGeneratorRegistry,
     ProjectGeneratorRegistryKey,
 } from './solution-services/project-services/generators/project-generator-registry.js';
 export { DtoGenerator } from './solution-services/project-services/generators/dto-generator.js';
-export { UiPlaceholderGenerator } from './solution-services/project-services/generators/ui-placeholder-generator.js';
+export { AppGenerator } from './solution-services/project-services/generators/app-generator.js';
+export { ModelInstanceGenerator } from './solution-services/project-services/generators/model-instance-generator.js';
+export { AppViewModelGenerator } from './solution-services/project-services/generators/app-view-model-generator.js';
 export {
     ProjectEvents,
     ProjectEventsKey,
@@ -375,6 +454,17 @@ export {
 } from './solution-services/project-services/composition/project-system-composer.js';
 export { TodlProjectSystemModule } from './solution-services/project-services/composition/todl-project-system-module.js';
 export { BuildSystemRegistryKey } from './solution-services/project-services/composition/build-system-registry-key.js';
+// The html-bundle build system + its storage-provider seam key, exposed on the main
+// barrel from their deep BROWSER-SAFE modules (NOT the ./todl-build-system barrel, which
+// also re-exports TodlBuildSystemRegistry -> EsbuildBundler -> esbuild). After the
+// IBundler seam (0.50.0) HtmlBundleBuildSystem imports only BundlerKey/IBundler, so a
+// renderer host can import it here and call HtmlBundleBuildSystem.Register with its own
+// IBundler. Guarded browser-safe by browser-safe-composition.test.ts.
+export { HtmlBundleBuildSystem } from './solution-services/todl-build-system/html-bundle/html-bundle-build-system.js';
+export { BuildStorageProviderKey } from './solution-services/todl-build-system/build-storage-provider-key.js';
+// Remote-app bind mode + the build-options shapes it rides with (Application vs Environment graph);
+// defined once in build-system-core, re-exported here so hosts import it from the package root.
+export { RemoteBindMode, type BuildOptions, type RemoteBuildTarget } from './solution-services/build-system-core/build-options.js';
 // The project build runner a browser host drives to publish one project (npm-publish
 // flavor). Browser-safe (build-system-core + todl-build-context types only) — exposed
 // here so renderer hosts need not import the ./todl-build-system barrel, which also
@@ -397,3 +487,26 @@ export { TarArchive, type TarEntry, type TarFile } from './solution-services/pac
 export { BuildService, type PublishOutcome as BuildPublishOutcome } from './solution-services/todl-build-system/build-service.js';
 export { InMemoryBuildStorage } from './solution-services/todl-build-system/in-memory-build-storage.js';
 export { ScopeFlatteningStorage } from './solution-services/todl-build-system/scope-flattening-storage.js';
+
+// Policy predicate surface (consumed by the identity bridge)
+export {
+  PolicyNodeKind,
+  PolicyRefRoot,
+  PolicyBoolOp,
+  PolicyCompareOp,
+  PolicyPredicateMembers,
+  type PolicyPredicate,
+  type PolicyRef,
+  type PolicyLiteral,
+  type PolicyOperand,
+  type PolicyCompare,
+  type PolicyMembership,
+  type PolicyBool,
+  type PolicyNot,
+} from './compiler-services/policy/policy-predicate.js';
+export { PolicyPredicateCodec } from './compiler-services/policy/policy-predicate-codec.js';
+export { parsePolicyPredicate, PolicyParseError } from './compiler-services/policy/policy-predicate-parser.js';
+export * as Cypher from './cypher/index.js';
+export { ConnectorMirrorMapper } from './model-data/connector-mirror-mapper.js';
+export { ConnectorPrefetch, type INodeReflector } from './model-data/connector-prefetch.js';
+export { ConnectorRuntimeGraphQuery } from './graph-api/connector-runtime-graph-query.js';

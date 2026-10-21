@@ -5,7 +5,7 @@
  * a graph DB later — leaves the Repository/Graph API unchanged.
  */
 
-import { type Node, type Edge, type NodeId, type Scalar, type FieldDecl } from "./graph.js";
+import { type Node, type Edge, type EdgeKind, type NodeId, type Scalar, type FieldDecl } from "./graph.js";
 import { type MetaKind } from "./kinds.js";
 
 export interface GraphStore
@@ -20,6 +20,7 @@ export interface GraphStore
   inEdges(id: NodeId): Edge[];
   addNode(node: Node): void;
   addEdge(edge: Edge): void;
+  removeEdge(kind: EdgeKind, via: NodeId | null, from: NodeId, to: NodeId): void;
   addFieldDecl(concept: NodeId, decl: FieldDecl): void;
   setAttr(id: NodeId, name: string, value: Scalar): void;
   addVariant(id: NodeId, text: string): void;
@@ -118,6 +119,16 @@ export class InMemoryGraphStore implements GraphStore
     }
     appendEdge(this._out, edge.from, edge);
     appendEdge(this._in, edge.to, edge);
+  }
+
+  removeEdge(kind: EdgeKind, via: NodeId | null, from: NodeId, to: NodeId): void
+  {
+    const matches = (e: Edge): boolean =>
+      e.kind === kind && e.via === via && e.from === from && e.to === to;
+    const fwd = this._out.get(from);
+    if (fwd !== undefined) this._out.set(from, fwd.filter((e) => !matches(e)));
+    const rev = this._in.get(to);
+    if (rev !== undefined) this._in.set(to, rev.filter((e) => !matches(e)));
   }
 
   addFieldDecl(concept: NodeId, decl: FieldDecl): void

@@ -1,5 +1,6 @@
 import {
-    ServiceBase, ServiceKey, Disposable, isWatchableStorage, type IServiceProvider, type IStorage, type IDisposable,
+    ServiceBase, ServiceKey, Disposable, FakeStorage, isWatchableStorage, Signal,
+    type IServiceProvider, type IStorage, type IDisposable,
 } from "@pragmatic-tech-ai/todl-runtime";
 import { MemberContentWatcher } from "./member-content-watcher.js";
 import type { CollectionChange } from "@pragmatic-tech-ai/todl-runtime";
@@ -12,6 +13,8 @@ import type { SourceFile } from "../../../compiler-services/diagnostics/span.js"
 import type { PackageSource } from "../../../domain/domain.js";
 import { AnalysisEngine } from "../analysis/analysis-engine.js";
 import { AnalyzeKind, type AnalyzeContext, type AnalyzeRequest, type AnalyzeResponse } from "../analysis/protocol.js";
+import type { GraphSlice } from "../analysis/graph-slice.js";
+import { preludeDocument } from "../../../compiler-services/stdlib/prelude.js";
 import type { RenameError } from "../analysis/rename-provider.js";
 import { AnalysisEngineKey, type IAnalysisEngine } from "./i-analysis-engine.js";
 import { ProjectRegistry, PushedSourceProvider, type Project, type OpenDocuments } from "./project-registry.js";
@@ -26,9 +29,17 @@ import {
     ProjectEventsKey, ProjectEventKind, type IProjectEvents, type ProjectEvent,
 } from "../../project-services/generators/project-events.js";
 import type { ILanguageService } from "./i-language-service.js";
+import { GraphBuildState } from "./graph-build-state.js";
 import type { TodlDocument } from "../../../compiler-services/emit/json.js";
-import type { ProjectType, DependencyRef } from "../../package-manager/manifest.js";
+import { ProjectType, parseManifest, type DependencyRef, type ProjectManifest } from "../../package-manager/manifest.js";
 import type { WikiOrigin } from "../../project-services/core/wiki-origin.js";
+import { SolutionGraph, type SolutionGraphMember, type SolutionGraphChange } from "./solution-graph.js";
+import { ResourceLocator, type ResolvedResource } from "./resource-locator.js";
+import { TodlProjectSourceFiles } from "../../project-services/core/todl-sources.js";
+import { PackageStoreKey } from "../../todl-build-system/package-store.js";
+import { PackageKind } from "../../../publish/publish.js";
+import { PROJECT_MANIFEST_FILENAME } from "../../project-services/core/project-factory.js";
+import type { Repository } from "../../../compiler-services/model/model.js";
 
 // The live-buffer store: the open documents the editor has pushed via DidChange,
 // adapted to the `.all()` surface PushedSourceProvider consumes. A real class (not
@@ -96,6 +107,13 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     // `change.kind === …` comparison still narrows the discriminated union.
     private static readonly InsertedKind = "inserted" as const;
     private static readonly RemovedKind = "removed" as const;
+    // The source-file predicate the live-buffer overlay mirrors so a live buffer is
+    // admitted only where the on-disk collect would admit the file: a `.todl` whose
+    // top-level folder is neither the always-excluded build output nor (for a producer)
+    // the samples folder.
+    private static readonly TodlExtension = ".todl";
+    private static readonly BuildOutputDir = "dist";
+    private static readonly SamplesDir = "samples";
 
     private readonly engine: IAnalysisEngine;
     private readonly resolver: SolutionBaseResolver;
@@ -103,6 +121,35 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     private readonly projects = new ProjectRegistry();
     private readonly sources = new PushedSourceProvider();
     private readonly liveDocuments = new LiveBufferDocuments();
+
+    // The single shared solution graph (Phase 1 read seam): ONE Repository for the
+    // whole active solution, assembled in warmup and kept in step by a targeted
+    // ReplaceMember on each live edit and a rebuild on each lifecycle/on-disk event.
+    private readonly solutionGraph = new SolutionGraph();
+    // The packages-storage backstop handed to a ResourceLocator when no PackageStore
+    // is registered (a headless / test host). A local member's resources resolve to
+    // its own OpenProject storage, so this is consulted only for published origins.
+    private readonly emptyPackages: IStorage = new FakeStorage();
+    // Per-URI generation counter coalescing live-edit replaces: DidChange bumps the
+    // file's generation and captures it; the dequeued replace runs only if it is
+    // still the latest (an older keystroke superseded by a newer one is skipped).
+    private readonly replaceGeneration = new Map<string, number>();
+    // False until the first RewireMembers (the construction-time call) has run, so that
+    // initial wiring leaves the graph build to the warmup promise (which Ready awaits);
+    // every SUBSEQUENT RewireMembers (a solution switch) enqueues its own rebuild.
+    private graphBootstrapped = false;
+    // The message of the most recent graph build failure (duplicate member id, cycle),
+    // else undefined — a readable flag that the shared graph is stale.
+    private lastGraphBuildError: string | undefined;
+    // The engine-owned full-build state (warmup / solution switch), raised on
+    // buildStateChanged only on a real transition. switchGeneration is bumped per
+    // solution switch so only the LATEST full build settles it (a stale switch's rebuild
+    // finishing first must not report Ready for a solution no longer active).
+    private buildState = GraphBuildState.Building;
+    private readonly buildStateChanged = new Signal<GraphBuildState>();
+    private switchGeneration = 0;
+    // Monotonic count of shared-graph commits (every GraphChanged emission).
+    private graphRevision = 0;
 
     // Permanent lifecycle subscriptions (the manager's ActiveSolution channel + the
     // project-event bus), disposed in dispose().
@@ -145,7 +192,8 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
         this.resolver = provider.get(SolutionBaseResolver.Key) ?? new SolutionBaseResolver(provider);
         const packages = provider.get(SolutionManagerService.PackageSourceKey) ?? new EmptyPackageSource();
         this.session = new SolutionSession(new ResolverPackageSource(this.resolver, packages));
-        this.warmup = this.BuildWarmCache();
+        this.subscriptions.push(this.solutionGraph.Changed.subscribe(() => { this.graphRevision++; }));
+        this.warmup = this.WarmAndSettle(this.switchGeneration);
         this.SubscribeToLifecycle();
         this.SubscribeToResolverStale();
     }
@@ -192,6 +240,14 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
         return this.baseSetToken;
     }
 
+    // The message of the most recent shared-graph build failure (duplicate member id,
+    // dependency cycle), or undefined when the last build succeeded. A readable flag so
+    // a consumer can tell the graph is stale rather than silently up to date.
+    public get LastGraphBuildError(): string | undefined
+    {
+        return this.lastGraphBuildError;
+    }
+
     // The composition session, held over the live-first resolver (Task-3 wiring).
     // Wave-1 keeps it for the headless composition path; the editor features read
     // the warm per-project base cache directly.
@@ -203,6 +259,68 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     public DidChange(uri: string, text: string): void
     {
         this.liveDocuments.Set(uri, text);
+        // The resolver base-cache is deliberately NOT invalidated on a keystroke (an edit
+        // does not change the base closure); only the shared graph's owning slice is
+        // re-loaded, debounced onto the same pending tail WhenIdle/Flush await. Bump the
+        // file's generation and capture it so a burst of keystrokes coalesces —
+        // only the latest enqueued replace for that file actually runs (see below).
+        const root = this.MemberRootForUri(uri);
+        if (root === undefined) return;
+        // The generation is per-URI: sibling files of one member must not supersede each
+        // other, only a newer keystroke in the SAME file does.
+        const generation = (this.replaceGeneration.get(uri) ?? 0) + 1;
+        this.replaceGeneration.set(uri, generation);
+        this.Enqueue(() => this.ReplaceOwningFile(uri, root, generation));
+    }
+
+    // The shared graph's Changed signal, re-exposed: it fires with the affected member
+    // ids whenever a member's slice is replaced (the same Signal instance across every
+    // Build/ReplaceMember, so a subscriber attached once keeps receiving).
+    public get GraphChanged(): Signal<SolutionGraphChange>
+    {
+        return this.solutionGraph.Changed;
+    }
+
+    // The engine-owned state of the shared graph's full build: Building at construction
+    // and on each solution switch, then Ready / Failed once the LATEST full build settles.
+    public get BuildState(): GraphBuildState
+    {
+        return this.buildState;
+    }
+
+    // Raised with the new state on every real BuildState transition (never a repeat).
+    public get BuildStateChanged(): Signal<GraphBuildState>
+    {
+        return this.buildStateChanged;
+    }
+
+    // Monotonic revision of the shared graph, bumped on every GraphChanged commit.
+    public get GraphRevision(): number
+    {
+        return this.graphRevision;
+    }
+
+    // The shared solution view for a member: the ONE Repository + origin map the whole
+    // solution composes into. Awaits warmup; undefined when no solution is active or the
+    // storage is not one of its members (every valid member shares the identical graph).
+    public async ModelView(consumerStorage: IStorage): Promise<{ model: Repository; originOf: ReadonlyMap<string, WikiOrigin>; provenanceOf: ReadonlyMap<string, string> } | undefined>
+    {
+        await this.warmup;
+        const solution = this.Provider.get(SolutionManagerService.Key)?.ActiveSolution;
+        if (solution === undefined) return undefined;
+        let isMember = false;
+        for (const member of solution.Members) if (member.Storage === consumerStorage) isMember = true;
+        if (!isMember) return undefined;
+        return { model: this.solutionGraph.Model, originOf: this.solutionGraph.OriginOf, provenanceOf: this.solutionGraph.Provenance };
+    }
+
+    // The resources a node declares (icon / MuralResource annotations carrying a path),
+    // resolved to a concrete storage via the shared graph's origin map. A local member's
+    // resource lands on its own storage; a published one on the packages backend.
+    public async Resources(nodeId: string): Promise<ResolvedResource[]>
+    {
+        await this.warmup;
+        return new ResourceLocator(this.solutionGraph.Model, this.solutionGraph.OriginOf, this.PackagesStorage()).Resources(nodeId);
     }
 
     public async CompletionsAt(uri: string, pos: Position): Promise<CompletionItem[]>
@@ -346,6 +464,20 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
         await this.pending;
     }
 
+    // Test seam: the warmup promise every feature awaits, so a caller can await the
+    // eager graph build before reading ModelView / Resources.
+    public Ready(): Promise<void>
+    {
+        return this.warmup;
+    }
+
+    // Test seam: the serialized maintenance tail (alias of WhenIdle), awaited so an
+    // enqueued ReplaceMember from DidChange is applied before asserting.
+    public Flush(): Promise<void>
+    {
+        return this.pending;
+    }
+
     // Re-raise the resolver's StaleMemberIds change as this service's own StaleMembers.
     private SubscribeToResolverStale(): void
     {
@@ -383,10 +515,40 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
         // content watchers and start one per member of the new solution.
         for (const watcher of this.contentWatchers.values()) watcher.dispose();
         this.contentWatchers.clear();
-        if (solution === undefined) return;
-        const off = solution.Members.Subscribe((change) => this.OnMembersChanged(change));
-        this.membersSubscription = new Disposable(off);
-        for (const member of solution.Members) this.WatchMemberContent(member);
+        if (solution !== undefined)
+        {
+            const off = solution.Members.Subscribe((change) => this.OnMembersChanged(change));
+            this.membersSubscription = new Disposable(off);
+            for (const member of solution.Members) this.WatchMemberContent(member);
+        }
+        // Re-assemble the shared graph for the (possibly swapped or cleared) member set —
+        // a solution switch raises no per-member Inserted events, so nothing else would.
+        // The first (construction-time) call leaves the initial build to the warmup
+        // promise that Ready awaits; every later switch enqueues its own rebuild, awaiting
+        // warmup first so a switch landing before the initial Build cannot race it (and let
+        // a stale assembly finish last).
+        // A switch moves the build state back to Building at once, and only the job of the
+        // LATEST switch (its captured generation still current) settles it. A rejected
+        // warmup must not strand the switch, so it is tolerated here and the settle runs in
+        // a finally (the switch's own rebuild still decides Ready vs Failed).
+        if (this.graphBootstrapped)
+        {
+            const generation = ++this.switchGeneration;
+            this.SetBuildState(GraphBuildState.Building);
+            this.Enqueue(async () =>
+            {
+                try
+                {
+                    await this.warmup.catch(() => undefined);
+                    await this.RebuildGraphSafely();
+                }
+                finally
+                {
+                    this.SettleBuild(generation);
+                }
+            });
+        }
+        this.graphBootstrapped = true;
     }
 
     // Start (or tear down) the on-disk content watcher for one member. A `.todl`
@@ -469,11 +631,27 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     private async InvalidateMember(storage: IStorage, refresh: boolean): Promise<void>
     {
         if (this.disposed) return;
-        const id = await this.resolver.ConsumerIdOf(storage);
-        if (id === undefined) return;
-        this.resolver.Invalidate(id);
-        await this.RefreshStaleMembers(storage, id, refresh);
-        this.BumpToken();
+        // Await warmup so an early lifecycle event cannot race (and lose to) the warmup
+        // graph build with a stale assembly.
+        await this.warmup;
+        try
+        {
+            const id = await this.resolver.ConsumerIdOf(storage);
+            if (id === undefined) return;
+            this.resolver.Invalidate(id);
+            await this.RefreshStaleMembers(storage, id, refresh);
+            this.BumpToken();
+        }
+        finally
+        {
+            // Keep the shared graph in step with the NEW member set / closure, even on the
+            // early-return path (a removed member whose manifest is gone must still drop out
+            // of the graph). A structural / reference change can alter topology, so the
+            // simplest correct Phase-1 move is a full rebuild from the current members (the
+            // fast incremental ReplaceMember is reserved for live keystroke edits, which
+            // cannot change the base closure).
+            await this.RebuildGraphSafely();
+        }
     }
 
     // Invalidate evicts the changed member PLUS its transitive dependents and surfaces
@@ -543,12 +721,47 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
         const documents: readonly SourceFile[] = this.sources.SourcesFor(project, this.liveDocuments);
         const include = project !== this.lastProject || this.sentTokenByProject.get(project.RootUri) !== this.baseSetToken;
         this.lastProject = project;
+        // The warm bases ride along only when newly active / the token moved — the engine
+        // keeps them for the Build fallback path. The shared-graph slice is attached
+        // whenever the graph represents this project (the preferred warm path).
+        const context: AnalyzeContext = { BaseSetToken: this.baseSetToken, Documents: documents };
         if (include)
         {
             this.sentTokenByProject.set(project.RootUri, this.baseSetToken);
-            return { BaseSetToken: this.baseSetToken, Bases: project.Bases, Documents: documents };
+            context.Bases = project.Bases;
         }
-        return { BaseSetToken: this.baseSetToken, Documents: documents };
+        const slice = this.GraphSliceFor(project);
+        if (slice !== undefined) context.Graph = slice;
+        return context;
+    }
+
+    // Assemble the shared SolutionGraph's per-project read slice, or undefined when the
+    // graph cannot serve this request (a recorded build error, or no node authored under
+    // this project — the engine then falls back to the per-request `checkAgainst`). The
+    // visible-id set reproduces a project-scoped `Build` model's membership: the project's
+    // OWN authored nodes plus the prelude and its declared bases' closure, so a bare
+    // reference never resolves to a same-named node contributed by an unrelated member.
+    private GraphSliceFor(project: Project): GraphSlice | undefined
+    {
+        if (this.lastGraphBuildError !== undefined) return undefined;
+        const provenance = this.solutionGraph.Provenance;
+        const ownIds = new Set<string>();
+        for (const [nodeId, uri] of provenance)
+        {
+            if (this.projects.ProjectFor(uri)?.RootUri === project.RootUri) ownIds.add(nodeId);
+        }
+        if (ownIds.size === 0) return undefined;
+        const visibleIds = new Set<string>(ownIds);
+        for (const node of preludeDocument().nodes) visibleIds.add(node.id);
+        for (const base of project.Bases) for (const node of base.nodes) visibleIds.add(node.id);
+        const diagnosticsByUri = this.solutionGraph.DiagnosticsByUri();
+        return {
+            Model: this.solutionGraph.Model,
+            DiagnosticsByUri: diagnosticsByUri,
+            WholeModelDiagnostics: diagnosticsByUri.get(SolutionGraph.ModelScopeUri) ?? [],
+            VisibleIds: visibleIds,
+            OwnIds: ownIds,
+        };
     }
 
     // Eagerly resolve each open member's warm base-set into the registry, keyed by
@@ -557,13 +770,70 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     private async BuildWarmCache(): Promise<void>
     {
         const solution = this.Provider.get(SolutionManagerService.Key)?.ActiveSolution;
-        if (solution === undefined) return;
-        for (const member of solution.Members)
+        if (solution !== undefined)
         {
-            const storage = member.Storage;
-            if (storage === undefined) continue;
-            await this.RefreshWarmBases(storage);
+            for (const member of solution.Members)
+            {
+                const storage = member.Storage;
+                if (storage === undefined) continue;
+                await this.RefreshWarmBases(storage);
+            }
         }
+        // Always build the graph — even with no active solution, AssembleMembers yields []
+        // and Build([]) leaves (clears) the graph, so Ready/ModelView have a defined state.
+        await this.RebuildGraphSafely();
+    }
+
+    // The warmup, settling the build state for its generation once it completes. A warm
+    // cache failure (before the graph build ran) settles Failed and is re-thrown so Ready
+    // keeps rejecting exactly as before.
+    private async WarmAndSettle(generation: number): Promise<void>
+    {
+        try
+        {
+            await this.BuildWarmCache();
+        }
+        catch (error)
+        {
+            if (!this.disposed && generation === this.switchGeneration) this.SetBuildState(GraphBuildState.Failed);
+            throw error;
+        }
+        this.SettleBuild(generation);
+    }
+
+    // Settle a full build: ignored when a newer switch superseded it (or after dispose),
+    // else Failed when the graph build was rejected, Ready otherwise.
+    private SettleBuild(generation: number): void
+    {
+        if (this.disposed || generation !== this.switchGeneration) return;
+        this.SetBuildState(this.lastGraphBuildError !== undefined ? GraphBuildState.Failed : GraphBuildState.Ready);
+    }
+
+    // Assign and raise the build state, a no-op when unchanged (emit only on transitions).
+    // A throwing subscriber is isolated: it must not reject the warmup / Ready, abort a
+    // switch's settle, or escape into the manager's ActiveSolution setter.
+    private SetBuildState(next: GraphBuildState): void
+    {
+        if (next === this.buildState) return;
+        this.buildState = next;
+        try
+        {
+            this.buildStateChanged.emit(next);
+        }
+        catch
+        {
+            // ignore: a misbehaving listener cannot corrupt the engine's build state
+        }
+    }
+
+    // After a full rebuild OUTSIDE a warmup / switch (membership, reference, on-disk
+    // change), reconcile a SETTLED state to that rebuild's outcome: Failed -> Ready when
+    // the error cleared, Ready -> Failed when it failed. Never sets Building, and is a
+    // no-op while Building (the in-flight warmup / switch settles that itself).
+    private ReconcileSettledState(): void
+    {
+        if (this.disposed || this.buildState === GraphBuildState.Building) return;
+        this.SetBuildState(this.lastGraphBuildError !== undefined ? GraphBuildState.Failed : GraphBuildState.Ready);
     }
 
     // Re-resolve a member's warm base-set and store it under its project root — the
@@ -574,6 +844,260 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
         const { bases } = await this.resolver.ResolveBasesFor(storage);
         this.projects.Register(rootUri);
         this.projects.SetBases(rootUri, bases);
+    }
+
+    // Rebuild the whole shared graph from the active solution's current members. Used at
+    // warmup and after any lifecycle / on-disk / reference change routed through
+    // InvalidateMember. The graph is an ADDITIVE read seam, so a build failure is
+    // swallowed rather than allowed to break the resolver / editor-feature path.
+    private async RebuildGraphSafely(): Promise<void>
+    {
+        if (this.disposed) return;
+        try
+        {
+            const members = await this.AssembleMembers();
+            // Re-check after the await: dispose() may have run while assembling, and a Build
+            // here would emit GraphChanged to subscribers after teardown.
+            if (this.disposed) return;
+            await this.solutionGraph.Build(members);
+            this.lastGraphBuildError = undefined;
+        }
+        catch (error)
+        {
+            // A build failure (duplicate member id / dependency cycle) must not regress the
+            // editor-feature path — the shared graph keeps its last good state; record the
+            // error so a consumer can tell the graph is stale (see LastGraphBuildError).
+            this.lastGraphBuildError = error instanceof Error ? error.message : String(error);
+        }
+        this.ReconcileSettledState();
+    }
+
+    // Assemble one SolutionGraphMember per solution member: its graph id, storage,
+    // live-overlaid .todl sources, the OTHER local member ids it depends on (baseIds),
+    // and the published base documents it depends on (publishedBases). A dependency is
+    // LOCAL when some open member produces its id (→ baseIds, so its nodes get an origin
+    // on their source member storage); otherwise it resolves as a published package
+    // through the resolver (→ publishedBases). Only metaModels / libraries bindings are
+    // classified — an architecture binding is never a producer, so it is not a base here.
+    private async AssembleMembers(): Promise<SolutionGraphMember[]>
+    {
+        const solution = this.Provider.get(SolutionManagerService.Key)?.ActiveSolution;
+        if (solution === undefined) return [];
+        const entries: { storage: IStorage; manifest: ProjectManifest }[] = [];
+        for (const member of solution.Members)
+        {
+            const storage = member.Storage;
+            if (storage === undefined) continue;
+            const manifest = await this.ReadManifest(storage);
+            if (manifest !== undefined) entries.push({ storage, manifest });
+        }
+        const localProducers = new Set<string>();
+        for (const entry of entries)
+        {
+            if (SolutionLanguageService.IsProducerType(entry.manifest.type) && entry.manifest.id !== undefined) localProducers.add(entry.manifest.id);
+        }
+        const members: SolutionGraphMember[] = [];
+        for (const entry of entries)
+        {
+            const id = SolutionLanguageService.MemberIdOf(entry.manifest);
+            const sources = await this.SourcesForMember(entry.storage, entry.manifest.type);
+            const baseIds = new Set<string>();
+            const publishedBases: TodlDocument[] = [];
+            for (const dep of SolutionLanguageService.DepsOf(entry.manifest))
+            {
+                if (localProducers.has(dep.ref.id))
+                {
+                    if (dep.ref.id !== id) baseIds.add(dep.ref.id);
+                }
+                else
+                {
+                    const sourced = await this.resolver.TryGet({ kind: dep.kind, id: dep.ref.id, version: dep.ref.version });
+                    if (sourced !== undefined) publishedBases.push(sourced.Document);
+                }
+            }
+            members.push({ id, storage: entry.storage, sources, baseIds: [...baseIds], publishedBases });
+        }
+        return members;
+    }
+
+    // A member's own .todl sources as full-URI SourceFiles, overlaid with any live editor
+    // buffer under the member root (the live buffer wins). A producer excludes its
+    // samples/ folder, mirroring the per-member compile's source classification.
+    private async SourcesForMember(storage: IStorage, type: ProjectType): Promise<SourceFile[]>
+    {
+        const root = SolutionLanguageService.RootUriOf(storage);
+        const onDisk = SolutionLanguageService.IsProducerType(type)
+            ? await TodlProjectSourceFiles.CollectTaxonomy(storage)
+            : await TodlProjectSourceFiles.Collect(storage);
+        const byUri = new Map<string, string>();
+        for (const file of onDisk) byUri.set(root + file.uri, file.text);
+        for (const doc of this.liveDocuments.all())
+        {
+            if (!doc.uri.startsWith(root)) continue;
+            // Admit a live buffer only where the disk collect would admit the file, so an
+            // open samples/** or non-.todl buffer does not leak into the member's compile.
+            if (!SolutionLanguageService.IncludesLivePath(doc.uri.slice(root.length), type)) continue;
+            byUri.set(doc.uri, doc.getText());
+        }
+        return [...byUri].map(([uri, text]) => ({ uri, text }));
+    }
+
+    // Mirror of TodlProjectSourceFiles' collect predicate for a member-relative path: a
+    // `.todl` whose top-level folder is neither the build-output folder nor (for a
+    // producer) the samples folder. Nested folders of those names are not special.
+    private static IncludesLivePath(relPath: string, type: ProjectType): boolean
+    {
+        if (!relPath.toLowerCase().endsWith(SolutionLanguageService.TodlExtension)) return false;
+        const slash = relPath.indexOf(SolutionLanguageService.RootSeparator);
+        const topDir = slash >= 0 ? relPath.slice(0, slash) : "";
+        if (topDir === SolutionLanguageService.BuildOutputDir) return false;
+        if (topDir === SolutionLanguageService.SamplesDir && SolutionLanguageService.IsProducerType(type)) return false;
+        return true;
+    }
+
+    // The file-granular live-edit path: re-load just the edited file (plus its referrer cone)
+    // via SolutionGraph.ReplaceFile. ReplaceFile only handles an in-place edit of a file the
+    // graph already knows, so a URI not yet loaded (e.g. a just-created file) falls back to
+    // the member-granular replace instead of throwing.
+    private async ReplaceOwningFile(uri: string, root: string, generation: number): Promise<void>
+    {
+        if (this.disposed) return;
+        await this.warmup;
+        // Latest-wins per file: a newer keystroke for this URI already bumped the generation.
+        if (this.replaceGeneration.get(uri) !== generation) return;
+        const owner = await this.MemberForUri(uri);
+        if (owner === undefined) return;
+        const id = SolutionLanguageService.MemberIdOf(owner.manifest);
+        if (!this.solutionGraph.Has(id)) return;
+        if (!this.solutionGraph.HasFile(uri))
+        {
+            await this.ReplaceOwningMember(uri, root, generation);
+            return;
+        }
+        try
+        {
+            const sources = await this.SourcesForMember(owner.storage, owner.manifest.type);
+            if (this.disposed) return;
+            this.solutionGraph.ReplaceFile(uri, sources);
+        }
+        catch (error)
+        {
+            // Non-fatal to the queue (e.g. a replace race), but not ignored: the error is
+            // captured to lastGraphBuildError so a consumer can tell the graph may be stale.
+            this.lastGraphBuildError = error instanceof Error ? error.message : String(error);
+        }
+    }
+
+    // The live-edit path: re-load just the member that owns the changed URI from its
+    // current (live-overlaid) sources, so the shared graph reflects the keystroke and
+    // GraphChanged fires. Awaits warmup so the graph exists; a member not yet built (or
+    // removed concurrently) is a no-op rather than a throw.
+    private async ReplaceOwningMember(uri: string, root: string, generation: number): Promise<void>
+    {
+        if (this.disposed) return;
+        await this.warmup;
+        // Latest-wins: a newer keystroke for the same file has already bumped the
+        // generation, so this superseded replace skips its re-read + reload.
+        if (this.replaceGeneration.get(uri) !== generation) return;
+        const owner = await this.MemberForUri(uri);
+        if (owner === undefined) return;
+        const id = SolutionLanguageService.MemberIdOf(owner.manifest);
+        if (!this.solutionGraph.Has(id)) return;
+        try
+        {
+            const sources = await this.SourcesForMember(owner.storage, owner.manifest.type);
+            // Re-check after the await: dispose() may have run, and ReplaceMember would emit
+            // GraphChanged to subscribers after teardown.
+            if (this.disposed) return;
+            this.solutionGraph.ReplaceMember(id, sources);
+        }
+        catch
+        {
+            // ignore: a replace race (e.g. the member was removed concurrently) is non-fatal
+        }
+    }
+
+    // The longest member root that is a prefix of `uri` (no manifest read — a synchronous
+    // sibling of MemberForUri used to key live-edit coalescing); undefined when no member
+    // owns the URI.
+    private MemberRootForUri(uri: string): string | undefined
+    {
+        const solution = this.Provider.get(SolutionManagerService.Key)?.ActiveSolution;
+        if (solution === undefined) return undefined;
+        let best: string | undefined;
+        let bestLength = -1;
+        for (const member of solution.Members)
+        {
+            const storage = member.Storage;
+            if (storage === undefined) continue;
+            const root = SolutionLanguageService.RootUriOf(storage);
+            if (uri.startsWith(root) && root.length > bestLength)
+            {
+                best = root;
+                bestLength = root.length;
+            }
+        }
+        return best;
+    }
+
+    // The solution member whose root is the longest prefix of `uri`, with its parsed
+    // manifest; undefined when no member owns the URI (mirrors ProjectRegistry.ProjectFor).
+    private async MemberForUri(uri: string): Promise<{ storage: IStorage; manifest: ProjectManifest } | undefined>
+    {
+        const solution = this.Provider.get(SolutionManagerService.Key)?.ActiveSolution;
+        if (solution === undefined) return undefined;
+        let best: { storage: IStorage; manifest: ProjectManifest } | undefined;
+        let bestLength = -1;
+        for (const member of solution.Members)
+        {
+            const storage = member.Storage;
+            if (storage === undefined) continue;
+            const root = SolutionLanguageService.RootUriOf(storage);
+            if (!uri.startsWith(root) || root.length <= bestLength) continue;
+            const manifest = await this.ReadManifest(storage);
+            if (manifest === undefined) continue;
+            best = { storage, manifest };
+            bestLength = root.length;
+        }
+        return best;
+    }
+
+    private async ReadManifest(storage: IStorage): Promise<ProjectManifest | undefined>
+    {
+        try { return parseManifest(await storage.ReadText(PROJECT_MANIFEST_FILENAME)); }
+        catch { return undefined; }
+    }
+
+    // The packages-storage backend a ResourceLocator reads published-origin resources
+    // from: the registered PackageStore's storage, else the empty backstop.
+    private PackagesStorage(): IStorage
+    {
+        return this.Provider.get(PackageStoreKey)?.Storage ?? this.emptyPackages;
+    }
+
+    // The id a member carries in the shared graph: its package id, else (an architecture,
+    // which has no id) its name — identical to the resolver's ConsumerIdOf.
+    private static MemberIdOf(manifest: ProjectManifest): string
+    {
+        return manifest.id ?? manifest.name;
+    }
+
+    // A producer kind (meta-model / library) owns a published base; an architecture does
+    // not. Drives both the local-producer classification and the samples/ source exclusion.
+    private static IsProducerType(type: ProjectType): boolean
+    {
+        return type === ProjectType.MetaModel || type === ProjectType.Library;
+    }
+
+    // A member's base dependencies tagged with the package kind each was declared under
+    // (metaModels → MetaModel, libraries → Library) — the same classification the
+    // resolver's baseIdsOf graph uses, so local-vs-published matches the compile path.
+    private static DepsOf(manifest: ProjectManifest): { ref: DependencyRef; kind: PackageKind }[]
+    {
+        const deps: { ref: DependencyRef; kind: PackageKind }[] = [];
+        for (const ref of manifest.metaModels ?? []) deps.push({ ref, kind: PackageKind.MetaModel });
+        for (const ref of manifest.libraries ?? []) deps.push({ ref, kind: PackageKind.Library });
+        return deps;
     }
 
     // The project-root URI for a member's storage: its root normalized to a trailing

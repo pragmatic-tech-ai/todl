@@ -44,6 +44,7 @@ import { SolutionBaseResolver } from "../../solution-manager/engine/solution-bas
 import { MetaModelProjectFactory } from "../meta-model-project/meta-model-project-factory.js";
 import { LibraryProjectFactory } from "../library-project/library-project-factory.js";
 import { ArchitectureProjectFactory } from "../architecture-project/architecture-project-factory.js";
+import { ArchitectureProjectMigration } from "../architecture-project/architecture-project-migration.js";
 import { NpmPackageBuildSystem } from "../../todl-build-system/npm/npm-package-build-system.js";
 
 export interface ProjectSystemComposerOptions
@@ -118,6 +119,11 @@ export class ProjectSystemComposer
             generators,
             (event, reason) => ProjectSystemComposer.BuildContext(event, reason, ProjectSystemComposer.ResolveSource(provider, options.Source)),
         );
+        // Subscribers run in registration order and Raise awaits each, so the migration
+        // MUST be subscribed before the scheduler: the old generated/app.mu is moved to
+        // src/app.mu before the Opened backfill could scaffold a fresh src/app.mu.
+        const migration = new ArchitectureProjectMigration();
+        events.Subscribe((event) => migration.Handle(event));
         events.Subscribe((event) => scheduler.Handle(event));
         container.registerInstance(ProjectEventsKey, events);
     }

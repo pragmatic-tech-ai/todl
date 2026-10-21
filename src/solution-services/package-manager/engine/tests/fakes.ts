@@ -8,6 +8,7 @@ import {
     type IPackageRegistry,
     type PublishablePackage,
     type ConnectionStatus,
+    type RegistryInspection,
     type PackageRef,
     type VersionList,
     type PackageManifestJson,
@@ -151,6 +152,18 @@ export class FakeRegistry implements IPackageRegistry
     public async Test(): Promise<ConnectionStatus>
     {
         return this.TestResult
+    }
+
+    public async Inspect(): Promise<RegistryInspection>
+    {
+        return {
+            ...this.TestResult,
+            Identity: '',
+            Scopes: [],
+            ScopesSupported: false,
+            Packages: [],
+            PackagesSupported: false,
+        }
     }
 }
 

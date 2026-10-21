@@ -2,11 +2,15 @@ import type {
     CodeAction, CompletionItem, Diagnostic, DocumentSymbol, FoldingRange, Hover, Location, Position, Range,
     SemanticTokens, SignatureHelp, TextEdit, WorkspaceEdit, WorkspaceSymbol,
 } from "vscode-languageserver-types";
-import type { IStorage } from "@pragmatic-tech-ai/todl-runtime";
+import type { IStorage, Signal } from "@pragmatic-tech-ai/todl-runtime";
 import type { RenameError } from "../analysis/rename-provider.js";
 import type { TodlDocument } from "../../../compiler-services/emit/json.js";
 import type { ProjectType, DependencyRef } from "../../package-manager/manifest.js";
 import type { WikiOrigin } from "../../project-services/core/wiki-origin.js";
+import type { Repository } from "../../../compiler-services/model/model.js";
+import type { SolutionGraphChange } from "./solution-graph.js";
+import type { ResolvedResource } from "./resource-locator.js";
+import type { GraphBuildState } from "./graph-build-state.js";
 
 // The single host-facing language-service authority: one promise-returning method
 // per editor feature plus the live-buffer channel (DidChange) and pull-model
@@ -38,4 +42,23 @@ export interface ILanguageService
     ProducedIdOf(consumerStorage: IStorage): Promise<string | undefined>;
     // Member ids evicted by the most recent invalidation; raises PropertyChanged("StaleMembers").
     readonly StaleMembers: ReadonlySet<string>;
+
+    // The shared solution-graph read seam (Phase 1): ONE Repository + origin map for the
+    // whole active solution (the SAME graph for every consumer; undefined when no solution
+    // is active or the storage is not a member), the resources a node declares, and a
+    // signal that fires with the affected member ids when a member's slice is replaced.
+    ModelView(consumerStorage: IStorage): Promise<{ model: Repository; originOf: ReadonlyMap<string, WikiOrigin>; provenanceOf: ReadonlyMap<string, string> } | undefined>;
+    Resources(nodeId: string): Promise<ResolvedResource[]>;
+    readonly GraphChanged: Signal<SolutionGraphChange>;
+
+    // The engine-owned state of the shared graph's full build. Building at construction
+    // and on each solution switch; the warmup / LATEST switch settles it to Ready or
+    // Failed. Once settled, any later full rebuild (membership, reference or on-disk
+    // change) reconciles it to that rebuild's outcome (Failed <-> Ready, never Building);
+    // a live DidChange edit never moves it. BuildStateChanged is raised only on a real
+    // transition; GraphRevision is a monotonic count bumped on every GraphChanged commit
+    // (a fingerprint for paging cursors).
+    readonly BuildState: GraphBuildState;
+    readonly BuildStateChanged: Signal<GraphBuildState>;
+    readonly GraphRevision: number;
 }

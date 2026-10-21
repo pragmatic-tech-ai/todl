@@ -54,13 +54,19 @@
 
 import { parse } from "./parser.js";
 import { parsePredicate } from "./predicate-parser.js";
+import { parsePolicyPredicate } from "../policy/policy-predicate-parser.js";
+import { PolicyPredicateCodec } from "../policy/policy-predicate-codec.js";
+import { PolicyPredicateMembers, type PolicyPredicate } from "../policy/policy-predicate.js";
+import { MatchRuleNormalizer } from "./match-rule-normalizer.js";
 import { ApplicationRootPass } from "./application-root-pass.js";
 import { Repository } from "../model/model.js";
-import type { Builder, TermInput } from "../model/builder.js";
+import { Builder, type TermInput } from "../model/builder.js";
+import { type ConnectionPolicy, ConnectionPolicies } from "../connectors/connection-policy.js";
 import type { Expr } from "../predicate/ast.js";
 import {
   DeclKind,
   ValueKind,
+  type MergeStrategy,
   type Declaration,
   type InstanceDecl,
   type ModelDecl,
@@ -185,6 +191,7 @@ export function loadInto(
   reserved: ReadonlySet<string> = new Set(),
   idGenerator: IdGenerator = new SnowflakeIdGenerator(),
   provenance?: Map<string, string>,
+  policy: ConnectionPolicy = ConnectionPolicies.Default,
 ): Diagnostic[]
 {
   const diagnostics: Diagnostic[] = [];
@@ -521,13 +528,16 @@ export function loadInto(
   for (const { ns, imports, uri, decl: declaration } of units)
   {
     first.setNamespace(ns);
+    if (rec !== undefined) rec.current = uri;
     switch (declaration.kind)
     {
       case DeclKind.Primitive:
         first.definePrimitive(NodeIdQualifier.Qualify(ns, declaration.name), declaration.base, declaration.regex);
+        recordHome(rec, NodeIdQualifier.Qualify(ns, declaration.name));
         break;
       case DeclKind.Viewpoint:
         first.defineViewpoint(NodeIdQualifier.Qualify(ns, declaration.name), declaration.frames);
+        recordHome(rec, NodeIdQualifier.Qualify(ns, declaration.name));
         break;
       case DeclKind.Taxonomy:
       {
@@ -564,6 +574,8 @@ export function loadInto(
               path: taxonomyId,
             });
           }
+          // buildTerm runs exactly for the terms minted as nodes (top-level + hierarchy sub-terms).
+          recordHome(rec, `${taxonomyId}.${t.id}`);
           const hierarchy: TermInput[] = [];
           for (const child of t.children)
           {
@@ -619,6 +631,7 @@ export function loadInto(
         };
 
         first.defineTaxonomy(taxonomyId, decl.represents, decl.terms.map((t) => buildTerm(t, normConcept(t.concept) ?? primary)));
+        recordHome(rec, taxonomyId);
         break;
       }
       case DeclKind.Concept:
@@ -628,10 +641,12 @@ export function loadInto(
         // resolution (`Repository.supertypesOf`/`schemaOf`), not a stored
         // `Extends → Element` edge — killing the `Element` super-node.
         first.defineConcept(NodeIdQualifier.Qualify(ns, declaration.name), declaration.extends ?? null);
+        recordHome(rec, NodeIdQualifier.Qualify(ns, declaration.name));
         break;
       }
       case DeclKind.Annotation:
         first.defineAnnotation(NodeIdQualifier.Qualify(ns, declaration.name), declaration.extends ?? null);
+        recordHome(rec, NodeIdQualifier.Qualify(ns, declaration.name));
         break;
       case DeclKind.Operator:
         // Stage a glyph once; a redeclaration would collide on the node id, so
@@ -640,6 +655,7 @@ export function loadInto(
         {
           definedOps.add(declaration.glyph);
           first.defineOperator(declaration.glyph, declaration.concept, declaration.fromMember, declaration.toMember, declaration.relationship);
+          recordHome(rec, declaration.glyph);
         }
         break;
       case DeclKind.Instance:
@@ -658,8 +674,9 @@ export function loadInto(
   // Invariants are parsed here but only registered at the very end.
   const second = model.builder();
   const invariants: PendingInvariant[] = [];
-  for (const { ns, decl: declaration } of units)
+  for (const { ns, uri, decl: declaration } of units)
   {
+    if (rec !== undefined) rec.current = uri;
     if (declaration.kind === DeclKind.Annotation)
     {
       second.setNamespace(ns);
@@ -677,6 +694,7 @@ export function loadInto(
     for (const relationship of declaration.relationships)
     {
       second.addConceptRelationship(conceptId, relationship.name, relationship.targets, relationship.cardinality);
+      recordHome(rec, `${conceptId}.${relationship.name}`);
     }
     for (const invariant of declaration.invariants)
     {
@@ -694,6 +712,398 @@ export function loadInto(
 
   // Operator glyphs can now be checked against the concept schemas they reference.
   validateOperators(model, units, diagnostics);
+
+  // ═══════════════════════ IDENTITY declarations (entity-identity) ═════════════════
+  // Lower each `identity <Concept> key <field>;` to an identity node. It runs once
+  // concept members are committed, so the key can be checked against the concept's
+  // effective (inherited) schema. The concept is resolved here (not in the reference
+  // pre-pass) so an unknown one yields `identity.unknown-concept` alone.
+  const identityBuilder = model.builder();
+  const stagedIdentities = new Set<string>();
+  for (const { ns, imports, uri, decl: declaration } of units)
+  {
+    if (declaration.kind !== DeclKind.Identity) continue;
+    identityBuilder.setNamespace(ns);
+    if (rec !== undefined) rec.current = uri;
+    const resolved = resolveRef(declaration.concept, { ns, imports });
+    const conceptId = resolved.kind === "qualified" ? resolved.flat : declaration.concept;
+    if (resolved.kind === "undefined" || resolved.kind === "unreachable" || model.resolve(conceptId)?.metaKind !== MetaKind.Concept)
+    {
+      diagnostics.push({
+        code: DiagnosticCode.IdentityUnknownConcept, severity: Severity.Error,
+        message: `identity references unknown concept "${declaration.concept}"`,
+        span: declaration.conceptSpan ?? declaration.span, node: declaration.concept, path: null,
+      });
+      continue;
+    }
+    const known = declaration.key === Builder.StorageIdKey
+      || model.effectiveSchema(conceptId).fields.some((f) => f.name === declaration.key);
+    if (!known)
+    {
+      diagnostics.push({
+        code: DiagnosticCode.IdentityUnknownKey, severity: Severity.Error,
+        message: `identity key "${declaration.key}" is not a field of "${declaration.concept}"`,
+        span: declaration.keySpan ?? declaration.span, node: conceptId, path: declaration.key,
+      });
+      continue;
+    }
+    const identityId = `${conceptId}@identity`;
+    // A second identity for the same concept would collide on the node id: dropped.
+    if (model.has(identityId) || stagedIdentities.has(identityId)) continue;
+    stagedIdentities.add(identityId);
+    identityBuilder.defineIdentity(identityId, conceptId, declaration.key);
+    recordHome(rec, identityId);
+  }
+  identityBuilder.commit(undefinedIds);
+
+  // ═══════════════════════ MATCH declarations (entity-identity) ═════════════════════
+  // Lower each `match <Concept> { same when <pred>; ... }`. Every clause is parsed and
+  // normalized to the sorted field set both candidates must agree on; invalid clauses
+  // are diagnosed and dropped while the others survive. Rules UNION per concept (across
+  // clauses and across multiple blocks) into ONE `<concept>@match` node.
+  const matchBuilder = model.builder();
+  const matchRulesByConcept = new Map<NodeId, string[][]>();
+  const matchConceptOrder: NodeId[] = [];
+  for (const { ns, imports, uri, decl: declaration } of units)
+  {
+    if (declaration.kind !== DeclKind.Match) continue;
+    matchBuilder.setNamespace(ns);
+    if (rec !== undefined) rec.current = uri;
+    const resolved = resolveRef(declaration.concept, { ns, imports });
+    const conceptId = resolved.kind === "qualified" ? resolved.flat : declaration.concept;
+    if (resolved.kind === "undefined" || resolved.kind === "unreachable" || model.resolve(conceptId)?.metaKind !== MetaKind.Concept)
+    {
+      diagnostics.push({
+        code: DiagnosticCode.MatchUnknownConcept, severity: Severity.Error,
+        message: `match references unknown concept "${declaration.concept}"`,
+        span: declaration.conceptSpan ?? declaration.span, node: declaration.concept, path: null,
+      });
+      continue;
+    }
+    const fieldNames = new Set(model.effectiveSchema(conceptId).fields.map((f) => f.name));
+    for (const rule of declaration.rules)
+    {
+      let expr: Expr;
+      try
+      {
+        expr = parsePredicate(rule.predicate);
+      }
+      catch
+      {
+        diagnostics.push({
+          code: DiagnosticCode.MatchUnsupportedRule, severity: Severity.Error,
+          message: `match rule is not a valid expression`,
+          span: rule.span, node: conceptId, path: null,
+        });
+        continue;
+      }
+      const normalized = MatchRuleNormalizer.Normalize(expr, Builder.MatchLeftVar, Builder.MatchRightVar);
+      if (normalized === null)
+      {
+        diagnostics.push({
+          code: DiagnosticCode.MatchUnsupportedRule, severity: Severity.Error,
+          message: `match rule must be a conjunction of "${Builder.MatchLeftVar}.F == ${Builder.MatchRightVar}.F" field equalities`,
+          span: rule.span, node: conceptId, path: null,
+        });
+        continue;
+      }
+      const unknown = normalized.find((f) => !fieldNames.has(f));
+      if (unknown !== undefined)
+      {
+        diagnostics.push({
+          code: DiagnosticCode.MatchUnknownField, severity: Severity.Error,
+          message: `match rule field "${unknown}" is not a field of "${declaration.concept}"`,
+          span: rule.span, node: conceptId, path: unknown,
+        });
+        continue;
+      }
+      const existing = matchRulesByConcept.get(conceptId);
+      if (existing === undefined)
+      {
+        matchRulesByConcept.set(conceptId, [normalized]);
+        matchConceptOrder.push(conceptId);
+      }
+      else if (!existing.some((r) => r.join(",") === normalized.join(","))) existing.push(normalized);
+    }
+  }
+  for (const conceptId of matchConceptOrder)
+  {
+    const matchId = `${conceptId}@match`;
+    if (model.has(matchId)) continue;
+    matchBuilder.defineMatch(matchId, conceptId, JSON.stringify(matchRulesByConcept.get(conceptId)!));
+    recordHome(rec, matchId);
+  }
+  matchBuilder.commit(undefinedIds);
+
+  // ═══════════════════════ MERGE declarations (entity-identity) ═════════════════════
+  // Lower each `merge <Concept> { prefer ...; }`. Rules accumulate per concept (first
+  // rule per field wins) into ONE `<concept>@merge` node; invalid rules are diagnosed
+  // and dropped while the others survive.
+  const mergeBuilder = model.builder();
+  const mergeRulesByConcept = new Map<NodeId, { field: string; strategy: `${MergeStrategy}`; source: string | null }[]>();
+  const mergeConceptOrder: NodeId[] = [];
+  for (const { ns, imports, uri, decl: declaration } of units)
+  {
+    if (declaration.kind !== DeclKind.Merge) continue;
+    mergeBuilder.setNamespace(ns);
+    if (rec !== undefined) rec.current = uri;
+    const resolved = resolveRef(declaration.concept, { ns, imports });
+    const conceptId = resolved.kind === "qualified" ? resolved.flat : declaration.concept;
+    if (resolved.kind === "undefined" || resolved.kind === "unreachable" || model.resolve(conceptId)?.metaKind !== MetaKind.Concept)
+    {
+      diagnostics.push({
+        code: DiagnosticCode.MergeUnknownConcept, severity: Severity.Error,
+        message: `merge references unknown concept "${declaration.concept}"`,
+        span: declaration.conceptSpan ?? declaration.span, node: declaration.concept, path: null,
+      });
+      continue;
+    }
+    const fieldNames = new Set(model.effectiveSchema(conceptId).fields.map((f) => f.name));
+    for (const rule of declaration.rules)
+    {
+      if (!fieldNames.has(rule.field))
+      {
+        diagnostics.push({
+          code: DiagnosticCode.MergeUnknownField, severity: Severity.Error,
+          message: `merge rule field "${rule.field}" is not a field of "${declaration.concept}"`,
+          span: rule.fieldSpan ?? rule.span, node: conceptId, path: rule.field,
+        });
+        continue;
+      }
+      const serialized = { field: rule.field, strategy: rule.strategy, source: rule.source };
+      const existing = mergeRulesByConcept.get(conceptId);
+      if (existing === undefined)
+      {
+        mergeRulesByConcept.set(conceptId, [serialized]);
+        mergeConceptOrder.push(conceptId);
+      }
+      else if (!existing.some((r) => r.field === rule.field)) existing.push(serialized);
+    }
+  }
+  for (const conceptId of mergeConceptOrder)
+  {
+    const mergeId = `${conceptId}@merge`;
+    if (model.has(mergeId)) continue;
+    mergeBuilder.defineMerge(mergeId, conceptId, JSON.stringify(mergeRulesByConcept.get(conceptId)!));
+    recordHome(rec, mergeId);
+  }
+  mergeBuilder.commit(undefinedIds);
+
+  // ═══════════════════════ POLICY declarations (access rules) ═══════════════════════
+  // Lower each `policy <Concept> { allow|deny <action> when <pred>; ... }`. A malformed
+  // predicate or an unknown `entity.<member>` is diagnosed and the rule DROPPED (never
+  // silently lowered). Rules append per concept, in order, into ONE `<concept>@policy` node.
+  const policyBuilder = model.builder();
+  const policyRulesByConcept = new Map<NodeId, { effect: string; action: string; predicate: unknown }[]>();
+  const policyConceptOrder: NodeId[] = [];
+  for (const { ns, imports, uri, decl: declaration } of units)
+  {
+    if (declaration.kind !== DeclKind.Policy) continue;
+    policyBuilder.setNamespace(ns);
+    if (rec !== undefined) rec.current = uri;
+    const resolved = resolveRef(declaration.concept, { ns, imports });
+    const conceptId = resolved.kind === "qualified" ? resolved.flat : declaration.concept;
+    if (resolved.kind === "undefined" || resolved.kind === "unreachable" || model.resolve(conceptId)?.metaKind !== MetaKind.Concept)
+    {
+      diagnostics.push({
+        code: DiagnosticCode.PolicyUnknownConcept, severity: Severity.Error,
+        message: `policy references unknown concept "${declaration.concept}"`,
+        span: declaration.conceptSpan ?? declaration.span, node: declaration.concept, path: null,
+      });
+      continue;
+    }
+    const fieldNames = new Set(model.effectiveSchema(conceptId).fields.map((f) => f.name));
+    for (const rule of declaration.rules)
+    {
+      let predicate: PolicyPredicate;
+      try
+      {
+        predicate = parsePolicyPredicate(rule.predicate);
+      }
+      catch (error)
+      {
+        diagnostics.push({
+          code: DiagnosticCode.PolicyUnsupportedRule, severity: Severity.Error,
+          message: `policy rule is not a valid predicate: ${(error as Error).message}`,
+          span: rule.span, node: conceptId, path: null,
+        });
+        continue;
+      }
+      // Only entity-rooted members are validated; principal.<x> claims have no schema yet (later phase).
+      const unknown = PolicyPredicateMembers.EntityMembers(predicate).find((m) => m !== Builder.StorageIdKey && !fieldNames.has(m));
+      if (unknown !== undefined)
+      {
+        diagnostics.push({
+          code: DiagnosticCode.PolicyUnknownField, severity: Severity.Error,
+          message: `policy rule field "${unknown}" is not a field of "${declaration.concept}"`,
+          span: rule.span, node: conceptId, path: unknown,
+        });
+        continue;
+      }
+      const serialized = { effect: rule.effect, action: rule.action, predicate: JSON.parse(PolicyPredicateCodec.ToJson(predicate)) as unknown };
+      const existing = policyRulesByConcept.get(conceptId);
+      if (existing === undefined)
+      {
+        policyRulesByConcept.set(conceptId, [serialized]);
+        policyConceptOrder.push(conceptId);
+      }
+      else existing.push(serialized);
+    }
+  }
+  for (const conceptId of policyConceptOrder)
+  {
+    const policyId = `${conceptId}@policy`;
+    if (model.has(policyId)) continue;
+    policyBuilder.definePolicy(policyId, conceptId, JSON.stringify(policyRulesByConcept.get(conceptId)!));
+    recordHome(rec, policyId);
+  }
+  policyBuilder.commit(undefinedIds);
+
+  // ═══════════════════ CONNECTORS + POPULATIONS (external data) ═════════════════
+  // `datasource` decls lower to namespace-scoped Connector nodes
+  // (`<ns>@connector:<name>`); each model's `populate` lowers to one Population node
+  // (`<model>@populate:<concept>`, one per model+concept) whose FieldMap is TOTAL: convention
+  // expansion maps every schema field to the same-named external field, then
+  // explicit overrides are applied.
+  // The deployment `policy` rejects inline config / a model `provider` here.
+  const connectorBuilder = model.builder();
+  const connectorReservedKeys = new Set<string>([Builder.ConnectorKindAttr, Builder.ConnectorConnectionAttr, Builder.ConnectorSecretAttr, Builder.ConnectorProviderAttr]);
+  for (const { ns, uri, decl: declaration } of units)
+  {
+    if (declaration.kind !== DeclKind.Connector) continue;
+    connectorBuilder.setNamespace(ns);
+    if (rec !== undefined) rec.current = uri;
+    const connectorId = `${ns}@connector:${declaration.name}`;
+    if (model.has(connectorId)) continue;
+    const config: Record<string, string> = {};
+    for (const a of declaration.assignments) if (!connectorReservedKeys.has(a.name) && !(a.name in config)) config[a.name] = a.value;
+    const find = (key: string) => declaration.assignments.find((a) => a.name === key)?.value ?? null;
+    const kindValue = find(Builder.ConnectorKindAttr);
+    if (kindValue === null || !CONNECTOR_KINDS.has(kindValue))
+    {
+      diagnostics.push({
+        code: DiagnosticCode.ConnectorUnknownKind, severity: Severity.Error,
+        message: kindValue === null
+          ? `datasource "${declaration.name}" declares no "kind" (expected one of: ${[...CONNECTOR_KINDS].join(", ")})`
+          : `datasource "${declaration.name}" has unknown kind "${kindValue}" (expected one of: ${[...CONNECTOR_KINDS].join(", ")})`,
+        span: declaration.nameSpan ?? declaration.span, node: connectorId, path: null,
+      });
+    }
+    const providerValue = find(Builder.ConnectorProviderAttr);
+    if (!policy.InlineAllowed && Object.keys(config).length > 0)
+    {
+      diagnostics.push({
+        code: DiagnosticCode.ConnectorInlineForbidden, severity: Severity.Error,
+        message: `datasource "${declaration.name}" declares inline connection config (${Object.keys(config).join(", ")}), which the deployment policy forbids`,
+        span: declaration.nameSpan ?? declaration.span, node: connectorId, path: null,
+      });
+    }
+    if (providerValue !== null && !policy.ProviderAllowed)
+    {
+      diagnostics.push({
+        code: DiagnosticCode.ConnectorProviderForbidden, severity: Severity.Error,
+        message: `datasource "${declaration.name}" declares a provider, which the deployment policy forbids`,
+        span: declaration.nameSpan ?? declaration.span, node: connectorId, path: null,
+      });
+    }
+    connectorBuilder.defineConnector(
+      connectorId, declaration.name, find(Builder.ConnectorKindAttr), JSON.stringify(config),
+      find(Builder.ConnectorConnectionAttr), find(Builder.ConnectorSecretAttr), providerValue);
+    recordHome(rec, connectorId);
+  }
+  connectorBuilder.commit(undefinedIds);
+
+  const populateBuilder = model.builder();
+  const seenByModel = new Map<NodeId, Set<NodeId>>();
+  for (const { ns, imports, uri, decl: declaration } of units)
+  {
+    if (declaration.kind !== DeclKind.Model) continue;
+    populateBuilder.setNamespace(ns);
+    if (rec !== undefined) rec.current = uri;
+    const defaultConnector = declaration.connects[0]?.connector ?? null;
+    const modelNodeId = NodeIdQualifier.Qualify(ns, declaration.id);
+    const seenConcepts = seenByModel.get(modelNodeId) ?? new Set<NodeId>();
+    seenByModel.set(modelNodeId, seenConcepts);
+    for (const populate of declaration.populations)
+    {
+      const resolved = resolveRef(populate.concept, { ns, imports });
+      const conceptId = resolved.kind === "qualified" ? resolved.flat : populate.concept;
+      if (resolved.kind === "undefined" || resolved.kind === "unreachable" || model.resolve(conceptId)?.metaKind !== MetaKind.Concept)
+      {
+        diagnostics.push({
+          code: DiagnosticCode.ConnectorUnknownConcept, severity: Severity.Error,
+          message: `populate references unknown concept "${populate.concept}"`,
+          span: populate.conceptSpan ?? populate.span, node: populate.concept, path: null,
+        });
+        continue;
+      }
+      if (seenConcepts.has(conceptId))
+      {
+        diagnostics.push({
+          code: DiagnosticCode.ConnectorDuplicatePopulate, severity: Severity.Error,
+          message: `concept "${populate.concept}" is populated more than once in model "${declaration.id}"`,
+          span: populate.conceptSpan ?? populate.span, node: conceptId, path: null,
+        });
+        continue;
+      }
+      seenConcepts.add(conceptId);
+      const connectorName = populate.connector ?? defaultConnector;
+      let connectorId: NodeId | null = null;
+      if (connectorName !== null)
+      {
+        const scoped = `${ns}@connector:${connectorName}`;
+        if (model.has(scoped)) connectorId = scoped;
+      }
+      if (connectorId === null)
+      {
+        diagnostics.push({
+          code: DiagnosticCode.ConnectorUnresolvedConnector, severity: Severity.Error,
+          message: connectorName === null
+            ? `populate "${populate.concept}" has no "from" connector and the model declares no "connect"`
+            : `populate "${populate.concept}": connector "${connectorName}" is unresolved in namespace "${ns}"`,
+          span: populate.span, node: conceptId, path: null,
+        });
+        continue;
+      }
+      const idKey = populate.idKey ?? Builder.DefaultIdKey;
+      const fieldNames = model.effectiveSchema(conceptId).fields.map((f) => f.name);
+      const fieldMap: Record<string, string> = { [Builder.IdMember]: idKey };
+      for (const name of fieldNames) if (!(name in fieldMap)) fieldMap[name] = name;
+      for (const o of populate.overrides)
+      {
+        if (o.member !== Builder.IdMember && !fieldNames.includes(o.member))
+        {
+          diagnostics.push({
+            code: DiagnosticCode.ConnectorUnknownField, severity: Severity.Error,
+            message: `populate override member "${o.member}" is not a field of "${populate.concept}"`,
+            span: o.memberSpan ?? o.span, node: conceptId, path: o.member,
+          });
+          continue;
+        }
+        // The id member always maps to the key clause (or default); `key` wins.
+        if (o.member === Builder.IdMember) continue;
+        fieldMap[o.member] = o.field;
+      }
+      // A `version <member>` must name a FieldMap member (same membership the overrides use);
+      // a typo is a build error here, not a silent passthrough that reaches plan-build.
+      let versionMember = populate.versionField;
+      if (versionMember !== null && !(versionMember in fieldMap))
+      {
+        diagnostics.push({
+          code: DiagnosticCode.ConnectorUnknownField, severity: Severity.Error,
+          message: `populate version member "${versionMember}" is not a field of "${populate.concept}"`,
+          span: populate.span, node: conceptId, path: versionMember,
+        });
+        versionMember = null;
+      }
+      const bindingId = `${modelNodeId}@populate:${conceptId}`;
+      if (model.has(bindingId)) continue;
+      const source = populate.source ?? conceptId.slice(conceptId.lastIndexOf(".") + 1);
+      populateBuilder.defineBinding(bindingId, modelNodeId, conceptId, connectorId, source, idKey, JSON.stringify(fieldMap), !populate.readOnly, versionMember, populate.concurrency, populate.atomicity);
+      recordHome(rec, bindingId);
+    }
+  }
+  populateBuilder.commit(undefinedIds);
 
   // ═══════════════════════════ PASS 2b: instances & models ═════════════════════
   // Stage the concrete graph: model containers, their objects, deferred term
@@ -750,26 +1160,27 @@ export function loadInto(
   const fourth = model.builder();
   const seenApps = new Set<string>();
   let packageStaged = false;
-  for (const { ns, imports, decl } of units)
+  for (const { ns, imports, uri, decl } of units)
   {
     const home: Home = { ns, imports };
+    if (rec !== undefined) rec.current = uri;
     if (decl.kind === DeclKind.Concept)
     {
       fourth.setNamespace(ns);
       const conceptId = NodeIdQualifier.Qualify(ns, decl.name);
-      stageApplications(fourth, model, conceptId, decl.annotations, seenApps, diagnostics, asserted, idGenerator, ops, home, resolveRef);
+      stageApplications(fourth, model, conceptId, decl.annotations, seenApps, diagnostics, asserted, idGenerator, ops, home, resolveRef, rec);
       // Member-level annotations decorate the member node (`<concept>.<member>@<Ann>`).
       for (const rel of decl.relationships)
       {
         if (rel.annotations.length > 0)
-          stageApplications(fourth, model, `${conceptId}.${rel.name}`, rel.annotations, seenApps, diagnostics, asserted, idGenerator, ops, home, resolveRef);
+          stageApplications(fourth, model, `${conceptId}.${rel.name}`, rel.annotations, seenApps, diagnostics, asserted, idGenerator, ops, home, resolveRef, rec);
       }
     }
     else if (decl.kind === DeclKind.Package)
     {
       fourth.setNamespace(ns);
-      if (!packageStaged) { fourth.definePackageNode(PACKAGE_NODE_ID); packageStaged = true; }
-      stageApplications(fourth, model, PACKAGE_NODE_ID, decl.annotations, seenApps, diagnostics, asserted, idGenerator, ops, home, resolveRef);
+      if (!packageStaged) { fourth.definePackageNode(PACKAGE_NODE_ID); recordHome(rec, PACKAGE_NODE_ID); packageStaged = true; }
+      stageApplications(fourth, model, PACKAGE_NODE_ID, decl.annotations, seenApps, diagnostics, asserted, idGenerator, ops, home, resolveRef, rec);
     }
     else if (decl.kind === DeclKind.Taxonomy)
     {
@@ -777,11 +1188,11 @@ export function loadInto(
       const taxonomyId = NodeIdQualifier.Qualify(ns, decl.name);
       // Taxonomy-level annotations decorate the taxonomy node itself
       // (`<taxonomy>@<name>`), exactly like a concept.
-      stageApplications(fourth, model, taxonomyId, decl.annotations, seenApps, diagnostics, asserted, idGenerator, ops, home, resolveRef);
+      stageApplications(fourth, model, taxonomyId, decl.annotations, seenApps, diagnostics, asserted, idGenerator, ops, home, resolveRef, rec);
       const walkTerm = (t: Term): void => {
         if (t.annotations.length > 0)
         {
-          stageApplications(fourth, model, `${taxonomyId}.${t.id}`, t.annotations, seenApps, diagnostics, asserted, idGenerator, ops, home, resolveRef);
+          stageApplications(fourth, model, `${taxonomyId}.${t.id}`, t.annotations, seenApps, diagnostics, asserted, idGenerator, ops, home, resolveRef, rec);
         }
         t.children.forEach(walkTerm);
       };
@@ -790,13 +1201,13 @@ export function loadInto(
     else if (decl.kind === DeclKind.Instance)
     {
       fourth.setNamespace(ns);
-      stageInstanceAnnotations(fourth, model, decl, seenApps, diagnostics, asserted, idGenerator, ops, home, resolveRef);
+      stageInstanceAnnotations(fourth, model, decl, seenApps, diagnostics, asserted, idGenerator, ops, home, resolveRef, rec);
     }
     else if (decl.kind === DeclKind.Model)
     {
       fourth.setNamespace(ns);
-      stageApplications(fourth, model, NodeIdQualifier.Qualify(ns, decl.id), decl.annotations, seenApps, diagnostics, asserted, idGenerator, ops, home, resolveRef);
-      for (const inst of decl.instances) stageInstanceAnnotations(fourth, model, inst, seenApps, diagnostics, asserted, idGenerator, ops, home, resolveRef);
+      stageApplications(fourth, model, NodeIdQualifier.Qualify(ns, decl.id), decl.annotations, seenApps, diagnostics, asserted, idGenerator, ops, home, resolveRef, rec);
+      for (const inst of decl.instances) stageInstanceAnnotations(fourth, model, inst, seenApps, diagnostics, asserted, idGenerator, ops, home, resolveRef, rec);
     }
   }
   fourth.commit(undefinedIds);
@@ -964,6 +1375,8 @@ function termToInstanceDecl(taxonomy: string, t: Term, normalize: (name: string 
 
 
 /** File-level grouping keywords that wrap records but are not themselves records. */
+// mirrors DataSourceKind in model-data (cannot import upward across the layer boundary)
+const CONNECTOR_KINDS: ReadonlySet<string> = new Set(["sql", "rest", "cypher", "document"]);
 const WRAPPER_CONCEPTS = new Set(["technology-library"]);
 
 /**
@@ -1019,6 +1432,7 @@ function stageApplications(
   ops: OperatorTable,
   home: Home,
   resolveRef: ResolveRef,
+  rec?: HomeRecorder,
 ): void
 {
   for (const app of apps)
@@ -1038,8 +1452,9 @@ function stageApplications(
     }
     seen.add(appId);
     builder.annotate(target, app.name);
+    recordHome(rec, appId);
     model.recordSpan(appId, app.span);
-    for (const a of app.assignments) realizeValue(builder, model, app.name, appId, a.name, a.value, diagnostics, asserted, idGen, ops, home, resolveRef);
+    for (const a of app.assignments) realizeValue(builder, model, app.name, appId, a.name, a.value, diagnostics, asserted, idGen, ops, home, resolveRef, rec);
   }
 }
 
@@ -1056,13 +1471,14 @@ function stageInstanceAnnotations(
   ops: OperatorTable,
   home: Home,
   resolveRef: ResolveRef,
+  rec?: HomeRecorder,
 ): void
 {
   if (decl.annotations.length > 0)
   {
     if (decl.isClass)
     {
-      stageApplications(builder, model, NodeIdQualifier.Qualify(home.ns, decl.id), decl.annotations, seen, diagnostics, asserted, idGen, ops, home, resolveRef);
+      stageApplications(builder, model, NodeIdQualifier.Qualify(home.ns, decl.id), decl.annotations, seen, diagnostics, asserted, idGen, ops, home, resolveRef, rec);
     }
     else
     {
@@ -1079,7 +1495,7 @@ function stageInstanceAnnotations(
       }
     }
   }
-  for (const child of decl.children) stageInstanceAnnotations(builder, model, child, seen, diagnostics, asserted, idGen, ops, home, resolveRef);
+  for (const child of decl.children) stageInstanceAnnotations(builder, model, child, seen, diagnostics, asserted, idGen, ops, home, resolveRef, rec);
 }
 
 // ── The instance-materialisation engine ───────────────────────────────────────

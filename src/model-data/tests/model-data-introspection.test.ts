@@ -28,7 +28,22 @@ class Probe extends ModelDataSource
 {
     constructor(connector?: IModelDataConnector) { super(connector); this.modelName = "probe"; this.modelVersion = "0.0.0"; }
     static viaDocument(doc: TodlDocument): Probe { const p = new Probe(); p.loadDocument(doc); return p; }
+
+    static viaEmptyModel(): Probe
+    {
+        const r = new Repository();
+        const b = r.builder();
+        b.definePrimitive("string");
+        b.commit();
+        return Probe.viaDocument(toJSON(r));
+    }
 }
+
+test("ConceptNames of a model with zero concepts is empty (the app view-model's ConceptSummary cannot throw)", () =>
+{
+    const src = Probe.viaEmptyModel();
+    assert.equal(src.ConceptNames().length, 0);
+});
 
 test("ConceptNames lists domain concepts (excludes the prelude root)", () =>
 {

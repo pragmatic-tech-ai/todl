@@ -1,5 +1,6 @@
 import { ArtifactKey } from "../../build-system-core/artifact-key.js";
 import type { TodlDocument } from "../../../compiler-services/emit/json.js";
+import type { ResolvedClosureMember } from "../../project-services/core/base-resolver.js";
 import type { CompiledPackage } from "../../../publish/publish.js";
 
 // The typed artifacts the npm build actions hand between each other (spec §4). Static
@@ -7,6 +8,7 @@ import type { CompiledPackage } from "../../../publish/publish.js";
 export class NpmArtifacts
 {
     public static readonly ResolvedBases = new ArtifactKey<readonly TodlDocument[]>("ResolvedBases");
+    public static readonly ResolvedClosure = new ArtifactKey<readonly ResolvedClosureMember[]>("ResolvedClosure");
     public static readonly CompiledModel = new ArtifactKey<CompiledPackage>("CompiledModel");
     public static readonly CompiledMural = new ArtifactKey<readonly string[]>("CompiledMural");
 }

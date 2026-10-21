@@ -45,6 +45,26 @@ describe("ProjectModelProvider", () =>
         assert.ok(model.package!.fullDocument.nodes.length > 0);
     });
 
+    test("CompileLocal compiles an architecture project (no publishable id) that Compile cannot", async () =>
+    {
+        // An architecture project is a consumer: it has NO publishable id. The content
+        // generators (model-dto, app-ui) run on exactly these and need the compiled model.
+        const archManifest: ProjectManifest = { type: ProjectType.Architecture, name: "test_arch", version: 1 };
+        const project = new FakeStorage();
+        await project.WriteText("project.plexus", JSON.stringify(archManifest));
+        await project.WriteText("model.todl", WIDGET_MODEL);
+        const provider = new ProjectModelProvider(project, archManifest, new EmptySource());
+
+        // Publishable Compile() throws on the missing id — the silent failure that left the
+        // generators producing nothing and the html-bundle build reporting "generated/… missing".
+        await assert.rejects(() => provider.Compile());
+
+        // CompileLocal() (what the generators now use) compiles with a synthetic identity.
+        const local = await provider.CompileLocal();
+        assert.ok(local.package !== undefined, JSON.stringify(local.errors));
+        assert.ok(local.package!.fullDocument.nodes.length > 0);
+    });
+
     test("Compile reports errors when a declared base binding cannot be resolved", async () =>
     {
         const project = await widgetProject();

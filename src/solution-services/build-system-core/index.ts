@@ -4,7 +4,7 @@
 export { ArtifactKey } from "./artifact-key.js";
 export { BuildArtifacts } from "./build-artifacts.js";
 export { DiagnosticSink, Severity, type BuildDiagnostic } from "./diagnostic-sink.js";
-export type { BuildOptions } from "./build-options.js";
+export { RemoteBindMode, type BuildOptions, type RemoteBuildTarget } from "./build-options.js";
 export type { CoreBuildContext, IBuildAction } from "./build-action.js";
 export type { IBuildSystem } from "./build-system.js";
 export { StaticBuildFlavor, type BuildFlavor } from "./build-flavor.js";
@@ -29,3 +29,6 @@ export {
     type BuildContextFactory,
 } from "./project-build-manager.js";
 export { SolutionDependencyGraph, type SolutionOrder } from "./solution/solution-dependency-graph.js";
+export { BundlerKey, type IBundler, type BundleAppRequest, type BundleAppResult, type StagedFile } from "./bundler.js";
+export * from "./compiler-options.js";
+export * from "./type-checker.js";

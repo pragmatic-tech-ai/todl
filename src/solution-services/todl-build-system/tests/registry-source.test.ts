@@ -8,6 +8,7 @@ import type {
     PackageManifestJson,
     PublishablePackage,
     ConnectionStatus,
+    RegistryInspection,
 } from "../../package-manager/engine/package-registry.js";
 import { PackageKind, type PackageDocument, type PackageRef } from "../../../publish/publish.js";
 import { RegistrySource } from "../registry-source.js";
@@ -50,6 +51,7 @@ class FakeRegistry implements IPackageRegistry
     public Publish(_pkg: PublishablePackage): Promise<void> { return Promise.reject(new Error("not used")); }
     public DeleteVersion(): Promise<void> { return Promise.reject(new Error("not used")); }
     public Test(): Promise<ConnectionStatus> { return Promise.resolve({ Ok: true, Message: "ok" }); }
+    public Inspect(): Promise<RegistryInspection> { return Promise.reject(new Error("not used")); }
 }
 
 function ref(id: string, version = "1.0.0"): PackageRef

@@ -23,6 +23,25 @@ test('subscribing to the root lazily lists one level and replays ContentAdded pe
     assert.deepEqual(names, ['a.todl', 'sub']);                  // one level only (not b.todl)
 });
 
+test('the root project.plexus manifest is hidden, but a nested same-named file is not', async () =>
+{
+    const s = new FakeStorage();
+    await s.WriteText('project.plexus', '{}');          // the manifest — hidden at root
+    await s.WriteText('a.todl', '');
+    await s.WriteText('sub/project.plexus', '');         // NOT the manifest — a nested file, kept
+    const store = new ProjectContentStore(s);
+
+    const roots = new Map<string, ContentNodeId>();
+    store.ObserveChildren(store.Root.Id, (c) => { if (c instanceof ContentAdded) roots.set(c.Node.Name, c.Node.Id); });
+    await store.WhenIdle();
+    assert.deepEqual([...roots.keys()].sort(), ['a.todl', 'sub']);   // no project.plexus at the root
+
+    const subNames: string[] = [];
+    store.ObserveChildren(roots.get('sub')!, (c) => { if (c instanceof ContentAdded) subNames.push(c.Node.Name); });
+    await store.WhenIdle();
+    assert.deepEqual(subNames, ['project.plexus']);          // nested file is a real content node
+});
+
 test('re-subscribing after dispose reuses the same ContentNodeIds', async () =>
 {
     const store = new ProjectContentStore(await seeded());

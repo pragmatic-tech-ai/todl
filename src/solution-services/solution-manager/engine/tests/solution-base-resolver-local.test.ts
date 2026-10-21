@@ -94,7 +94,7 @@ class LocalFixtures
     {
         const nodes: JsonNode[] = nodeIds.map((id) => ({
             id, tier: 'Domain', type: null, metaKind: null, namespace: null,
-            localId: null, isClass: false, class: null, storageId: null, fields: [], attrs: {},
+            localId: null, isClass: false, class: null, storageId: null, canonicalId: null, fields: [], attrs: {},
         }))
         return { Document: { nodes, edges: [] }, Dependencies: [] }
     }

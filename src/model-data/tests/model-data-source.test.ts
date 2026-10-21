@@ -75,6 +75,15 @@ test("Prepare materializes through a connector and preserves reference identity"
     assert.equal(src.entity("subscription"), src.billings()[0]);
 });
 
+test("Type returns the reflected concept type, undefined for a missing concept", () =>
+{
+    const src = MiniSource.viaDocument(toJSON(miniRepo()));
+    const type = src.Type("billing");
+    assert.ok(type !== undefined);
+    assert.equal(type.fullName, "billing");
+    assert.equal(src.Type("Missing"), undefined);
+});
+
 test("Prepare without a connector throws a clear error", async () =>
 {
     const src = new MiniSource();
@@ -100,4 +109,70 @@ test("ReflectedRepository back-compat load(doc, model, version) still works", ()
 
     const src = LegacySource.fromJSON(toJSON(miniRepo()));
     assert.deepEqual(src.billings().map((e) => e.id), ["subscription"]);
+});
+
+class RefreshableConnector implements IModelDataConnector
+{
+    public constructor(private readonly first: TodlDocument, private readonly second: TodlDocument)
+    {
+    }
+
+    public async Prepare(): Promise<TodlDocument>
+    {
+        return this.first;
+    }
+
+    public async Refresh(): Promise<TodlDocument>
+    {
+        return this.second;
+    }
+}
+
+class PrepareOnlyConnector implements IModelDataConnector
+{
+    public constructor(private readonly doc: TodlDocument)
+    {
+    }
+
+    public async Prepare(): Promise<TodlDocument>
+    {
+        return this.doc;
+    }
+}
+
+class LabelRepo
+{
+    public static With(label: string): Repository
+    {
+        const r = miniRepo();
+        const b = r.builder();
+        b.setField("subscription", "label", label);
+        b.commit();
+        return r;
+    }
+}
+
+test("Refresh rebuilds the graph and a previously-fetched entity reflects new values", async () =>
+{
+    const connector = new RefreshableConnector(toJSON(LabelRepo.With("v1")), toJSON(LabelRepo.With("v2")));
+    const src = new MiniSource(connector);
+    await src.Prepare(new ServiceProvider());
+    assert.equal(src.entity("subscription")?.Snapshot()["label"], "v1");
+    await src.Refresh(new ServiceProvider());
+    assert.equal(src.entity("subscription")?.Snapshot()["label"], "v2");
+});
+
+test("Refresh on a source whose connector cannot refresh throws a clear not-refreshable error", async () =>
+{
+    const src = new MiniSource(new PrepareOnlyConnector(toJSON(miniRepo())));
+    await src.Prepare(new ServiceProvider());
+    await assert.rejects(() => src.Refresh(new ServiceProvider()), /supports Refresh/);
+});
+
+test("Refresh before Prepare performs the initial pull", async () =>
+{
+    const connector = new RefreshableConnector(toJSON(LabelRepo.With("v1")), toJSON(LabelRepo.With("v2")));
+    const src = new MiniSource(connector);
+    await src.Refresh(new ServiceProvider());
+    assert.equal(src.entity("subscription")?.Snapshot()["label"], "v1");
 });

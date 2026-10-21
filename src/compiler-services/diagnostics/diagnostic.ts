@@ -90,6 +90,32 @@ export enum DiagnosticCode
   ApplicationMultipleRoots = "application.multiple-roots",
   ApplicationRootUndesignated = "application.root-undesignated",
   ApplicationRootNotAModel = "application.root-not-a-model",
+  // Entity-identity declarations: the concept must exist, and the key must be one of
+  // its fields (or the reserved `storageId`).
+  IdentityUnknownConcept = "identity.unknown-concept",
+  IdentityUnknownKey = "identity.unknown-key",
+  MatchUnknownConcept = "match.unknown-concept",
+  MatchUnknownField = "match.unknown-field",
+  MatchUnsupportedRule = "match.unsupported-rule",
+  MergeUnknownConcept = "merge.unknown-concept",
+  MergeUnknownField = "merge.unknown-field",
+  PolicyUnknownConcept = "policy.unknown-concept",
+  PolicyUnknownField = "policy.unknown-field",
+  PolicyUnsupportedRule = "policy.unsupported-rule",
+  // External-data connectors: `populate` must name a real concept, real members, one
+  // population per concept per model, and a resolvable connector.
+  ConnectorUnknownConcept = "connector.unknown-concept",
+  ConnectorUnknownField = "connector.unknown-field",
+  ConnectorDuplicatePopulate = "connector.duplicate-populate",
+  ConnectorUnresolvedConnector = "connector.unresolved-connector",
+  ConnectorUnknownKind = "connector.unknown-kind",
+  ConnectorInlineForbidden = "connector.inline-forbidden",
+  ConnectorProviderForbidden = "connector.provider-forbidden",
+  ConnectorReadOnly = "connector.read-only",
+  ConnectorWriteConflict = "connector.write-conflict",
+  ConnectorWriteFailed = "connector.write-failed",
+  ConnectorRefreshDropped = "connector.refresh-dropped",
+  ResolutionUnmergedConflict = "resolution.unmerged-conflict",
   // Solution composition phase (SPEC-06): a member/dependency package could not
   // be resolved or loaded into the composed Domain.
   PackageUnresolved = "package.unresolved",

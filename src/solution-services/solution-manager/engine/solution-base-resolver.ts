@@ -23,6 +23,13 @@ interface LiveBase
 {
     document: TodlDocument
     producer: IStorage | undefined
+    // For a published-origin base (producer undefined): its `id@version` identity, so
+    // the single top-level dedup can collapse the same published package reached via
+    // more than one scope (the consumer's own binding AND an open producer's) to one
+    // contribution. Each open producer resolves with its OWN seenPub (so its compile
+    // closure is complete), which is what makes those duplicates possible in the first
+    // place — see resolveOneBase and dedupeLiveBases.
+    pubKey?: string
 }
 
 // A live-first IPackageSource: a base ref that names an open, resolved producer
@@ -250,10 +257,13 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource,
             // base content regardless of whether a sibling branch already resolved the
             // same shared dependency — starving this call to avoid a later duplicate
             // was the Task-1-round-1 regression (a diamond's second branch compiled
-            // against an incomplete closure and silently lost its own base). The
-            // closure-level dedup happens exactly once, at the very end, in
-            // dedupeLiveBases — never here.
-            const child = await this.resolveBindingsInto(producer.storage, producer.manifest, path, seenPub, context)
+            // against an incomplete closure and silently lost its own base). This holds
+            // for PUBLISHED bases too (todl#25): the producer gets a FRESH seenPub so a
+            // published base the consumer already consumed is still resolved into this
+            // producer's compile inputs — the single closure-level dedup (by producer
+            // identity for live, by pubKey for published) happens exactly once, at the
+            // very end, in dedupeLiveBases — never here.
+            const child = await this.resolveBindingsInto(producer.storage, producer.manifest, path, new Set<string>(), context)
             path.delete(producer.storage)
             problems.push(...child.problems)
             // A live compile can fail two ways: softly (model.errors non-empty, no
@@ -316,10 +326,11 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource,
             problems.push(SolutionBaseResolver.notPublished(kind, ref.id, ref.version))
             return
         }
-        // No producer tag (undefined): a published package is fetched at most once
-        // per id@version already (the seenPub guard just above), so it needs no
-        // further dedup at the dedupeLiveBases step.
-        bases.push({ document: { nodes: sourced.Document.nodes, edges: sourced.Document.edges }, producer: undefined })
+        // No producer tag (undefined). The seenPub guard just above makes it unique
+        // within THIS resolve scope, but each open producer resolves with its own
+        // seenPub, so the same published package can arrive from more than one scope;
+        // carry its id@version as pubKey so dedupeLiveBases collapses those to one.
+        bases.push({ document: { nodes: sourced.Document.nodes, edges: sourced.Document.edges }, producer: undefined, pubKey: `${ref.id}@${ref.version}` })
         SolutionBaseResolver.tagOrigin(originOf, sourced.Document, WikiLocator.PackageOrigin(ref.id, ref.version))
         for (const dep of sourced.Dependencies)
         {
@@ -363,13 +374,14 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource,
     // The ONE dedup pass for the whole resolved tree, run once at the top
     // (ResolveBasesFor) after every producer's own compile has already seen its
     // complete, ungated closure: a live diamond's shared producer (same IStorage
-    // reached via more than one binding path) contributes its document exactly
-    // once — first path to resolve it wins. A published-origin entry (producer
-    // undefined) is never deduped here — resolvePublishedBase's own seenPub key
-    // already ensures it is fetched, and so pushed, at most once.
+    // reached via more than one binding path) contributes its document exactly once
+    // (first path wins), and a published base reached from more than one scope (the
+    // consumer's own binding plus an open producer's, now that each producer carries
+    // its own seenPub — todl#25) collapses by pubKey to a single contribution.
     private static dedupeLiveBases(bases: readonly LiveBase[]): TodlDocument[]
     {
         const seenProducers = new Set<IStorage>()
+        const seenPubKeys = new Set<string>()
         const documents: TodlDocument[] = []
         for (const base of bases)
         {
@@ -377,6 +389,11 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource,
             {
                 if (seenProducers.has(base.producer)) continue
                 seenProducers.add(base.producer)
+            }
+            else if (base.pubKey !== undefined)
+            {
+                if (seenPubKeys.has(base.pubKey)) continue
+                seenPubKeys.add(base.pubKey)
             }
             documents.push(base.document)
         }

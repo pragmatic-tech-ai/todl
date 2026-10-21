@@ -7,6 +7,7 @@
  */
 import { mergeBases } from "../compiler-services/api.js";
 import { preludeDocument } from "../compiler-services/stdlib/prelude.js";
+import { ResolutionPass } from "../compiler-services/resolution/resolution-pass.js";
 import { Repository } from "../compiler-services/model/model.js";
 import { MetaKind } from "../compiler-services/model/kinds.js";
 import type { NodeId } from "../compiler-services/model/graph.js";
@@ -31,7 +32,9 @@ export class Graph
 
   private compose(): Repository
   {
-    return new Repository(mergeBases([preludeDocument(), ...this.documents]));
+    const repository = new Repository(mergeBases([preludeDocument(), ...this.documents]));
+    new ResolutionPass(repository).Resolve();
+    return repository;
   }
 
   /** Merge a source's instances into the graph (populating the model shells). */

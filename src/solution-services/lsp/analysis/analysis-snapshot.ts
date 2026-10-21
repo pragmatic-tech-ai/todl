@@ -9,6 +9,8 @@ import type { NamespaceNode } from "../../../compiler-services/parse/ast.js";
 import { ReferenceIndex } from "./reference-index.js";
 import { DefinitionIndex } from "./definition-index.js";
 import { DiagnosticsMapper } from "./diagnostics-mapper.js";
+import { ScopedRepository } from "./scoped-repository.js";
+import type { GraphSlice } from "./graph-slice.js";
 
 export interface ParsedSource { ast: NamespaceNode; tokens: Token[]; text: string }
 
@@ -77,6 +79,48 @@ export class AnalysisSnapshot
         return new AnalysisSnapshot(
             parsed,
             model,
+            ReferenceIndex.Build(asts),
+            DefinitionIndex.Build(asts),
+            flat,
+            byUri,
+        );
+    }
+
+    // The shared-graph path: produce the IDENTICAL snapshot shape as `Build` for the
+    // same `sources`, but without a fresh `checkAgainst` — the Model is the shared
+    // whole-solution Repository (scoped to the project via `ScopedRepository`) and the
+    // diagnostics come from the graph's already-computed per-file buckets. `sources`,
+    // `Refs`, `Defs` and the diagnostics bucketing are built exactly as `Build` does,
+    // so every feature method behaves identically. Parsing is kept (it is cheap); only
+    // the per-request base-merge + load + validate recompile is eliminated.
+    public static FromGraph(sources: readonly SourceFile[], slice: GraphSlice): AnalysisSnapshot
+    {
+        const parsed = new Map<string, ParsedSource>();
+        const asts = new Map<string, NamespaceNode>();
+        for (const src of sources)
+        {
+            const ast = parse(src.text, src.uri).namespace;
+            parsed.set(src.uri, { ast, tokens: tokenize(src.text), text: src.text });
+            asts.set(src.uri, ast);
+        }
+
+        // Map the project's own per-file diagnostics once; whole-model (null-span)
+        // diagnostics surface on every project file, mirroring `Build`.
+        const wholeModel = slice.WholeModelDiagnostics.map((d) => DiagnosticsMapper.Map(d));
+        const byUri = new Map<string, Diagnostic[]>();
+        const flat: Diagnostic[] = [];
+        for (const src of sources)
+        {
+            const mapped = (slice.DiagnosticsByUri.get(src.uri) ?? []).map((d) => DiagnosticsMapper.Map(d));
+            byUri.set(src.uri, mapped);
+            flat.push(...mapped);
+        }
+        flat.push(...wholeModel);
+        if (wholeModel.length > 0) for (const list of byUri.values()) list.push(...wholeModel);
+
+        return new AnalysisSnapshot(
+            parsed,
+            new ScopedRepository(slice.Model, slice.VisibleIds, slice.OwnIds),
             ReferenceIndex.Build(asts),
             DefinitionIndex.Build(asts),
             flat,
