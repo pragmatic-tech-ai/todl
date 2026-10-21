@@ -5,7 +5,7 @@ export class HtmlShell
     private static readonly RootId = "todl-app-root";
     private static readonly AppGlobal = "__TODL_APP__";
     private static readonly Title = "TODL Graph";
-    // Inline 1x1 transparent PNG so the browser never requests a separate /favicon.ico.
+    // Inline 1x1 PNG so the browser never requests a separate /favicon.ico.
     private static readonly FaviconDataUri =
         "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
     private static readonly FaviconLink = `<link rel="icon" href="${HtmlShell.FaviconDataUri}" />`;
