@@ -8,7 +8,7 @@ export class HtmlShell
     // Inline 1x1 PNG so the browser never requests a separate /favicon.ico.
     private static readonly FaviconDataUri =
         "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
-    private static readonly FaviconLink = `<link rel="icon" href="${HtmlShell.FaviconDataUri}" />`;
+    private static readonly FaviconLink = `<link rel="icon" type="image/png" href="${HtmlShell.FaviconDataUri}" />`;
     private static readonly PageStyle =
         "html, body { height: 100%; margin: 0; overflow: hidden; }\n"
         + `#${HtmlShell.RootId} { height: 100%; }`;
