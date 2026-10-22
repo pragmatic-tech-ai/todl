@@ -105,6 +105,7 @@ describe("concept UI generation service", () =>
         assert.ok(appMu.includes("merge CustomerFormView"));
         assert.ok(appMu.includes("ContentTemplate = @CustomerListTemplate"));
         assert.ok(appMu.includes("ContentTemplate = @CustomerFormTemplate"));
+        assert.ok(appMu.includes("Border x:root [ Fill = @SurfaceBg ]"), "app root is a filled, scheme-tracking backdrop that stretches to the host");
         assert.ok(!appMu.includes(AppUiTemplate.PristineMarker), "rewritten app.mu is no longer pristine");
 
         // main.ts constructs the container VM from the model.
