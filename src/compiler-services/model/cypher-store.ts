@@ -37,10 +37,11 @@ const REMOVE_EDGE =
   "WHERE r.via = $via OR (r.via IS NULL AND $via IS NULL) DELETE r";
 const SET_ATTR = "MATCH (n:Node {id: $id}) SET n += $delta";
 const SET_FIELDS = "MATCH (n:Node {id: $id}) SET n.fields = $fields";
+const SET_VARIANTS = "MATCH (n:Node {id: $id}) SET n.variants = $variants";
 const REMOVE = "MATCH (n:Node {id: $id}) DETACH DELETE n";
 const LOAD_NODES = "MATCH (n:Node) RETURN n.id AS id, n.tier AS tier, n.type AS type, " +
   "n.metaKind AS metaKind, n.namespace AS namespace, n.localId AS localId, n.isClass AS isClass, " +
-  "n.class AS class, n.storageId AS storageId, n.canonicalId AS canonicalId, n.fields AS fields, properties(n) AS props";
+  "n.class AS class, n.storageId AS storageId, n.canonicalId AS canonicalId, n.fields AS fields, n.variants AS variants, properties(n) AS props";
 const LOAD_EDGES = "MATCH (a:Node)-[r:REL]->(b:Node) RETURN a.id AS from, b.id AS to, r.kind AS kind, r.via AS via";
 
 export class CypherGraphStore implements GraphStore
@@ -60,8 +61,9 @@ export class CypherGraphStore implements GraphStore
     for (const row of await session.run(LOAD_NODES))
     {
       const props = { ...(row.props as Record<string, Scalar>) };
-      for (const col of ["id", "tier", "type", "metaKind", "namespace", "localId", "isClass", "class", "storageId", "canonicalId", "fields"])
+      for (const col of ["id", "tier", "type", "metaKind", "namespace", "localId", "isClass", "class", "storageId", "canonicalId", "fields", "variants"])
         delete props[col];
+      const variants = Array.isArray(row.variants) ? (row.variants as string[]) : [];
       inner.addNode({
         id: row.id as NodeId,
         tier: Tier[row.tier as keyof typeof Tier],
@@ -75,6 +77,7 @@ export class CypherGraphStore implements GraphStore
         canonicalId: (row.canonicalId as NodeId | null) ?? null,
         fields: typeof row.fields === "string" ? (JSON.parse(row.fields) as FieldDecl[]) : [],
         attrs: new Map(Object.entries(props)),
+        ...(variants.length > 0 ? { variants } : {}),
       });
     }
     for (const row of await session.run(LOAD_EDGES))
@@ -144,6 +147,8 @@ export class CypherGraphStore implements GraphStore
         attrs: Object.fromEntries(node.attrs),
       },
     });
+    if (node.variants !== undefined && node.variants.length > 0)
+      this.pending.push({ cypher: SET_VARIANTS, params: { id: node.id, variants: [...node.variants] } });
   }
 
   addEdge(edge: Edge): void
@@ -171,6 +176,14 @@ export class CypherGraphStore implements GraphStore
     // as a JSON string) — the working copy already holds the appended decl.
     const fields = this.inner.getNode(concept)?.fields ?? [];
     this.pending.push({ cypher: SET_FIELDS, params: { id: concept, fields: JSON.stringify(fields) } });
+  }
+
+  addVariant(id: NodeId, text: string): void
+  {
+    this.inner.addVariant(id, text);
+    // Re-persist the whole list, as addFieldDecl does for fields.
+    const variants = this.inner.getNode(id)?.variants ?? [];
+    this.pending.push({ cypher: SET_VARIANTS, params: { id, variants: [...variants] } });
   }
 
   setAttr(id: NodeId, name: string, value: Scalar): void

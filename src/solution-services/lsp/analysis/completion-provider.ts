@@ -6,7 +6,7 @@ import { SchemaContextResolver } from "./schema-context-resolver.js";
 
 export class CompletionProvider
 {
-    private static readonly Keywords = ["namespace", "import", "concept", "primitive", "taxonomy", "relationship", "invariant", "instanceof"];
+    private static readonly Keywords = ["namespace", "import", "concept", "primitive", "taxonomy", "relationship", "invariant", "instanceof", "variant"];
     private static readonly ConceptLabel = "concept";
     private static readonly PrimitiveLabel = "primitive";
     private static readonly TaxonomyLabel = "taxonomy";

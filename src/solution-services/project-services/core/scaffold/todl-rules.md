@@ -44,3 +44,8 @@ meta-model, library). Full reference: `.claude/todl-manual.md`.
   on a relationship member).
 - **Parent-less concepts extend the prelude's `Element`** (free `label` /
   `description`).
+- **Rules stay in the meta-model; defects go on the instance.** A model of a real
+  thing as it is may break a prose `invariant`: record it inside that instance as
+  `variant "<what breaks which rule, and why it is so>";`. Only on concrete
+  instances in a model; a defect, never a design decision; it never excuses what
+  the compiler checks.

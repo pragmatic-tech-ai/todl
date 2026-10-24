@@ -23,6 +23,7 @@ export interface GraphStore
   removeEdge(kind: EdgeKind, via: NodeId | null, from: NodeId, to: NodeId): void;
   addFieldDecl(concept: NodeId, decl: FieldDecl): void;
   setAttr(id: NodeId, name: string, value: Scalar): void;
+  addVariant(id: NodeId, text: string): void;
   remove(id: NodeId): void;
   commit(): void;
 }
@@ -148,6 +149,16 @@ export class InMemoryGraphStore implements GraphStore
       throw new Error(`node "${id}" does not exist`);
     }
     node.attrs.set(name, value);
+  }
+
+  addVariant(id: NodeId, text: string): void
+  {
+    const node = this._nodes.get(id);
+    if (node === undefined)
+    {
+      throw new Error(`node "${id}" does not exist`);
+    }
+    (node.variants ??= []).push(text);
   }
 
   remove(id: NodeId): void

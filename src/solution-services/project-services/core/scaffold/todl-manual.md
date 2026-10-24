@@ -165,6 +165,9 @@ The prose form is documentation the validator surfaces on violation. The
 predicate's exact shape, write the prose form and confirm behaviour in the
 Problems panel.
 
+A model of a real thing as it is may break a prose invariant. Keep the rule in
+the concept; record the departure on the instance with `variant` (§7.4).
+
 ## 4. `primitive` — a base data type
 
     primitive Sku : string
@@ -391,6 +394,40 @@ node:
 Terminate with `;` (or `,` inside an array). The literal stays nested inside its
 parent — it is not hoisted to a top-level instance.
 
+### 7.4 Variants — where an instance breaks a rule
+
+An invariant says how an instance must be. A model of a real thing *as it is* —
+an existing business, a legacy system — often breaks those rules. Keep every rule
+in the meta-model and record each departure on the instance itself:
+
+    model clinic : biz.enterprise
+    {
+        business_object monthly_report
+        {
+            label = "Monthly report";
+            variant "No capability consumes it: it is made by habit and nobody reads it.";
+        }
+    }
+
+- `variant "<text>";` is allowed **only in the body of a concrete instance in a
+  model** — a top-level record, a nested record or an inline object. In a
+  concept, in a model body outside an instance, or on a `class` it is an error.
+- The text says **what in this instance breaks a rule of its concept, and why it
+  is so**. A variant records a **defect**, never a design decision: a well-built
+  model has no variants. If the rule has a legitimate exception, write it into the
+  invariant instead.
+- A variant answers **prose** invariants only. It never excuses what the compiler
+  checks — types, cardinality, `predicate` invariants.
+- Where a rule spans several instances (e.g. two value streams deliver the same
+  value), each affected instance carries its own variant.
+- An instance may have several variants. The compiler keeps their text and checks
+  nothing against it; the reader that checks prose invariants matches each
+  variant to its rule by meaning. Hover shows an instance's variants; tools read
+  them as `variants` of the node in the JSON form.
+- `variant` is a keyword only before a string: `variant = "blue";` is still an
+  assignment to a field named `variant`, and `variant v { … }` a record of a
+  concept named `variant`.
+
 ## 8. Modifiers
 
 `internal` and `sealed` may prefix a declaration
@@ -425,7 +462,9 @@ The Problems panel reports these families (code → meaning):
   target. (An unknown annotation name is `reference.undefined`; a missing required
   param is `cardinality.required-missing`.)
 - `annotation.invalid-target` — `annotate` on a target that can't carry it (e.g. a
-  concrete instance). `annotation.base-not-annotation` / `annotation.param-redeclared`
+  concrete instance).
+- `variant.invalid-target` — `variant` stated on a `class`; variants record
+  defects of concrete instances only. `annotation.base-not-annotation` / `annotation.param-redeclared`
   — an `annotation X : Base` names a non-annotation base, or re-declares an
   inherited param.
 - `taxonomy.uses-undefined` / `taxonomy.ambiguous-bare-reference` — a `uses` entry
@@ -468,5 +507,6 @@ spurious later diagnostics. Re-check after each fix.
     model m : a.b.c uses lib                     // instances live in a model
     {
         Thing t { parts = [ Part { id = p1; } ]; }   // inline object literal
+        Thing u { variant "Breaks rule X: why."; }   // a recorded defect
         a --> b;                                     // operator edge
     }
