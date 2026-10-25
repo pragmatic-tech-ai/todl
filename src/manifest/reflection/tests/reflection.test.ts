@@ -120,6 +120,75 @@ describe("SPEC-05 t6: subtype algebra", () => {
   });
 });
 
+// A second, independent package whose single base-less concept lands at the
+// SAME TypeInfo row (1) as package A's root — mirrors the control-plane-smoke
+// two-package env graph (smokepromo Element/Widget + smokepromo2 Gadget).
+function pkgALogical(): LogicalManifest
+{
+  return {
+    format: "todl-manifest/1",
+    model: "smokepromo",
+    version: "1.0.0",
+    root: "Element",
+    concepts: {
+      Element: { extends: null, fields: {}, relationships: {}, invariants: [] },
+      Widget: { extends: "Element", fields: {}, relationships: {}, invariants: [] },
+    },
+    classes: {},
+    taxonomies: {},
+  };
+}
+
+function pkgBLogical(): LogicalManifest
+{
+  return {
+    format: "todl-manifest/1",
+    model: "smokepromo2",
+    version: "1.0.0",
+    root: "Gadget",
+    concepts: {
+      Gadget: { extends: null, fields: {}, relationships: {}, invariants: [] },
+    },
+    classes: {},
+    taxonomies: {},
+  };
+}
+
+function load(logical: LogicalManifest): Manifest
+{
+  return Manifest.load(ManifestWriter.fromLogical(logical).toJSON());
+}
+
+describe("cross-manifest type identity (no raw-token collision across packages)", () => {
+  test("Element (row 1 of pkg A) and Gadget (row 1 of pkg B) share a token but are NOT the same type", () => {
+    const a = load(pkgALogical());
+    const b = load(pkgBLogical());
+    const element = a.getType("Element")!;
+    const widget = a.getType("Widget")!;
+    const gadget = b.getType("Gadget")!;
+
+    // The collision that drives the bug: same per-manifest (table,row) address.
+    assert.equal(element.token, gadget.token);
+
+    // ... yet they are distinct types, so no subtype/assignability must hold.
+    assert.equal(widget.isSubtypeOf(gadget), false);
+    assert.equal(gadget.isSubtypeOf(widget), false);
+    assert.equal(gadget.isAssignableFrom(widget), false);
+    assert.equal(widget.isAssignableFrom(gadget), false);
+    assert.equal(gadget.sameTypeAs(element), false);
+  });
+
+  test("genuine same-manifest subtype relations are preserved", () => {
+    const a = load(pkgALogical());
+    const element = a.getType("Element")!;
+    const widget = a.getType("Widget")!;
+    assert.equal(widget.isSubtypeOf(element), true);
+    assert.equal(element.isAssignableFrom(widget), true);
+    assert.equal(widget.sameTypeAs(widget), true);
+    assert.equal(widget.sameTypeAs(element), false);
+  });
+});
+
 describe("SPEC-05 t7: RelationshipInfo", () => {
   test("declared relationship carries targets, inverse, cardinality, getTargets", () => {
     const co = loadShop().getType("Component")!;
