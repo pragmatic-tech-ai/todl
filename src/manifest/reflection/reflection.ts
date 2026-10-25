@@ -407,16 +407,31 @@ export class TypeInfo
         return out;
     }
 
+    /**
+     * Manifest-qualified type identity. Two TypeInfo denote the SAME type iff
+     * they were declared by the same `model@version` AND share a `fullName`. A
+     * raw `.token` is only a `(table,row)` address stable within ONE Manifest, so
+     * it collides across the several manifests a multi-package Domain composes
+     * (row 1 of package A vs row 1 of package B). This comparison is collision-free
+     * across manifests while, within a single manifest, same type ⟺ same token.
+     */
+    sameTypeAs(other: TypeInfo): boolean
+    {
+        return this.manifest.model === other.manifest.model
+            && this.manifest.version === other.manifest.version
+            && this.fullName === other.fullName;
+    }
+
     /** Strict, transitive: this is a proper subtype of `other` via extends. */
     isSubtypeOf(other: TypeInfo): boolean
     {
-        return this.getSupertypes().some((t) => t.token === other.token);
+        return this.getSupertypes().some((t) => t.sameTypeAs(other));
     }
 
     /** Reflexive: `this` is assignable FROM `other` (other == this or subtype). */
     isAssignableFrom(other: TypeInfo): boolean
     {
-        return other.token === this.token || other.isSubtypeOf(this);
+        return other.sameTypeAs(this) || other.isSubtypeOf(this);
     }
 
     /** Declared invariants — [] in v1 (no invariant table yet; SPEC-03/04 open Q). */
