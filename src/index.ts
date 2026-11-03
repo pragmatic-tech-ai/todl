@@ -61,6 +61,7 @@ export { EntityBase, type Entity } from './compiler-services/model/entity.js';
 export {
     ReflectedRepository,
     ReflectedEntity,
+    SnapshotReader,
     type EntityReader,
     type EntityHost,
 } from './reflection-client/index.js';
