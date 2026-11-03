@@ -1,6 +1,6 @@
 import type { IServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
 import type { TodlDocument } from "../compiler-services/emit/json.js";
-import { ConnectorLookup, type ConnectorBinding, type ModelConnectorPlan, type QueryFilter, type QueryRequest } from "./connector-plan.js";
+import { ConnectorLookup, type ConnectorBinding, type ModelConnectorPlan, type QueryComparison, type QueryFilter, type QueryRequest } from "./connector-plan.js";
 import { ConnectorWorkingCopy } from "./connector-working-copy.js";
 import { DataSourceAdapterCatalog } from "./data-source-adapter-catalog.js";
 import type { IModelDataConnector } from "./model-data-connector.js";
@@ -10,7 +10,9 @@ import { ResolutionAuditSinkKey } from "./resolution-audit-sink.js";
 import type { MergeDecision } from "../compiler-services/resolution/resolution-pass.js";
 import type { Diagnostic } from "../compiler-services/diagnostics/diagnostic.js";
 
-/** Supplies an optional per-concept filter that is pushed into the connector's query. */
+/** Supplies an optional per-concept filter that is pushed into the connector's query. Comparisons name MODEL members;
+ *  the connector translates them to the binding's external fields (see FederatedModelDataConnector). A pushed filter
+ *  must be a superset of what the caller keeps: the in-memory filter stays authoritative. */
 export interface IConnectorQueryFilterProvider
 {
     WhereFor(concept: string): QueryFilter | undefined;
@@ -132,7 +134,22 @@ export class FederatedModelDataConnector implements IModelDataConnector
     private RequestFor(binding: ConnectorBinding): QueryRequest
     {
         const fields = [...new Set(Object.values(binding.FieldMap))].sort();
-        const where = this.queryFilterProvider?.WhereFor(binding.Concept);
+        const where = FederatedModelDataConnector.External(binding, this.queryFilterProvider?.WhereFor(binding.Concept));
         return where === undefined ? { Source: binding.Source, Fields: fields } : { Source: binding.Source, Fields: fields, Where: where };
+    }
+
+    // Model member names -> the binding's external fields. A term on an unmapped member, or on the id member (whose
+    // value is carried by storageId, not an attr), is dropped: dropping a conjunct only widens the pull.
+    private static External(binding: ConnectorBinding, filter: QueryFilter | undefined): QueryFilter | undefined
+    {
+        if (filter === undefined) return undefined;
+        const all: QueryComparison[] = [];
+        for (const term of filter.All)
+        {
+            const external = Object.hasOwn(binding.FieldMap, term.Field) ? binding.FieldMap[term.Field] : undefined;
+            if (external === undefined || external === binding.IdKey) continue;
+            all.push({ Field: external, Op: term.Op, Value: term.Value });
+        }
+        return all.length === 0 ? undefined : { All: all };
     }
 }
