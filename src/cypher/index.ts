@@ -17,5 +17,7 @@ export { CypherError, CypherSyntaxError, CypherSemanticError, CypherTimeout, Cyp
 export { Deadline } from "./execution-limits.js";
 export type { ExecutionLimits, ICancellation } from "./execution-limits.js";
 export { ReferencedLabels } from "./referenced-labels.js";
+export { CypherPushDown, CypherQueryFilterProvider, GraphQuerySchema } from "./push-down.js";
+export type { ICypherSchema } from "./push-down.js";
 export { CypherWriteStats } from "./writer.js";
 export type { ICypherWriter, CypherWriteStatsDto } from "./writer.js";
