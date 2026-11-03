@@ -142,9 +142,16 @@ describe("cypher write parse", () =>
         assert.throws(() => P.Parse("CREATE (a)-[:orders {qty: 2}]->(b)"), CypherSyntaxError);
     });
 
-    it("MERGE with a relationship path is rejected", () =>
+    it("MERGE accepts a relationship path", () =>
     {
-        assert.throws(() => P.Parse("MERGE (a)-[:r]->(b)"), CypherSyntaxError);
+        const merge = P.Parse("MERGE (a)-[:r]->(b)").Parts[0]!.Reading[0] as MergeClause;
+        assert.equal(merge.Pattern.Rels.length, 1);
+        assert.equal(merge.Pattern.Nodes.length, 2);
+    });
+
+    it("MERGE relationship properties are still rejected", () =>
+    {
+        assert.throws(() => P.Parse("MERGE (a)-[:r {w: 1}]->(b)"), CypherSyntaxError);
     });
 
     it("a keyword-spelled label parses on the read path", () =>

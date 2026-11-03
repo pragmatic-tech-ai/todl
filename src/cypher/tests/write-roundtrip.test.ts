@@ -171,3 +171,14 @@ describe("cypher write fluent + unparser round-trip: MERGE ON actions + full-rep
         assert.equal(RoundTrip.Shape(new CypherParser(once).Parse()), RoundTrip.Shape(new CypherParser(text).Parse()));
     });
 });
+
+describe("cypher write fluent + unparser round-trip: path MERGE", () =>
+{
+    it("a MERGE over a relationship path round-trips with its relationship variable and ON action", () =>
+    {
+        const q = CypherQuery.Match(Pattern.Node("c").Label("shop.Customer"))
+            .Merge(Pattern.Node("c").Out("orders", Pattern.Node("o").Label("shop.Order").Prop("total", "1"), undefined, "r"))
+            .OnCreateSet(Expr.Prop("c", "tier"), Expr.Lit("linked"));
+        RoundTrip.Check(q, "MATCH (c:shop.Customer) MERGE (c)-[r:orders]->(o:shop.Order {total: '1'}) ON CREATE SET c.tier = 'linked'");
+    });
+});

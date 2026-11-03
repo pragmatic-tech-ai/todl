@@ -227,8 +227,10 @@ export class LogicalPlanner
         }
         if (clause instanceof MergeClause)
         {
+            const before = new Set<string>(bound);
+            const matcher = new OptionalMatchPlan(this, new MatchClause([clause.Pattern], undefined, false), before);
             for (const v of clause.DeclaredVariables()) bound.add(v);
-            return new MergeOperator(op, clause, g, writer, new SetApplier(g, writer, p, this.createdEdges));
+            return new MergeOperator(op, clause, g, writer, new SetApplier(g, writer, p, this.createdEdges), matcher, before);
         }
         if (clause instanceof SetClause) return new SetOperator(op, clause, new SetApplier(g, writer, p, this.createdEdges));
         if (clause instanceof DeleteClause) return new DeleteOperator(op, clause, writer, p);

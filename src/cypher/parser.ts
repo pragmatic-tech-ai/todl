@@ -45,7 +45,6 @@ export class CypherParser
     private static readonly KwDetach = "DETACH";
     private static readonly KwRemove = "REMOVE";
     private static readonly RelPropsNotAllowed = "relationships carry no properties in CREATE/MERGE";
-    private static readonly MergeSingleNodeOnly = "MERGE supports a single node pattern only";
     private static readonly BothArrowheads = "a relationship cannot point both ways (<-[...]->)";
     private static readonly WordOn = "ON";
     private static readonly OnNeedsCreateOrMatch = "expected CREATE or MATCH after ON";
@@ -151,7 +150,6 @@ export class CypherParser
     {
         this.expectKeyword(CypherParser.KwMerge);
         const path = this.parseWritePath();
-        if (path.Rels.length > 0) throw this.error(CypherParser.MergeSingleNodeOnly);
         const onCreate: SetItem[] = [];
         const onMatch: SetItem[] = [];
         // ON is contextual, not a reserved keyword: only here can an identifier "on" follow a pattern, so a variable or
