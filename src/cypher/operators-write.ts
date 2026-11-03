@@ -10,6 +10,7 @@ import { Binding, EvalContext } from "./binding.js";
 import { CypherValue, NodeValue, NodeRefValue, ScalarValue, NullValue } from "./values.js";
 import { MapValue } from "./values-structured.js";
 import { CypherSemanticError } from "./errors.js";
+import { CancelProbe, type ICancellation } from "./execution-limits.js";
 
 // Shared helpers for the write operators (no module-level free functions).
 class WriteSupport
@@ -46,6 +47,37 @@ class WriteSupport
     public static Eval(expr: Expression, row: Binding, parameters: ReadonlyMap<string, CypherValue>): CypherValue
     {
         return expr.Evaluate(new EvalContext(row, parameters));
+    }
+
+    // A node this query just created: a live mirror when the read graph overlays uncommitted writes (read-your-writes),
+    // else an id-only reference whose fields are not readable until commit.
+    public static Created(graph: ICypherGraph, id: string): CypherValue
+    {
+        const mirror = graph.Reflect(id);
+        return mirror === undefined ? new NodeRefValue(id) : new NodeValue(mirror);
+    }
+}
+
+// Drains its input completely before yielding a row. Placed around write clauses when the write overlay is active, so
+// every read feeding a write finishes before the write starts (no Halloween re-reads of its own effects) and the write
+// finishes before anything above reads the graph: openCypher's clause-at-a-time semantics (Neo4j's "Eager" operator).
+export class EagerBarrier implements IOperator
+{
+    constructor(private readonly child: IOperator, private readonly cancel?: ICancellation)
+    {
+    }
+
+    public *Rows(): Iterable<Binding>
+    {
+        const buffered: Binding[] = [];
+        const probe = new CancelProbe(this.cancel);
+        probe.Begin();
+        for (const row of this.child.Rows())
+        {
+            probe.Tick();
+            buffered.push(row);
+        }
+        yield* buffered;
     }
 }
 
@@ -98,7 +130,7 @@ export class CreateOperator implements IOperator
             }
             const id = this.createNode(node);
             ids.push(id);
-            if (node.Variable !== undefined) current = current.With(node.Variable, new NodeRefValue(id));
+            if (node.Variable !== undefined) current = current.With(node.Variable, WriteSupport.Created(this.graph, id));
         }
         for (let i = 0; i < path.Rels.length; i++)
         {
@@ -178,10 +210,10 @@ export class MergeOperator implements IOperator
             .sort((a, b) => (a.node.id < b.node.id ? -1 : a.node.id > b.node.id ? 1 : 0));
         if (matches.length > 0) return { Value: new NodeValue(matches[0]!), Created: false };
         const known = this.pending.get(key);
-        if (known !== undefined) return { Value: new NodeRefValue(known), Created: false };
+        if (known !== undefined) return { Value: WriteSupport.Created(this.graph, known), Created: false };
         const id = this.writer.CreateNode(concept, node.Properties);
         this.pending.set(key, id);
-        return { Value: new NodeRefValue(id), Created: true };
+        return { Value: WriteSupport.Created(this.graph, id), Created: true };
     }
 
     private static Key(concept: string, props: ReadonlyMap<string, Scalar>): string

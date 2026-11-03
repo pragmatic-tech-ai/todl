@@ -6,6 +6,7 @@ import { CypherQuery } from "./fluent.js";
 import { LogicalPlanner } from "./planner.js";
 import type { IOperator } from "./operators.js";
 import { BindingRows } from "./operators.js";
+import { WriteOverlay, OverlayRecordingWriter } from "./write-overlay.js";
 import { ListValue, MapValue } from "./values-structured.js";
 import type { ICypherWriter } from "./writer.js";
 import type { Binding } from "./binding.js";
@@ -64,7 +65,13 @@ export class CypherEngine
         try
         {
             const binder = ParameterBinder.FromInputMap(parameters);
-            const { Mutations, Projection } = new LogicalPlanner(this.graph, binder, this.options, limits?.Cancel, false, writer).PlanForWrite(model);
+            // Read-your-writes: when the graph can materialize decorated mirrors for uncommitted nodes, the pipeline reads
+            // through an overlay of this query's own accepted writes (fenced clause-at-a-time). Otherwise it reads the
+            // pre-query graph, and reading a node it created before commit fails loud.
+            const overlay = this.graph.CanMaterialize?.() === true ? new WriteOverlay(this.graph) : undefined;
+            const readGraph = overlay === undefined ? this.graph : overlay.Graph;
+            const pipelineWriter = overlay === undefined ? writer : new OverlayRecordingWriter(writer, overlay);
+            const { Mutations, Projection } = new LogicalPlanner(readGraph, binder, this.options, limits?.Cancel, false, pipelineWriter, overlay !== undefined).PlanForWrite(model);
             const probe = new CancelProbe(limits?.Cancel);
             const raw: Binding[] = [];
             for (const binding of Mutations.Rows())

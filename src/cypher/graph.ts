@@ -1,5 +1,6 @@
 import type { IGraphQuery } from "../graph-api/index.js";
-import type { IInstanceMirror } from "../manifest/reflection/reflection.js";
+import type { IInstanceMirror, ReflectedNode, TypeInfo } from "../manifest/reflection/reflection.js";
+import { MetaKind } from "../manifest/enums.js";
 import { RelDirection } from "./enums.js";
 import { CypherSemanticError } from "./errors.js";
 
@@ -13,6 +14,11 @@ export interface ICypherGraph
     HasRelationshipType(relType: string): boolean;
     // Resolves a label (exact fullName, else unique simple name) to the concept fullName; throws CypherSemanticError if unknown/ambiguous.
     ResolveConcept(label: string): string;
+    // Optional capability: true when Materialize can build decorated mirrors for nodes not (yet) in this graph. Write
+    // queries use it for intra-query read-your-writes; without it they read the pre-query graph (and fail loud on
+    // reads of nodes they created).
+    CanMaterialize?(): boolean;
+    Materialize?(node: ReflectedNode): IInstanceMirror | undefined;
 }
 
 export class GraphQueryAdapter implements ICypherGraph
@@ -65,16 +71,40 @@ export class GraphQueryAdapter implements ICypherGraph
         return type !== undefined && type.isAssignableFrom(mirror.type);
     }
 
+    // Honest capability: only a query that itself implements Materialize (and so applies its own decoration) qualifies.
+    public CanMaterialize(): boolean
+    {
+        return this.query.Materialize !== undefined;
+    }
+
+    public Materialize(node: ReflectedNode): IInstanceMirror | undefined
+    {
+        return this.query.Materialize?.(node);
+    }
+
     public HasRelationshipType(relType: string): boolean
     {
         for (const concept of this.query.Concepts())
         {
-            if (concept.getRelationships().some((r) => r.name === relType))
+            if (GraphQueryAdapter.EdgeMembers(concept).includes(relType))
             {
                 return true;
             }
         }
         return false;
+    }
+
+    // The members a concept's instances traverse as edges: declared relationships plus reference-typed fields (a field
+    // typed by a concept is an edge in TODL — type-directed references). Taxonomy-typed fields point at terms, not
+    // instances, so they are not edges here.
+    private static EdgeMembers(type: TypeInfo): string[]
+    {
+        const names = type.getRelationships().map((r) => r.name);
+        for (const f of type.getFields())
+        {
+            if (f.fieldType?.kind === MetaKind.Concept) names.push(f.name);
+        }
+        return names;
     }
 
     public ResolveConcept(label: string): string
@@ -114,9 +144,9 @@ export class GraphQueryAdapter implements ICypherGraph
             return [];
         }
         const out: IInstanceMirror[] = [];
-        for (const r of mirror.type.getRelationships())
+        for (const member of GraphQueryAdapter.EdgeMembers(mirror.type))
         {
-            out.push(...this.query.Refs(nodeId, r.name));
+            out.push(...this.query.Refs(nodeId, member));
         }
         return out;
     }
