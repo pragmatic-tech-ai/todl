@@ -81,3 +81,18 @@ describe("qualified node labels", () =>
         assert.deepEqual(concepts, ["a.b.C"]);
     });
 });
+
+describe("backtick-quoted qualified labels", () =>
+{
+    test("a backtick-quoted FQN resolves to the exact namespaced concept", () =>
+    {
+        const concepts = QualifiedLabelFixture.Concepts(QualifiedLabelFixture.Engine(), "MATCH (c:`crm.Customer`) RETURN c");
+        assert.deepEqual(concepts, ["crm.Customer"]);
+    });
+
+    test("a backtick-quoted multi-segment FQN resolves like its dotted spelling", () =>
+    {
+        const concepts = QualifiedLabelFixture.Concepts(QualifiedLabelFixture.Engine(), "MATCH (c:`a.b.C`) RETURN c");
+        assert.deepEqual(concepts, ["a.b.C"]);
+    });
+});

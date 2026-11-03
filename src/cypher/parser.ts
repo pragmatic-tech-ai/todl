@@ -46,6 +46,7 @@ export class CypherParser
     private static readonly KwRemove = "REMOVE";
     private static readonly RelPropsNotAllowed = "relationships carry no properties in CREATE/MERGE";
     private static readonly MergeSingleNodeOnly = "MERGE supports a single node pattern only";
+    private static readonly BothArrowheads = "a relationship cannot point both ways (<-[...]->)";
     private static readonly AdditiveOps: ReadonlyMap<TokenKind, ArithmeticOp> = new Map([
         [TokenKind.Plus, ArithmeticOp.Add], [TokenKind.Dash, ArithmeticOp.Sub],
     ]);
@@ -311,6 +312,8 @@ export class CypherParser
         let outgoing = false;
         if (this.accept(TokenKind.ArrowRight)) outgoing = true;
         else this.expect(TokenKind.Dash);
+        // openCypher: a relationship points one way or neither (<-[]-, -[]->, -[]-), never both.
+        if (incoming && outgoing) throw this.error(CypherParser.BothArrowheads);
 
         const direction = incoming ? RelDirection.Incoming : (outgoing ? RelDirection.Outgoing : RelDirection.Undirected);
         return new RelPattern(variable, relType, direction, props, minHops, maxHops);

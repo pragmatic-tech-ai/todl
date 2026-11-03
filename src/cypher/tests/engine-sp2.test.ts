@@ -710,3 +710,64 @@ describe("Execute limits", () =>
         assert.equal(live.Truncated, false);
     });
 });
+
+describe("CypherEngine projection column names are unique", () =>
+{
+    const e = Sp2Fixture.Engine();
+
+    test("RETURN with two items aliased to the same name is a semantic error (no silent collapse)", () =>
+    {
+        assert.throws(() => e.Execute("MATCH (a:Service) RETURN a.name AS n, a.kind AS n"), CypherSemanticError);
+    });
+
+    test("two implicit columns with the same name are a semantic error", () =>
+    {
+        assert.throws(() => e.Execute("MATCH (a:Service) RETURN a.name, a.name"), CypherSemanticError);
+    });
+
+    test("WITH duplicate names are a semantic error (the downstream variable would be ambiguous)", () =>
+    {
+        assert.throws(() => e.Execute("MATCH (a:Service) WITH a.name AS n, a.kind AS n RETURN n"), CypherSemanticError);
+    });
+
+    test("the same expression under two distinct names is still fine", () =>
+    {
+        const r = e.Execute("MATCH (a:Service {name: 'ledger'}) RETURN a.name AS x, a.name AS y");
+        assert.deepEqual(Sp2Fixture.Pairs(r), [["ledger", "ledger"]]);
+    });
+});
+
+describe("CypherEngine WHERE NOT / IS NULL / bare arrows (end-to-end)", () =>
+{
+    const e = Sp2Fixture.Engine();
+
+    test("WHERE NOT negates the predicate", () =>
+    {
+        const r = e.Execute("MATCH (a:Service) WHERE NOT a.kind = 'core' RETURN a.name AS n ORDER BY n");
+        assert.deepEqual(Sp2Fixture.Col(r, 0), ["audit", "checkout", "lonely"]);
+    });
+
+    test("IS NOT NULL keeps every node with the property; IS NULL keeps none", () =>
+    {
+        assert.deepEqual(Sp2Fixture.Col(e.Execute("MATCH (a:Service) WHERE a.kind IS NOT NULL RETURN count(a) AS c"), 0), [6]);
+        assert.deepEqual(Sp2Fixture.Col(e.Execute("MATCH (a:Service) WHERE a.kind IS NULL RETURN count(a) AS c"), 0), [0]);
+    });
+
+    test("bare --> follows outgoing edges of any type", () =>
+    {
+        const r = e.Execute("MATCH (a:Service {name: 'billing'})-->(b) RETURN b.name AS n ORDER BY n");
+        assert.deepEqual(Sp2Fixture.Col(r, 0), ["audit", "checkout"]);
+    });
+
+    test("bare <-- follows incoming edges of any type", () =>
+    {
+        const r = e.Execute("MATCH (a:Service {name: 'ledger'})<--(b) RETURN b.name AS n ORDER BY n");
+        assert.deepEqual(Sp2Fixture.Col(r, 0), ["checkout", "vault"]);
+    });
+
+    test("bare -- follows edges in both directions", () =>
+    {
+        const r = e.Execute("MATCH (a:Service {name: 'billing'})--(b) RETURN b.name AS n ORDER BY n");
+        assert.deepEqual(Sp2Fixture.Col(r, 0), ["audit", "checkout", "ledger"]);
+    });
+});

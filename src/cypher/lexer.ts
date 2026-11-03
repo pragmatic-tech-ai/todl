@@ -38,6 +38,7 @@ export class CypherLexer
         ["=", TokenKind.Eq], ["<", TokenKind.Lt], [">", TokenKind.Gt],
     ]);
     private static readonly Quote = "'";
+    private static readonly Backtick = "`";
     private static readonly Newline = "\n";
     private static readonly DecimalPoint = ".";
     private static readonly ZeroDigit = "0";
@@ -46,6 +47,8 @@ export class CypherLexer
     private static readonly IdentStartPattern = /[A-Za-z_]/;
     private static readonly IdentPartPattern = /[A-Za-z0-9_]/;
     private static readonly UnterminatedString = "unterminated string literal";
+    private static readonly UnterminatedName = "unterminated quoted name";
+    private static readonly EmptyName = "empty quoted name";
     private static readonly UnexpectedChar = "unexpected character";
 
     private pos = 0;
@@ -83,6 +86,7 @@ export class CypherLexer
         const line = this.line;
         const column = this.column;
         if (ch === CypherLexer.Quote) return this.readString(line, column);
+        if (ch === CypherLexer.Backtick) return this.readQuotedName(line, column);
         if (this.isDigit(ch)) return this.readNumber(line, column);
         if (this.isIdentStart(ch)) return this.readWord(line, column);
         return this.readSymbol(line, column);
@@ -123,6 +127,35 @@ export class CypherLexer
         }
         this.advance(1); // closing quote
         return new Token(TokenKind.String, value, line, column);
+    }
+
+    // `name` — a quoted name is always an Identifier (never a Keyword), so keywords, dots, spaces and punctuation can
+    // be written in any name position (e.g. a namespaced label `acme.Service`). A doubled backtick escapes a backtick.
+    private readQuotedName(line: number, column: number): Token
+    {
+        this.advance(1); // opening backtick
+        let value = "";
+        for (;;)
+        {
+            while (this.pos < this.source.length && this.current() !== CypherLexer.Backtick)
+            {
+                value += this.current();
+                this.advance(1);
+            }
+            if (this.pos >= this.source.length) throw new CypherSyntaxError(CypherLexer.UnterminatedName, line, column);
+            if (this.source.charAt(this.pos + 1) !== CypherLexer.Backtick) break;
+            value += CypherLexer.Backtick;
+            this.advance(2);
+        }
+        this.advance(1); // closing backtick
+        if (value.length === 0) throw new CypherSyntaxError(CypherLexer.EmptyName, line, column);
+        return new Token(TokenKind.Identifier, value, line, column);
+    }
+
+    // True for a word the lexer folds to a Keyword token; the unparser must quote such a word in identifier positions.
+    public static IsKeyword(word: string): boolean
+    {
+        return CypherLexer.Keywords.has(word.toUpperCase());
     }
 
     private readNumber(line: number, column: number): Token
