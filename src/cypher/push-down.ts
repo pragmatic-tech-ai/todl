@@ -79,6 +79,8 @@ class LabeledOccurrence
  * conjunction of its inline properties plus the MATCH's top-level `AND` terms of the form `v.p = literal | $param`.
  * Only equality is pushed: source-side equality can only widen (coercion, case-insensitive collation), never narrow,
  * while `<>` and ranges can narrow. Anything the analyzer cannot prove safe yields no filter.
+ * Soundness is per ROW: it assumes each pulled record is one entity. A consumer that merges records into one entity
+ * (identity resolution) must not push for such concepts (FederatedModelDataConnector gates on MergeFreeConcepts).
  */
 export class CypherPushDown
 {

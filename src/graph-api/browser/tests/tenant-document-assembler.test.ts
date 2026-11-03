@@ -48,14 +48,18 @@ describe("TenantDocumentAssembler", () =>
         assert.ok(doc.edges.some(e => e.kind === "Relationship" && e.via === "uses" && e.from === "acme.a2" && e.to === "acme.a1"));
     });
 
-    test("Assemble skips cells of unknown concepts and IsNodeCell rejects non-nodes", () =>
+    test("Assemble skips cells of unknown concepts and NodeCellOf accepts only $node cells", () =>
     {
         const schema = TenantDocumentAssembler.SchemaOf(Fixture.Full());
         const doc = TenantDocumentAssembler.Assemble(schema, [{ id: "z.q", concept: "Nope", fields: {}, refs: {} }]);
         assert.ok(!doc.nodes.some(n => n.id === "z.q"));
-        assert.equal(TenantDocumentAssembler.IsNodeCell(5), false);
-        assert.equal(TenantDocumentAssembler.IsNodeCell(null), false);
-        assert.equal(TenantDocumentAssembler.IsNodeCell(Fixture.Cells()[0]), true);
+        const node = Fixture.Cells()[0]!;
+        assert.equal(TenantDocumentAssembler.NodeCellOf(5), undefined);
+        assert.equal(TenantDocumentAssembler.NodeCellOf(null), undefined);
+        assert.equal(TenantDocumentAssembler.NodeCellOf({ $node: node }), node);
+        assert.equal(TenantDocumentAssembler.NodeCellOf(node), undefined, "a node-shaped map is not a node");
+        assert.equal(TenantDocumentAssembler.NodeCellOf({ $map: { $node: node } }), undefined);
+        assert.equal(TenantDocumentAssembler.NodeCellOf({ $node: { id: "x" } }), undefined);
     });
 
     test("the assembled document loads into a ModelDataSource through RemoteTenantConnector", async () =>
