@@ -1,7 +1,8 @@
 import type { IServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
 import type { TodlDocument } from "../compiler-services/emit/json.js";
-import { ConnectorLookup, type ConnectorBinding, type ModelConnectorPlan, type QueryComparison, type QueryFilter, type QueryRequest } from "./connector-plan.js";
+import { ConnectorLookup, type ConnectorBinding, type ModelConnectorPlan, type QueryFilter, type QueryRequest } from "./connector-plan.js";
 import { ConnectorWorkingCopy } from "./connector-working-copy.js";
+import { QueryFilterTranslator } from "./query-filter-translator.js";
 import { DataSourceAdapterCatalog } from "./data-source-adapter-catalog.js";
 import type { IModelDataConnector } from "./model-data-connector.js";
 import { PopulationBuilder } from "./population-builder.js";
@@ -134,22 +135,7 @@ export class FederatedModelDataConnector implements IModelDataConnector
     private RequestFor(binding: ConnectorBinding): QueryRequest
     {
         const fields = [...new Set(Object.values(binding.FieldMap))].sort();
-        const where = FederatedModelDataConnector.External(binding, this.queryFilterProvider?.WhereFor(binding.Concept));
+        const where = QueryFilterTranslator.External(binding, this.queryFilterProvider?.WhereFor(binding.Concept));
         return where === undefined ? { Source: binding.Source, Fields: fields } : { Source: binding.Source, Fields: fields, Where: where };
-    }
-
-    // Model member names -> the binding's external fields. A term on an unmapped member, or on the id member (whose
-    // value is carried by storageId, not an attr), is dropped: dropping a conjunct only widens the pull.
-    private static External(binding: ConnectorBinding, filter: QueryFilter | undefined): QueryFilter | undefined
-    {
-        if (filter === undefined) return undefined;
-        const all: QueryComparison[] = [];
-        for (const term of filter.All)
-        {
-            const external = Object.hasOwn(binding.FieldMap, term.Field) ? binding.FieldMap[term.Field] : undefined;
-            if (external === undefined || external === binding.IdKey) continue;
-            all.push({ Field: external, Op: term.Op, Value: term.Value });
-        }
-        return all.length === 0 ? undefined : { All: all };
     }
 }
