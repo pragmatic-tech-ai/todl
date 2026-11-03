@@ -81,5 +81,5 @@
 
 ## Tests + build
 
-- **Tests:** every test in a `tests/` subfolder next to the code (`CLAUDE.md`); runner `tsx --conditions=development --test "src/**/*.test.ts"`. Extra: `test:corpus`, `test:smoke` (Playwright). Suite ~2180.
+- **Tests:** every test in a `tests/` subfolder next to the code (`CLAUDE.md`); runner `tsx --conditions=development --test "src/**/*.test.ts"`. Extra: `test:smoke` (Playwright). Suite ~2180.
 - **Build** (`package.json`): `gen:prelude` → `gen:scaffold` → `compile:mu` (`scripts/compile-mu.mjs` lowers `*.mu`→`*.mu.js`) → `tsc -p tsconfig.build.json`. `typecheck` = `tsc --noEmit`. `dist/` mirrors `src/` one-to-one (+`.d.ts`/`.js.map`); subpath/bin targets resolve into it. `dist/` gitignored.

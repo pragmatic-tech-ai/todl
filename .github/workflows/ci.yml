@@ -50,5 +50,18 @@ jobs:
       # strict-null errors in test files only, which tsx never surfaces at
       # runtime (the tests pass). Source stays type-clean via the build.
       - run: npm run build
+      # The remote-flavor tests type-check the emitted data.ts against the real
+      # pragmatic-protocol browser typings. Protocol is neither a todl dependency
+      # nor published, so check it out (public repo, default branch) and build its
+      # dist; the test reads its location from PRAGMATIC_PROTOCOL_ROOT (locally it
+      # falls back to the sibling ../pragmatic-protocol checkout).
+      - uses: actions/checkout@v7
+        with:
+          repository: pragmatic-tech-ai/pragmatic-protocol
+          path: .ci/pragmatic-protocol
+      - name: Build pragmatic-protocol typings
+        working-directory: .ci/pragmatic-protocol
+        run: npm ci && npm run build
       - run: npm test
-      - run: npm run test:corpus
+        env:
+          PRAGMATIC_PROTOCOL_ROOT: ${{ github.workspace }}/.ci/pragmatic-protocol
