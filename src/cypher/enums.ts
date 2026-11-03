@@ -6,7 +6,8 @@ export enum TokenKind
     Identifier, Keyword, String, Number, Eof,
 }
 
-export enum SetMode { Property, MergeMap }
+// Property: SET n.p = v. MergeMap: SET n += {map} (listed props only). Replace: SET n = {map} (listed props, all others removed).
+export enum SetMode { Property, MergeMap, Replace }
 
 export enum RelDirection { Outgoing, Incoming, Undirected }
 

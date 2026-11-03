@@ -358,6 +358,8 @@ export class CypherQuery
     private static readonly SetTargetMessage = "Set target must be a property access (Expr.Prop)";
     private static readonly RemoveTargetMessage = "Remove targets must be property accesses (Expr.Prop)";
     private static readonly SetVariableMessage = "SetMerge requires a non-empty variable name";
+    private static readonly ReplaceVariableMessage = "SetReplace requires a non-empty variable name";
+    private static readonly OnActionNeedsMergeMessage = "OnCreateSet/OnMatchSet must directly follow a Merge";
     private static readonly AfterReturnMessage = "no clauses may follow Return";
     private static readonly NoProjectionMessage = "projection modifier requires a preceding With or Return";
     private static readonly WhereNeedsMatchMessage = "Where must directly follow a Match or OptionalMatch";
@@ -410,9 +412,14 @@ export class CypherQuery
     // SET n.p = value.
     public Set(target: ExprBuilder, value: ExprArg): CypherQuery
     {
+        return this.AddSetItem(CypherQuery.PropertySetItem(target, value));
+    }
+
+    private static PropertySetItem(target: ExprBuilder, value: ExprArg): SetItem
+    {
         const access = target.Inner;
         if (!(access instanceof PropertyAccess)) throw new CypherSemanticError(CypherQuery.SetTargetMessage);
-        return this.AddSetItem(new SetItem(access.Variable, access.Property, ExprBuilder.Unwrap(value), SetMode.Property));
+        return new SetItem(access.Variable, access.Property, ExprBuilder.Unwrap(value), SetMode.Property);
     }
 
     // SET n += map.
@@ -420,6 +427,25 @@ export class CypherQuery
     {
         if (variable.length === 0) throw new CypherSemanticError(CypherQuery.SetVariableMessage);
         return this.AddSetItem(new SetItem(variable, undefined, ExprBuilder.Unwrap(map), SetMode.MergeMap));
+    }
+
+    // SET n = map: sets the listed properties and removes every other property of n.
+    public SetReplace(variable: string, map: ExprArg): CypherQuery
+    {
+        if (variable.length === 0) throw new CypherSemanticError(CypherQuery.ReplaceVariableMessage);
+        return this.AddSetItem(new SetItem(variable, undefined, ExprBuilder.Unwrap(map), SetMode.Replace));
+    }
+
+    // MERGE ... ON CREATE SET n.p = value (runs only when the MERGE creates the node).
+    public OnCreateSet(target: ExprBuilder, value: ExprArg): CypherQuery
+    {
+        return this.AddMergeAction(CypherQuery.PropertySetItem(target, value), true);
+    }
+
+    // MERGE ... ON MATCH SET n.p = value (runs only when the MERGE matches an existing node).
+    public OnMatchSet(target: ExprBuilder, value: ExprArg): CypherQuery
+    {
+        return this.AddMergeAction(CypherQuery.PropertySetItem(target, value), false);
     }
 
     public Delete(...variables: string[]): CypherQuery
@@ -538,6 +564,17 @@ export class CypherQuery
             return this;
         }
         return this.AddClause(new SetClause([item]));
+    }
+
+    // Appends an ON CREATE / ON MATCH item to the MERGE that was the last clause added (matching the parsed form).
+    private AddMergeAction(item: SetItem, onCreate: boolean): CypherQuery
+    {
+        const last = this.reading[this.reading.length - 1];
+        if (this.projection !== undefined || !(last instanceof MergeClause)) throw new CypherSemanticError(CypherQuery.OnActionNeedsMergeMessage);
+        this.reading[this.reading.length - 1] = onCreate
+            ? new MergeClause(last.Pattern, [...last.OnCreate, item], last.OnMatch)
+            : new MergeClause(last.Pattern, last.OnCreate, [...last.OnMatch, item]);
+        return this;
     }
 
     private AddClause(clause: ReadingClause): CypherQuery

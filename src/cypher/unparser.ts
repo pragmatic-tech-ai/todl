@@ -59,6 +59,8 @@ export class CypherUnparser
     private static readonly KwDetach = "DETACH DELETE";
     private static readonly KwRemove = "REMOVE";
     private static readonly KwPlusEq = "+=";
+    private static readonly KwOnCreateSet = "ON CREATE SET";
+    private static readonly KwOnMatchSet = "ON MATCH SET";
     private static readonly KwAs = "AS";
     private static readonly KwWhere = "WHERE";
     private static readonly KwReturn = "RETURN";
@@ -111,8 +113,8 @@ export class CypherUnparser
         if (clause instanceof MatchClause) return this.Match(clause);
         if (clause instanceof UnwindClause) return this.Unwind(clause);
         if (clause instanceof CreateClause) return `${CypherUnparser.KwCreate} ${clause.Paths.map((p) => this.Path(p)).join(CypherUnparser.Comma)}`;
-        if (clause instanceof MergeClause) return `${CypherUnparser.KwMerge} ${this.Path(clause.Pattern)}`;
-        if (clause instanceof SetClause) return `${CypherUnparser.KwSet} ${clause.Items.map((i) => this.SetItem(i)).join(CypherUnparser.Comma)}`;
+        if (clause instanceof MergeClause) return this.Merge(clause);
+        if (clause instanceof SetClause) return `${CypherUnparser.KwSet} ${this.SetItems(clause.Items)}`;
         if (clause instanceof DeleteClause)
         {
             const kw = clause.Detach ? CypherUnparser.KwDetach : CypherUnparser.KwDelete;
@@ -122,10 +124,24 @@ export class CypherUnparser
         throw new CypherSemanticError(clause.constructor.name);
     }
 
+    private Merge(clause: MergeClause): string
+    {
+        let out = `${CypherUnparser.KwMerge} ${this.Path(clause.Pattern)}`;
+        if (clause.OnCreate.length > 0) out += ` ${CypherUnparser.KwOnCreateSet} ${this.SetItems(clause.OnCreate)}`;
+        if (clause.OnMatch.length > 0) out += ` ${CypherUnparser.KwOnMatchSet} ${this.SetItems(clause.OnMatch)}`;
+        return out;
+    }
+
+    private SetItems(items: readonly SetItem[]): string
+    {
+        return items.map((i) => this.SetItem(i)).join(CypherUnparser.Comma);
+    }
+
     private SetItem(item: SetItem): string
     {
         const value = this.Expr(item.Value, Prec.Or);
         if (item.Mode === SetMode.MergeMap) return `${this.Ident(item.Variable)} ${CypherUnparser.KwPlusEq} ${value}`;
+        if (item.Mode === SetMode.Replace) return `${this.Ident(item.Variable)} ${CypherUnparser.Equals} ${value}`;
         if (item.Property === undefined) throw new CypherSemanticError(CypherUnparser.MissingSetProperty);
         return `${this.Ident(item.Variable)}${CypherUnparser.Dot}${this.Name(item.Property)} ${CypherUnparser.Equals} ${value}`;
     }

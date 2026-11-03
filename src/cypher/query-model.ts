@@ -77,7 +77,13 @@ export class CreateClause extends WritingClause
 
 export class MergeClause extends WritingClause
 {
-    constructor(public readonly Pattern: PatternPath)
+    constructor(
+        public readonly Pattern: PatternPath,
+        // ON CREATE SET items: applied only when this MERGE creates the node.
+        public readonly OnCreate: readonly SetItem[] = [],
+        // ON MATCH SET items: applied only when this MERGE matches an existing node (incl. one this query created earlier).
+        public readonly OnMatch: readonly SetItem[] = [],
+    )
     {
         super();
     }
@@ -92,7 +98,7 @@ export class SetItem
 {
     constructor(
         public readonly Variable: string,
-        // Defined for "n.p = expr" (SetMode.Property); undefined for "n += map" (SetMode.MergeMap).
+        // Defined for "n.p = expr" (SetMode.Property); undefined for "n += map" (MergeMap) and "n = map" (Replace).
         public readonly Property: string | undefined,
         public readonly Value: Expression,
         public readonly Mode: SetMode,
