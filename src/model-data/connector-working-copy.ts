@@ -19,10 +19,12 @@ export class ConnectorWorkingCopy
     private static readonly WriteFailedMessage = "Write failed on";
     private static readonly DroppedMessage = "Pending edit dropped on refresh: instance no longer present";
     private static readonly KeySeparator = "\u0000";
+    private static readonly RelationshipEdge = "Relationship";
 
     private readonly bindingsByKey = new Map<string, ConnectorBinding>();
     private readonly nodes = new Map<string, JsonNode>();
     private readonly pending = new Map<string, WriteOperationKind>();
+    private document: TodlDocument;
 
     public constructor(
         private readonly plan: ModelConnectorPlan,
@@ -35,6 +37,7 @@ export class ConnectorWorkingCopy
             this.bindingsByKey.set(ConnectorWorkingCopy.BindingKey(binding.Concept, binding.Connector, binding.Source), binding);
         }
         for (const node of document.nodes) this.nodes.set(node.id, node);
+        this.document = document;
     }
 
     /** Records an upsert; returns a connector.read-only diagnostic (and records nothing) if every target binding is read-only. */
@@ -57,6 +60,7 @@ export class ConnectorWorkingCopy
         this.writeTargets = writeTargets;
         this.nodes.clear();
         for (const node of document.nodes) this.nodes.set(node.id, node);
+        this.document = document;
         const dropped: Diagnostic[] = [];
         for (const instanceId of [...this.pending.keys()])
         {
@@ -233,6 +237,15 @@ export class ConnectorWorkingCopy
                 // The id column travels as Key, never as a field (mirrors the read path).
                 if (external === undefined || external === binding.IdKey) continue;
                 fields[external] = value;
+            }
+            // A reference member read as an edge (PopulationBuilder) writes back as its target's key.
+            for (const edge of this.document.edges)
+            {
+                if (edge.kind !== ConnectorWorkingCopy.RelationshipEdge || edge.from !== instanceId || edge.via === null) continue;
+                const external = binding.FieldMap[edge.via];
+                const target = this.nodes.get(String(edge.to));
+                if (external === undefined || external === binding.IdKey || target?.storageId == null) continue;
+                fields[external] = target.storageId;
             }
         }
         const operation: WriteOperation = { Kind: kind, Key: storageId, Fields: fields };

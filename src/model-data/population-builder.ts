@@ -1,5 +1,5 @@
 import type { JsonEdge, JsonNode, TodlDocument } from "../compiler-services/emit/json.js";
-import { Tier, type Scalar } from "../compiler-services/model/graph.js";
+import { EdgeKind, Tier, type Scalar } from "../compiler-services/model/graph.js";
 import type { ConnectorBinding, ExternalRecord, SourceRef } from "./connector-plan.js";
 
 /** Maps external records onto TODL instance nodes and merges them into a base shard. */
@@ -80,11 +80,118 @@ export class PopulationBuilder
     }
 
     /**
-     * v1 stub: scalar attrs are left intact. Turning reference-member values that match
-     * another population's storageId into edges is the spec's open question
-     * "Reference-member mapping across populations".
+     * Turns a populated record's reference-member value (a concept-typed field or a relationship, declared on its concept
+     * or inherited) into a Relationship edge when it names exactly one instance of a target concept (or a subtype) by
+     * storageId. The scalar attr is then dropped: the member now reads as a reference. A value matching no instance, or
+     * more than one, is left as the raw scalar (nothing is guessed).
      */
     private ResolveCrossPopulationReferences(): void
     {
+        const schema = new ReferenceSchema(this.nodes, this.edges);
+        const byStorage = new Map<string, JsonNode[]>();
+        for (const node of this.nodes)
+        {
+            if (node.tier !== Tier[Tier.Instance] || node.storageId === null || node.storageId === undefined) continue;
+            const list = byStorage.get(node.storageId) ?? [];
+            list.push(node);
+            byStorage.set(node.storageId, list);
+        }
+        for (const node of this.nodes)
+        {
+            if (!this.sources.has(node.id) || node.type === null) continue;
+            for (const [member, value] of Object.entries(node.attrs))
+            {
+                const targets = schema.TargetsOf(node.type, member);
+                if (targets === undefined) continue;
+                const matches = (byStorage.get(String(value)) ?? []).filter((n) => n.type !== null && schema.IsAnyOf(n.type, targets));
+                if (matches.length !== 1) continue;
+                this.edges.push({ kind: EdgeKind[EdgeKind.Relationship], via: member, from: node.id, to: matches[0]!.id });
+                delete node.attrs[member];
+            }
+        }
+    }
+}
+
+/** The reference members of the concepts in a document: concept-typed fields and relationships, with their targets. */
+class ReferenceSchema
+{
+    private static readonly ConceptKind = "concept";
+    private static readonly RelationshipKind = "relationship";
+    private static readonly NameAttr = "name";
+
+    private readonly concepts = new Set<string>();
+    private readonly parents = new Map<string, string[]>();
+    private readonly members = new Map<string, Map<string, Set<string>>>();
+
+    constructor(nodes: readonly JsonNode[], edges: readonly JsonEdge[])
+    {
+        const relationshipName = new Map<string, string>();
+        for (const node of nodes)
+        {
+            if (node.metaKind === ReferenceSchema.ConceptKind) this.concepts.add(node.id);
+            if (node.metaKind === ReferenceSchema.RelationshipKind) relationshipName.set(node.id, String(node.attrs[ReferenceSchema.NameAttr]));
+        }
+        for (const node of nodes)
+        {
+            if (node.metaKind !== ReferenceSchema.ConceptKind) continue;
+            for (const field of node.fields)
+            {
+                if (this.concepts.has(field.type)) this.Add(node.id, field.name, field.type);
+            }
+        }
+        const owners = new Map<string, string>();
+        for (const edge of edges)
+        {
+            if (edge.kind === EdgeKind[EdgeKind.Extends]) this.parents.set(String(edge.from), [...(this.parents.get(String(edge.from)) ?? []), String(edge.to)]);
+            if (edge.kind === EdgeKind[EdgeKind.HasRelationship]) owners.set(String(edge.to), String(edge.from));
+        }
+        for (const edge of edges)
+        {
+            if (edge.kind !== EdgeKind[EdgeKind.Targets]) continue;
+            const relationship = String(edge.from);
+            const owner = owners.get(relationship);
+            const name = relationshipName.get(relationship);
+            if (owner !== undefined && name !== undefined) this.Add(owner, name, String(edge.to));
+        }
+    }
+
+    /** The target concepts of `member` on `concept` (declared or inherited); undefined when it is not a reference member. */
+    public TargetsOf(concept: string, member: string): ReadonlySet<string> | undefined
+    {
+        for (const c of this.Lineage(concept))
+        {
+            const targets = this.members.get(c)?.get(member);
+            if (targets !== undefined) return targets;
+        }
+        return undefined;
+    }
+
+    /** True when `concept` is one of `targets` or a subtype of one. */
+    public IsAnyOf(concept: string, targets: ReadonlySet<string>): boolean
+    {
+        return this.Lineage(concept).some((c) => targets.has(c));
+    }
+
+    private Lineage(concept: string): string[]
+    {
+        const out: string[] = [];
+        const queue = [concept];
+        while (queue.length > 0)
+        {
+            const next = queue.shift()!;
+            if (out.includes(next)) continue;
+            out.push(next);
+            queue.push(...(this.parents.get(next) ?? []));
+        }
+        return out;
+    }
+
+    private Add(concept: string, member: string, target: string): void
+    {
+        const byMember = this.members.get(concept) ?? new Map<string, Set<string>>();
+        const targets = byMember.get(member) ?? new Set<string>();
+        targets.add(target);
+        byMember.set(member, targets);
+        this.members.set(concept, byMember);
     }
 }
