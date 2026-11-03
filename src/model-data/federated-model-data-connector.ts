@@ -3,6 +3,7 @@ import type { TodlDocument } from "../compiler-services/emit/json.js";
 import { ConnectorLookup, type ConnectorBinding, type ModelConnectorPlan, type QueryFilter, type QueryRequest } from "./connector-plan.js";
 import { ConnectorWorkingCopy } from "./connector-working-copy.js";
 import { QueryFilterTranslator } from "./query-filter-translator.js";
+import { MergeFreeConcepts } from "./merge-free-concepts.js";
 import { DataSourceAdapterCatalog } from "./data-source-adapter-catalog.js";
 import type { IModelDataConnector } from "./model-data-connector.js";
 import { PopulationBuilder } from "./population-builder.js";
@@ -12,8 +13,9 @@ import type { MergeDecision } from "../compiler-services/resolution/resolution-p
 import type { Diagnostic } from "../compiler-services/diagnostics/diagnostic.js";
 
 /** Supplies an optional per-concept filter that is pushed into the connector's query. Comparisons name MODEL members;
- *  the connector translates them to the binding's external fields (see FederatedModelDataConnector). A pushed filter
- *  must be a superset of what the caller keeps: the in-memory filter stays authoritative. */
+ *  the connector translates them to the binding's external fields. A pushed filter must keep every row the caller
+ *  keeps (the in-memory filter stays authoritative); FederatedModelDataConnector additionally pushes only for
+ *  MergeFreeConcepts, since a dropped record would otherwise strip attributes from an identity-merged entity. */
 export interface IConnectorQueryFilterProvider
 {
     WhereFor(concept: string): QueryFilter | undefined;
@@ -30,6 +32,7 @@ export class FederatedModelDataConnector implements IModelDataConnector
     private queryFilterProvider: IConnectorQueryFilterProvider | undefined;
     private resolution: ConnectorResolutionResult | undefined;
     private lastRefreshDiagnostics: readonly Diagnostic[] = [];
+    private mergeFree: ReadonlySet<string> | undefined;
 
     public constructor(private readonly plan: ModelConnectorPlan, private readonly base: TodlDocument)
     {
@@ -135,7 +138,10 @@ export class FederatedModelDataConnector implements IModelDataConnector
     private RequestFor(binding: ConnectorBinding): QueryRequest
     {
         const fields = [...new Set(Object.values(binding.FieldMap))].sort();
-        const where = QueryFilterTranslator.External(binding, this.queryFilterProvider?.WhereFor(binding.Concept));
+        // Push only where no record can merge with another (a dropped record would strip attributes from a merged entity).
+        this.mergeFree ??= MergeFreeConcepts.Of(this.plan, this.base);
+        const filter = this.mergeFree.has(binding.Concept) ? this.queryFilterProvider?.WhereFor(binding.Concept) : undefined;
+        const where = QueryFilterTranslator.External(binding, filter);
         return where === undefined ? { Source: binding.Source, Fields: fields } : { Source: binding.Source, Fields: fields, Where: where };
     }
 }
