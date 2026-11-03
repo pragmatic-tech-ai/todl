@@ -384,3 +384,13 @@ describe("cypher SET n = {map} full-replace execution", () =>
         assert.equal(writer.Rollbacks, 1);
     });
 });
+
+describe("cypher path MERGE without read-your-writes (fallback graph)", () =>
+{
+    test("a repeated row reuses the path this query created instead of duplicating it", () =>
+    {
+        const writer = new FakeCypherWriter();
+        Fixture.Engine(writer).Execute("UNWIND [1, 2] AS i MERGE (a:shop.Customer {name: 'P'})-[:knows]->(b:shop.Customer {name: 'Q'})");
+        assert.equal(writer.Creates, 2);
+    });
+});
