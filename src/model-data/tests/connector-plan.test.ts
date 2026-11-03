@@ -223,3 +223,19 @@ test("write-config identifier rules apply only to GraphQL connectors, not plain 
     assert.doesNotThrow(() => ConnectorPlanValidator.Validate(sql));
     assert.doesNotThrow(() => ConnectorPlanValidator.Validate(rest));
 });
+
+test("Optimistic on a GraphQL connector that declares a version argument passes plan-build", () =>
+{
+    const binding: ConnectorBinding =
+    {
+        Concept: "a.Order", Connector: "api", Source: "orders", IdKey: "id",
+        FieldMap: { id: "id", version: "ver" }, Writable: true, VersionField: "ver",
+        Concurrency: WriteConcurrency.Optimistic, Atomicity: WriteAtomicity.Sequential,
+    };
+    const versioned = { ...ValidatorHarness.GraphQl, Config: { ...ValidatorHarness.GraphQl.Config, versionArg: "expectedVersion", versionArgType: "Int!" } };
+    assert.doesNotThrow(() => ConnectorPlanValidator.Validate(ValidatorHarness.Plan(binding, versioned)));
+    const half = { ...ValidatorHarness.GraphQl, Config: { ...ValidatorHarness.GraphQl.Config, versionArg: "expectedVersion" } };
+    assert.throws(() => ConnectorPlanValidator.Validate(ValidatorHarness.Plan(binding, half)), /together/);
+    const badType = { ...ValidatorHarness.GraphQl, Config: { ...ValidatorHarness.GraphQl.Config, versionArg: "v", versionArgType: "Int (x)" } };
+    assert.throws(() => ConnectorPlanValidator.Validate(ValidatorHarness.Plan(binding, badType)), /not a valid GraphQL type/);
+});

@@ -275,7 +275,13 @@ export class ConnectorPlanValidator
     private static readonly AbsentVersionMiddle = "' names version field '";
     private static readonly AbsentVersionSuffix = "' which is not in its field map";
     private static readonly GraphQlMiddle = "' targets GraphQL connector '";
-    private static readonly GraphQlSuffix = "', which cannot version writes";
+    private static readonly GraphQlSuffix = "', which cannot version writes (declare versionArg and versionArgType on the connector)";
+    private static readonly VersionArgKey = "versionArg";
+    private static readonly VersionArgTypeKey = "versionArgType";
+    private static readonly VersionArgPairMessage = "' must declare versionArg and versionArgType together";
+    private static readonly InvalidTypeMiddle = "' is not a valid GraphQL type: '";
+    // A named GraphQL input type, optionally a list and/or non-null (e.g. Int, ID!, [String!]!).
+    private static readonly GraphQlTypePattern = /^\[?[_A-Za-z][_0-9A-Za-z]*!?\]?!?$/;
     private static readonly GraphQlStyleKey = "style";
     private static readonly GraphQlStyleValue = "graphql";
 
@@ -297,6 +303,7 @@ export class ConnectorPlanValidator
         ConnectorPlanValidator.DeleteIdArgKey,
         ConnectorPlanValidator.UpsertMutationKey,
         ConnectorPlanValidator.DeleteMutationKey,
+        ConnectorPlanValidator.VersionArgKey,
     ];
     // GraphQL identifier rule, mirrored from the host's GraphQlName.Pattern (no upward import).
     private static readonly GraphQlNamePattern = /^[_A-Za-z][_0-9A-Za-z]*$/;
@@ -342,6 +349,17 @@ export class ConnectorPlanValidator
                 ConnectorPlanValidator.RequireGraphQlName(spec.Name, key, value);
             }
         }
+        const versionArg = spec.Config[ConnectorPlanValidator.VersionArgKey];
+        const versionType = spec.Config[ConnectorPlanValidator.VersionArgTypeKey];
+        if ((versionArg === undefined) !== (versionType === undefined))
+        {
+            throw new Error(`${ConnectorPlanValidator.InvalidIdentifierPrefix}${spec.Name}${ConnectorPlanValidator.VersionArgPairMessage}`);
+        }
+        if (versionType !== undefined && !ConnectorPlanValidator.GraphQlTypePattern.test(versionType))
+        {
+            throw new Error(`${ConnectorPlanValidator.InvalidIdentifierPrefix}${spec.Name}${ConnectorPlanValidator.InvalidIdentifierKeyMiddle}`
+                + `${ConnectorPlanValidator.VersionArgTypeKey}${ConnectorPlanValidator.InvalidTypeMiddle}${versionType}${ConnectorPlanValidator.InvalidIdentifierSuffix}`);
+        }
         const returnList = spec.Config[ConnectorPlanValidator.UpsertReturnKey];
         if (returnList !== undefined)
         {
@@ -379,7 +397,9 @@ export class ConnectorPlanValidator
                 + `${ConnectorPlanValidator.AbsentVersionMiddle}${binding.VersionField}`
                 + ConnectorPlanValidator.AbsentVersionSuffix);
         }
-        if (ConnectorPlanValidator.IsGraphQl(ConnectorLookup.TryFind(connectors, binding)))
+        const spec = ConnectorLookup.TryFind(connectors, binding);
+        // GraphQL can version only when the connector declares the mutation argument that carries the expected version.
+        if (ConnectorPlanValidator.IsGraphQl(spec) && spec!.Config[ConnectorPlanValidator.VersionArgKey] === undefined)
         {
             throw new Error(`${ConnectorPlanValidator.BindingPrefix}${binding.Concept}`
                 + `${ConnectorPlanValidator.GraphQlMiddle}${binding.Connector}`
