@@ -6,7 +6,7 @@ import { Manifest } from "../../manifest/reflection/reflection.js";
 import { ManifestWriter } from "../../manifest/manifest-writer.js";
 import type { LogicalManifest } from "../../manifest/logical.js";
 import type { ReflectedNode } from "../../manifest/reflection/reflection.js";
-import type { MirrorSnapshot } from "../../graph-api/index.js";
+import { CypherCellCodec } from "../cell-codec.js";
 import { SnapshotReader } from "../../reflection-client/index.js";
 import { CypherEngine } from "../engine.js";
 import { CypherQuery, Pattern, Expr, Return, Sort, Fn } from "../fluent.js";
@@ -284,18 +284,18 @@ describe("CypherEngine SP2 read-plus (end-to-end)", () =>
         assert.deepEqual(row[0], [1, 2]);
         assert.deepEqual(row[1], { k: "v" });
         assert.deepEqual(row[2], [{ from: "s1", type: "calls", to: "s2" }]);
-        const path = row[3] as unknown as { nodes: MirrorSnapshot[]; relationships: unknown[] };
-        assert.deepEqual(path.nodes.map((n) => n.id), ["s1", "s2"]);
+        const path = row[3] as unknown as { nodes: unknown[]; relationships: unknown[] };
+        assert.deepEqual(path.nodes.map((n) => CypherCellCodec.AsNode(n)!.id), ["s1", "s2"]);
         assert.deepEqual(path.relationships, [{ from: "s1", type: "calls", to: "s2" }]);
         assert.ok(r.Rows[0]![3] instanceof PathValue);
     });
 
-    test("node nested in nodes(p) DTO is a MirrorSnapshot that SnapshotReader rehydrates", () =>
+    test("node nested in nodes(p) DTO is a $node cell whose snapshot SnapshotReader rehydrates", () =>
     {
         const r = e.Execute("MATCH p = (a:Service)-[:calls*2..2]->(b) WHERE a.name = 'checkout' RETURN nodes(p) AS ns");
         const dto = CypherEngine.ToDto(r);
-        const list = dto.Rows[0]![0] as unknown as MirrorSnapshot[];
-        const reader = new SnapshotReader(list[1]!);
+        const list = dto.Rows[0]![0] as unknown[];
+        const reader = new SnapshotReader(CypherCellCodec.AsNode(list[1])!);
         assert.equal(reader.id, "s2");
         assert.equal(reader.concept, "Service");
         assert.equal(reader.field("name"), "ledger");
