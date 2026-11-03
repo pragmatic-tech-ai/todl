@@ -122,6 +122,7 @@ export class ConnectorWorkingCopy
             };
             const result = await this.ApplyBatch(catalog, services, binding, batch, operations);
             results.push(result);
+            this.AdoptVersions(binding, result);
 
             // A transactional batch that applied nothing rolled back wholesale: the backend returns
             // only the faulting op in Failures, so every op in the batch must stay pending — not just
@@ -149,6 +150,27 @@ export class ConnectorWorkingCopy
             if (!keep) this.pending.delete(instanceId);
         }
         return { Results: results, Diagnostics: diagnostics };
+    }
+
+    /** Copies each version the source now holds (bumped on write) onto the written instance's version member, so the next
+     *  optimistic write from this working copy guards on the current version instead of conflicting with itself. */
+    private AdoptVersions(binding: ConnectorBinding, result: WriteResult): void
+    {
+        if (result.Versions === undefined || binding.VersionField === undefined) return;
+        const member = Object.keys(binding.FieldMap).find(key => binding.FieldMap[key] === binding.VersionField);
+        if (member === undefined) return;
+        const byKey = new Map(result.Versions.map(v => [String(v.Key), v.Version] as const));
+        for (const [instanceId, targets] of this.writeTargets)
+        {
+            const node = this.nodes.get(instanceId);
+            if (node?.type !== binding.Concept) continue;
+            for (const target of targets)
+            {
+                if (target.Connector !== binding.Connector || target.Source !== binding.Source) continue;
+                const version = byKey.get(String(target.StorageId));
+                if (version !== undefined && version !== null) node.attrs[member] = version;
+            }
+        }
     }
 
     /** Applies one binding's batch, isolating it: a THROWN error from opening the adapter OR from

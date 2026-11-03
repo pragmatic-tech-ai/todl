@@ -183,6 +183,8 @@ export interface WriteResult
 {
     Applied: number;
     Failures: readonly WriteFailure[];
+    /** The version each applied optimistic upsert now carries, when it was bumped on write (VersionBumpingAdapter). */
+    Versions?: readonly { Key: ExternalFieldValue; Version: ExternalFieldValue }[];
 }
 
 /** The minimal resolved connection shape handed to an adapter. */
