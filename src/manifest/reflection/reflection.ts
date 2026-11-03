@@ -116,15 +116,21 @@ export class Manifest
     }
 
     /** Resolve a type by simple name, then by fullName; undefined if absent. */
+    /** A type by its full name, else by a simple name that is unique in this manifest (ambiguous -> undefined). */
     getType(name: string): TypeInfo | undefined
     {
-        let full: TypeInfo | undefined;
+        let simple: TypeInfo | undefined;
+        let simpleCount = 0;
         for (const t of this.types())
         {
-            if (t.name === name) return t;
-            if (t.fullName === name) full = t;
+            if (t.fullName === name) return t;
+            if (t.name === name)
+            {
+                simple = t;
+                simpleCount++;
+            }
         }
-        return full;
+        return simpleCount === 1 ? simple : undefined;
     }
 
     /** Every taxonomy in this manifest. */
