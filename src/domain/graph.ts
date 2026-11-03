@@ -160,12 +160,29 @@ export class FrozenGraph implements ManifestHost
             const name = qualifiedName.slice(colon + 1);
             return this.getManifest(model)?.getType(name);
         }
+        return this.ResolveBare(qualifiedName)?.type;
+    }
+
+    // A bare name across every manifest: an exact full name wins (first manifest in load order); otherwise a simple name
+    // resolves only when exactly one type in the WHOLE domain carries it, so a name shared across manifests stays ambiguous.
+    private ResolveBare(name: string): { type: TypeInfo; owner: Manifest } | undefined
+    {
         for (const m of this.order)
         {
-            const type = m.getType(qualifiedName);
-            if (type !== undefined) return type;
+            const exact = m.types().find((t) => t.fullName === name);
+            if (exact !== undefined) return { type: exact, owner: m };
         }
-        return undefined;
+        let found: { type: TypeInfo; owner: Manifest } | undefined;
+        for (const m of this.order)
+        {
+            for (const t of m.types())
+            {
+                if (t.name !== name) continue;
+                if (found !== undefined) return undefined;
+                found = { type: t, owner: m };
+            }
+        }
+        return found;
     }
 
     /** Dereference a DomainToken to its reflection handle in the owning manifest. */
@@ -188,8 +205,7 @@ export class FrozenGraph implements ManifestHost
     /** The loaded manifest that defines type name `typeName`, if any. */
     ownerOf(typeName: string): Manifest | undefined
     {
-        for (const m of this.order) if (m.getType(typeName) !== undefined) return m;
-        return undefined;
+        return this.ResolveBare(typeName)?.owner;
     }
 
     /** Merge `data` into the heap, attributing each node to `boundTo` for eviction. */

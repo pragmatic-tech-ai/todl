@@ -7,7 +7,8 @@ import type { IDataSourceAdapter, PageQuery, PageSlice } from "./data-source-ada
  * Server-side version bumping for optimistic writes. An Optimistic upsert whose fields leave the version column absent
  * (or equal to the expected version) and whose expected version is a finite number is written with version + 1, so a
  * client never has to compute the next version and a second writer holding the old version conflicts. A caller that
- * sets a different version keeps it; a non-numeric version (an etag the source manages) is never touched. The version
+ * sets a different version keeps it; a non-numeric version, and every version of a source that assigns its own
+ * (IDataSourceAdapter.SourceManagesVersions: HTTP etags, a GraphQL version argument), is never touched. The version
  * each applied upsert now carries is reported in WriteResult.Versions so callers can keep their copy current.
  */
 export class VersionBumpingAdapter implements IDataSourceAdapter
@@ -58,21 +59,26 @@ export class VersionBumpingAdapter implements IDataSourceAdapter
         return this.inner.Query(request);
     }
 
+    public get SourceManagesVersions(): boolean
+    {
+        return this.inner.SourceManagesVersions === true;
+    }
+
     public async Apply(batch: WriteBatch): Promise<WriteResult>
     {
+        // A source that assigns its own versions (etag / server-side) is never second-guessed.
+        if (this.inner.SourceManagesVersions === true) return this.inner.Apply(batch);
         const bumped = VersionBumpingAdapter.Bumped(batch);
         const result = await this.inner.Apply(bumped);
-        if (bumped === batch) return result;
+        if (bumped === batch || result.Applied === 0) return result;
         const failed = new Set(result.Failures.map((f) => String(f.Key)));
         const versions: { Key: ExternalFieldValue; Version: ExternalFieldValue }[] = [];
-        for (const op of bumped.Operations)
+        bumped.Operations.forEach((op, i) =>
         {
-            const version = op.Fields[batch.VersionField!];
-            if (op.Kind === WriteOperationKind.Upsert && version !== undefined && !failed.has(String(op.Key)) && result.Applied > 0)
-            {
-                versions.push({ Key: op.Key, Version: version });
-            }
-        }
+            // Only ops this wrapper actually bumped are reported (a caller-set or non-numeric version is not ours to report).
+            if (op === batch.Operations[i] || failed.has(String(op.Key))) return;
+            versions.push({ Key: op.Key, Version: op.Fields[batch.VersionField!]! });
+        });
         return versions.length === 0 ? result : { ...result, Versions: versions };
     }
 

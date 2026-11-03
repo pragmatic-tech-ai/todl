@@ -80,10 +80,11 @@ export class PopulationBuilder
     }
 
     /**
-     * Turns a populated record's reference-member value (a concept-typed field or a relationship, declared on its concept
-     * or inherited) into a Relationship edge when it names exactly one instance of a target concept (or a subtype) by
-     * storageId. The scalar attr is then dropped: the member now reads as a reference. A value matching no instance, or
-     * more than one, is left as the raw scalar (nothing is guessed).
+     * Adds a Relationship edge for a populated record's reference-member value (a concept-typed field or a relationship,
+     * declared on its concept or inherited) when it names exactly one instance of a target concept (or a subtype) by
+     * storageId, so the member is traversable. The raw value is KEPT as the attr: identity / match rules over the member
+     * still see it, write-back still sends the original typed value, and two aliases with different values still surface
+     * as a merge conflict. A value matching no instance, or more than one, gets no edge (nothing is guessed).
      */
     private ResolveCrossPopulationReferences(): void
     {
@@ -106,7 +107,6 @@ export class PopulationBuilder
                 const matches = (byStorage.get(String(value)) ?? []).filter((n) => n.type !== null && schema.IsAnyOf(n.type, targets));
                 if (matches.length !== 1) continue;
                 this.edges.push({ kind: EdgeKind[EdgeKind.Relationship], via: member, from: node.id, to: matches[0]!.id });
-                delete node.attrs[member];
             }
         }
     }

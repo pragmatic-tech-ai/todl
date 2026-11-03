@@ -28,6 +28,7 @@ export class SqlQueryTranslator
     private static readonly InOpen = " IN (";
     private static readonly InClose = ")";
     private static readonly FalseSql = "1 = 0";
+    private static readonly UnknownOperatorMessage = "unsupported filter operator: ";
     private static readonly PlaceholderPrefix = "$";
     private static readonly IdentQuote = "\"";
     private static readonly EscapedIdentQuote = "\"\"";
@@ -132,7 +133,8 @@ export class SqlQueryTranslator
             case QueryCompareOp.Lte: return SqlQueryTranslator.LessOrEqualOperator;
             case QueryCompareOp.Gt: return SqlQueryTranslator.GreaterOperator;
             case QueryCompareOp.Gte: return SqlQueryTranslator.GreaterOrEqualOperator;
-            default: return SqlQueryTranslator.EqualsOperator;
+            case QueryCompareOp.Eq: return SqlQueryTranslator.EqualsOperator;
+            default: throw new Error(SqlQueryTranslator.UnknownOperatorMessage + String(op));
         }
     }
 

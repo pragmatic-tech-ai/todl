@@ -96,3 +96,9 @@ describe("QueryFilterTranslator.Strict", () =>
         assert.throws(() => QueryFilterTranslator.Strict(binding, { All: [DslFixture.Term("nope", QueryCompareOp.Eq, "x")] }), UnmappedFilterFieldError);
     });
 });
+
+test("an unknown operator is refused by the SQL translator rather than silently treated as equality", async () =>
+{
+    const session = new RecordingSqlSession();
+    await assert.rejects(() => new SqlQueryTranslator(session).Query({ Source: "t", Fields: ["n"], Where: { All: [{ Field: "n", Op: "like" as QueryCompareOp, Value: "x" }] } }), /unsupported filter operator/);
+});

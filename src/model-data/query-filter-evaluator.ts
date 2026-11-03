@@ -2,7 +2,8 @@ import { QueryCompareOp, type ExternalFieldValue, type QueryComparison, type Que
 
 /**
  * The reference in-memory semantics of a push-down filter, shared by every adapter that re-filters pulled rows (REST,
- * GraphQL, document, the test fakes) so they all agree with SQL: a NULL (or missing) field satisfies only IS NULL;
+ * GraphQL, document, the test fakes). An adapter that pushes a filter to its source and does not re-filter (SQL, a paged
+ * Cypher read) follows the source's own semantics instead (collation, type coercion). Shared rules: a NULL (or missing) field satisfies only IS NULL;
  * every other comparison against NULL is unknown, so the row is excluded. Ordering compares like with like only
  * (number with number, string with string by code unit, boolean false < true); mixed types never match.
  */

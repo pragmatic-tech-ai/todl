@@ -55,3 +55,30 @@ test("optional capabilities stay absent when the wrapped adapter lacks them", as
     assert.equal(bare.ClassifyFailure, undefined);
     assert.equal(bare.CanPage, false);
 });
+
+test("a source that manages its own versions is passed through untouched and nothing is reported", async () =>
+{
+    const batches: WriteBatch[] = [];
+    const inner = {
+        SourceManagesVersions: true,
+        Query: async () => [],
+        Apply: async (batch: WriteBatch) => { batches.push(batch); return { Applied: batch.Operations.length, Failures: [] }; },
+        Dispose: async () => {},
+    };
+    const adapter = new VersionBumpingAdapter(inner);
+    const batch = BumpFixture.Batch([{ Kind: WriteOperationKind.Upsert, Key: "O1", Fields: { label: "x" }, Version: 7 }]);
+    const result = await adapter.Apply(batch);
+    assert.equal(batches[0], batch);
+    assert.equal(result.Versions, undefined);
+    assert.equal(adapter.SourceManagesVersions, true);
+});
+
+test("only ops the wrapper bumped are reported", async () =>
+{
+    const adapter = await BumpFixture.Adapter();
+    const result = await adapter.Apply(BumpFixture.Batch([
+        { Kind: WriteOperationKind.Upsert, Key: "O1", Fields: { label: "x" }, Version: 7 },
+        { Kind: WriteOperationKind.Upsert, Key: "O2", Fields: { label: "y" }, Version: "etag-1" },
+    ]));
+    assert.deepEqual(result.Versions, [{ Key: "O1", Version: 8 }]);
+});

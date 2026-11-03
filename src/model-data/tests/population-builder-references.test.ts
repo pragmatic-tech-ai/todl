@@ -44,15 +44,15 @@ class RefsFixture
     }
 }
 
-test("a reference field or relationship whose value names another population's record becomes an edge", () =>
+test("a reference field or relationship whose value names another population's record gains an edge and keeps its typed value", () =>
 {
     const doc = RefsFixture.Build([{ oid: "O1", label: "first", buyer_id: "C1", owner_id: "C2" }]);
     const order = RefsFixture.Order(doc, "O1");
     const customer = (id: string) => doc.nodes.find((n) => n.type === "a.Customer" && n.storageId === id)!.id;
     assert.equal(RefsFixture.EdgeFrom(doc, order.id, "buyer"), customer("C1"));
     assert.equal(RefsFixture.EdgeFrom(doc, order.id, "owner"), customer("C2"), "an inherited target type (Party) accepts a subtype instance");
-    assert.equal(order.attrs["buyer"], undefined);
-    assert.equal(order.attrs["owner"], undefined);
+    assert.equal(order.attrs["buyer"], "C1", "the raw value stays for identity rules and write-back");
+    assert.equal(order.attrs["owner"], "C2");
     assert.equal(order.attrs["label"], "first", "plain scalars are untouched");
 });
 
@@ -65,7 +65,7 @@ test("a value naming no record (or a scalar member) is left as the raw scalar", 
     assert.equal(RefsFixture.EdgeFrom(doc, order.id, "buyer"), undefined);
 });
 
-test("write-back sends a reference edge as the target's key", async () =>
+test("write-back sends the reference member's original value", async () =>
 {
     const doc = RefsFixture.Build([{ oid: "O1", label: "first", buyer_id: "C1" }]);
     const order = RefsFixture.Order(doc, "O1");
@@ -87,4 +87,15 @@ test("write-back sends a reference edge as the target's key", async () =>
     const fields = batches[0]!.Operations[0]!.Fields;
     assert.equal(fields["buyer_id"], "C1");
     assert.equal(fields["label"], "first");
+});
+
+test("a numeric reference value keeps its type through write-back, and an identity rule over a reference member still merges", () =>
+{
+    const doc = new PopulationBuilder(RefsFixture.Base())
+        .Add(RefsFixture.Binding("a.Customer", "customers", "cid", { id: "cid" }), [{ cid: 42 }])
+        .Add(RefsFixture.Orders, [{ oid: "O1", buyer_id: 42 }])
+        .Build();
+    const order = RefsFixture.Order(doc, "O1");
+    assert.equal(order.attrs["buyer"], 42);
+    assert.ok(RefsFixture.EdgeFrom(doc, order.id, "buyer") !== undefined);
 });
