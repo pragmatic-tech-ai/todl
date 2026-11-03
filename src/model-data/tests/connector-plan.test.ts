@@ -239,3 +239,18 @@ test("Optimistic on a GraphQL connector that declares a version argument passes 
     const badType = { ...ValidatorHarness.GraphQl, Config: { ...ValidatorHarness.GraphQl.Config, versionArg: "v", versionArgType: "Int (x)" } };
     assert.throws(() => ConnectorPlanValidator.Validate(ValidatorHarness.Plan(binding, badType)), /not a valid GraphQL type/);
 });
+
+test("GraphQL upsertArgs / filterArgs / upsertKeyArg are validated at plan-build", () =>
+{
+    const binding: ConnectorBinding =
+    {
+        Concept: "a.Order", Connector: "api", Source: "orders", IdKey: "id", FieldMap: { id: "id" }, Writable: true,
+        Concurrency: WriteConcurrency.LastWriteWins, Atomicity: WriteAtomicity.Sequential,
+    };
+    const With = (config: Record<string, string>) => ValidatorHarness.Plan(binding, { ...ValidatorHarness.GraphQl, Config: { ...ValidatorHarness.GraphQl.Config, ...config } });
+    assert.doesNotThrow(() => ConnectorPlanValidator.Validate(With({ upsertArgs: "label=name:String, tier=tier:Tier!", filterArgs: "region=region:String", upsertKeyArg: "orderId:ID!" })));
+    assert.throws(() => ConnectorPlanValidator.Validate(With({ upsertArgs: "label" })), /malformed/);
+    assert.throws(() => ConnectorPlanValidator.Validate(With({ upsertArgs: "label=na-me:String" })), /not a valid GraphQL identifier/);
+    assert.throws(() => ConnectorPlanValidator.Validate(With({ filterArgs: "region=region:Str ing" })), /not a valid GraphQL type/);
+    assert.throws(() => ConnectorPlanValidator.Validate(With({ upsertKeyArg: "orderId" })), /malformed/);
+});

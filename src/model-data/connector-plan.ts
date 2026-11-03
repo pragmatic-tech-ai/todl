@@ -279,6 +279,13 @@ export class ConnectorPlanValidator
     private static readonly VersionArgKey = "versionArg";
     private static readonly VersionArgTypeKey = "versionArgType";
     private static readonly VersionArgPairMessage = "' must declare versionArg and versionArgType together";
+    private static readonly UpsertArgsKey = "upsertArgs";
+    private static readonly FilterArgsKey = "filterArgs";
+    private static readonly UpsertKeyArgKey = "upsertKeyArg";
+    private static readonly TypedArgEntrySeparator = /\s*,\s*/;
+    private static readonly TypedArgPairSeparator = "=";
+    private static readonly TypedArgTypeSeparator = ":";
+    private static readonly MalformedTypedArgMiddle = "' has a malformed 'field=arg:Type' entry: '";
     private static readonly InvalidTypeMiddle = "' is not a valid GraphQL type: '";
     // A named GraphQL input type, optionally a list and/or non-null (e.g. Int, ID!, [String!]!).
     private static readonly GraphQlTypePattern = /^\[?[_A-Za-z][_0-9A-Za-z]*!?\]?!?$/;
@@ -360,6 +367,22 @@ export class ConnectorPlanValidator
             throw new Error(`${ConnectorPlanValidator.InvalidIdentifierPrefix}${spec.Name}${ConnectorPlanValidator.InvalidIdentifierKeyMiddle}`
                 + `${ConnectorPlanValidator.VersionArgTypeKey}${ConnectorPlanValidator.InvalidTypeMiddle}${versionType}${ConnectorPlanValidator.InvalidIdentifierSuffix}`);
         }
+        for (const key of [ConnectorPlanValidator.UpsertArgsKey, ConnectorPlanValidator.FilterArgsKey])
+        {
+            const list = spec.Config[key];
+            if (list === undefined || list.trim().length === 0) continue;
+            for (const entry of list.trim().split(ConnectorPlanValidator.TypedArgEntrySeparator).filter((e) => e.length > 0))
+            {
+                const [field, target, ...rest] = entry.split(ConnectorPlanValidator.TypedArgPairSeparator);
+                if (field === undefined || field.trim().length === 0 || target === undefined || rest.length > 0)
+                {
+                    throw new Error(`${ConnectorPlanValidator.InvalidIdentifierPrefix}${spec.Name}${ConnectorPlanValidator.InvalidIdentifierKeyMiddle}${key}${ConnectorPlanValidator.MalformedTypedArgMiddle}${entry}${ConnectorPlanValidator.InvalidIdentifierSuffix}`);
+                }
+                ConnectorPlanValidator.ValidateTypedArg(spec, key, target);
+            }
+        }
+        const keyArg = spec.Config[ConnectorPlanValidator.UpsertKeyArgKey];
+        if (keyArg !== undefined) ConnectorPlanValidator.ValidateTypedArg(spec, ConnectorPlanValidator.UpsertKeyArgKey, keyArg);
         const returnList = spec.Config[ConnectorPlanValidator.UpsertReturnKey];
         if (returnList !== undefined)
         {
@@ -370,6 +393,22 @@ export class ConnectorPlanValidator
                     ConnectorPlanValidator.RequireGraphQlName(spec.Name, ConnectorPlanValidator.UpsertReturnKey, field);
                 }
             }
+        }
+    }
+
+    /** `arg:Type`: a GraphQL argument name and a GraphQL input type (the adapter's grammar). */
+    private static ValidateTypedArg(spec: ConnectorSpec, key: string, typedArg: string): void
+    {
+        const [arg, type, ...rest] = typedArg.split(ConnectorPlanValidator.TypedArgTypeSeparator).map((p) => p.trim());
+        if (arg === undefined || type === undefined || rest.length > 0)
+        {
+            throw new Error(`${ConnectorPlanValidator.InvalidIdentifierPrefix}${spec.Name}${ConnectorPlanValidator.InvalidIdentifierKeyMiddle}${key}${ConnectorPlanValidator.MalformedTypedArgMiddle}${typedArg}${ConnectorPlanValidator.InvalidIdentifierSuffix}`);
+        }
+        ConnectorPlanValidator.RequireGraphQlName(spec.Name, key, arg);
+        if (!ConnectorPlanValidator.GraphQlTypePattern.test(type))
+        {
+            throw new Error(`${ConnectorPlanValidator.InvalidIdentifierPrefix}${spec.Name}${ConnectorPlanValidator.InvalidIdentifierKeyMiddle}`
+                + `${key}${ConnectorPlanValidator.InvalidTypeMiddle}${type}${ConnectorPlanValidator.InvalidIdentifierSuffix}`);
         }
     }
 
