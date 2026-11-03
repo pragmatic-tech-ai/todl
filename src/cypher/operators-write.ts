@@ -22,6 +22,8 @@ class WriteSupport
     public static readonly VarLengthCreate = "variable-length relationships cannot be created";
     public static readonly NotAScalar = "property value must be a scalar, null, or a node";
     public static readonly MergeMapNotMap = "SET n += requires a map";
+    public static readonly ReplaceNotMap = "SET n = requires a map";
+    public static readonly ReplaceCreatedNode = "SET n = {map} cannot replace the properties of a node created earlier in the same query (intra-query read-your-writes is unsupported)";
     public static readonly NullEndpoint = "cannot create a relationship from a null node variable";
     public static readonly MergeNeedsNode = "MERGE requires a node pattern";
     public static readonly MergeBoundNotNode = "MERGE variable is bound to a non-node value";
@@ -127,6 +129,7 @@ export class MergeOperator implements IOperator
         private readonly clause: MergeClause,
         private readonly graph: ICypherGraph,
         private readonly writer: ICypherWriter,
+        private readonly applier: SetApplier,
     )
     {
         if (clause.Pattern.Nodes.length === 0) throw new CypherSemanticError(WriteSupport.MergeNeedsNode);
@@ -146,28 +149,39 @@ export class MergeOperator implements IOperator
                 {
                     throw new CypherSemanticError(`${WriteSupport.MergeBoundNotNode}: "${node.Variable}"`);
                 }
+                // A bound node is kept as-is, i.e. matched.
+                this.applyActions(row, this.clause.OnMatch);
                 yield row;
                 continue;
             }
             if (node.Label === undefined) throw new CypherSemanticError(WriteSupport.LabelRequired);
             const concept = this.graph.ResolveConcept(node.Label);
             const key = MergeOperator.Key(concept, node.Properties);
-            const value = this.findOrCreate(concept, key, node);
-            yield node.Variable === undefined ? row : row.With(node.Variable, value);
+            const outcome = this.findOrCreate(concept, key, node);
+            const merged = node.Variable === undefined ? row : row.With(node.Variable, outcome.Value);
+            this.applyActions(merged, outcome.Created ? this.clause.OnCreate : this.clause.OnMatch);
+            yield merged;
         }
     }
 
-    private findOrCreate(concept: string, key: string, node: NodePattern): CypherValue
+    private applyActions(row: Binding, items: readonly SetItem[]): void
+    {
+        for (const item of items) this.applier.Apply(row, item);
+    }
+
+    // Created is true only for the row that actually creates the node; a later row merging the same key finds the node
+    // this query created and treats it as matched (openCypher: the earlier create is visible to the later MERGE).
+    private findOrCreate(concept: string, key: string, node: NodePattern): { Value: CypherValue; Created: boolean }
     {
         const matches = this.graph.NodesByLabel(concept)
             .filter((m) => [...node.Properties].every(([k, v]) => m.field(k)?.value === v))
             .sort((a, b) => (a.node.id < b.node.id ? -1 : a.node.id > b.node.id ? 1 : 0));
-        if (matches.length > 0) return new NodeValue(matches[0]!);
+        if (matches.length > 0) return { Value: new NodeValue(matches[0]!), Created: false };
         const known = this.pending.get(key);
-        if (known !== undefined) return new NodeRefValue(known);
+        if (known !== undefined) return { Value: new NodeRefValue(known), Created: false };
         const id = this.writer.CreateNode(concept, node.Properties);
         this.pending.set(key, id);
-        return new NodeRefValue(id);
+        return { Value: new NodeRefValue(id), Created: true };
     }
 
     private static Key(concept: string, props: ReadonlyMap<string, Scalar>): string
@@ -177,42 +191,51 @@ export class MergeOperator implements IOperator
     }
 }
 
-export class SetOperator implements IOperator
+// Applies SET items (SET n.p = v / n += {map} / n = {map}) to the bound node. Shared by SET and by MERGE's ON CREATE /
+// ON MATCH actions so both write identically and share one query's relationship bookkeeping.
+export class SetApplier
 {
     constructor(
-        private readonly child: IOperator,
-        private readonly clause: SetClause,
         private readonly graph: ICypherGraph,
         private readonly writer: ICypherWriter,
         private readonly parameters: ReadonlyMap<string, CypherValue>,
-        // Edges created per (node, member), shared across all SetOperators of one query so a later row or clause replacing the same member removes them too.
+        // Edges created per (node, member), shared across every applier of one query so a later row or clause replacing
+        // the same member removes them too.
         private readonly created: Map<string, Set<string>> = new Map<string, Set<string>>(),
     )
     {
     }
 
-    public *Rows(): Iterable<Binding>
-    {
-        for (const row of this.child.Rows())
-        {
-            for (const item of this.clause.Items) this.apply(row, item);
-            yield row;
-        }
-    }
-
-    private apply(row: Binding, item: SetItem): void
+    public Apply(row: Binding, item: SetItem): void
     {
         const id = WriteSupport.RequiredNodeId(row, item.Variable);
         if (id === undefined) return;
         const value = WriteSupport.Eval(item.Value, row, this.parameters);
-        if (item.Mode === SetMode.MergeMap || item.Property === undefined)
+        if (item.Mode === SetMode.Property && item.Property !== undefined)
         {
-            if (value instanceof NullValue) return;
-            if (!(value instanceof MapValue)) throw new CypherSemanticError(WriteSupport.MergeMapNotMap);
-            for (const [name, entry] of value.Entries) this.assign(id, name, entry);
+            this.assign(id, item.Property, value);
             return;
         }
-        this.assign(id, item.Property, value);
+        if (value instanceof NullValue) return;
+        if (!(value instanceof MapValue))
+        {
+            throw new CypherSemanticError(item.Mode === SetMode.Replace ? WriteSupport.ReplaceNotMap : WriteSupport.MergeMapNotMap);
+        }
+        if (item.Mode === SetMode.Replace) this.removeUnlisted(id, value);
+        for (const [name, entry] of value.Entries) this.assign(id, name, entry);
+    }
+
+    // SET n = {map}: every own property not in the map is removed (relationships are untouched, as in openCypher where
+    // properties and relationships are separate). Needs the node's current properties, so a node created earlier in
+    // this query (no committed fields to read yet) is rejected like any other intra-query read of a created node.
+    private removeUnlisted(id: string, map: MapValue): void
+    {
+        const mirror = this.graph.Reflect(id);
+        if (mirror === undefined) throw new CypherSemanticError(WriteSupport.ReplaceCreatedNode);
+        for (const name of Object.keys(mirror.node.attrs ?? {}))
+        {
+            if (!map.Entries.has(name)) this.writer.RemoveProperty(id, name);
+        }
     }
 
     private assign(id: string, name: string, value: CypherValue): void
@@ -248,6 +271,26 @@ export class SetOperator implements IOperator
         for (const old of stale) this.writer.DeleteRelationship(id, member, old);
         this.writer.CreateRelationship(id, member, targetId);
         this.created.set(key, new Set<string>([targetId]));
+    }
+}
+
+export class SetOperator implements IOperator
+{
+    constructor(
+        private readonly child: IOperator,
+        private readonly clause: SetClause,
+        private readonly applier: SetApplier,
+    )
+    {
+    }
+
+    public *Rows(): Iterable<Binding>
+    {
+        for (const row of this.child.Rows())
+        {
+            for (const item of this.clause.Items) this.applier.Apply(row, item);
+            yield row;
+        }
     }
 }
 

@@ -21,7 +21,7 @@ class NodeState
     {
         const fields = this.Fields;
         return {
-            node: { id: this.Id },
+            node: { id: this.Id, attrs: Object.fromEntries(fields) },
             type: { fullName: this.Concept, name: this.Concept },
             field: (name: string) => (fields.has(name) ? { value: fields.get(name) } : undefined),
         } as unknown as InstanceMirror;
@@ -304,5 +304,83 @@ describe("cypher two-phase write execution", () =>
         const r = Fixture.Engine(writer).Execute("CREATE (n:shop.Customer {name: 'Ada'}) RETURN n.name");
         assert.equal(r.Rows[0]![0]!.ToDto(), "Ada");
         assert.equal(writer.Rollbacks, 0);
+    });
+});
+
+describe("cypher MERGE ON CREATE / ON MATCH SET execution", () =>
+{
+    const query = "MERGE (n:shop.Customer {name: 'Ada'}) ON CREATE SET n.tier = 'new' ON MATCH SET n.tier = 'seen' RETURN n.tier";
+
+    test("a MERGE that creates runs only the ON CREATE actions", () =>
+    {
+        const writer = new FakeCypherWriter();
+        const r = Fixture.Engine(writer).Execute(query);
+        assert.equal(writer.Creates, 1);
+        assert.deepEqual(r.Rows.map((row) => row[0]!.ToDto()), ["new"]);
+    });
+
+    test("a MERGE that matches runs only the ON MATCH actions", () =>
+    {
+        const writer = new FakeCypherWriter(Fixture.Seed());
+        const r = Fixture.Engine(writer).Execute(query);
+        assert.equal(writer.Creates, 0);
+        assert.deepEqual(r.Rows.map((row) => row[0]!.ToDto()), ["seen"]);
+    });
+
+    test("a later row merging a node this query created sees it as matched", () =>
+    {
+        const writer = new FakeCypherWriter();
+        const r = Fixture.Engine(writer).Execute(
+            "UNWIND [1, 2] AS i MERGE (n:shop.Customer {name: 'Zed'}) ON CREATE SET n.c = 'created' ON MATCH SET n.m = 'matched' RETURN n.c, n.m");
+        assert.equal(writer.Creates, 1);
+        assert.deepEqual(r.Rows.map((row) => row.map((v) => v.ToDto())), [["created", "matched"], ["created", "matched"]]);
+    });
+
+    test("an ON CREATE action reading a property of the just-created node fails loudly and rolls back", () =>
+    {
+        const writer = new FakeCypherWriter();
+        assert.throws(() => Fixture.Engine(writer).Execute("MERGE (n:shop.Customer {name: 'Ada'}) ON CREATE SET n.copy = n.name"), CypherSemanticError);
+        assert.equal(writer.Rollbacks, 1);
+        assert.equal(writer.Commits, 0);
+    });
+});
+
+describe("cypher SET n = {map} full-replace execution", () =>
+{
+    const seed = (): NodeState[] => [new NodeState("c1", "shop.Customer", new Map<string, Scalar>([["name", "Ada"], ["tier", "gold"]]))];
+
+    test("listed properties are set and every other own property is removed", () =>
+    {
+        const writer = new FakeCypherWriter(seed());
+        const r = Fixture.Engine(writer).Execute("MATCH (n:shop.Customer) SET n = {name: 'Ada2', city: 'Oslo'} RETURN n.name, n.tier, n.city");
+        assert.deepEqual(r.Rows.map((row) => row.map((v) => v.ToDto())), [["Ada2", null, "Oslo"]]);
+    });
+
+    test("a null entry in the map removes that property", () =>
+    {
+        const writer = new FakeCypherWriter(seed());
+        const r = Fixture.Engine(writer).Execute("MATCH (n:shop.Customer) SET n = {name: 'X', tier: null} RETURN n.name, n.tier");
+        assert.deepEqual(r.Rows.map((row) => row.map((v) => v.ToDto())), [["X", null]]);
+    });
+
+    test("SET n = null changes nothing (like SET n += null)", () =>
+    {
+        const writer = new FakeCypherWriter(seed());
+        const r = Fixture.Engine(writer).Execute("MATCH (n:shop.Customer) SET n = null RETURN n.name, n.tier");
+        assert.deepEqual(r.Rows.map((row) => row.map((v) => v.ToDto())), [["Ada", "gold"]]);
+    });
+
+    test("a non-map value is a semantic error", () =>
+    {
+        const writer = new FakeCypherWriter(seed());
+        assert.throws(() => Fixture.Engine(writer).Execute("MATCH (n:shop.Customer) SET n = 1"), CypherSemanticError);
+        assert.equal(writer.Commits, 0);
+    });
+
+    test("full-replace on a node created in the same query fails loudly (its current properties are not readable yet)", () =>
+    {
+        const writer = new FakeCypherWriter();
+        assert.throws(() => Fixture.Engine(writer).Execute("CREATE (n:shop.Customer {name: 'A'}) SET n = {name: 'B'}"), CypherSemanticError);
+        assert.equal(writer.Rollbacks, 1);
     });
 });

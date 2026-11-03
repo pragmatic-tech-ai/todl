@@ -1,7 +1,7 @@
 import type { Scalar } from "../manifest/logical.js";
 import type { ICypherGraph } from "./graph.js";
 import type { NodePattern, PatternPath } from "./patterns.js";
-import type { CypherQueryModel, QueryPart, ProjectionClause, ReturnItem } from "./query-model.js";
+import type { CypherQueryModel, QueryPart, ProjectionClause, ReturnItem, SetItem } from "./query-model.js";
 import { MatchClause, UnwindClause, WritingClause, SortItem, CreateClause, MergeClause, SetClause, DeleteClause, RemoveClause } from "./query-model.js";
 import { CypherSemanticError } from "./errors.js";
 import { ComparisonOp } from "./enums.js";
@@ -12,7 +12,7 @@ import { CypherValue, ScalarValue } from "./values.js";
 import { VarLengthExpand } from "./operators-varlength.js";
 import { IOperator, AllNodesScan, LabelScan, Expand, ExpandInto, Filter, LabelFilter, Project, SingleRow, BindingRow } from "./operators.js";
 import { Unwind } from "./operators-unwind.js";
-import { CreateOperator, MergeOperator, SetOperator, DeleteOperator, RemoveOperator } from "./operators-write.js";
+import { CreateOperator, MergeOperator, SetOperator, SetApplier, DeleteOperator, RemoveOperator } from "./operators-write.js";
 import type { ICypherWriter } from "./writer.js";
 import { CartesianProduct } from "./operators-join.js";
 import { OptionalApply } from "./operators-optional.js";
@@ -221,12 +221,21 @@ export class LogicalPlanner
         if (clause instanceof MergeClause)
         {
             for (const v of clause.DeclaredVariables()) bound.add(v);
-            return new MergeOperator(op, clause, g, writer);
+            return new MergeOperator(op, clause, g, writer, new SetApplier(g, writer, p, this.createdEdges));
         }
-        if (clause instanceof SetClause) return new SetOperator(op, clause, g, writer, p, this.createdEdges);
+        if (clause instanceof SetClause) return new SetOperator(op, clause, new SetApplier(g, writer, p, this.createdEdges));
         if (clause instanceof DeleteClause) return new DeleteOperator(op, clause, writer, p);
         if (clause instanceof RemoveClause) return new RemoveOperator(op, clause, writer);
         throw new CypherSemanticError(LogicalPlanner.WritesNotExecutable);
+    }
+
+    private static CollectSetItems(items: readonly SetItem[], referenced: Set<string>): void
+    {
+        for (const item of items)
+        {
+            referenced.add(item.Variable);
+            item.Value.CollectVariables(referenced);
+        }
     }
 
     private validateScope(part: QueryPart, available: ReadonlySet<string>): void
@@ -236,13 +245,11 @@ export class LogicalPlanner
         {
             if (clause instanceof MatchClause) clause.Where?.Predicate.CollectVariables(referenced);
             else if (clause instanceof UnwindClause) clause.Expr.CollectVariables(referenced);
-            else if (clause instanceof SetClause)
+            else if (clause instanceof SetClause) LogicalPlanner.CollectSetItems(clause.Items, referenced);
+            else if (clause instanceof MergeClause)
             {
-                for (const item of clause.Items)
-                {
-                    referenced.add(item.Variable);
-                    item.Value.CollectVariables(referenced);
-                }
+                LogicalPlanner.CollectSetItems(clause.OnCreate, referenced);
+                LogicalPlanner.CollectSetItems(clause.OnMatch, referenced);
             }
             else if (clause instanceof DeleteClause) for (const t of clause.Targets) t.CollectVariables(referenced);
             else if (clause instanceof RemoveClause) for (const i of clause.Items) referenced.add(i.Variable);
