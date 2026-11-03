@@ -253,4 +253,6 @@ test("GraphQL upsertArgs / filterArgs / upsertKeyArg are validated at plan-build
     assert.throws(() => ConnectorPlanValidator.Validate(With({ upsertArgs: "label=na-me:String" })), /not a valid GraphQL identifier/);
     assert.throws(() => ConnectorPlanValidator.Validate(With({ filterArgs: "region=region:Str ing" })), /not a valid GraphQL type/);
     assert.throws(() => ConnectorPlanValidator.Validate(With({ upsertKeyArg: "orderId" })), /malformed/);
+    assert.throws(() => ConnectorPlanValidator.Validate(With({ upsertArgs: "la bel=name:String" })), /malformed/);
+    assert.doesNotThrow(() => ConnectorPlanValidator.Validate(With({ versionArg: "v", versionArgType: "Int " })));
 });

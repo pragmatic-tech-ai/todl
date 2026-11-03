@@ -283,6 +283,8 @@ export class ConnectorPlanValidator
     private static readonly FilterArgsKey = "filterArgs";
     private static readonly UpsertKeyArgKey = "upsertKeyArg";
     private static readonly TypedArgEntrySeparator = /\s*,\s*/;
+    // The source-field side of a `field=arg:Type` entry (the adapter's DeclaredFilters field grammar).
+    private static readonly SourceFieldPattern = /^[_A-Za-z][_0-9A-Za-z.-]*$/;
     private static readonly TypedArgPairSeparator = "=";
     private static readonly TypedArgTypeSeparator = ":";
     private static readonly MalformedTypedArgMiddle = "' has a malformed 'field=arg:Type' entry: '";
@@ -357,7 +359,7 @@ export class ConnectorPlanValidator
             }
         }
         const versionArg = spec.Config[ConnectorPlanValidator.VersionArgKey];
-        const versionType = spec.Config[ConnectorPlanValidator.VersionArgTypeKey];
+        const versionType = spec.Config[ConnectorPlanValidator.VersionArgTypeKey]?.trim();
         if ((versionArg === undefined) !== (versionType === undefined))
         {
             throw new Error(`${ConnectorPlanValidator.InvalidIdentifierPrefix}${spec.Name}${ConnectorPlanValidator.VersionArgPairMessage}`);
@@ -374,7 +376,7 @@ export class ConnectorPlanValidator
             for (const entry of list.trim().split(ConnectorPlanValidator.TypedArgEntrySeparator).filter((e) => e.length > 0))
             {
                 const [field, target, ...rest] = entry.split(ConnectorPlanValidator.TypedArgPairSeparator);
-                if (field === undefined || field.trim().length === 0 || target === undefined || rest.length > 0)
+                if (field === undefined || !ConnectorPlanValidator.SourceFieldPattern.test(field.trim()) || target === undefined || rest.length > 0)
                 {
                     throw new Error(`${ConnectorPlanValidator.InvalidIdentifierPrefix}${spec.Name}${ConnectorPlanValidator.InvalidIdentifierKeyMiddle}${key}${ConnectorPlanValidator.MalformedTypedArgMiddle}${entry}${ConnectorPlanValidator.InvalidIdentifierSuffix}`);
                 }
