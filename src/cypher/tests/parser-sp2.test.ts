@@ -156,3 +156,33 @@ describe("cypher parser SP2 (expression edge cases)", () =>
         assert.throws(() => new CypherParser("MATCH (a) WITH a ORDER BY a WHERE a RETURN a").Parse(), CypherSyntaxError);
     });
 });
+
+describe("cypher parser: relationship direction + quoted names + end of input", () =>
+{
+    test("a relationship with both arrowheads is a syntax error", () =>
+    {
+        assert.throws(() => new CypherParser("MATCH (a)<-[:calls]->(b) RETURN a").Parse(), CypherSyntaxError);
+        assert.throws(() => new CypherParser("MATCH (a)<-->(b) RETURN a").Parse(), CypherSyntaxError);
+    });
+
+    test("a backtick-quoted label keeps its dots as one qualified label", () =>
+    {
+        const match = new CypherParser("MATCH (a:`acme.Service`) RETURN a").Parse().Parts[0]!.Reading[0] as MatchClause;
+        assert.equal(match.Paths[0]!.Nodes[0]!.Label, "acme.Service");
+    });
+
+    test("quoted names work in variable, property, alias and rel-type positions", () =>
+    {
+        const model = new CypherParser("MATCH (`order`)-[:`calls`]->(b) RETURN `order`.`full name` AS `the name`").Parse();
+        const match = model.Parts[0]!.Reading[0] as MatchClause;
+        assert.equal(match.Paths[0]!.Nodes[0]!.Variable, "order");
+        assert.equal(match.Paths[0]!.Rels[0]!.RelType, "calls");
+        assert.deepEqual(model.FinalColumns(), ["the name"]);
+    });
+
+    test("trailing tokens after a complete query are a syntax error", () =>
+    {
+        assert.throws(() => new CypherParser("MATCH (n) RETURN n )").Parse(), CypherSyntaxError);
+        assert.throws(() => new CypherParser("MATCH (n) RETURN n n").Parse(), CypherSyntaxError);
+    });
+});

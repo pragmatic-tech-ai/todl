@@ -76,3 +76,41 @@ describe("cypher lexer", () =>
         assert.deepEqual(nums, ["1", "2"]);
     });
 });
+
+describe("cypher lexer: backtick-quoted identifiers", () =>
+{
+    test("a backtick-quoted name lexes as one Identifier carrying the inner text", () =>
+    {
+        const toks = new CypherLexer("(a:`acme.Service`)").Tokenize();
+        const label = toks[3]!;
+        assert.equal(label.Kind, TokenKind.Identifier);
+        assert.equal(label.Text, "acme.Service");
+    });
+
+    test("a quoted keyword stays an Identifier (never folded to a Keyword)", () =>
+    {
+        const tok = new CypherLexer("`match`").Tokenize()[0]!;
+        assert.equal(tok.Kind, TokenKind.Identifier);
+        assert.equal(tok.Text, "match");
+    });
+
+    test("spaces and punctuation survive inside the quotes", () =>
+    {
+        assert.equal(new CypherLexer("`full name (x)`").Tokenize()[0]!.Text, "full name (x)");
+    });
+
+    test("a doubled backtick is an escaped backtick", () =>
+    {
+        assert.equal(new CypherLexer("`a``b`").Tokenize()[0]!.Text, "a`b");
+    });
+
+    test("an unterminated quoted name is a syntax error", () =>
+    {
+        assert.throws(() => new CypherLexer("`open").Tokenize(), CypherSyntaxError);
+    });
+
+    test("an empty quoted name is a syntax error", () =>
+    {
+        assert.throws(() => new CypherLexer("``").Tokenize(), CypherSyntaxError);
+    });
+});

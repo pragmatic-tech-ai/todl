@@ -1,6 +1,7 @@
 import type { Scalar } from "../manifest/logical.js";
 import { ArithmeticOp, BooleanOp, ComparisonOp, RelDirection, SetMode } from "./enums.js";
 import { CypherSemanticError } from "./errors.js";
+import { CypherLexer } from "./lexer.js";
 import {
     ArithmeticExpression, BooleanExpression, Comparison, Expression, FunctionCall, InExpression, IndexAccess, IsNullExpression,
     ListLiteral, Literal, MapLiteral, Parameter, PropertyAccess, UnaryMinus, ValueLiteral, VariableRef,
@@ -45,6 +46,9 @@ export class CypherUnparser
     private static readonly KeyValueSeparator = ": ";
     private static readonly Quote = "'";
     private static readonly EscapedQuote = "''";
+    private static readonly Backtick = "`";
+    private static readonly EscapedBacktick = "``";
+    private static readonly PlainNamePattern = /^[A-Za-z_][A-Za-z0-9_]*$/;
     private static readonly KwMatch = "MATCH";
     private static readonly KwOptional = "OPTIONAL";
     private static readonly KwUnwind = "UNWIND";
@@ -121,9 +125,9 @@ export class CypherUnparser
     private SetItem(item: SetItem): string
     {
         const value = this.Expr(item.Value, Prec.Or);
-        if (item.Mode === SetMode.MergeMap) return `${item.Variable} ${CypherUnparser.KwPlusEq} ${value}`;
+        if (item.Mode === SetMode.MergeMap) return `${this.Ident(item.Variable)} ${CypherUnparser.KwPlusEq} ${value}`;
         if (item.Property === undefined) throw new CypherSemanticError(CypherUnparser.MissingSetProperty);
-        return `${item.Variable}${CypherUnparser.Dot}${item.Property} ${CypherUnparser.Equals} ${value}`;
+        return `${this.Ident(item.Variable)}${CypherUnparser.Dot}${this.Name(item.Property)} ${CypherUnparser.Equals} ${value}`;
     }
 
     private Match(clause: MatchClause): string
@@ -135,7 +139,7 @@ export class CypherUnparser
 
     private Unwind(clause: UnwindClause): string
     {
-        return `${CypherUnparser.KwUnwind} ${this.Expr(clause.Expr, Prec.Or)} ${CypherUnparser.KwAs} ${clause.Variable}`;
+        return `${CypherUnparser.KwUnwind} ${this.Expr(clause.Expr, Prec.Or)} ${CypherUnparser.KwAs} ${this.Ident(clause.Variable)}`;
     }
 
     // Leading-space-prefixed so an absent WHERE contributes nothing.
@@ -162,7 +166,7 @@ export class CypherUnparser
     private ReturnItem(item: ReturnItem): string
     {
         const expr = this.Expr(item.Expr, Prec.Or);
-        return item.Alias === undefined ? expr : `${expr} ${CypherUnparser.KwAs} ${item.Alias}`;
+        return item.Alias === undefined ? expr : `${expr} ${CypherUnparser.KwAs} ${this.Ident(item.Alias)}`;
     }
 
     private Sort(item: SortItem): string
@@ -173,7 +177,7 @@ export class CypherUnparser
 
     private Path(path: PatternPath): string
     {
-        let out = path.PathVariable === undefined ? CypherUnparser.Empty : `${path.PathVariable} ${CypherUnparser.Equals} `;
+        let out = path.PathVariable === undefined ? CypherUnparser.Empty : `${this.Ident(path.PathVariable)} ${CypherUnparser.Equals} `;
         out += this.Node(path.Nodes[0]!);
         for (let i = 0; i < path.Rels.length; i++)
         {
@@ -182,11 +186,11 @@ export class CypherUnparser
         return out;
     }
 
-    // A qualified label (shop.Customer) is rendered verbatim as :ns.Concept.
+    // A qualified label (shop.Customer) is rendered segment by segment as :ns.Concept, quoting any segment that needs it.
     private Node(node: NodePattern): string
     {
-        let out = CypherUnparser.OpenParen + (node.Variable ?? CypherUnparser.Empty);
-        if (node.Label !== undefined) out += CypherUnparser.Colon + node.Label;
+        let out = CypherUnparser.OpenParen + (node.Variable === undefined ? CypherUnparser.Empty : this.Ident(node.Variable));
+        if (node.Label !== undefined) out += CypherUnparser.Colon + this.Label(node.Label);
         if (node.Properties.size > 0) out += CypherUnparser.Space + this.PropMap(node.Properties);
         return out + CypherUnparser.CloseParen;
     }
@@ -195,8 +199,8 @@ export class CypherUnparser
     {
         const left = rel.Direction === RelDirection.Incoming ? CypherUnparser.ArrowLeft + CypherUnparser.Dash : CypherUnparser.Dash;
         const right = rel.Direction === RelDirection.Outgoing ? CypherUnparser.Dash + CypherUnparser.ArrowRight : CypherUnparser.Dash;
-        let inner = rel.Variable ?? CypherUnparser.Empty;
-        if (rel.RelType !== undefined) inner += CypherUnparser.Colon + rel.RelType;
+        let inner = rel.Variable === undefined ? CypherUnparser.Empty : this.Ident(rel.Variable);
+        if (rel.RelType !== undefined) inner += CypherUnparser.Colon + this.Name(rel.RelType);
         if (rel.IsVariableLength) inner += this.Hops(rel);
         if (rel.Properties.size > 0) inner += CypherUnparser.Space + this.PropMap(rel.Properties);
         const bracket = inner.length === 0 ? CypherUnparser.Empty : CypherUnparser.OpenBracket + inner + CypherUnparser.CloseBracket;
@@ -213,7 +217,7 @@ export class CypherUnparser
 
     private PropMap(props: ReadonlyMap<string, Scalar>): string
     {
-        const entries = [...props].map(([k, v]) => `${k}${CypherUnparser.KeyValueSeparator}${this.Scalar(v)}`);
+        const entries = [...props].map(([k, v]) => `${this.Name(k)}${CypherUnparser.KeyValueSeparator}${this.Scalar(v)}`);
         return CypherUnparser.OpenBrace + entries.join(CypherUnparser.Comma) + CypherUnparser.CloseBrace;
     }
 
@@ -244,9 +248,9 @@ export class CypherUnparser
     private ExprBare(e: Expression): string
     {
         if (e instanceof Literal) return e.Value === null ? CypherUnparser.KwNull : this.Scalar(e.Value);
-        if (e instanceof VariableRef) return e.Variable;
-        if (e instanceof PropertyAccess) return e.Variable + CypherUnparser.Dot + e.Property;
-        if (e instanceof Parameter) return CypherUnparser.Dollar + e.Name;
+        if (e instanceof VariableRef) return this.Ident(e.Variable);
+        if (e instanceof PropertyAccess) return this.Ident(e.Variable) + CypherUnparser.Dot + this.Name(e.Property);
+        if (e instanceof Parameter) return CypherUnparser.Dollar + this.Ident(e.Name);
         if (e instanceof Comparison) return this.ComparisonText(e);
         if (e instanceof BooleanExpression) return this.BooleanText(e);
         if (e instanceof IsNullExpression) return `${this.Expr(e.Operand, Prec.Additive)} ${e.Negated ? CypherUnparser.KwIsNotNull : CypherUnparser.KwIsNull}`;
@@ -294,7 +298,7 @@ export class CypherUnparser
 
     private MapText(e: MapLiteral): string
     {
-        const entries = [...e.Entries].map(([k, v]) => `${k}${CypherUnparser.KeyValueSeparator}${this.Expr(v, Prec.Or)}`);
+        const entries = [...e.Entries].map(([k, v]) => `${this.Name(k)}${CypherUnparser.KeyValueSeparator}${this.Expr(v, Prec.Or)}`);
         return CypherUnparser.OpenBrace + entries.join(CypherUnparser.Comma) + CypherUnparser.CloseBrace;
     }
 
@@ -304,6 +308,33 @@ export class CypherUnparser
         const args = e.Args.map((a) => this.Expr(a, Prec.Or)).join(CypherUnparser.Comma);
         const distinct = e.Distinct ? `${CypherUnparser.KwDistinct} ` : CypherUnparser.Empty;
         return `${e.Name}${CypherUnparser.OpenParen}${distinct}${args}${CypherUnparser.CloseParen}`;
+    }
+
+    // A name position (label segment, rel type, property, map key) accepts keyword spellings, so only a name that is
+    // not a plain identifier needs backticks.
+    private Name(name: string): string
+    {
+        return CypherUnparser.PlainNamePattern.test(name) ? name : this.Quote(name);
+    }
+
+    // An identifier position (variable, alias, parameter) rejects keywords, so a keyword spelling is quoted too.
+    private Ident(name: string): string
+    {
+        return CypherUnparser.PlainNamePattern.test(name) && !CypherLexer.IsKeyword(name) ? name : this.Quote(name);
+    }
+
+    // The parser joins dotted segments into one qualified label, so rendering per segment re-parses to the same label.
+    // A label with an empty segment (only writable as one quoted name, e.g. `a..b`) is quoted whole instead.
+    private Label(label: string): string
+    {
+        const segments = label.split(CypherUnparser.Dot);
+        if (segments.some((segment) => segment.length === 0)) return this.Quote(label);
+        return segments.map((segment) => this.Name(segment)).join(CypherUnparser.Dot);
+    }
+
+    private Quote(name: string): string
+    {
+        return CypherUnparser.Backtick + name.split(CypherUnparser.Backtick).join(CypherUnparser.EscapedBacktick) + CypherUnparser.Backtick;
     }
 
     private Scalar(value: Scalar | null): string

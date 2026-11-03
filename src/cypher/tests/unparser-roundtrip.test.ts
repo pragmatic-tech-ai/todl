@@ -8,6 +8,8 @@ import type { LogicalManifest } from "../../manifest/logical.js";
 import type { ReflectedNode } from "../../manifest/reflection/reflection.js";
 import { CypherEngine } from "../engine.js";
 import { CypherParser } from "../parser.js";
+import { CypherUnparser } from "../unparser.js";
+import { MatchClause } from "../query-model.js";
 import { CypherQuery, Pattern, Expr, Return, Sort, Fn, Hops } from "../fluent.js";
 import type { NodeBuilder } from "../fluent.js";
 import { BooleanExpression, Comparison, IsNullExpression, InExpression, Literal, VariableRef, PropertyAccess } from "../expressions.js";
@@ -235,5 +237,38 @@ describe("CypherQuery.ToCypherText round trip", () =>
             const q = CypherQuery.Unwind(Expr.List(Expr.Lit(1)), "x").Return(Return.Item(Expr.Lit(n), "n"));
             assert.throws(() => q.ToCypherText(), CypherSemanticError);
         }
+    });
+});
+
+describe("unparser quotes names that are not plain identifiers", () =>
+{
+    const roundTrip = (source: string): string => new CypherUnparser().Text(new CypherParser(source).Parse());
+
+    test("spaced, keyword and escaped names re-parse to the same model", () =>
+    {
+        const source = "MATCH (`order`:`acme.Service` {`full name`: 'x'})-[`r`:`calls`]->(b) "
+            + "WHERE `order`.`a``b` IS NOT NULL "
+            + "RETURN `order`.`full name` AS `the name`, b.match AS `RETURN`";
+        const once = roundTrip(source);
+        assert.equal(roundTrip(once), once, "unparse is a fixed point");
+        const model = new CypherParser(once).Parse();
+        const node = (model.Parts[0]!.Reading[0] as MatchClause).Paths[0]!.Nodes[0]!;
+        assert.equal(node.Variable, "order");
+        assert.equal(node.Label, "acme.Service");
+        assert.deepEqual([...node.Properties.keys()], ["full name"]);
+        assert.deepEqual(model.FinalColumns(), ["the name", "RETURN"]);
+    });
+
+    test("a quoted label with an empty segment is quoted whole and re-parses to the same label", () =>
+    {
+        const once = roundTrip("MATCH (a:`a..b`) RETURN a");
+        const node = (new CypherParser(once).Parse().Parts[0]!.Reading[0] as MatchClause).Paths[0]!.Nodes[0]!;
+        assert.equal(node.Label, "a..b");
+    });
+
+    test("plain names stay unquoted", () =>
+    {
+        assert.equal(roundTrip("MATCH (a:shop.Customer)-[:calls]->(b) RETURN a.name AS n"),
+            "MATCH (a:shop.Customer)-[:calls]->(b) RETURN a.name AS n");
     });
 });

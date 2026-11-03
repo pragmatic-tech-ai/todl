@@ -61,6 +61,7 @@ export class LogicalPlanner
     private static readonly VarLengthIntoBoundUnsupported = "variable-length expansion into an already-bound node is not yet supported";
 
     private static readonly StrictScopeReuse = "variable reused after being dropped by an earlier WITH";
+    private static readonly DuplicateColumn = "multiple result columns with the same name are not supported";
 
     private readonly maxVarLength: number;
     private readonly strictWithScope: boolean;
@@ -90,6 +91,7 @@ export class LogicalPlanner
         let op: IOperator | undefined = undefined;
         for (const part of model.Parts)
         {
+            this.ensureUniqueColumns(part);
             if (this.strictWithScope) this.checkStrictScope(part, inScope, everBound);
             op = this.compilePart(part, op, inScope, part === model.Parts[model.Parts.length - 1]);
             for (const v of this.readingVariables(part)) everBound.add(v);
@@ -116,6 +118,7 @@ export class LogicalPlanner
         for (const part of model.Parts)
         {
             const isFinal = part === last;
+            this.ensureUniqueColumns(part);
             if (this.strictWithScope) this.checkStrictScope(part, inScope, everBound);
             op = this.compilePart(part, op, inScope, isFinal, isFinal);
             if (isFinal) projection = part.Projection;
@@ -149,6 +152,21 @@ export class LogicalPlanner
 
     // Strict mode: a MATCH/UNWIND variable bound in a PRIOR segment but not carried into this
     // segment's inScope is a dropped-then-reused name; reject it.
+    // openCypher: projection column names must be unique. A Binding-keyed row would otherwise keep only the last
+    // duplicate silently, and a duplicate WITH name makes the downstream variable ambiguous. Checked during planning,
+    // before any operator runs, so a write query with a bad RETURN is rejected before it mutates anything.
+    private ensureUniqueColumns(part: QueryPart): void
+    {
+        if (part.Projection === undefined) return;
+        const seen = new Set<string>();
+        for (const item of part.Projection.Items)
+        {
+            const name = item.ColumnName();
+            if (seen.has(name)) throw new CypherSemanticError(`${LogicalPlanner.DuplicateColumn}: "${name}"`);
+            seen.add(name);
+        }
+    }
+
     private checkStrictScope(part: QueryPart, inScope: ReadonlySet<string>, everBound: ReadonlySet<string>): void
     {
         for (const v of this.readingVariables(part))
