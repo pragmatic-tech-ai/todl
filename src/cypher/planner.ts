@@ -12,7 +12,7 @@ import { CypherValue, ScalarValue } from "./values.js";
 import { VarLengthExpand } from "./operators-varlength.js";
 import { IOperator, AllNodesScan, LabelScan, Expand, ExpandInto, Filter, LabelFilter, Project, SingleRow, BindingRow } from "./operators.js";
 import { Unwind } from "./operators-unwind.js";
-import { CreateOperator, MergeOperator, SetOperator, SetApplier, DeleteOperator, RemoveOperator } from "./operators-write.js";
+import { CreateOperator, MergeOperator, SetOperator, SetApplier, DeleteOperator, RemoveOperator, EagerBarrier } from "./operators-write.js";
 import type { ICypherWriter } from "./writer.js";
 import { CartesianProduct } from "./operators-join.js";
 import { OptionalApply } from "./operators-optional.js";
@@ -77,6 +77,8 @@ export class LogicalPlanner
         private readonly ensureOrder: boolean = false,
         // Optional: only write-capable plans (PlanForWrite) supply one; read planning omits it.
         private readonly writer?: ICypherWriter,
+        // Set when the plan reads through the read-your-writes overlay: write clauses are fenced with EagerBarriers.
+        private readonly writeBarriers: boolean = false,
     )
     {
         // Variable-length wiring lands in a later task; the cap is accepted and carried now.
@@ -199,7 +201,12 @@ export class LogicalPlanner
             }
             else if (clause instanceof WritingClause)
             {
-                op = this.compileWrite(op ?? new SingleRow(), clause, pipelineBound);
+                // Under the read-your-writes overlay, reads feeding a write finish before it starts and the write
+                // finishes before anything above reads the graph (see EagerBarrier).
+                let source = op ?? new SingleRow();
+                if (this.writeBarriers && op !== undefined && !(op instanceof EagerBarrier)) source = new EagerBarrier(source, this.cancel);
+                op = this.compileWrite(source, clause, pipelineBound);
+                if (this.writeBarriers) op = new EagerBarrier(op, this.cancel);
             }
         }
         if (op === undefined) op = new SingleRow();
