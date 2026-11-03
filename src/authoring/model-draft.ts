@@ -18,6 +18,7 @@ import { checkAgainst } from "../compiler-services/api.js";
 import { preludeDocument } from "../compiler-services/stdlib/prelude.js";
 import { collectOperators, deriveBindings, emitModelTodl } from "../compiler-services/emit/todl.js";
 import type { Diagnostic } from "../compiler-services/diagnostics/diagnostic.js";
+import { ModelBlockSplicer, SourceLayout } from "./source-layout.js";
 
 const INSTANCE_TIER = Tier[Tier.Instance];
 const RELATIONSHIP = EdgeKind[EdgeKind.Relationship];
@@ -46,6 +47,8 @@ export class ModelDraft
   private readonly baseIds: ReadonlySet<NodeId>;
   /** Home file (source uri) of each own node — the file it round-trips to. */
   private readonly home = new Map<NodeId, string>();
+  /** The files this draft was reopened from (fromSources), by uri: their original text and role (see SourceLayout). */
+  private readonly layouts = new Map<string, SourceLayout>();
 
   private constructor(
     /** The frozen bases as documents: [prelude, ...bases]. */
@@ -67,17 +70,8 @@ export class ModelDraft
    *  yields an empty draft. */
   static fromSource(bases: readonly Repository[], source: string, opts: { namespace: string }): ModelDraft
   {
-    const draft = new ModelDraft([preludeDocument(), ...bases.map((b) => toJSON(b))], opts.namespace);
-    if (source.trim().length === 0) return draft;
-    const compiled = toJSON(checkAgainst([...draft.baseDocs], [{ uri: `${opts.namespace}.todl`, text: source }]).model);
-    // Drop the synthesized `model`-container node (typeOf "model") + its Contains
-    // edges — it is a serialization artifact, not an editable instance.
-    const modelIds = new Set(compiled.nodes.filter((n) => n.metaKind === MODEL_TYPEOF).map((n) => n.id));
-    draft.own = {
-      nodes: compiled.nodes.filter((n) => !draft.baseIds.has(n.id) && !modelIds.has(n.id)),
-      edges: compiled.edges.filter((e) => !draft.baseIds.has(String(e.from)) && !modelIds.has(String(e.from))),
-    };
-    return draft;
+    if (source.trim().length === 0) return ModelDraft.on(bases, opts);
+    return ModelDraft.fromSources(bases, [{ uri: `${opts.namespace}.todl`, text: source }], opts);
   }
 
   /** Reopen SEVERAL `.todl` files as one editable draft (Option B: one model,
@@ -89,14 +83,31 @@ export class ModelDraft
     opts: { namespace: string },
   ): ModelDraft
   {
-    const draft = new ModelDraft([preludeDocument(), ...bases.map((b) => toJSON(b))], opts.namespace);
-    const result = checkAgainst([...draft.baseDocs], sources.map((s) => ({ uri: s.uri, text: s.text })));
+    const baseDocs = [preludeDocument(), ...bases.map((b) => toJSON(b))];
+    const baseIds = new Set(baseDocs.flatMap((d) => d.nodes.map((n) => n.id)));
+    const result = checkAgainst([...baseDocs], sources.map((s) => ({ uri: s.uri, text: s.text })));
     const compiled = toJSON(result.model);
+    // Drop the synthesized `model`-container node (typeOf "model") + its Contains
+    // edges — it is a serialization artifact, not an editable instance.
     const modelIds = new Set(compiled.nodes.filter((n) => n.metaKind === MODEL_TYPEOF).map((n) => n.id));
+    const layouts = new Map(sources.map((s) => [s.uri, SourceLayout.Of(s.uri, s.text)] as const));
+    const declared = compiled.nodes.filter((n) => !baseIds.has(n.id) && !modelIds.has(n.id));
+    // Schema declared in the member's own files (concepts, taxonomies, ...) is frozen like a base: writes edit
+    // instances only, and the round-trip keeps that schema's source text verbatim (toTodlByFile splices). A class
+    // declared in a file that carries schema is kept verbatim with it, so it is frozen too.
+    const frozen = new Set(declared
+      .filter((n) => n.metaKind !== null || (n.isClass === true && layouts.get(result.provenance.get(n.id) ?? "")?.HasSchema === true))
+      .map((n) => n.id));
+    const schema: TodlDocument = {
+      nodes: declared.filter((n) => frozen.has(n.id)),
+      edges: compiled.edges.filter((e) => frozen.has(String(e.from))),
+    };
+    const draft = new ModelDraft(schema.nodes.length > 0 ? [...baseDocs, schema] : baseDocs, opts.namespace);
     draft.own = {
-      nodes: compiled.nodes.filter((n) => !draft.baseIds.has(n.id) && !modelIds.has(n.id)),
+      nodes: declared.filter((n) => !frozen.has(n.id)),
       edges: compiled.edges.filter((e) => !draft.baseIds.has(String(e.from)) && !modelIds.has(String(e.from))),
     };
+    for (const [uri, layout] of layouts) draft.layouts.set(uri, layout);
     // Home every own id from the loader's authoritative provenance (covers named
     // instances AND loader-minted reified edges / inline objects). The model
     // container id is skipped since it is not an own node.
@@ -292,7 +303,11 @@ export class ModelDraft
   {
     const own = this.toJSON();
     const bindings = deriveBindings(this.model, this.baseIds, this.namespace, own);
-    return emitModelTodl(own, this.namespace, bindings, this.conformsOf(own), collectOperators(this.model), this.model);
+    const emitted = emitModelTodl(own, this.namespace, bindings, this.conformsOf(own), collectOperators(this.model), this.model);
+    // Reopened from a single file that carries schema: keep that file's text and replace only its model body.
+    if (this.layouts.size !== 1) return emitted;
+    const [uri, layout] = [...this.layouts][0]!;
+    return layout.HasSchema ? ModelBlockSplicer.Splice(uri, layout.Text, emitted) : emitted;
   }
 
   /** Serialize the overlay as one `.todl` per home file (Option B multi-file):
@@ -309,13 +324,19 @@ export class ModelDraft
       return doc;
     };
     const own = this.toJSON();
+    // Every reopened file that carried the model block is re-emitted, even when every instance in it was deleted —
+    // otherwise the deletion is never written and the instances come back on the next load.
+    for (const [uri, layout] of this.layouts) if (layout.HasModel) ensure(uri);
     for (const n of own.nodes) ensure(this.home.get(n.id) ?? defaultUri).nodes.push(n);
     for (const e of own.edges) ensure(this.home.get(String(e.from)) ?? defaultUri).edges.push(e);
     const result = new Map<string, string>();
     for (const [uri, doc] of files)
     {
       const bindings = deriveBindings(this.model, this.baseIds, this.namespace, doc);
-      result.set(uri, emitModelTodl(doc, this.namespace, bindings, this.conformsOf(doc), collectOperators(this.model), this.model));
+      const emitted = emitModelTodl(doc, this.namespace, bindings, this.conformsOf(doc), collectOperators(this.model), this.model);
+      // A file that declares schema beside its model keeps that schema verbatim: only its model body is replaced.
+      const layout = this.layouts.get(uri);
+      result.set(uri, layout !== undefined && layout.HasSchema ? ModelBlockSplicer.Splice(uri, layout.Text, emitted) : emitted);
     }
     return result;
   }
