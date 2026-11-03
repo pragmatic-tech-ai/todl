@@ -1,3 +1,4 @@
+import { QueryFilterEvaluator } from "../query-filter-evaluator.js";
 import { QueryCompareOp, WriteConcurrency, WriteFailureKind, WriteOperationKind } from "../connector-plan.js";
 import type { DataSourceKind, ExternalRecord, QueryRequest, ResolvedConnection, WriteBatch, WriteFailure, WriteResult } from "../connector-plan.js";
 import type { AdapterResolutionRequest, IDataSourceAdapter, IDataSourceAdapterFactory, IDataSourceAdapterProvider } from "../data-source-adapter.js";
@@ -16,14 +17,8 @@ export class InMemoryAdapter implements IDataSourceAdapter
 
     public async Query(request: QueryRequest): Promise<readonly ExternalRecord[]>
     {
-        const comparisons = request.Where?.All ?? [];
-        const rows = (this.sources.get(request.Source) ?? []).filter(row => comparisons.every(c =>
-        {
-            const fieldValue = row[c.Field];
-            // NULL operand -> SQL UNKNOWN for both = and <> -> row excluded.
-            if (fieldValue === null || fieldValue === undefined || c.Value === null) return false;
-            return c.Op === QueryCompareOp.Neq ? fieldValue !== c.Value : fieldValue === c.Value;
-        }));
+        // The shared SQL-null semantics every re-filtering adapter uses.
+        const rows = (this.sources.get(request.Source) ?? []).filter(row => QueryFilterEvaluator.Matches(row, request.Where));
         return rows.map(row =>
         {
             const projected: { [field: string]: ExternalRecord[string] } = {};

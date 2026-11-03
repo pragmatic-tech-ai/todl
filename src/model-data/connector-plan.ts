@@ -79,19 +79,29 @@ export interface ExternalRecord
     readonly [field: string]: ExternalFieldValue;
 }
 
-/** Comparison operator of a push-down filter term. */
+/** Comparison operator of a filter term. Semantics are SQL's (see QueryFilterEvaluator): a NULL field satisfies only
+ *  IsNull; every other comparison against NULL excludes the row. */
 export enum QueryCompareOp
 {
     Eq = "eq",
     Neq = "neq",
+    Lt = "lt",
+    Lte = "lte",
+    Gt = "gt",
+    Gte = "gte",
+    /** Field equals one of Values (an empty Values matches nothing). */
+    In = "in",
+    IsNull = "isNull",
+    IsNotNull = "isNotNull",
 }
 
-/** One field comparison in a push-down filter. */
+/** One field comparison in a filter. Value is the operand of Eq..Gte (ignored by In / IsNull / IsNotNull); Values is In's set. */
 export interface QueryComparison
 {
     Field: string;
     Op: QueryCompareOp;
     Value: ExternalFieldValue;
+    Values?: readonly ExternalFieldValue[];
 }
 
 /** A conjunction of comparisons (the push-down-eligible subset of a filter). */

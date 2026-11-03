@@ -1,5 +1,5 @@
 import { QueryCompareOp, WriteAtomicity, WriteConcurrency, WriteFailureKind, WriteOperationKind } from "./connector-plan.js";
-import type { ExternalFieldValue, ExternalRecord, QueryRequest, WriteBatch, WriteFailure, WriteOperation, WriteResult } from "./connector-plan.js";
+import type { ExternalFieldValue, ExternalRecord, QueryComparison, QueryRequest, WriteBatch, WriteFailure, WriteOperation, WriteResult } from "./connector-plan.js";
 import { ConnectionFailureKind } from "./connection-reconnect.js";
 import type { IDataSourceAdapter, PageQuery, PageSlice } from "./data-source-adapter.js";
 import { RollbackSignal } from "./rollback-signal.js";
@@ -20,6 +20,14 @@ export class SqlQueryTranslator
     private static readonly InvalidLimitMessage = "QueryPage Limit must be a positive integer";
     private static readonly EqualsOperator = " = ";
     private static readonly NotEqualsOperator = " <> ";
+    private static readonly LessOperator = " < ";
+    private static readonly LessOrEqualOperator = " <= ";
+    private static readonly GreaterOrEqualOperator = " >= ";
+    private static readonly IsNullSql = " IS NULL";
+    private static readonly IsNotNullSql = " IS NOT NULL";
+    private static readonly InOpen = " IN (";
+    private static readonly InClose = ")";
+    private static readonly FalseSql = "1 = 0";
     private static readonly PlaceholderPrefix = "$";
     private static readonly IdentQuote = "\"";
     private static readonly EscapedIdentQuote = "\"\"";
@@ -43,16 +51,9 @@ export class SqlQueryTranslator
             + SqlQueryTranslator.FromKeyword
             + SqlQueryTranslator.QuoteIdent(request.Source);
         const params: ExternalFieldValue[] = [];
-        if (request.Where !== undefined && request.Where.All.length > 0)
+        const terms = (request.Where?.All ?? []).map((c) => SqlQueryTranslator.TermSql(c, params));
+        if (terms.length > 0)
         {
-            const terms: string[] = [];
-            for (const comparison of request.Where.All)
-            {
-                params.push(comparison.Value);
-                terms.push(SqlQueryTranslator.QuoteIdent(comparison.Field)
-                    + SqlQueryTranslator.OperatorSql(comparison.Op)
-                    + SqlQueryTranslator.PlaceholderPrefix + params.length);
-            }
             sql += SqlQueryTranslator.WhereKeyword + terms.join(SqlQueryTranslator.AndKeyword);
         }
         const rows = await this.session.Query(sql, params);
@@ -72,14 +73,7 @@ export class SqlQueryTranslator
             + SqlQueryTranslator.FromKeyword
             + SqlQueryTranslator.QuoteIdent(request.Source);
         const params: ExternalFieldValue[] = [];
-        const terms: string[] = [];
-        for (const comparison of request.Where?.All ?? [])
-        {
-            params.push(comparison.Value);
-            terms.push(SqlQueryTranslator.QuoteIdent(comparison.Field)
-                + SqlQueryTranslator.OperatorSql(comparison.Op)
-                + SqlQueryTranslator.PlaceholderPrefix + params.length);
-        }
+        const terms = (request.Where?.All ?? []).map((c) => SqlQueryTranslator.TermSql(c, params));
         if (page.After !== undefined)
         {
             params.push(page.After);
@@ -104,9 +98,42 @@ export class SqlQueryTranslator
         return nextAfter == null ? { Records: records } : { Records: records, NextAfter: nextAfter };
     }
 
+    /** One filter term as SQL, appending its operands to `params` ($n placeholders). NULL semantics are SQL's own. */
+    private static TermSql(c: QueryComparison, params: ExternalFieldValue[]): string
+    {
+        const column = SqlQueryTranslator.QuoteIdent(c.Field);
+        switch (c.Op)
+        {
+            case QueryCompareOp.IsNull: return column + SqlQueryTranslator.IsNullSql;
+            case QueryCompareOp.IsNotNull: return column + SqlQueryTranslator.IsNotNullSql;
+            case QueryCompareOp.In:
+            {
+                const values = c.Values ?? [];
+                if (values.length === 0) return SqlQueryTranslator.FalseSql;
+                const placeholders = values.map((v) =>
+                {
+                    params.push(v);
+                    return SqlQueryTranslator.PlaceholderPrefix + params.length;
+                });
+                return column + SqlQueryTranslator.InOpen + placeholders.join(SqlQueryTranslator.ListSeparator) + SqlQueryTranslator.InClose;
+            }
+            default:
+                params.push(c.Value);
+                return column + SqlQueryTranslator.OperatorSql(c.Op) + SqlQueryTranslator.PlaceholderPrefix + params.length;
+        }
+    }
+
     private static OperatorSql(op: QueryCompareOp): string
     {
-        return op === QueryCompareOp.Neq ? SqlQueryTranslator.NotEqualsOperator : SqlQueryTranslator.EqualsOperator;
+        switch (op)
+        {
+            case QueryCompareOp.Neq: return SqlQueryTranslator.NotEqualsOperator;
+            case QueryCompareOp.Lt: return SqlQueryTranslator.LessOperator;
+            case QueryCompareOp.Lte: return SqlQueryTranslator.LessOrEqualOperator;
+            case QueryCompareOp.Gt: return SqlQueryTranslator.GreaterOperator;
+            case QueryCompareOp.Gte: return SqlQueryTranslator.GreaterOrEqualOperator;
+            default: return SqlQueryTranslator.EqualsOperator;
+        }
     }
 
     private static ToRecord(row: SqlRow): ExternalRecord

@@ -76,6 +76,8 @@ export { ConnectorWorkingCopy } from './model-data/connector-working-copy.js';
 export type { FlushOutcome } from './model-data/connector-working-copy.js';
 export { FederatedModelDataConnector, type IConnectorQueryFilterProvider } from './model-data/federated-model-data-connector.js';
 export { ConjunctiveQueryFilterProvider } from './model-data/conjunctive-query-filter-provider.js';
+export { QueryFilterEvaluator } from './model-data/query-filter-evaluator.js';
+export { QueryFilterTranslator, UnmappedFilterFieldError } from './model-data/query-filter-translator.js';
 export type { IInstanceFilter, IInstanceView } from './model-data/instance-filter.js';
 export { ModelShardExtractor } from './model-data/model-shard-extractor.js';
 export { ApplicationRootResolver } from './model-data/application-root-resolver.js';
