@@ -79,19 +79,29 @@ export interface ExternalRecord
     readonly [field: string]: ExternalFieldValue;
 }
 
-/** Comparison operator of a push-down filter term. */
+/** Comparison operator of a filter term. Semantics are SQL's (see QueryFilterEvaluator): a NULL field satisfies only
+ *  IsNull; every other comparison against NULL excludes the row. */
 export enum QueryCompareOp
 {
     Eq = "eq",
     Neq = "neq",
+    Lt = "lt",
+    Lte = "lte",
+    Gt = "gt",
+    Gte = "gte",
+    /** Field equals one of Values (an empty Values matches nothing). */
+    In = "in",
+    IsNull = "isNull",
+    IsNotNull = "isNotNull",
 }
 
-/** One field comparison in a push-down filter. */
+/** One field comparison in a filter. Value is the operand of Eq..Gte (ignored by In / IsNull / IsNotNull); Values is In's set. */
 export interface QueryComparison
 {
     Field: string;
     Op: QueryCompareOp;
     Value: ExternalFieldValue;
+    Values?: readonly ExternalFieldValue[];
 }
 
 /** A conjunction of comparisons (the push-down-eligible subset of a filter). */
@@ -173,6 +183,8 @@ export interface WriteResult
 {
     Applied: number;
     Failures: readonly WriteFailure[];
+    /** The version each applied optimistic upsert now carries, when it was bumped on write (VersionBumpingAdapter). */
+    Versions?: readonly { Key: ExternalFieldValue; Version: ExternalFieldValue }[];
 }
 
 /** The minimal resolved connection shape handed to an adapter. */
@@ -263,7 +275,22 @@ export class ConnectorPlanValidator
     private static readonly AbsentVersionMiddle = "' names version field '";
     private static readonly AbsentVersionSuffix = "' which is not in its field map";
     private static readonly GraphQlMiddle = "' targets GraphQL connector '";
-    private static readonly GraphQlSuffix = "', which cannot version writes";
+    private static readonly GraphQlSuffix = "', which cannot version writes (declare versionArg and versionArgType on the connector)";
+    private static readonly VersionArgKey = "versionArg";
+    private static readonly VersionArgTypeKey = "versionArgType";
+    private static readonly VersionArgPairMessage = "' must declare versionArg and versionArgType together";
+    private static readonly UpsertArgsKey = "upsertArgs";
+    private static readonly FilterArgsKey = "filterArgs";
+    private static readonly UpsertKeyArgKey = "upsertKeyArg";
+    private static readonly TypedArgEntrySeparator = /\s*,\s*/;
+    // The source-field side of a `field=arg:Type` entry (the adapter's DeclaredFilters field grammar).
+    private static readonly SourceFieldPattern = /^[_A-Za-z][_0-9A-Za-z.-]*$/;
+    private static readonly TypedArgPairSeparator = "=";
+    private static readonly TypedArgTypeSeparator = ":";
+    private static readonly MalformedTypedArgMiddle = "' has a malformed 'field=arg:Type' entry: '";
+    private static readonly InvalidTypeMiddle = "' is not a valid GraphQL type: '";
+    // A named GraphQL input type, optionally a list and/or non-null (e.g. Int, ID!, [String!]!).
+    private static readonly GraphQlTypePattern = /^\[?[_A-Za-z][_0-9A-Za-z]*!?\]?!?$/;
     private static readonly GraphQlStyleKey = "style";
     private static readonly GraphQlStyleValue = "graphql";
 
@@ -285,6 +312,7 @@ export class ConnectorPlanValidator
         ConnectorPlanValidator.DeleteIdArgKey,
         ConnectorPlanValidator.UpsertMutationKey,
         ConnectorPlanValidator.DeleteMutationKey,
+        ConnectorPlanValidator.VersionArgKey,
     ];
     // GraphQL identifier rule, mirrored from the host's GraphQlName.Pattern (no upward import).
     private static readonly GraphQlNamePattern = /^[_A-Za-z][_0-9A-Za-z]*$/;
@@ -330,6 +358,33 @@ export class ConnectorPlanValidator
                 ConnectorPlanValidator.RequireGraphQlName(spec.Name, key, value);
             }
         }
+        const versionArg = spec.Config[ConnectorPlanValidator.VersionArgKey];
+        const versionType = spec.Config[ConnectorPlanValidator.VersionArgTypeKey]?.trim();
+        if ((versionArg === undefined) !== (versionType === undefined))
+        {
+            throw new Error(`${ConnectorPlanValidator.InvalidIdentifierPrefix}${spec.Name}${ConnectorPlanValidator.VersionArgPairMessage}`);
+        }
+        if (versionType !== undefined && !ConnectorPlanValidator.GraphQlTypePattern.test(versionType))
+        {
+            throw new Error(`${ConnectorPlanValidator.InvalidIdentifierPrefix}${spec.Name}${ConnectorPlanValidator.InvalidIdentifierKeyMiddle}`
+                + `${ConnectorPlanValidator.VersionArgTypeKey}${ConnectorPlanValidator.InvalidTypeMiddle}${versionType}${ConnectorPlanValidator.InvalidIdentifierSuffix}`);
+        }
+        for (const key of [ConnectorPlanValidator.UpsertArgsKey, ConnectorPlanValidator.FilterArgsKey])
+        {
+            const list = spec.Config[key];
+            if (list === undefined || list.trim().length === 0) continue;
+            for (const entry of list.trim().split(ConnectorPlanValidator.TypedArgEntrySeparator).filter((e) => e.length > 0))
+            {
+                const [field, target, ...rest] = entry.split(ConnectorPlanValidator.TypedArgPairSeparator);
+                if (field === undefined || !ConnectorPlanValidator.SourceFieldPattern.test(field.trim()) || target === undefined || rest.length > 0)
+                {
+                    throw new Error(`${ConnectorPlanValidator.InvalidIdentifierPrefix}${spec.Name}${ConnectorPlanValidator.InvalidIdentifierKeyMiddle}${key}${ConnectorPlanValidator.MalformedTypedArgMiddle}${entry}${ConnectorPlanValidator.InvalidIdentifierSuffix}`);
+                }
+                ConnectorPlanValidator.ValidateTypedArg(spec, key, target);
+            }
+        }
+        const keyArg = spec.Config[ConnectorPlanValidator.UpsertKeyArgKey];
+        if (keyArg !== undefined) ConnectorPlanValidator.ValidateTypedArg(spec, ConnectorPlanValidator.UpsertKeyArgKey, keyArg);
         const returnList = spec.Config[ConnectorPlanValidator.UpsertReturnKey];
         if (returnList !== undefined)
         {
@@ -340,6 +395,22 @@ export class ConnectorPlanValidator
                     ConnectorPlanValidator.RequireGraphQlName(spec.Name, ConnectorPlanValidator.UpsertReturnKey, field);
                 }
             }
+        }
+    }
+
+    /** `arg:Type`: a GraphQL argument name and a GraphQL input type (the adapter's grammar). */
+    private static ValidateTypedArg(spec: ConnectorSpec, key: string, typedArg: string): void
+    {
+        const [arg, type, ...rest] = typedArg.split(ConnectorPlanValidator.TypedArgTypeSeparator).map((p) => p.trim());
+        if (arg === undefined || type === undefined || rest.length > 0)
+        {
+            throw new Error(`${ConnectorPlanValidator.InvalidIdentifierPrefix}${spec.Name}${ConnectorPlanValidator.InvalidIdentifierKeyMiddle}${key}${ConnectorPlanValidator.MalformedTypedArgMiddle}${typedArg}${ConnectorPlanValidator.InvalidIdentifierSuffix}`);
+        }
+        ConnectorPlanValidator.RequireGraphQlName(spec.Name, key, arg);
+        if (!ConnectorPlanValidator.GraphQlTypePattern.test(type))
+        {
+            throw new Error(`${ConnectorPlanValidator.InvalidIdentifierPrefix}${spec.Name}${ConnectorPlanValidator.InvalidIdentifierKeyMiddle}`
+                + `${key}${ConnectorPlanValidator.InvalidTypeMiddle}${type}${ConnectorPlanValidator.InvalidIdentifierSuffix}`);
         }
     }
 
@@ -367,7 +438,9 @@ export class ConnectorPlanValidator
                 + `${ConnectorPlanValidator.AbsentVersionMiddle}${binding.VersionField}`
                 + ConnectorPlanValidator.AbsentVersionSuffix);
         }
-        if (ConnectorPlanValidator.IsGraphQl(ConnectorLookup.TryFind(connectors, binding)))
+        const spec = ConnectorLookup.TryFind(connectors, binding);
+        // GraphQL can version only when the connector declares the mutation argument that carries the expected version.
+        if (ConnectorPlanValidator.IsGraphQl(spec) && spec!.Config[ConnectorPlanValidator.VersionArgKey] === undefined)
         {
             throw new Error(`${ConnectorPlanValidator.BindingPrefix}${binding.Concept}`
                 + `${ConnectorPlanValidator.GraphQlMiddle}${binding.Connector}`

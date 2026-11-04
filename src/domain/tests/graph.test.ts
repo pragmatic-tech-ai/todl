@@ -66,3 +66,15 @@ describe("FrozenGraph: registry + reflection + heap", () =>
         assert.equal(g.originOf("w2"), "app@9.9.9");
     });
 });
+
+test("a bare simple name shared by two manifests is ambiguous domain-wide; full names and unique names still resolve", () =>
+{
+    const g = new FrozenGraph();
+    register(g, Manifest.load(soloManifest("a", "a.Widget")));
+    register(g, Manifest.load(soloManifest("b", "b.Widget")));
+    assert.equal(g.getType("Widget"), undefined);
+    assert.equal(g.getType("a.Widget")?.fullName, "a.Widget");
+    assert.equal(g.getType("b.Widget")?.fullName, "b.Widget");
+    assert.equal(g.ownerOf("b.Widget")?.model, "b");
+    assert.equal(g.getType("Element")?.fullName, "Element", "an exact full name wins even when several manifests declare it");
+});

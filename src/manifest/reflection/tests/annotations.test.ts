@@ -31,7 +31,9 @@ for (const binary of [false, true])
         const component = manifest(binary).getType("acme.Component")!;
         const anns = component.getAnnotations();
         assert.equal(anns.length, 1);
-        assert.equal(anns[0]!.type.name, "todl.icon");
+        assert.equal(anns[0]!.type.fullName, "todl.icon");
+        assert.equal(anns[0]!.type.name, "icon");
+        assert.equal(anns[0]!.type.namespace, "todl");
         assert.equal(anns[0]!.args.get("path"), "resources/component.svg");
     });
 
@@ -40,7 +42,7 @@ for (const binary of [false, true])
         const rel = manifest(binary).getType("acme.Component")!.getRelationships().find((r) => r.name === "implementedBy")!;
         const anns = rel.getAnnotations();
         assert.equal(anns.length, 1);
-        assert.equal(anns[0]!.type.name, "todl.iconSource");
+        assert.equal(anns[0]!.type.fullName, "todl.iconSource");
         assert.equal(anns[0]!.args.get("order"), "1"); // numeric args store as strings
     });
 }

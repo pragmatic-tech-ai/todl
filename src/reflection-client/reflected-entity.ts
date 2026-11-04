@@ -123,7 +123,7 @@ export class TermReader implements EntityReader
 
     public get concept(): string
     {
-        return this.term.concept?.name ?? "";
+        return this.term.concept?.fullName ?? "";
     }
 
     public field(name: string): Scalar | undefined

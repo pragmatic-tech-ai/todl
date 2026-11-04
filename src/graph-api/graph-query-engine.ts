@@ -25,7 +25,7 @@ export class GraphQuery implements IGraphQuery
         if (owner === undefined) return undefined;
         const type = owner.getType(typeId);
         if (type === undefined) return undefined;
-        const icon = type.getAnnotations().find((a) => a.type.name === GraphQuery.IconAnnotation);
+        const icon = type.getAnnotations().find((a) => a.type.fullName === GraphQuery.IconAnnotation);
         if (icon === undefined) return undefined;
         const path = icon.args.get(GraphQuery.IconPathArg);
         if (typeof path !== "string") return undefined;
