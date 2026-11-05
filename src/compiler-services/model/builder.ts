@@ -60,6 +60,10 @@ export class Builder
   public static readonly IdentityConceptAttr = "concept";
   public static readonly IdentityKeyAttr = "key";
   public static readonly StorageIdKey = "storageId";
+  /** Concept attr: JSON list of `{ member, expression }` (`derive` entries, expression = source text). */
+  public static readonly DerivesAttr = "derives";
+  /** Attr on a member-annotation application node: the annotated member's name. */
+  public static readonly AppliesToMemberAttr = "appliesToMember";
   /** Reserved match-node attr keys (the concept reuses the identity key) and the
    *  two candidate variable names a `same when` rule may reference. */
   public static readonly MatchConceptAttr = Builder.IdentityConceptAttr;
@@ -209,6 +213,34 @@ export class Builder
       this.stagedEdges.push({ kind: EdgeKind.Extends, via: null, from: id, to: extendsId });
     }
     return this;
+  }
+
+  /** Stage an aspect declaration node (Ontology-tier): a reusable bundle of members. */
+  DefineAspect(id: NodeId): this
+  {
+    this.stagedNodes.push(this.makeNode(id, Tier.Ontology, { metaKind: MetaKind.Aspect }));
+    return this;
+  }
+
+  /** Stage `owner -IncludesAspect-> aspect` (owner is a concept or another aspect). */
+  IncludeAspect(owner: NodeId, aspect: NodeId): this
+  {
+    this.stagedEdges.push({ kind: EdgeKind.IncludesAspect, via: null, from: owner, to: aspect });
+    return this;
+  }
+
+  /** Stage an annotation application on an inherited/contributed member of `owner`
+   *  (`member <name> { annotate … }`): node `<owner>.<member>@<annotation>` typed by the
+   *  annotation, an `Annotated` edge owner -> application, and the member name carried
+   *  under {@link Builder.AppliesToMemberAttr}. Returns the application id. */
+  AnnotateMember(owner: NodeId, member: string, annotationId: NodeId): NodeId
+  {
+    const appId = `${owner}.${member}@${annotationId}`;
+    const node = this.makeNode(appId, Tier.Ontology, { type: annotationId });
+    node.attrs.set(Builder.AppliesToMemberAttr, member);
+    this.stagedNodes.push(node);
+    this.stagedEdges.push({ kind: EdgeKind.Annotated, via: null, from: owner, to: appId });
+    return appId;
   }
 
   /** Stage a declared field on `concept`: a scalar/enum/ref-typed property. The

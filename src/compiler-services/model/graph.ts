@@ -42,6 +42,7 @@ export enum EdgeKind
   Frames, // viewpoint -> the concept it frames
   Targets, // relationship-schema node -> a target concept node (one per union member)
   SameAs, // alias instance -> canonical instance (entity-identity resolution)
+  IncludesAspect, // concept | aspect -> an aspect it includes (type model R1/R2)
 }
 
 /** Which way to walk an edge from a node. */

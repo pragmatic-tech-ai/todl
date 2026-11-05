@@ -22,6 +22,7 @@ export enum MetaKind
   Connector = "connector",
   Population = "population",
   Policy = "policy",
+  Aspect = "aspect",
 }
 
 /** Reserved id of the singleton package node that hosts package-level annotations. */

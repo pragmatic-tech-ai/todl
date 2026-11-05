@@ -117,6 +117,10 @@ export enum DiagnosticCode
   // Solution composition phase (SPEC-06): a member/dependency package could not
   // be resolved or loaded into the composed Domain.
   PackageUnresolved = "package.unresolved",
+  // Type-model aspects (R2): base-list ordering and aspect inclusion rules.
+  ConceptBaseNotFirst = "type.concept-base-not-first",
+  MultipleParentConcepts = "type.multiple-parent-concepts",
+  AspectIncludesNonAspect = "type.aspect-includes-non-aspect",
 }
 
 export interface Diagnostic

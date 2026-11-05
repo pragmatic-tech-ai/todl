@@ -118,6 +118,16 @@ class ParseError extends Error
   }
 }
 
+/** Members shared by concept and aspect bodies, collected while parsing. */
+interface SchemaBody
+{
+  description: string;
+  fields: FieldDecl[];
+  relationships: RelationshipDecl[];
+  invariants: InvariantDecl[];
+  annotations: AnnotationApplication[];
+}
+
 /**
  * The recursive-descent engine. Holds the token stream, the current file `uri`
  * (for spanning), and the shared diagnostics list. `pos` is the single cursor
@@ -129,6 +139,7 @@ class Parser
   private static readonly DeriveKeyword = "derive";
   private static readonly MemberKeyword = "member";
   private static readonly AspectKeyword = "aspect";
+  private static readonly DescriptionMember = "description";
   private static readonly ReadOnlyMember = "read-only";
   private static readonly VersionMember = "version";
   private static readonly ConcurrencyMember = "concurrency";
@@ -385,7 +396,7 @@ class Parser
     if (this.checkKeyword("taxonomy")) return this.parseTaxonomy(start);
     if (this.checkKeyword("viewpoint")) return this.parseViewpoint(start);
     if (this.checkKeyword("concept")) return this.parseConcept(start);
-    if (this.checkKeyword(Parser.AspectKeyword) &&this.peekKind(1) === TokenKind.Identifier) return this.parseAspect(start);
+    if (this.checkKeyword(Parser.AspectKeyword) && this.peekKind(1) === TokenKind.Identifier) return this.parseAspect(start);
     if (this.checkKeyword("model")) return this.parseModel(start);
     if (this.checkKeyword("annotation")) return this.parseAnnotation(start);
     if (this.checkKeyword("package")) return this.parsePackage(start);
@@ -1321,30 +1332,14 @@ class Parser
     const extendsName: string | null = bases[0]?.name ?? null;
     const extendsSpan: SourceSpan | undefined = bases[0]?.span;
 
-    let description = "";
-    const fields: FieldDecl[] = [];
-    const relationships: RelationshipDecl[] = [];
-    const invariants: InvariantDecl[] = [];
-    const annotations: AnnotationApplication[] = [];
+    const body = Parser.NewSchemaBody();
     const derives: DeriveDecl[] = [];
     const memberAnnotations: MemberAnnotationDecl[] = [];
 
     this.expect(TokenKind.LBrace);
     this.parseBodyMembers(() =>
     {
-      if (this.checkKeyword("relationship"))
-      {
-        relationships.push(this.parseRelationship());
-      }
-      else if (this.checkKeyword("invariant"))
-      {
-        invariants.push(this.parseInvariant());
-      }
-      else if (this.checkKeyword("annotate"))
-      {
-        annotations.push(this.parseAnnotationApplication(this.startToken()));
-      }
-      else if (this.checkKeyword(Parser.DeriveKeyword) && this.peekKind(1) === TokenKind.Identifier)
+      if (this.checkKeyword(Parser.DeriveKeyword) && this.peekKind(1) === TokenKind.Identifier)
       {
         derives.push(this.parseDerive());
       }
@@ -1362,45 +1357,73 @@ class Parser
       }
       else
       {
-        const nameTok = this.expect(TokenKind.Identifier);
-        const memberName = nameTok.value;
-        if (this.match(TokenKind.Colon))
-        {
-          const typeStart = this.current();
-          const typeName = this.parseDottedPath();      // field type may be ns-qualified
-          const typeSpan = this.spanFrom(typeStart);
-          const cardinality = this.parseCardinality();
-          this.expect(TokenKind.Semicolon);
-          fields.push({
-            name: memberName, type: typeName, cardinality,
-            nameSpan: tokenSpan(nameTok, this.uri), typeSpan,
-          });
-        }
-        else if (this.match(TokenKind.Equals))
-        {
-          if (this.check(TokenKind.String) || this.check(TokenKind.RawString))
-          {
-            const value = this.parseStringValue();
-            if (memberName === "description") description = value;
-          }
-          else
-          {
-            // Doc-only non-string members (`references = [ … ]`); skip.
-            this.skipToSemicolon();
-          }
-          this.expect(TokenKind.Semicolon);
-        }
-        else
-        {
-          throw this.error(`expected ":" (field) or "=" (assignment) after "${memberName}"`);
-        }
+        this.parseSchemaMember(body);
       }
     });
     this.expect(TokenKind.RBrace);
-    const decl: ConceptDecl = { kind: DeclKind.Concept, name, extends: extendsName, bases, description, fields, relationships, invariants, annotations, derives, memberAnnotations, span: this.spanFrom(start) };
+    const decl: ConceptDecl = { kind: DeclKind.Concept, name, extends: extendsName, bases, description: body.description, fields: body.fields, relationships: body.relationships, invariants: body.invariants, annotations: body.annotations, derives, memberAnnotations, span: this.spanFrom(start) };
     if (extendsSpan !== undefined) decl.extendsSpan = extendsSpan;
     decl.nameSpan = tokenSpan(nameTok, this.uri);
     return decl;
+  }
+
+  private static NewSchemaBody(): SchemaBody
+  {
+    return { description: "", fields: [], relationships: [], invariants: [], annotations: [] };
+  }
+
+  /** One member shared by concept and aspect bodies: `relationship`, `invariant`,
+   * `annotate`, a `name : Type` field, or a `name = …;` doc assignment (only a
+   * string `description` is kept). */
+  private parseSchemaMember(body: SchemaBody): void
+  {
+    if (this.checkKeyword("relationship"))
+    {
+      body.relationships.push(this.parseRelationship());
+    }
+    else if (this.checkKeyword("invariant"))
+    {
+      body.invariants.push(this.parseInvariant());
+    }
+    else if (this.checkKeyword("annotate"))
+    {
+      body.annotations.push(this.parseAnnotationApplication(this.startToken()));
+    }
+    else
+    {
+      const nameTok = this.expect(TokenKind.Identifier);
+      const memberName = nameTok.value;
+      if (this.match(TokenKind.Colon))
+      {
+        const typeStart = this.current();
+        const typeName = this.parseDottedPath();      // field type may be ns-qualified
+        const typeSpan = this.spanFrom(typeStart);
+        const cardinality = this.parseCardinality();
+        this.expect(TokenKind.Semicolon);
+        body.fields.push({
+          name: memberName, type: typeName, cardinality,
+          nameSpan: tokenSpan(nameTok, this.uri), typeSpan,
+        });
+      }
+      else if (this.match(TokenKind.Equals))
+      {
+        if (this.check(TokenKind.String) || this.check(TokenKind.RawString))
+        {
+          const value = this.parseStringValue();
+          if (memberName === Parser.DescriptionMember) body.description = value;
+        }
+        else
+        {
+          // Doc-only non-string members (`references = [ … ]`); skip.
+          this.skipToSemicolon();
+        }
+        this.expect(TokenKind.Semicolon);
+      }
+      else
+      {
+        throw this.error(`expected ":" (field) or "=" (assignment) after "${memberName}"`);
+      }
+    }
   }
 
   /** `: a, b.c, d` — comma-separated dotted paths; the cursor is already past the `:`. */
@@ -1423,56 +1446,12 @@ class Parser
     this.expectKeyword(Parser.AspectKeyword);
     const nameTok = this.expect(TokenKind.Identifier);
     const includes = this.match(TokenKind.Colon) ? this.parseBaseList() : [];
-    let description = "";
-    const fields: FieldDecl[] = [];
-    const relationships: RelationshipDecl[] = [];
-    const invariants: InvariantDecl[] = [];
-    const annotations: AnnotationApplication[] = [];
+    const body = Parser.NewSchemaBody();
 
     this.expect(TokenKind.LBrace);
-    this.parseBodyMembers(() =>
-    {
-      if (this.checkKeyword("relationship"))
-      {
-        relationships.push(this.parseRelationship());
-      }
-      else if (this.checkKeyword("invariant"))
-      {
-        invariants.push(this.parseInvariant());
-      }
-      else if (this.checkKeyword("annotate"))
-      {
-        annotations.push(this.parseAnnotationApplication(this.startToken()));
-      }
-      else
-      {
-        const memberTok = this.expect(TokenKind.Identifier);
-        if (this.match(TokenKind.Colon))
-        {
-          const typeStart = this.current();
-          const typeName = this.parseDottedPath();
-          const typeSpan = this.spanFrom(typeStart);
-          const cardinality = this.parseCardinality();
-          this.expect(TokenKind.Semicolon);
-          fields.push({
-            name: memberTok.value, type: typeName, cardinality,
-            nameSpan: tokenSpan(memberTok, this.uri), typeSpan,
-          });
-        }
-        else if (this.match(TokenKind.Equals))
-        {
-          const value = this.parseStringValue();
-          if (memberTok.value === "description") description = value;
-          this.expect(TokenKind.Semicolon);
-        }
-        else
-        {
-          throw this.error(`expected ":" (field) or "=" (assignment) after "${memberTok.value}"`);
-        }
-      }
-    });
+    this.parseBodyMembers(() => this.parseSchemaMember(body));
     this.expect(TokenKind.RBrace);
-    const decl: AspectDecl = { kind: DeclKind.Aspect, name: nameTok.value, includes, description, fields, relationships, invariants, annotations, span: this.spanFrom(start) };
+    const decl: AspectDecl = { kind: DeclKind.Aspect, name: nameTok.value, includes, description: body.description, fields: body.fields, relationships: body.relationships, invariants: body.invariants, annotations: body.annotations, span: this.spanFrom(start) };
     decl.nameSpan = tokenSpan(nameTok, this.uri);
     return decl;
   }

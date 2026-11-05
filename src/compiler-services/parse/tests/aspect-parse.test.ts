@@ -74,3 +74,25 @@ test("fields named member and derive still parse", () =>
   assert.deepEqual(c.fields.map((f) => f.name), ["member", "derive"]);
   assert.deepEqual(c.memberAnnotations, []);
 });
+
+test("derive without a closing semicolon at EOF yields a ParseError and terminates", () =>
+{
+  const { diagnostics } = parse(`namespace t { concept a { derive x = foo`, "t.todl");
+  assert.ok(diagnostics.length > 0);
+});
+
+test("malformed member block yields a diagnostic and recovery continues", () =>
+{
+  const { namespace, diagnostics } = parse(
+    `namespace t { concept a { member x { nonsense ; } y : string; } concept b { } }`, "t.todl");
+  assert.ok(diagnostics.length > 0);
+  const names = namespace.declarations.map((d) => (d as ConceptDecl).name);
+  assert.deepEqual(names, ["a", "b"]);
+});
+
+test("dotted base name", () =>
+{
+  const c = AspectParseHarness.Concept(`namespace t { concept a : ns.base_net { } }`);
+  assert.deepEqual(c.bases.map((b) => b.name), ["ns.base_net"]);
+  assert.equal(c.extends, "ns.base_net");
+});
