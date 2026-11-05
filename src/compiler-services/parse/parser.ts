@@ -53,6 +53,10 @@ import {
   type NamespaceNode,
   type Declaration,
   type ConceptDecl,
+  type AspectDecl,
+  type BaseRef,
+  type DeriveDecl,
+  type MemberAnnotationDecl,
   type PrimitiveDecl,
   type FieldDecl,
   type RelationshipDecl,
@@ -122,6 +126,9 @@ class ParseError extends Error
  */
 class Parser
 {
+  private static readonly DeriveKeyword = "derive";
+  private static readonly MemberKeyword = "member";
+  private static readonly AspectKeyword = "aspect";
   private static readonly ReadOnlyMember = "read-only";
   private static readonly VersionMember = "version";
   private static readonly ConcurrencyMember = "concurrency";
@@ -378,6 +385,7 @@ class Parser
     if (this.checkKeyword("taxonomy")) return this.parseTaxonomy(start);
     if (this.checkKeyword("viewpoint")) return this.parseViewpoint(start);
     if (this.checkKeyword("concept")) return this.parseConcept(start);
+    if (this.checkKeyword(Parser.AspectKeyword) &&this.peekKind(1) === TokenKind.Identifier) return this.parseAspect(start);
     if (this.checkKeyword("model")) return this.parseModel(start);
     if (this.checkKeyword("annotation")) return this.parseAnnotation(start);
     if (this.checkKeyword("package")) return this.parsePackage(start);
@@ -1307,22 +1315,19 @@ class Parser
     this.expectKeyword("concept");
     const nameTok = this.expect(TokenKind.Identifier);
     const name = nameTok.value;
-    let extendsName: string | null = null;
-    let extendsSpan: SourceSpan | undefined;
-    if (this.match(TokenKind.Colon))
-    {
-      // A parent may be namespace-qualified (`ns.concept`); resolution strips
-      // the namespace. Bare names still parse.
-      const startTok = this.current();
-      extendsName = this.parseDottedPath();
-      extendsSpan = this.spanFrom(startTok);
-    }
+    // A parent may be namespace-qualified (`ns.concept`); resolution strips
+    // the namespace. The list may also carry aspects after the parent.
+    const bases = this.match(TokenKind.Colon) ? this.parseBaseList() : [];
+    const extendsName: string | null = bases[0]?.name ?? null;
+    const extendsSpan: SourceSpan | undefined = bases[0]?.span;
 
     let description = "";
     const fields: FieldDecl[] = [];
     const relationships: RelationshipDecl[] = [];
     const invariants: InvariantDecl[] = [];
     const annotations: AnnotationApplication[] = [];
+    const derives: DeriveDecl[] = [];
+    const memberAnnotations: MemberAnnotationDecl[] = [];
 
     this.expect(TokenKind.LBrace);
     this.parseBodyMembers(() =>
@@ -1338,6 +1343,14 @@ class Parser
       else if (this.checkKeyword("annotate"))
       {
         annotations.push(this.parseAnnotationApplication(this.startToken()));
+      }
+      else if (this.checkKeyword(Parser.DeriveKeyword) && this.peekKind(1) === TokenKind.Identifier)
+      {
+        derives.push(this.parseDerive());
+      }
+      else if (this.checkKeyword(Parser.MemberKeyword) && this.peekKind(1) === TokenKind.Identifier)
+      {
+        memberAnnotations.push(this.parseMemberAnnotations());
       }
       else if (this.checkKeyword("authoring"))
       {
@@ -1384,10 +1397,112 @@ class Parser
       }
     });
     this.expect(TokenKind.RBrace);
-    const decl: ConceptDecl = { kind: DeclKind.Concept, name, extends: extendsName, description, fields, relationships, invariants, annotations, span: this.spanFrom(start) };
+    const decl: ConceptDecl = { kind: DeclKind.Concept, name, extends: extendsName, bases, description, fields, relationships, invariants, annotations, derives, memberAnnotations, span: this.spanFrom(start) };
     if (extendsSpan !== undefined) decl.extendsSpan = extendsSpan;
     decl.nameSpan = tokenSpan(nameTok, this.uri);
     return decl;
+  }
+
+  /** `: a, b.c, d` — comma-separated dotted paths; the cursor is already past the `:`. */
+  public parseBaseList(): BaseRef[]
+  {
+    const refs: BaseRef[] = [];
+    do
+    {
+      const startTok = this.current();
+      const name = this.parseDottedPath();
+      refs.push({ name, span: this.spanFrom(startTok) });
+    }
+    while (this.match(TokenKind.Comma));
+    return refs;
+  }
+
+  /** `aspect <Name> [: <aspect>, …] { fields, relationships, invariants, annotate }`. */
+  private parseAspect(start: Token): AspectDecl
+  {
+    this.expectKeyword(Parser.AspectKeyword);
+    const nameTok = this.expect(TokenKind.Identifier);
+    const includes = this.match(TokenKind.Colon) ? this.parseBaseList() : [];
+    let description = "";
+    const fields: FieldDecl[] = [];
+    const relationships: RelationshipDecl[] = [];
+    const invariants: InvariantDecl[] = [];
+    const annotations: AnnotationApplication[] = [];
+
+    this.expect(TokenKind.LBrace);
+    this.parseBodyMembers(() =>
+    {
+      if (this.checkKeyword("relationship"))
+      {
+        relationships.push(this.parseRelationship());
+      }
+      else if (this.checkKeyword("invariant"))
+      {
+        invariants.push(this.parseInvariant());
+      }
+      else if (this.checkKeyword("annotate"))
+      {
+        annotations.push(this.parseAnnotationApplication(this.startToken()));
+      }
+      else
+      {
+        const memberTok = this.expect(TokenKind.Identifier);
+        if (this.match(TokenKind.Colon))
+        {
+          const typeStart = this.current();
+          const typeName = this.parseDottedPath();
+          const typeSpan = this.spanFrom(typeStart);
+          const cardinality = this.parseCardinality();
+          this.expect(TokenKind.Semicolon);
+          fields.push({
+            name: memberTok.value, type: typeName, cardinality,
+            nameSpan: tokenSpan(memberTok, this.uri), typeSpan,
+          });
+        }
+        else if (this.match(TokenKind.Equals))
+        {
+          const value = this.parseStringValue();
+          if (memberTok.value === "description") description = value;
+          this.expect(TokenKind.Semicolon);
+        }
+        else
+        {
+          throw this.error(`expected ":" (field) or "=" (assignment) after "${memberTok.value}"`);
+        }
+      }
+    });
+    this.expect(TokenKind.RBrace);
+    const decl: AspectDecl = { kind: DeclKind.Aspect, name: nameTok.value, includes, description, fields, relationships, invariants, annotations, span: this.spanFrom(start) };
+    decl.nameSpan = tokenSpan(nameTok, this.uri);
+    return decl;
+  }
+
+  /** `derive <member> = <tokens> ;` — the expression is kept as raw tokens. */
+  private parseDerive(): DeriveDecl
+  {
+    const start = this.startToken();
+    this.expectKeyword(Parser.DeriveKeyword);
+    const member = this.expectIdentifier();
+    this.expect(TokenKind.Equals);
+    const expression = this.collectUntilSemicolon();
+    this.expect(TokenKind.Semicolon);
+    return { member, expression, span: this.spanFrom(start) };
+  }
+
+  /** `member <name> { annotate … }` — annotations applied to an inherited or contributed member. */
+  private parseMemberAnnotations(): MemberAnnotationDecl
+  {
+    const start = this.startToken();
+    this.expectKeyword(Parser.MemberKeyword);
+    const member = this.expectIdentifier();
+    const annotations: AnnotationApplication[] = [];
+    this.expect(TokenKind.LBrace);
+    this.parseBodyMembers(() =>
+    {
+      annotations.push(this.parseAnnotationApplication(this.startToken()));
+    });
+    this.expect(TokenKind.RBrace);
+    return { member, annotations, span: this.spanFrom(start) };
   }
 
   /** `relationship <name> -> <target> [| <target>…] <card> [{ annotate … } | ;]` —
