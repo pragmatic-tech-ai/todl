@@ -111,13 +111,13 @@ test("derive is stored as source text; member annotations hang off the member ta
   assert.deepEqual(AspectLoadHarness.Errors(r), []);
   const derives = JSON.parse(String(r.model.resolve("t.a")?.attrs.get(Builder.DerivesAttr)));
   assert.deepEqual(derives, [{ member: "region", expression: 'upper( "x" ) + y' }]);
-  const app = r.model.resolve("t.a.region@t.heat");
+  const app = r.model.resolve(`${Builder.MemberTargetId("t.a", "region")}@t.heat`);
   assert.ok(app);
   assert.equal(app?.attrs.get("level"), "3");
-  const target = r.model.resolve("t.a.region");
+  const target = r.model.resolve(Builder.MemberTargetId("t.a", "region"));
   assert.equal(target?.metaKind, MetaKind.MemberTarget);
   assert.equal(target?.attrs.get(Builder.MemberTargetNameAttr), "region");
-  assert.deepEqual(r.model.related("t.a.region", EdgeKind.Annotated, Direction.Out), ["t.a.region@t.heat"]);
+  assert.deepEqual(r.model.related(Builder.MemberTargetId("t.a", "region"), EdgeKind.Annotated, Direction.Out), [`${Builder.MemberTargetId("t.a", "region")}@t.heat`]);
   assert.deepEqual(r.model.related("t.a", EdgeKind.Annotated, Direction.Out), []);
 });
 

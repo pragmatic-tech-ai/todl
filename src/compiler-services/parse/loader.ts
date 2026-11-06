@@ -1493,7 +1493,7 @@ function stageApplications(
 {
   for (const app of apps)
   {
-    const appId = member === undefined ? `${target}@${app.name}` : `${target}.${member}@${app.name}`;
+    const appId = member === undefined ? `${target}@${app.name}` : `${Builder.MemberTargetId(target, member)}@${app.name}`;
     if (seen.has(appId))
     {
       diagnostics.push({

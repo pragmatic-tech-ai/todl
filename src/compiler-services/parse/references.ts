@@ -47,6 +47,7 @@ import {
 } from "./ast.js";
 import type { SourceSpan } from "../diagnostics/span.js";
 import { PACKAGE_NODE_ID } from "../model/kinds.js";
+import { Builder } from "../model/builder.js";
 import { NodeIdQualifier } from "./node-id-qualifier.js";
 
 /**
@@ -190,8 +191,8 @@ export function visitReferences(decl: Declaration, visit: Visit): void
       }
       annotationRefs(decl.annotations, decl.name);
       // `member <m> { annotate … }` applications resolve like any annotation name; their
-      // application nodes are `<concept>.<m>@<annotation>` (see Builder.AnnotateMember).
-      for (const ma of decl.memberAnnotations) annotationRefs(ma.annotations, `${decl.name}.${ma.member}`);
+      // application nodes are `<concept>#<m>@<annotation>` (see Builder.MemberTargetId).
+      for (const ma of decl.memberAnnotations) annotationRefs(ma.annotations, Builder.MemberTargetId(decl.name, ma.member));
       break;
     }
     case DeclKind.Aspect:

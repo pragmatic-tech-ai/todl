@@ -64,6 +64,8 @@ export class Builder
   public static readonly DerivesAttr = "derives";
   /** Attr on a member-target node: the annotated member's name. */
   public static readonly MemberTargetNameAttr = "name";
+  private static readonly MemberTargetSeparator = "#";
+  private static readonly MemberTargetClashMessage = "member target id is taken by a node that is not a member target:";
   /** Reserved match-node attr keys (the concept reuses the identity key) and the
    *  two candidate variable names a `same when` rule may reference. */
   public static readonly MatchConceptAttr = Builder.IdentityConceptAttr;
@@ -229,20 +231,33 @@ export class Builder
     return this;
   }
 
+  /** Id of the member target `<owner>#<member>` hosting member annotations (R6). `#`
+   *  cannot appear in a TODL identifier, so no declared node can spell this id (a
+   *  dotted `<owner>.<member>` could be a concept `member` in namespace `owner`). */
+  public static MemberTargetId(owner: NodeId, member: string): NodeId
+  {
+    return `${owner}${Builder.MemberTargetSeparator}${member}`;
+  }
+
   /** Stage an annotation application on an inherited/contributed member of `owner`
    *  (`member <name> { annotate … }`, R6). The application hangs off the member target
-   *  `<owner>.<member>` (a {@link MetaKind.MemberTarget} node, staged once), exactly as
-   *  a relationship-member annotation hangs off `<concept>.<rel>`, so concept-level
-   *  annotation readers never see it. The caller guarantees `member` is not one of
-   *  `owner`'s own members. Returns the application id. */
+   *  {@link Builder.MemberTargetId} (a {@link MetaKind.MemberTarget} node, staged once),
+   *  the way a relationship-member annotation hangs off its relationship node, so
+   *  concept-level annotation readers never see it. The caller guarantees `member` is
+   *  not one of `owner`'s own members. Returns the application id. */
   AnnotateMember(owner: NodeId, member: string, annotationId: NodeId): NodeId
   {
-    const memberId = `${owner}.${member}`;
-    if (!this.graph.hasNode(memberId) && !this.stagedNodes.some((n) => n.id === memberId))
+    const memberId = Builder.MemberTargetId(owner, member);
+    const existing = this.graph.getNode(memberId) ?? this.stagedNodes.find((n) => n.id === memberId);
+    if (existing === undefined)
     {
       const node = this.makeNode(memberId, Tier.Ontology, { metaKind: MetaKind.MemberTarget });
       node.attrs.set(Builder.MemberTargetNameAttr, member);
       this.stagedNodes.push(node);
+    }
+    else if (existing.metaKind !== MetaKind.MemberTarget || existing.attrs.get(Builder.MemberTargetNameAttr) !== member)
+    {
+      throw new Error(`${Builder.MemberTargetClashMessage} "${memberId}"`);
     }
     return this.annotate(memberId, annotationId);
   }

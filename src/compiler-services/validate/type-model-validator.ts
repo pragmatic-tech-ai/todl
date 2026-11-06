@@ -147,7 +147,7 @@ export class TypeModelValidator
     // edges are already reported as MultipleExtendsEdges.
     const parent = this.model.related(concept, EdgeKind.Extends, Direction.Out).slice(0, 1);
     this.CheckCollisions(concept, [...parent, ...this.DirectIncludes(concept)], others);
-    this.CheckDerives(concept, own);
+    this.CheckDerives(concept);
   }
 
   private CheckAspect(node: Node): void
@@ -183,7 +183,7 @@ export class TypeModelValidator
     return true;
   }
 
-  private CheckDerives(concept: NodeId, own: Set<string>): void
+  private CheckDerives(concept: NodeId): void
   {
     let derives: { member: string; expression: string }[];
     try
@@ -199,11 +199,6 @@ export class TypeModelValidator
     }
     if (derives.length === 0) return;
     const seen = new Set<string>();
-    const contributed = new Set<string>();
-    for (const aspect of this.model.AspectsOf(concept))
-    {
-      for (const name of this.OwnNames(aspect)) contributed.add(name);
-    }
     for (const derive of derives)
     {
       if (seen.has(derive.member))
@@ -214,7 +209,7 @@ export class TypeModelValidator
         continue;
       }
       seen.add(derive.member);
-      if (contributed.has(derive.member) && !own.has(derive.member)) continue;
+      if (this.model.IsDerivableMember(concept, derive.member)) continue;
       this.diagnostics.push(this.Error(
         DiagnosticCode.DeriveTargetNotContributed, concept, `${concept}.${derive.member}`,
         `"${derive.member}": ${TypeModelValidator.DeriveTargetMessage} "${concept}"`,

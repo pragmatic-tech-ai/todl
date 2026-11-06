@@ -720,8 +720,10 @@ export class Repository
     return parsed as { member: string; expression: string }[];
   }
 
-  /** Names of members derived (R7) on `type` or any of its supertypes. A malformed
-   *  derives attribute contributes nothing here (the type-model validator reports it). */
+  /** Names of members validly derived (R7) on `type` or any of its supertypes: only a
+   *  derive whose target {@link IsDerivableMember} counts. An invalid derive or a
+   *  malformed derives attribute contributes nothing here (the type-model validator
+   *  reports both). */
   DerivedMembersOf(type: NodeId): Set<string>
   {
     const names = new Set<string>();
@@ -737,9 +739,25 @@ export class Repository
         if (!(error instanceof MalformedDerivesError)) throw error;
         continue;
       }
-      for (const derive of derives) names.add(derive.member);
+      for (const derive of derives)
+      {
+        if (this.IsDerivableMember(owner, derive.member)) names.add(derive.member);
+      }
     }
     return names;
+  }
+
+  /** True when `member` may be derived on `concept` (R7): an aspect carried by the
+   *  concept declares it and the concept does not declare it itself. */
+  IsDerivableMember(concept: NodeId, member: string): boolean
+  {
+    if (Repository.DeclaresMember(this.schemaOf(concept), member)) return false;
+    return this.AspectsOf(concept).some((aspect) => Repository.DeclaresMember(this.schemaOf(aspect), member));
+  }
+
+  private static DeclaresMember(schema: ConceptSchema, member: string): boolean
+  {
+    return schema.fields.some((f) => f.name === member) || schema.relationships.some((r) => r.name === member);
   }
 
   private static IsDeriveEntry(entry: unknown): boolean

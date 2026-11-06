@@ -6,6 +6,7 @@ import { Builder } from "../../model/builder.js";
 import { Direction, EdgeKind } from "../../model/graph.js";
 import { DiagnosticCode, Severity, type Diagnostic } from "../../diagnostics/diagnostic.js";
 import { ManifestEmitter } from "../../emit/manifest.js";
+import { MetaKind } from "../../model/kinds.js";
 import type { Repository } from "../../model/model.js";
 
 /** Downstream validation/emission must see aspects (final-review findings). */
@@ -84,10 +85,10 @@ test("a member annotation is not an annotation of the concept itself", () =>
 test("a member annotation is reachable from the member target like a relationship-member annotation", () =>
 {
   const r = DownstreamHarness.Check(MemberAnnotationSource.Text);
-  assert.deepEqual(r.model.related("t.a.region", EdgeKind.Annotated, Direction.Out), ["t.a.region@t.heat"]);
-  assert.deepEqual(r.model.related("t.a.near", EdgeKind.Annotated, Direction.Out), ["t.a.near@t.heat"]);
-  assert.equal(r.model.resolve("t.a.region@t.heat")?.attrs.get("level"), "3");
-  assert.equal(r.model.resolve("t.a.region@t.heat")?.attrs.has("@appliesToMember"), false);
+  assert.deepEqual(r.model.related(Builder.MemberTargetId("t.a", "region"), EdgeKind.Annotated, Direction.Out), [`${Builder.MemberTargetId("t.a", "region")}@t.heat`]);
+  assert.deepEqual(r.model.related(Builder.MemberTargetId("t.a", "near"), EdgeKind.Annotated, Direction.Out), [`${Builder.MemberTargetId("t.a", "near")}@t.heat`]);
+  assert.equal(r.model.resolve(`${Builder.MemberTargetId("t.a", "region")}@t.heat`)?.attrs.get("level"), "3");
+  assert.equal(r.model.resolve(`${Builder.MemberTargetId("t.a", "region")}@t.heat`)?.attrs.has("@appliesToMember"), false);
 });
 
 // -- 3: aspect invariants run on carriers and are emitted ----------------------
@@ -175,4 +176,33 @@ test("DerivesOf rejects valid JSON of the wrong shape", () =>
     r.model.setAttr("t.c", Builder.DerivesAttr, bad);
     assert.throws(() => r.model.DerivesOf("t.c"), /Malformed derives attribute/, bad);
   }
+});
+
+// -- re-review 1: member-target ids cannot collide with declared nodes ---------------
+
+test("a member annotation never hangs off an unrelated node spelled <owner>.<member>", () =>
+{
+  const r = check([
+    { uri: "t.todl", text: `namespace t {\nannotation heat { level : number; }\naspect cs { region : string; }\nconcept a : cs { member region { annotate heat { level = 3; } } }\n}` },
+    { uri: "ta.todl", text: `namespace t.a {\nconcept region { }\n}` },
+  ]);
+  assert.equal(r.model.resolve("t.a.region")?.metaKind, MetaKind.Concept);
+  assert.deepEqual(r.model.related("t.a.region", EdgeKind.Annotated, Direction.Out), []);
+  const target = Builder.MemberTargetId("t.a", "region");
+  assert.equal(r.model.resolve(target)?.metaKind, MetaKind.MemberTarget);
+  const apps = r.model.related(target, EdgeKind.Annotated, Direction.Out);
+  assert.equal(apps.length, 1);
+  assert.equal(r.model.resolve(apps[0]!)?.attrs.get("level"), "3");
+});
+
+// -- re-review 2: only valid (aspect-contributed) derives count as derived -----------
+
+test("an invalid derive does not suppress required-missing nor cascade DerivedMemberAssigned", () =>
+{
+  const own = DownstreamHarness.Codes(`concept c { y : string; derive y = 1; }\nc c1 { }\nc c2 { y = "v"; }`);
+  assert.equal(own.filter((c) => c === DiagnosticCode.RequiredMissing).length, 1, JSON.stringify(own));
+  assert.equal(own.filter((c) => c === DiagnosticCode.DerivedMemberAssigned).length, 0);
+  const parent = DownstreamHarness.Codes(`concept p { x : string; }\nconcept c : p { derive x = 1; }\nc c1 { }\nc c2 { x = "v"; }`);
+  assert.equal(parent.filter((c) => c === DiagnosticCode.RequiredMissing).length, 1, JSON.stringify(parent));
+  assert.equal(parent.filter((c) => c === DiagnosticCode.DerivedMemberAssigned).length, 0);
 });
