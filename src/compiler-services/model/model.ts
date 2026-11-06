@@ -54,6 +54,8 @@ export interface FieldSchema
   name: string;
   type: NodeId;
   cardinality: Cardinality;
+  /** The concept or aspect that declares this member (its origin). */
+  declaredBy: NodeId;
 }
 
 export interface RelationshipSchema
@@ -62,6 +64,8 @@ export interface RelationshipSchema
   targets: NodeId[];
   cardinality: Cardinality;
   inverse: string | null;
+  /** The concept or aspect that declares this member (its origin). */
+  declaredBy: NodeId;
 }
 
 export interface ConceptSchema
@@ -72,6 +76,18 @@ export interface ConceptSchema
   relationships: RelationshipSchema[];
 }
 
+/** Thrown by {@link Repository.DerivesOf} when a concept's derives attribute is not valid JSON. */
+export class MalformedDerivesError extends Error
+{
+  public readonly Concept: NodeId;
+
+  constructor(concept: NodeId, message: string)
+  {
+    super(message);
+    this.Concept = concept;
+  }
+}
+
 export class Repository
 {
   private readonly graph: Graph;
@@ -79,12 +95,44 @@ export class Repository
   private readonly invariants: Invariants;
   private readonly spans = new Map<string, SourceSpan>();
   private readonly entityCache = new Map<NodeId, EntityBase>();
+  private static readonly MalformedDerivesMessage = "Malformed derives attribute on concept";
+  private static readonly DeriveMemberKey = "member";
+  private static readonly DeriveExpressionKey = "expression";
+  // Aspect-closure memo, cleared on any graph mutation.
+  private readonly aspectsCache = new Map<NodeId, NodeId[]>();
+  private readonly carriedCache = new Map<NodeId, ReadonlySet<NodeId>>();
+  private readonly carriersCache = new Map<NodeId, NodeId[]>();
+  // Predicate quantifier domains (InstancesMatching ids), cleared on any graph mutation.
+  private readonly domainCache = new Map<NodeId, NodeId[]>();
 
   constructor(graph: Graph = new Graph())
   {
     this.graph = graph;
     this.derivations = new Derivations(this);
     this.invariants = new Invariants();
+    this.graph.changed.subscribe(() => this.InvalidateAspectCaches());
+  }
+
+  private InvalidateAspectCaches(): void
+  {
+    this.aspectsCache.clear();
+    this.carriedCache.clear();
+    this.carriersCache.clear();
+    this.domainCache.clear();
+  }
+
+  /** Ids of every instance whose type `IsA` the argument (spec R8), memoized until the
+   *  graph changes so a quantifier evaluated once per instance stays linear. Resolves
+   *  through the (overridable) {@link InstancesMatching}. Callers must not mutate it. */
+  QuantifierDomain(conceptOrAspect: NodeId): readonly NodeId[]
+  {
+    let cached = this.domainCache.get(conceptOrAspect);
+    if (cached === undefined)
+    {
+      cached = this.InstancesMatching(conceptOrAspect).map((n) => n.id);
+      this.domainCache.set(conceptOrAspect, cached);
+    }
+    return cached;
   }
 
   /** Register a derived member (spec §4.4): a comprehension queried per instance. */
@@ -489,6 +537,7 @@ export class Repository
       name: f.name,
       type: f.type,
       cardinality: f.cardinality,
+      declaredBy: concept,
     }));
 
     const relationships: RelationshipSchema[] = [];
@@ -502,6 +551,7 @@ export class Repository
         targets: this.graph.related(memberId, EdgeKind.Targets, Direction.Out),
         cardinality: readCardinality(node.attrs.get("cardinality")),
         inverse: typeof inverse === "string" ? inverse : null,
+        declaredBy: concept,
       });
     }
 
@@ -511,12 +561,15 @@ export class Repository
     return { concept, extends: extendsParent, fields, relationships };
   }
 
-  /** A concept's schema merged with everything it extends (subtype members win). */
+  /** A concept's schema merged with everything it extends and every aspect it carries.
+   *  Ordering: own, then supertypes nearest-first, then aspects in declaration order;
+   *  a name appearing from several sources keeps the first. Each member records its
+   *  `declaredBy` origin. */
   effectiveSchema(concept: NodeId): ConceptSchema
   {
     const fields = new Map<string, FieldSchema>();
     const relationships = new Map<string, RelationshipSchema>();
-    for (const current of [concept, ...this.supertypesOf(concept)])
+    for (const current of [concept, ...this.supertypesOf(concept), ...this.AspectsOf(concept)])
     {
       const schema = this.schemaOf(current);
       for (const field of schema.fields)
@@ -536,6 +589,184 @@ export class Repository
     };
   }
 
+  // -- Aspect closure queries (type model R3/R5/R8) --------------------------
+
+  /** Every aspect `concept` carries: its own, its supertypes', and those they include
+   *  transitively, each once, in declaration order. Cycle-safe. */
+  AspectsOf(concept: NodeId): NodeId[]
+  {
+    let cached = this.aspectsCache.get(concept);
+    if (cached === undefined)
+    {
+      cached = this.ComputeAspectsOf(concept);
+      this.aspectsCache.set(concept, cached);
+    }
+    return [...cached];
+  }
+
+  private ComputeAspectsOf(concept: NodeId): NodeId[]
+  {
+    const result: NodeId[] = [];
+    const seen = new Set<NodeId>();
+    for (const owner of [concept, ...this.supertypesOf(concept)])
+    {
+      const direct = this.graph.related(owner, EdgeKind.IncludesAspect, Direction.Out);
+      if (direct.length === 0) continue;
+      const reached = [...direct];
+      for (const aspect of direct)
+      {
+        reached.push(...this.graph.closure(aspect, EdgeKind.IncludesAspect, Direction.Out, false));
+      }
+      for (const aspect of reached)
+      {
+        if (seen.has(aspect) || this.resolve(aspect)?.metaKind !== MetaKind.Aspect) continue;
+        seen.add(aspect);
+        result.push(aspect);
+      }
+    }
+    return result;
+  }
+
+  /** Every concept carrying `aspect`: those including it directly or through another
+   *  aspect, plus all their subtypes. Cycle-safe. */
+  CarriersOf(aspect: NodeId): NodeId[]
+  {
+    let cached = this.carriersCache.get(aspect);
+    if (cached === undefined)
+    {
+      cached = this.ComputeCarriersOf(aspect);
+      this.carriersCache.set(aspect, cached);
+    }
+    return [...cached];
+  }
+
+  private ComputeCarriersOf(aspect: NodeId): NodeId[]
+  {
+    const includers = this.graph.closure(aspect, EdgeKind.IncludesAspect, Direction.In, false);
+    const carriers = new Set<NodeId>();
+    for (const includer of includers)
+    {
+      if (this.resolve(includer)?.metaKind !== MetaKind.Concept) continue;
+      carriers.add(includer);
+      for (const sub of this.subtypesOf(includer)) carriers.add(sub);
+    }
+    return [...carriers];
+  }
+
+  /** True for the type itself, any supertype, or any carried aspect. */
+  IsA(type: NodeId, conceptOrAspect: NodeId): boolean
+  {
+    return type === conceptOrAspect
+      || this.supertypesOf(type).includes(conceptOrAspect)
+      || this.CarriedSet(type).has(conceptOrAspect);
+  }
+
+  /** The aspects `type` carries as a memoized set (avoids rebuilding per IsA call). */
+  private CarriedSet(type: NodeId): ReadonlySet<NodeId>
+  {
+    let cached = this.carriedCache.get(type);
+    if (cached === undefined)
+    {
+      cached = new Set(this.AspectsOf(type));
+      this.carriedCache.set(type, cached);
+    }
+    return cached;
+  }
+
+  /** Instances whose type `IsA` the argument. The matching type set is computed once,
+   *  then instances are collected through the per-type index. */
+  InstancesMatching(conceptOrAspect: NodeId): Node[]
+  {
+    const target = this.resolve(conceptOrAspect);
+    let types: NodeId[];
+    if (target?.metaKind === MetaKind.Aspect) types = this.CarriersOf(conceptOrAspect);
+    else if (conceptOrAspect === ELEMENT_ID) types = this.nodesOfMetaKind(MetaKind.Concept);
+    else types = [conceptOrAspect, ...this.subtypesOf(conceptOrAspect)];
+    const seen = new Set<NodeId>();
+    const result: Node[] = [];
+    for (const type of new Set<NodeId>(types))
+    {
+      for (const id of this.instancesOf(type))
+      {
+        const node = this.resolve(id);
+        if (node === undefined || seen.has(id)) continue;
+        seen.add(id);
+        result.push(node);
+      }
+    }
+    return result;
+  }
+
+  /** The concept's own `derive <member> = <expression>;` entries (raw expression text).
+   *  Throws {@link MalformedDerivesError} unless the attribute is a JSON array of
+   *  `{ member: string, expression: string }`. */
+  DerivesOf(concept: NodeId): { member: string; expression: string }[]
+  {
+    const raw = this.resolve(concept)?.attrs.get(Builder.DerivesAttr);
+    if (typeof raw !== "string") return [];
+    let parsed: unknown;
+    try
+    {
+      parsed = JSON.parse(raw);
+    }
+    catch
+    {
+      throw new MalformedDerivesError(concept, `${Repository.MalformedDerivesMessage} "${concept}"`);
+    }
+    if (!Array.isArray(parsed) || !parsed.every((entry) => Repository.IsDeriveEntry(entry)))
+    {
+      throw new MalformedDerivesError(concept, `${Repository.MalformedDerivesMessage} "${concept}"`);
+    }
+    return parsed as { member: string; expression: string }[];
+  }
+
+  /** Names of members validly derived (R7) on `type` or any of its supertypes: only a
+   *  derive whose target {@link IsDerivableMember} counts. An invalid derive or a
+   *  malformed derives attribute contributes nothing here (the type-model validator
+   *  reports both). */
+  DerivedMembersOf(type: NodeId): Set<string>
+  {
+    const names = new Set<string>();
+    for (const owner of [type, ...this.supertypesOf(type)])
+    {
+      let derives: { member: string; expression: string }[];
+      try
+      {
+        derives = this.DerivesOf(owner);
+      }
+      catch (error)
+      {
+        if (!(error instanceof MalformedDerivesError)) throw error;
+        continue;
+      }
+      for (const derive of derives)
+      {
+        if (this.IsDerivableMember(owner, derive.member)) names.add(derive.member);
+      }
+    }
+    return names;
+  }
+
+  /** True when `member` may be derived on `concept` (R7): an aspect carried by the
+   *  concept declares it and the concept does not declare it itself. */
+  IsDerivableMember(concept: NodeId, member: string): boolean
+  {
+    if (Repository.DeclaresMember(this.schemaOf(concept), member)) return false;
+    return this.AspectsOf(concept).some((aspect) => Repository.DeclaresMember(this.schemaOf(aspect), member));
+  }
+
+  private static DeclaresMember(schema: ConceptSchema, member: string): boolean
+  {
+    return schema.fields.some((f) => f.name === member) || schema.relationships.some((r) => r.name === member);
+  }
+
+  private static IsDeriveEntry(entry: unknown): boolean
+  {
+    if (typeof entry !== "object" || entry === null) return false;
+    const record = entry as Record<string, unknown>;
+    return typeof record[Repository.DeriveMemberKey] === "string" && typeof record[Repository.DeriveExpressionKey] === "string";
+  }
+
   /** Validate the model, returning structured diagnostics (spec §6). */
   validate(): Diagnostic[]
   {
@@ -552,6 +783,12 @@ export class Repository
   spanOf(key: string): SourceSpan | null
   {
     return this.spans.get(key) ?? null;
+  }
+
+  /** Key for the span of a concept's `derive <member>` entry. */
+  static deriveKey(concept: NodeId, member: string): string
+  {
+    return `${concept}#derive:${member}`;
   }
 
   /** Composite key for a per-instance member span. */

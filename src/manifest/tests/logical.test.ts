@@ -94,3 +94,21 @@ describe("ManifestModel.valueOriginOf (SPEC-03 Axis 2 — self vs class)", () =>
     assert.equal(fixture().valueOriginOf(node, "color"), "self");
   });
 });
+
+describe("ancestorsViaExtends cycle safety", () => {
+  test("a cyclic extends chain returns a finite list", () => {
+    const data: LogicalManifest = {
+      format: "todl-manifest/1",
+      model: "loop",
+      version: "1.0.0",
+      root: "Element",
+      concepts: {
+        a: { extends: "b", fields: {}, relationships: {}, invariants: [] },
+        b: { extends: "a", fields: {}, relationships: {}, invariants: [] },
+      },
+      classes: {},
+      taxonomies: {},
+    };
+    assert.deepEqual(ManifestModel.fromJSON(data).ancestorsViaExtends("a"), ["b"]);
+  });
+});

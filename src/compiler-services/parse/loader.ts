@@ -68,6 +68,8 @@ import {
   ValueKind,
   type MergeStrategy,
   type Declaration,
+  type ConceptDecl,
+  type AspectDecl,
   type InstanceDecl,
   type ModelDecl,
   type AnnotationApplication,
@@ -81,6 +83,9 @@ import { type IdGenerator, SnowflakeIdGenerator } from "../model/id-generator.js
 import { makeResolver, type Home, type Resolver } from "../resolve/resolver.js";
 import { collectDefinitions, visitReferences } from "./references.js";
 import { NodeIdQualifier } from "./node-id-qualifier.js";
+import { BaseListClassifier } from "./base-list-classifier.js";
+import { DeriveSerializer } from "./derive-serializer.js";
+import { MemberAnnotationTarget } from "./member-annotation-target.js";
 import { PACKAGE_NODE_ID, MetaKind } from "../model/kinds.js";
 import { EdgeKind, Direction, type NodeId, type Scalar } from "../model/graph.js";
 import type { SourceFile, SourceSpan } from "../diagnostics/span.js";
@@ -222,6 +227,7 @@ export function loadInto(
     const named =
       decl.kind === DeclKind.Primitive ||
       decl.kind === DeclKind.Concept ||
+      decl.kind === DeclKind.Aspect ||
       decl.kind === DeclKind.Annotation ||
       decl.kind === DeclKind.Taxonomy;
     // `reserved` now holds the prelude's QUALIFIED ids (`todl.*`), so a redeclaration
@@ -524,6 +530,9 @@ export function loadInto(
   // Members and instances come later. Referenced ids that failed to resolve above
   // are in `undefinedIds`, so the closing `commit` drops their edges.
   const first = model.builder();
+  // Base names are canonical ids by now (resolved above), so one table of every
+  // declaration's kind lets each `:` list be split into parent concept vs aspects.
+  const baseLists = new BaseListClassifier(model, units);
   const definedOps = new Set<string>(); // glyph → staged once; duplicates diagnosed in validateOperators
   for (const { ns, imports, uri, decl: declaration } of units)
   {
@@ -640,8 +649,19 @@ export function loadInto(
         // concept is an `Element`" is now a VIRTUAL root rule applied in
         // resolution (`Repository.supertypesOf`/`schemaOf`), not a stored
         // `Extends → Element` edge — killing the `Element` super-node.
-        first.defineConcept(NodeIdQualifier.Qualify(ns, declaration.name), declaration.extends ?? null);
-        recordHome(rec, NodeIdQualifier.Qualify(ns, declaration.name));
+        const classified = baseLists.ClassifyConcept(declaration, diagnostics);
+        const conceptId = NodeIdQualifier.Qualify(ns, declaration.name);
+        first.defineConcept(conceptId, classified.parent);
+        for (const aspect of classified.aspects) first.IncludeAspect(conceptId, aspect);
+        recordHome(rec, conceptId);
+        break;
+      }
+      case DeclKind.Aspect:
+      {
+        const aspectId = NodeIdQualifier.Qualify(ns, declaration.name);
+        first.DefineAspect(aspectId);
+        for (const aspect of baseLists.ClassifyAspect(declaration, diagnostics)) first.IncludeAspect(aspectId, aspect);
+        recordHome(rec, aspectId);
         break;
       }
       case DeclKind.Annotation:
@@ -674,6 +694,7 @@ export function loadInto(
   // Invariants are parsed here but only registered at the very end.
   const second = model.builder();
   const invariants: PendingInvariant[] = [];
+  const sourceTexts = new Map(sources.map((src) => [src.uri, src.text] as const));
   for (const { ns, uri, decl: declaration } of units)
   {
     if (rec !== undefined) rec.current = uri;
@@ -684,9 +705,13 @@ export function loadInto(
       for (const p of declaration.params) second.addField(annotationId, p.name, p.type, p.cardinality);
       continue;
     }
-    if (declaration.kind !== DeclKind.Concept) continue;
+    if (declaration.kind !== DeclKind.Concept && declaration.kind !== DeclKind.Aspect) continue;
     second.setNamespace(ns);
     const conceptId = NodeIdQualifier.Qualify(ns, declaration.name);
+    if (declaration.kind === DeclKind.Concept && declaration.derives.length > 0)
+    {
+      second.setField(conceptId, Builder.DerivesAttr, DeriveSerializer.ToJson(declaration.derives, sourceTexts.get(uri) ?? ""));
+    }
     for (const field of declaration.fields)
     {
       second.addField(conceptId, field.name, field.type, field.cardinality);
@@ -1164,10 +1189,23 @@ export function loadInto(
   {
     const home: Home = { ns, imports };
     if (rec !== undefined) rec.current = uri;
-    if (decl.kind === DeclKind.Concept)
+    if (decl.kind === DeclKind.Concept || decl.kind === DeclKind.Aspect)
     {
       fourth.setNamespace(ns);
       const conceptId = NodeIdQualifier.Qualify(ns, decl.name);
+      if (decl.kind === DeclKind.Concept)
+      {
+        for (const ma of decl.memberAnnotations)
+        {
+          const invalid = MemberAnnotationTarget.Diagnose(model, conceptId, ma);
+          if (invalid !== null)
+          {
+            diagnostics.push(invalid);
+            continue;
+          }
+          stageApplications(fourth, model, conceptId, ma.annotations, seenApps, diagnostics, asserted, idGenerator, ops, home, resolveRef, rec, ma.member);
+        }
+      }
       stageApplications(fourth, model, conceptId, decl.annotations, seenApps, diagnostics, asserted, idGenerator, ops, home, resolveRef, rec);
       // Member-level annotations decorate the member node (`<concept>.<member>@<Ann>`).
       for (const rel of decl.relationships)
@@ -1251,9 +1289,13 @@ function recordSpans(model: Repository, units: readonly { ns: string; decl: Decl
     switch (declaration.kind)
     {
       case DeclKind.Primitive:
-      case DeclKind.Concept:
       case DeclKind.Viewpoint:
         model.recordSpan(NodeIdQualifier.Qualify(ns, declaration.name), declaration.span);
+        break;
+      case DeclKind.Concept:
+      case DeclKind.Aspect:
+        model.recordSpan(NodeIdQualifier.Qualify(ns, declaration.name), declaration.span);
+        TypeMemberSpanRecorder.Record(model, declaration, NodeIdQualifier.Qualify(ns, declaration.name));
         break;
       case DeclKind.Taxonomy:
       {
@@ -1292,6 +1334,20 @@ function recordSpans(model: Repository, units: readonly { ns: string; decl: Decl
       case DeclKind.Package:
         break; // application spans are recorded during the applications pass
     }
+  }
+}
+
+/** Record member-name spans (and `derive` spans) of a concept or aspect for type-model diagnostics. */
+class TypeMemberSpanRecorder
+{
+  public static Record(model: Repository, decl: ConceptDecl | AspectDecl, id: string): void
+  {
+    for (const member of [...decl.fields, ...decl.relationships])
+    {
+      if (member.nameSpan !== undefined) model.recordSpan(Repository.memberKey(id, member.name), member.nameSpan);
+    }
+    if (decl.kind !== DeclKind.Concept) return;
+    for (const derive of decl.derives) model.recordSpan(Repository.deriveKey(id, derive.member), derive.span);
   }
 }
 
@@ -1432,17 +1488,18 @@ function stageApplications(
   home: Home,
   resolveRef: ResolveRef,
   rec?: HomeRecorder,
+  member?: string,
 ): void
 {
   for (const app of apps)
   {
-    const appId = `${target}@${app.name}`;
+    const appId = member === undefined ? `${target}@${app.name}` : `${Builder.MemberTargetId(target, member)}@${app.name}`;
     if (seen.has(appId))
     {
       diagnostics.push({
         code: DiagnosticCode.AnnotationDuplicate,
         severity: Severity.Error,
-        message: `annotation "${app.name}" is already applied to "${target}"`,
+        message: `annotation "${app.name}" is already applied to "${member === undefined ? target : `${target}.${member}`}"`,
         span: app.nameSpan ?? app.span,
         node: appId,
         path: null,
@@ -1450,7 +1507,8 @@ function stageApplications(
       continue;
     }
     seen.add(appId);
-    builder.annotate(target, app.name);
+    if (member === undefined) builder.annotate(target, app.name);
+    else builder.AnnotateMember(target, member, app.name);
     recordHome(rec, appId);
     model.recordSpan(appId, app.span);
     for (const a of app.assignments) realizeValue(builder, model, app.name, appId, a.name, a.value, diagnostics, asserted, idGen, ops, home, resolveRef, rec);

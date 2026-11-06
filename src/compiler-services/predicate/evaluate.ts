@@ -56,7 +56,7 @@ function evalExpr(model: Repository, expr: Expr, env: Env): EvalValue
     case ExprKind.Comprehension:
     {
       const result = new Set<NodeId>();
-      for (const instance of model.instancesOf(expr.concept))
+      for (const instance of model.QuantifierDomain(expr.concept))
       {
         if (toBool(evalExpr(model, expr.body, bind(env, expr.variable, instance))))
         {
@@ -68,7 +68,7 @@ function evalExpr(model: Repository, expr: Expr, env: Env): EvalValue
 
     case ExprKind.Quantifier:
     {
-      const instances = model.instancesOf(expr.concept);
+      const instances = model.QuantifierDomain(expr.concept);
       const holds = (instance: NodeId): boolean =>
         toBool(evalExpr(model, expr.body, bind(env, expr.variable, instance)));
       return expr.quantifier === QuantifierKind.All ? instances.every(holds) : instances.some(holds);

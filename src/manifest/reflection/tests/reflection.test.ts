@@ -303,3 +303,23 @@ describe("SPEC-05 t13: binary-load parity", () => {
     assert.equal((bv.valueOrigin as TermInfo).id, (jv.valueOrigin as TermInfo).id);
   });
 });
+
+describe("getSupertypes cycle safety", () => {
+  test("a cyclic extends chain returns a finite list", () => {
+    const logical: LogicalManifest = {
+      format: "todl-manifest/1",
+      model: "loop",
+      version: "1.0.0",
+      root: "Element",
+      concepts: {
+        Element: { extends: null, fields: {}, relationships: {}, invariants: [] },
+        a: { extends: "b", fields: {}, relationships: {}, invariants: [] },
+        b: { extends: "a", fields: {}, relationships: {}, invariants: [] },
+      },
+      classes: {},
+      taxonomies: {},
+    };
+    const manifest = Manifest.load(ManifestWriter.fromLogical(logical).toJSON());
+    assert.deepEqual(manifest.getType("a")!.getSupertypes().map((t) => t.name), ["b"]);
+  });
+});

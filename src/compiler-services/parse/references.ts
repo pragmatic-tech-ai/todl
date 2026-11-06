@@ -47,6 +47,7 @@ import {
 } from "./ast.js";
 import type { SourceSpan } from "../diagnostics/span.js";
 import { PACKAGE_NODE_ID } from "../model/kinds.js";
+import { Builder } from "../model/builder.js";
 import { NodeIdQualifier } from "./node-id-qualifier.js";
 
 /**
@@ -164,13 +165,12 @@ export function visitReferences(decl: Declaration, visit: Visit): void
     }
     case DeclKind.Concept:
     {
-      // The `extends` parent, if any. Cast is needed because `extends` is a
-      // readonly field on the AST node; the rewrite is the one sanctioned mutation.
-      if (decl.extends !== null)
-      {
-        visit({ name: decl.extends, span: decl.extendsSpan ?? decl.span, role: RefRole.Extends,
-          ownerNode: decl.name, memberPath: null, rewrite: (r) => { (decl as { extends: string | null }).extends = r; } });
-      }
+      // Every entry of the `:` list (parent concept and/or aspects) resolves like an
+      // `extends` parent; the rewrite updates the base slot and, for the first entry,
+      // the mirrored `extends` field Pass 1 reads.
+      decl.bases.forEach((b, i) => visit({ name: b.name, span: b.span, role: RefRole.Extends,
+        ownerNode: decl.name, memberPath: null,
+        rewrite: (r) => { b.name = r; if (i === 0) (decl as { extends: string | null }).extends = r; } }));
       // Each field's declared type. memberPath carries the field name so a
       // reference.undefined can point at the offending member.
       for (const f of decl.fields)
@@ -187,6 +187,30 @@ export function visitReferences(decl: Declaration, visit: Visit): void
         }));
         // Annotations on the member resolve like any annotation name (undeclared →
         // reference.undefined; qualified → rewritten flat), keyed to the member node.
+        annotationRefs(rel.annotations, `${decl.name}.${rel.name}`);
+      }
+      annotationRefs(decl.annotations, decl.name);
+      // `member <m> { annotate … }` applications resolve like any annotation name; their
+      // application nodes are `<concept>#<m>@<annotation>` (see Builder.MemberTargetId).
+      for (const ma of decl.memberAnnotations) annotationRefs(ma.annotations, Builder.MemberTargetId(decl.name, ma.member));
+      break;
+    }
+    case DeclKind.Aspect:
+    {
+      // Each included aspect (`aspect a : b, c`) resolves like an `extends` parent.
+      decl.includes.forEach((b) => visit({ name: b.name, span: b.span, role: RefRole.Extends,
+        ownerNode: decl.name, memberPath: null, rewrite: (r) => { b.name = r; } }));
+      for (const f of decl.fields)
+      {
+        visit({ name: f.type, span: f.typeSpan ?? decl.span, role: RefRole.FieldType,
+          ownerNode: decl.name, memberPath: f.name, rewrite: (r) => { f.type = r; } });
+      }
+      for (const rel of decl.relationships)
+      {
+        rel.targets.forEach((target, i) => visit({
+          name: target, span: rel.targetSpans?.[i] ?? decl.span, role: RefRole.RelationshipTarget,
+          ownerNode: decl.name, memberPath: rel.name, rewrite: (r) => { rel.targets[i] = r; },
+        }));
         annotationRefs(rel.annotations, `${decl.name}.${rel.name}`);
       }
       annotationRefs(decl.annotations, decl.name);
@@ -381,6 +405,7 @@ export function collectDefinitions(
   {
     case DeclKind.Primitive:
     case DeclKind.Concept:
+    case DeclKind.Aspect:
     case DeclKind.Annotation:
       // A single named type: it defines just its own name.
       define(NodeIdQualifier.Qualify(ns, decl.name));

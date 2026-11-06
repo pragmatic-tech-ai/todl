@@ -1,6 +1,6 @@
 import { Repository, ELEMENT_ID, type ConceptSchema, type FieldSchema, type RelationshipSchema } from "../../../compiler-services/model/model.js";
 import { MetaKind } from "../../../compiler-services/model/kinds.js";
-import type { Node, NodeId } from "../../../compiler-services/model/graph.js";
+import { EdgeKind, Direction, type Node, type NodeId } from "../../../compiler-services/model/graph.js";
 import type { SourceSpan } from "../../../compiler-services/diagnostics/span.js";
 
 // A read-only VIEW over the shared whole-solution Repository that reproduces the
@@ -20,11 +20,16 @@ import type { SourceSpan } from "../../../compiler-services/diagnostics/span.js"
 //     supertype chain — `schemaOf` (its `extends`) and `effectiveSchema` (its merged
 //     fields/relationships). An out-of-scope same-namespace supertype or field-type
 //     therefore contributes nothing, exactly as Build (which leaves it unresolved).
+//   - Aspect queries (`AspectsOf`, `CarriersOf`, `IsA`, `InstancesMatching`, `DerivesOf`)
+//     walk ONLY visible links: supertypes via the visible chain, aspect includes (and
+//     carrier/subtype hops) through visible nodes only, so an aspect reachable solely
+//     through an invisible supertype or intermediate aspect is excluded; `effectiveSchema`
+//     merges own -> visible supertype chain -> visible aspects (first name wins).
 //   - OwnIds-gated: `spanOf`. Build records a source span ONLY for the project's own
 //     loaded sources — bases arrive as compiled documents with no spans — so navigation
 //     into a base symbol must return null just as Build does.
-// The method names mirror Repository's existing (camelCase) surface, so they
-// deliberately do not follow the PascalCase convention.
+// The camelCase overrides mirror Repository's existing surface, so they deliberately do
+// not follow the PascalCase convention; the aspect queries are PascalCase like their base.
 //
 // INVARIANT: any new Repository read reached by a provider must get a matching scoped
 // override here — the base graph is empty, so an un-overridden read fails closed
@@ -91,13 +96,106 @@ export class ScopedRepository extends Repository
         // scoped Build never sees. `schemaOf` is the gated one, so each step is in scope.
         const fields = new Map<string, FieldSchema>();
         const relationships = new Map<string, RelationshipSchema>();
-        for (const current of this.VisibleChain(concept))
+        for (const current of [...this.VisibleChain(concept), ...this.AspectsOf(concept)])
         {
             const schema = this.schemaOf(current);
             for (const field of schema.fields) if (!fields.has(field.name)) fields.set(field.name, field);
             for (const relationship of schema.relationships) if (!relationships.has(relationship.name)) relationships.set(relationship.name, relationship);
         }
         return { concept, extends: this.schemaOf(concept).extends, fields: [...fields.values()], relationships: [...relationships.values()] };
+    }
+
+    // Aspect queries delegate to the inner repository and gate by visibility: an aspect
+    // (or carrier / instance) outside the project's scope contributes nothing.
+    public override AspectsOf(concept: NodeId): NodeId[]
+    {
+        if (!this.visibleIds.has(concept)) return [];
+        const result: NodeId[] = [];
+        const seen = new Set<NodeId>();
+        for (const owner of this.VisibleChain(concept))
+        {
+            for (const aspect of this.VisibleWalk(owner, EdgeKind.IncludesAspect, Direction.Out))
+            {
+                if (seen.has(aspect) || this.inner.resolve(aspect)?.metaKind !== MetaKind.Aspect) continue;
+                seen.add(aspect);
+                result.push(aspect);
+            }
+        }
+        return result;
+    }
+
+    public override CarriersOf(aspect: NodeId): NodeId[]
+    {
+        if (!this.visibleIds.has(aspect)) return [];
+        const carriers = new Set<NodeId>();
+        for (const includer of this.VisibleWalk(aspect, EdgeKind.IncludesAspect, Direction.In))
+        {
+            if (this.inner.resolve(includer)?.metaKind !== MetaKind.Concept) continue;
+            carriers.add(includer);
+            for (const sub of this.VisibleWalk(includer, EdgeKind.Extends, Direction.In)) carriers.add(sub);
+        }
+        return [...carriers];
+    }
+
+    public override IsA(type: NodeId, conceptOrAspect: NodeId): boolean
+    {
+        if (!this.visibleIds.has(type) || !this.visibleIds.has(conceptOrAspect)) return false;
+        return this.VisibleChain(type).includes(conceptOrAspect)
+            || this.AspectsOf(type).includes(conceptOrAspect);
+    }
+
+    /** A ScopedRepository is a per-request snapshot and its own (empty) graph never signals
+     *  changes, so the base class's memo would never invalidate: compute directly, uncached. */
+    public override QuantifierDomain(conceptOrAspect: NodeId): readonly NodeId[]
+    {
+        return this.InstancesMatching(conceptOrAspect).map((n) => n.id);
+    }
+
+    public override InstancesMatching(conceptOrAspect: NodeId): Node[]
+    {
+        if (!this.visibleIds.has(conceptOrAspect)) return [];
+        let types: NodeId[];
+        if (this.inner.resolve(conceptOrAspect)?.metaKind === MetaKind.Aspect) types = this.CarriersOf(conceptOrAspect);
+        else if (conceptOrAspect === ELEMENT_ID) types = this.allNodes().filter((n) => n.metaKind === MetaKind.Concept).map((n) => n.id);
+        else types = [conceptOrAspect, ...this.VisibleWalk(conceptOrAspect, EdgeKind.Extends, Direction.In)];
+        const seen = new Set<NodeId>();
+        const result: Node[] = [];
+        for (const type of new Set<NodeId>(types))
+        {
+            for (const id of this.instancesOf(type))
+            {
+                const node = this.inner.resolve(id);
+                if (node === undefined || seen.has(id)) continue;
+                seen.add(id);
+                result.push(node);
+            }
+        }
+        return result;
+    }
+
+    // Transitive closure (excluding `start`) over `kind` edges, following ONLY visible
+    // nodes, so a link through an invisible node is never crossed. Cycle-safe.
+    private VisibleWalk(start: NodeId, kind: EdgeKind, direction: Direction): NodeId[]
+    {
+        const result: NodeId[] = [];
+        const seen = new Set<NodeId>([start]);
+        const queue: NodeId[] = [start];
+        for (let head = 0; head < queue.length; head++)
+        {
+            for (const next of this.inner.related(queue[head]!, kind, direction))
+            {
+                if (seen.has(next) || !this.visibleIds.has(next)) continue;
+                seen.add(next);
+                result.push(next);
+                queue.push(next);
+            }
+        }
+        return result;
+    }
+
+    public override DerivesOf(concept: NodeId): { member: string; expression: string }[]
+    {
+        return this.visibleIds.has(concept) ? this.inner.DerivesOf(concept) : [];
     }
 
     // The concept plus its supertypes reachable through in-scope parents only, walked via

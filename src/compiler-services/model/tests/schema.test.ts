@@ -29,9 +29,9 @@ test("addField and addConceptRelationship populate the concept schema", () => {
     .commit();
 
   const schema = model.schemaOf("component");
-  assert.deepEqual(schema.fields, [{ name: "label", type: "string", cardinality: Cardinality.One }]);
+  assert.deepEqual(schema.fields, [{ name: "label", type: "string", cardinality: Cardinality.One, declaredBy: "component" }]);
   assert.deepEqual(schema.relationships, [
-    { name: "in", targets: ["location"], cardinality: Cardinality.One, inverse: null },
+    { name: "in", targets: ["location"], cardinality: Cardinality.One, inverse: null, declaredBy: "component" },
   ]);
 });
 

@@ -57,6 +57,7 @@ export enum DeclKind
   Merge,
   Connector,
   Policy,
+  Aspect,
 }
 
 /** The kind of an authored VALUE (the right-hand side of `name = …`, an array
@@ -500,16 +501,63 @@ export interface ConceptDecl
 {
   kind: DeclKind.Concept;
   name: string;
+  /** The first base (may be an aspect; the loader classifies via BaseListClassifier). */
   extends: string | null;
+  /** Every entry of the `:` list in order (parent concept first, then aspects);
+   * `extends` equals `bases[0]?.name ?? null`. */
+  bases: BaseRef[];
+  description: string;
+  fields: FieldDecl[];
+  relationships: RelationshipDecl[];
+  invariants: InvariantDecl[];
+  annotations: AnnotationApplication[];
+  /** `derive <member> = <expr>;` entries satisfying aspect-contributed members. */
+  derives: DeriveDecl[];
+  /** `member <name> { annotate … }` blocks annotating inherited/contributed members. */
+  memberAnnotations: MemberAnnotationDecl[];
+  span: SourceSpan;
+  /** Span of the `extends` parent identifier (`: <parent>`), when present. */
+  extendsSpan?: SourceSpan;
+  /** Span of the concept's name identifier. */
+  nameSpan?: SourceSpan;
+}
+
+/** One entry of a `:` base list (concept parent or aspect include). */
+export interface BaseRef
+{
+  name: string;
+  span: SourceSpan;
+}
+
+/** `derive <member> = <tokens>;` inside a concept body. */
+export interface DeriveDecl
+{
+  member: string;
+  expression: Token[];
+  span: SourceSpan;
+}
+
+/** `member <name> { annotate … }` inside a concept body. */
+export interface MemberAnnotationDecl
+{
+  member: string;
+  annotations: AnnotationApplication[];
+  span: SourceSpan;
+}
+
+/** An `aspect <Name> [: <aspect>, …] { … }` declaration — a reusable bundle of
+ * members that concepts include; never an instance type. */
+export interface AspectDecl
+{
+  kind: DeclKind.Aspect;
+  name: string;
+  includes: BaseRef[];
   description: string;
   fields: FieldDecl[];
   relationships: RelationshipDecl[];
   invariants: InvariantDecl[];
   annotations: AnnotationApplication[];
   span: SourceSpan;
-  /** Span of the `extends` parent identifier (`: <parent>`), when present. */
-  extendsSpan?: SourceSpan;
-  /** Span of the concept's name identifier. */
   nameSpan?: SourceSpan;
 }
 
@@ -597,7 +645,7 @@ export interface PrimitiveDecl
  * {@link DeclKind}). This is what a {@link NamespaceNode} holds. */
 export type Declaration =
   | ConceptDecl | TaxonomyDecl | ViewpointDecl | PrimitiveDecl | InstanceDecl | ModelDecl
-  | AnnotationDecl | PackageDecl | OperatorDecl | IdentityDecl | MatchDecl | MergeDecl | ConnectorDecl | PolicyDecl;
+  | AnnotationDecl | PackageDecl | OperatorDecl | IdentityDecl | MatchDecl | MergeDecl | ConnectorDecl | PolicyDecl | AspectDecl;
 
 // ═══════════════════════════════ FILE ROOT ════════════════════════════════════
 

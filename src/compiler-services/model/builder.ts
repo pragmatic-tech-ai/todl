@@ -60,6 +60,12 @@ export class Builder
   public static readonly IdentityConceptAttr = "concept";
   public static readonly IdentityKeyAttr = "key";
   public static readonly StorageIdKey = "storageId";
+  /** Concept attr: JSON list of `{ member, expression }` (`derive` entries, expression = source text). */
+  public static readonly DerivesAttr = "derives";
+  /** Attr on a member-target node: the annotated member's name. */
+  public static readonly MemberTargetNameAttr = "name";
+  private static readonly MemberTargetSeparator = "#";
+  private static readonly MemberTargetClashMessage = "member target id is taken by a node that is not a member target:";
   /** Reserved match-node attr keys (the concept reuses the identity key) and the
    *  two candidate variable names a `same when` rule may reference. */
   public static readonly MatchConceptAttr = Builder.IdentityConceptAttr;
@@ -209,6 +215,51 @@ export class Builder
       this.stagedEdges.push({ kind: EdgeKind.Extends, via: null, from: id, to: extendsId });
     }
     return this;
+  }
+
+  /** Stage an aspect declaration node (Ontology-tier): a reusable bundle of members. */
+  DefineAspect(id: NodeId): this
+  {
+    this.stagedNodes.push(this.makeNode(id, Tier.Ontology, { metaKind: MetaKind.Aspect }));
+    return this;
+  }
+
+  /** Stage `owner -IncludesAspect-> aspect` (owner is a concept or another aspect). */
+  IncludeAspect(owner: NodeId, aspect: NodeId): this
+  {
+    this.stagedEdges.push({ kind: EdgeKind.IncludesAspect, via: null, from: owner, to: aspect });
+    return this;
+  }
+
+  /** Id of the member target `<owner>#<member>` hosting member annotations (R6). `#`
+   *  cannot appear in a TODL identifier, so no declared node can spell this id (a
+   *  dotted `<owner>.<member>` could be a concept `member` in namespace `owner`). */
+  public static MemberTargetId(owner: NodeId, member: string): NodeId
+  {
+    return `${owner}${Builder.MemberTargetSeparator}${member}`;
+  }
+
+  /** Stage an annotation application on an inherited/contributed member of `owner`
+   *  (`member <name> { annotate … }`, R6). The application hangs off the member target
+   *  {@link Builder.MemberTargetId} (a {@link MetaKind.MemberTarget} node, staged once),
+   *  the way a relationship-member annotation hangs off its relationship node, so
+   *  concept-level annotation readers never see it. The caller guarantees `member` is
+   *  not one of `owner`'s own members. Returns the application id. */
+  AnnotateMember(owner: NodeId, member: string, annotationId: NodeId): NodeId
+  {
+    const memberId = Builder.MemberTargetId(owner, member);
+    const existing = this.graph.getNode(memberId) ?? this.stagedNodes.find((n) => n.id === memberId);
+    if (existing === undefined)
+    {
+      const node = this.makeNode(memberId, Tier.Ontology, { metaKind: MetaKind.MemberTarget });
+      node.attrs.set(Builder.MemberTargetNameAttr, member);
+      this.stagedNodes.push(node);
+    }
+    else if (existing.metaKind !== MetaKind.MemberTarget || existing.attrs.get(Builder.MemberTargetNameAttr) !== member)
+    {
+      throw new Error(`${Builder.MemberTargetClashMessage} "${memberId}"`);
+    }
+    return this.annotate(memberId, annotationId);
   }
 
   /** Stage a declared field on `concept`: a scalar/enum/ref-typed property. The
