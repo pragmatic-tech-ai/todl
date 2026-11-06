@@ -76,6 +76,18 @@ export interface ConceptSchema
   relationships: RelationshipSchema[];
 }
 
+/** Thrown by {@link Repository.DerivesOf} when a concept's derives attribute is not valid JSON. */
+export class MalformedDerivesError extends Error
+{
+  public readonly Concept: NodeId;
+
+  constructor(concept: NodeId, message: string)
+  {
+    super(message);
+    this.Concept = concept;
+  }
+}
+
 export class Repository
 {
   private readonly graph: Graph;
@@ -677,7 +689,7 @@ export class Repository
     }
     catch
     {
-      throw new Error(`${Repository.MalformedDerivesMessage} "${concept}"`);
+      throw new MalformedDerivesError(concept, `${Repository.MalformedDerivesMessage} "${concept}"`);
     }
   }
 

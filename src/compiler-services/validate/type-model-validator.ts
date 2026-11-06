@@ -10,7 +10,8 @@
 
 import { Direction, EdgeKind, Tier, type Node, type NodeId } from "../model/graph.js";
 import { MetaKind } from "../model/kinds.js";
-import { ELEMENT_ID, Repository } from "../model/model.js";
+import { ELEMENT_ID, MalformedDerivesError, Repository } from "../model/model.js";
+import type { SourceSpan } from "../diagnostics/span.js";
 import { Severity, DiagnosticCode, type Diagnostic } from "../diagnostics/diagnostic.js";
 
 export interface TypeModelOptions
@@ -33,6 +34,7 @@ export class TypeModelValidator
   private readonly enforceRoot: boolean;
   private readonly diagnostics: Diagnostic[] = [];
   private readonly fullCache = new Map<NodeId, Map<string, Set<NodeId>>>();
+  private readonly ownNamesCache = new Map<NodeId, Set<string>>();
   private readonly cycleMembers = new Set<NodeId>();
 
   constructor(model: Repository, options: TypeModelOptions = {})
@@ -45,6 +47,7 @@ export class TypeModelValidator
   {
     this.diagnostics.length = 0;
     this.fullCache.clear();
+    this.ownNamesCache.clear();
     this.cycleMembers.clear();
     this.CheckCycles(EdgeKind.Extends, MetaKind.Concept);
     this.CheckCycles(EdgeKind.IncludesAspect, MetaKind.Aspect);
@@ -110,7 +113,10 @@ export class TypeModelValidator
     reported.add(key);
     for (const member of cycle) this.cycleMembers.add(member);
     const anchor = [...cycle].sort()[0]!;
-    const route = [...cycle, cycle[0]!].join(TypeModelValidator.Separator);
+    // Rotate so the route starts at the anchor: the message is independent of declaration order.
+    const start = cycle.indexOf(anchor);
+    const rotated = [...cycle.slice(start), ...cycle.slice(0, start)];
+    const route = [...rotated, anchor].join(TypeModelValidator.Separator);
     this.diagnostics.push(this.Error(
       DiagnosticCode.InheritanceCycle, anchor, anchor,
       `${TypeModelValidator.CycleMessage}: ${route}`, this.model.spanOf(anchor)));
@@ -135,32 +141,44 @@ export class TypeModelValidator
     {
       if (others.has(name)) this.ReportRedeclared(concept, name);
     }
-    this.CheckCollisions(concept, [...this.model.related(concept, EdgeKind.Extends, Direction.Out).slice(0, 1), ...this.DirectIncludes(concept)]);
+    // slice(0, 1): with several Extends edges only the first is a base here; the extra
+    // edges are already reported as MultipleExtendsEdges.
+    const parent = this.model.related(concept, EdgeKind.Extends, Direction.Out).slice(0, 1);
+    this.CheckCollisions(concept, [...parent, ...this.DirectIncludes(concept)], others);
     this.CheckDerives(concept, own);
   }
 
   private CheckAspect(node: Node): void
   {
     if (this.cycleMembers.has(node.id)) return;
-    this.CheckCollisions(node.id, this.DirectIncludes(node.id));
+    this.CheckCollisions(node.id, this.DirectIncludes(node.id), this.Full(node.id));
   }
 
   /** Names provided by more than one distinct source at `owner` (own members count as a source
    *  for aspects only; a concept's own member against a provider is a redeclaration instead).
    *  Skipped when a single direct base already collides on the name (reported there). */
-  private CheckCollisions(owner: NodeId, bases: NodeId[]): void
+  private CheckCollisions(owner: NodeId, bases: NodeId[], providers: Map<string, Set<NodeId>>): void
   {
-    const isAspect = this.model.resolve(owner)?.metaKind === MetaKind.Aspect;
-    const providers = isAspect ? this.Full(owner) : this.ProvidedByOthers(owner);
     for (const [name, sources] of providers)
     {
       if (sources.size < 2) continue;
-      if (bases.some((base) => (this.Full(base).get(name)?.size ?? 0) >= 2)) continue;
+      // Already reported on a base only when one base accounts for every source here.
+      if (bases.some((base) => this.IsSuperset(this.Full(base).get(name), sources))) continue;
       this.diagnostics.push(this.Error(
         DiagnosticCode.MemberCollision, owner, `${owner}.${name}`,
         `"${owner}.${name}" ${TypeModelValidator.CollisionMessage}: ${[...sources].join(", ")}`,
         this.MemberSpan(owner, name)));
     }
+  }
+
+  private IsSuperset(candidate: Set<NodeId> | undefined, sources: Set<NodeId>): boolean
+  {
+    if (candidate === undefined || candidate.size < 2) return false;
+    for (const source of sources)
+    {
+      if (!candidate.has(source)) return false;
+    }
+    return true;
   }
 
   private CheckDerives(concept: NodeId, own: Set<string>): void
@@ -170,8 +188,11 @@ export class TypeModelValidator
     {
       derives = this.model.DerivesOf(concept);
     }
-    catch
+    catch (error)
     {
+      if (!(error instanceof MalformedDerivesError)) throw error;
+      this.diagnostics.push(this.Error(
+        DiagnosticCode.MalformedDerives, concept, concept, error.message, this.model.spanOf(concept)));
       return;
     }
     if (derives.length === 0) return;
@@ -211,8 +232,14 @@ export class TypeModelValidator
   /** Names a type declares itself (fields and relationships). */
   private OwnNames(type: NodeId): Set<string>
   {
-    const schema = this.model.schemaOf(type);
-    return new Set<string>([...schema.fields.map((f) => f.name), ...schema.relationships.map((r) => r.name)]);
+    let names = this.ownNamesCache.get(type);
+    if (names === undefined)
+    {
+      const schema = this.model.schemaOf(type);
+      names = new Set<string>([...schema.fields.map((f) => f.name), ...schema.relationships.map((r) => r.name)]);
+      this.ownNamesCache.set(type, names);
+    }
+    return names;
   }
 
   /** Aspects a type includes directly. */
@@ -279,7 +306,7 @@ export class TypeModelValidator
     }
   }
 
-  private MemberSpan(owner: NodeId, name: string)
+  private MemberSpan(owner: NodeId, name: string): SourceSpan | null
   {
     return this.model.spanOf(Repository.memberKey(owner, name)) ?? this.model.spanOf(owner);
   }

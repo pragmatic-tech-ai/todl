@@ -129,6 +129,7 @@ export enum DiagnosticCode
   DeriveTargetNotContributed = "type.derive-target-not-contributed",
   InheritanceCycle = "type.inheritance-cycle",
   MultipleExtendsEdges = "type.multiple-extends-edges",
+  MalformedDerives = "type.malformed-derives",
 }
 
 export interface Diagnostic

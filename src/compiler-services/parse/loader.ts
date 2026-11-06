@@ -1288,7 +1288,7 @@ function recordSpans(model: Repository, units: readonly { ns: string; decl: Decl
       case DeclKind.Concept:
       case DeclKind.Aspect:
         model.recordSpan(NodeIdQualifier.Qualify(ns, declaration.name), declaration.span);
-        recordTypeMemberSpans(model, declaration, NodeIdQualifier.Qualify(ns, declaration.name));
+        TypeMemberSpanRecorder.Record(model, declaration, NodeIdQualifier.Qualify(ns, declaration.name));
         break;
       case DeclKind.Taxonomy:
       {
@@ -1331,14 +1331,17 @@ function recordSpans(model: Repository, units: readonly { ns: string; decl: Decl
 }
 
 /** Record member-name spans (and `derive` spans) of a concept or aspect for type-model diagnostics. */
-function recordTypeMemberSpans(model: Repository, decl: ConceptDecl | AspectDecl, id: string): void
+class TypeMemberSpanRecorder
 {
-  for (const member of [...decl.fields, ...decl.relationships])
+  public static Record(model: Repository, decl: ConceptDecl | AspectDecl, id: string): void
   {
-    if (member.nameSpan !== undefined) model.recordSpan(Repository.memberKey(id, member.name), member.nameSpan);
+    for (const member of [...decl.fields, ...decl.relationships])
+    {
+      if (member.nameSpan !== undefined) model.recordSpan(Repository.memberKey(id, member.name), member.nameSpan);
+    }
+    if (decl.kind !== DeclKind.Concept) return;
+    for (const derive of decl.derives) model.recordSpan(Repository.deriveKey(id, derive.member), derive.span);
   }
-  if (decl.kind !== DeclKind.Concept) return;
-  for (const derive of decl.derives) model.recordSpan(Repository.deriveKey(id, derive.member), derive.span);
 }
 
 function recordInstanceSpans(model: Repository, decl: InstanceDecl, ns: string): void
