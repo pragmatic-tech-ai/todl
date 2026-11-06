@@ -20,11 +20,14 @@ import type { SourceSpan } from "../../../compiler-services/diagnostics/span.js"
 //     supertype chain — `schemaOf` (its `extends`) and `effectiveSchema` (its merged
 //     fields/relationships). An out-of-scope same-namespace supertype or field-type
 //     therefore contributes nothing, exactly as Build (which leaves it unresolved).
+//   - Aspect queries (`AspectsOf`, `CarriersOf`, `IsA`, `InstancesMatching`, `DerivesOf`)
+//     delegate to the inner repository and keep only visible ids; `effectiveSchema`
+//     merges own -> visible supertype chain -> visible aspects (first name wins).
 //   - OwnIds-gated: `spanOf`. Build records a source span ONLY for the project's own
 //     loaded sources — bases arrive as compiled documents with no spans — so navigation
 //     into a base symbol must return null just as Build does.
-// The method names mirror Repository's existing (camelCase) surface, so they
-// deliberately do not follow the PascalCase convention.
+// The camelCase overrides mirror Repository's existing surface, so they deliberately do
+// not follow the PascalCase convention; the aspect queries are PascalCase like their base.
 //
 // INVARIANT: any new Repository read reached by a provider must get a matching scoped
 // override here — the base graph is empty, so an un-overridden read fails closed
@@ -91,13 +94,44 @@ export class ScopedRepository extends Repository
         // scoped Build never sees. `schemaOf` is the gated one, so each step is in scope.
         const fields = new Map<string, FieldSchema>();
         const relationships = new Map<string, RelationshipSchema>();
-        for (const current of this.VisibleChain(concept))
+        for (const current of [...this.VisibleChain(concept), ...this.AspectsOf(concept)])
         {
             const schema = this.schemaOf(current);
             for (const field of schema.fields) if (!fields.has(field.name)) fields.set(field.name, field);
             for (const relationship of schema.relationships) if (!relationships.has(relationship.name)) relationships.set(relationship.name, relationship);
         }
         return { concept, extends: this.schemaOf(concept).extends, fields: [...fields.values()], relationships: [...relationships.values()] };
+    }
+
+    // Aspect queries delegate to the inner repository and gate by visibility: an aspect
+    // (or carrier / instance) outside the project's scope contributes nothing.
+    public override AspectsOf(concept: NodeId): NodeId[]
+    {
+        if (!this.visibleIds.has(concept)) return [];
+        return this.inner.AspectsOf(concept).filter((id) => this.visibleIds.has(id));
+    }
+
+    public override CarriersOf(aspect: NodeId): NodeId[]
+    {
+        if (!this.visibleIds.has(aspect)) return [];
+        return this.inner.CarriersOf(aspect).filter((id) => this.visibleIds.has(id));
+    }
+
+    public override IsA(type: NodeId, conceptOrAspect: NodeId): boolean
+    {
+        return this.visibleIds.has(type) && this.visibleIds.has(conceptOrAspect)
+            && this.inner.IsA(type, conceptOrAspect);
+    }
+
+    public override InstancesMatching(conceptOrAspect: NodeId): Node[]
+    {
+        if (!this.visibleIds.has(conceptOrAspect)) return [];
+        return this.inner.InstancesMatching(conceptOrAspect).filter((n) => this.visibleIds.has(n.id));
+    }
+
+    public override DerivesOf(concept: NodeId): { member: string; expression: string }[]
+    {
+        return this.visibleIds.has(concept) ? this.inner.DerivesOf(concept) : [];
     }
 
     // The concept plus its supertypes reachable through in-scope parents only, walked via

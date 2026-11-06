@@ -147,3 +147,22 @@ test("an undeclared appliesToMember on a normal annotation is annotation.unknown
   const codes = diagnostics.filter((d) => d.severity === Severity.Error).map((d) => d.code);
   assert.ok(codes.includes(DiagnosticCode.AnnotationUnknownParam), JSON.stringify(diagnostics));
 });
+
+test("aspect queries reflect model mutation (cache invalidation)", () =>
+{
+  const m = AspectSchemaHarness.Model();
+  assert.deepEqual(m.AspectsOf("t.unrelated"), []);
+  assert.equal(m.IsA("t.unrelated", "t.placed"), false);
+  assert.equal(m.CarriersOf("t.placed").includes("t.unrelated"), false);
+  m.addEdge({ kind: EdgeKind.IncludesAspect, via: null, from: "t.unrelated", to: "t.placed" });
+  assert.deepEqual(m.AspectsOf("t.unrelated"), ["t.placed"]);
+  assert.equal(m.IsA("t.unrelated", "t.placed"), true);
+  assert.equal(m.CarriersOf("t.placed").includes("t.unrelated"), true);
+});
+
+test("DerivesOf throws a clear error on a malformed derives attribute", () =>
+{
+  const m = AspectSchemaHarness.Model();
+  m.setAttr("t.unrelated", Builder.DerivesAttr, "{not json");
+  assert.throws(() => m.DerivesOf("t.unrelated"), /Malformed derives attribute on concept "t.unrelated"/);
+});

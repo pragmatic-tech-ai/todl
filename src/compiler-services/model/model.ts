@@ -83,12 +83,25 @@ export class Repository
   private readonly invariants: Invariants;
   private readonly spans = new Map<string, SourceSpan>();
   private readonly entityCache = new Map<NodeId, EntityBase>();
+  private static readonly MalformedDerivesMessage = "Malformed derives attribute on concept";
+  // Aspect-closure memo, cleared on any graph mutation.
+  private readonly aspectsCache = new Map<NodeId, NodeId[]>();
+  private readonly carriedCache = new Map<NodeId, ReadonlySet<NodeId>>();
+  private readonly carriersCache = new Map<NodeId, NodeId[]>();
 
   constructor(graph: Graph = new Graph())
   {
     this.graph = graph;
     this.derivations = new Derivations(this);
     this.invariants = new Invariants();
+    this.graph.changed.subscribe(() => this.InvalidateAspectCaches());
+  }
+
+  private InvalidateAspectCaches(): void
+  {
+    this.aspectsCache.clear();
+    this.carriedCache.clear();
+    this.carriersCache.clear();
   }
 
   /** Register a derived member (spec §4.4): a comprehension queried per instance. */
@@ -551,6 +564,17 @@ export class Repository
    *  transitively, each once, in declaration order. Cycle-safe. */
   AspectsOf(concept: NodeId): NodeId[]
   {
+    let cached = this.aspectsCache.get(concept);
+    if (cached === undefined)
+    {
+      cached = this.ComputeAspectsOf(concept);
+      this.aspectsCache.set(concept, cached);
+    }
+    return [...cached];
+  }
+
+  private ComputeAspectsOf(concept: NodeId): NodeId[]
+  {
     const result: NodeId[] = [];
     const seen = new Set<NodeId>();
     for (const owner of [concept, ...this.supertypesOf(concept)])
@@ -576,6 +600,17 @@ export class Repository
    *  aspect, plus all their subtypes. Cycle-safe. */
   CarriersOf(aspect: NodeId): NodeId[]
   {
+    let cached = this.carriersCache.get(aspect);
+    if (cached === undefined)
+    {
+      cached = this.ComputeCarriersOf(aspect);
+      this.carriersCache.set(aspect, cached);
+    }
+    return [...cached];
+  }
+
+  private ComputeCarriersOf(aspect: NodeId): NodeId[]
+  {
     const includers = this.graph.closure(aspect, EdgeKind.IncludesAspect, Direction.In, false);
     const carriers = new Set<NodeId>();
     for (const includer of includers)
@@ -592,7 +627,19 @@ export class Repository
   {
     return type === conceptOrAspect
       || this.supertypesOf(type).includes(conceptOrAspect)
-      || this.AspectsOf(type).includes(conceptOrAspect);
+      || this.CarriedSet(type).has(conceptOrAspect);
+  }
+
+  /** The aspects `type` carries as a memoized set (avoids rebuilding per IsA call). */
+  private CarriedSet(type: NodeId): ReadonlySet<NodeId>
+  {
+    let cached = this.carriedCache.get(type);
+    if (cached === undefined)
+    {
+      cached = new Set(this.AspectsOf(type));
+      this.carriedCache.set(type, cached);
+    }
+    return cached;
   }
 
   /** Instances whose type `IsA` the argument. The matching type set is computed once,
@@ -624,7 +671,14 @@ export class Repository
   {
     const raw = this.resolve(concept)?.attrs.get(Builder.DerivesAttr);
     if (typeof raw !== "string") return [];
-    return JSON.parse(raw) as { member: string; expression: string }[];
+    try
+    {
+      return JSON.parse(raw) as { member: string; expression: string }[];
+    }
+    catch
+    {
+      throw new Error(`${Repository.MalformedDerivesMessage} "${concept}"`);
+    }
   }
 
   /** Validate the model, returning structured diagnostics (spec §6). */
