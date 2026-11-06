@@ -12,6 +12,7 @@
 
 import { Tier, EdgeKind, Direction, Cardinality, type NodeId, type Node, type Scalar } from "../model/graph.js";
 import { MetaKind } from "../model/kinds.js";
+import { Builder } from "../model/builder.js";
 import { Repository, ScalarBase, type FieldSchema, type RelationshipSchema } from "../model/model.js";
 import { namespaceOf } from "../resolve/resolver.js";
 import { satisfies } from "../predicate/evaluate.js";
@@ -241,6 +242,7 @@ function validateAnnotationApplication(out: Diagnostic[], model: Repository, nod
   for (const key of node.attrs.keys())
   {
     if (key === "namespace") continue; // provenance, not a param
+    if (key === Builder.AppliesToMemberAttr) continue; // member-annotation marker, not a param
     if (!declared.has(key))
     {
       out.push({

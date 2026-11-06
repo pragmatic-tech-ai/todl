@@ -1473,7 +1473,7 @@ function stageApplications(
       diagnostics.push({
         code: DiagnosticCode.AnnotationDuplicate,
         severity: Severity.Error,
-        message: `annotation "${app.name}" is already applied to "${target}"`,
+        message: `annotation "${app.name}" is already applied to "${member === undefined ? target : `${target}.${member}`}"`,
         span: app.nameSpan ?? app.span,
         node: appId,
         path: null,

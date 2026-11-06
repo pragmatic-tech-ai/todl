@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { load } from "../loader.js";
+import { check } from "../../api.js";
 import { Builder } from "../../model/builder.js";
 import { MetaKind } from "../../model/kinds.js";
 import { EdgeKind, Direction } from "../../model/graph.js";
@@ -50,7 +51,9 @@ test("concept after an aspect is ConceptBaseNotFirst", () =>
 {
   const r = AspectLoadHarness.Load(`${Base}\nconcept a : some_aspect, base_net { }`);
   assert.deepEqual(AspectLoadHarness.Codes(r), [DiagnosticCode.ConceptBaseNotFirst]);
-  assert.deepEqual(r.model.related("t.a", EdgeKind.Extends, Direction.Out), []);
+  // The misplaced concept is still staged as the parent so nothing cascades.
+  assert.deepEqual(r.model.related("t.a", EdgeKind.Extends, Direction.Out), ["t.base_net"]);
+  assert.deepEqual(r.model.related("t.a", EdgeKind.IncludesAspect, Direction.Out), ["t.some_aspect"]);
 });
 
 test("two concepts is MultipleParentConcepts", () =>
@@ -58,6 +61,7 @@ test("two concepts is MultipleParentConcepts", () =>
   const r = AspectLoadHarness.Load(`concept b { }\nconcept c { }\nconcept a : b, c { }`);
   assert.deepEqual(AspectLoadHarness.Codes(r), [DiagnosticCode.MultipleParentConcepts]);
   assert.deepEqual(r.model.related("t.a", EdgeKind.Extends, Direction.Out), ["t.b"]);
+  assert.equal(r.model.related("t.a", EdgeKind.IncludesAspect, Direction.Out).length, 0);
 });
 
 test("aspect including a concept is AspectIncludesNonAspect", () =>
@@ -112,4 +116,47 @@ test("derive is stored as source text; member annotations carry AppliesToMemberA
   assert.equal(app?.attrs.get(Builder.AppliesToMemberAttr), "region");
   assert.equal(app?.attrs.get("level"), "3");
   assert.deepEqual(r.model.related("t.a", EdgeKind.Annotated, Direction.Out), ["t.a.region@t.heat"]);
+});
+
+test("a non-concept non-aspect base after the first is reported as not an aspect", () =>
+{
+  const r = AspectLoadHarness.Load(`${Base}
+primitive p { }
+concept a : some_aspect, p { }`);
+  const d = r.diagnostics.filter((x) => x.severity === Severity.Error);
+  assert.equal(d.length, 1);
+  assert.equal(d[0]!.code, DiagnosticCode.ConceptBaseNotFirst);
+  assert.match(d[0]!.message, /not an aspect/);
+  assert.doesNotMatch(d[0]!.message, /parent concept/);
+});
+
+test("a repeated base is deduplicated with a duplicate-base warning", () =>
+{
+  const r = AspectLoadHarness.Load(`${Base}
+concept a : some_aspect, some_aspect { }`);
+  assert.deepEqual(AspectLoadHarness.Codes(r), [DiagnosticCode.DuplicateBase]);
+  assert.equal(r.diagnostics[0]!.severity, Severity.Warning);
+  assert.deepEqual(r.model.related("t.a", EdgeKind.IncludesAspect, Direction.Out), ["t.some_aspect"]);
+});
+
+test("a duplicate member annotation message names the member", () =>
+{
+  const r = AspectLoadHarness.Load(
+    `annotation heat { level : number; }
+aspect cs { region : string; }
+` +
+    `concept a : cs { member region { annotate heat { level = 1; } annotate heat { level = 2; } } }`);
+  const d = r.diagnostics.find((x) => x.code === DiagnosticCode.AnnotationDuplicate);
+  assert.ok(d);
+  assert.match(d!.message, /a\.region/);
+});
+
+test("check(): a member annotation compiles without annotation.unknown-param", () =>
+{
+  const { diagnostics } = check([{ uri: "t.todl", text: `namespace t {
+    annotation heat { level : number; }
+    aspect cs { region : string; }
+    concept a : cs { member region { annotate heat { level = 3; } } }
+  }` }]);
+  assert.deepEqual(diagnostics.filter((d) => d.severity === Severity.Error), []);
 });

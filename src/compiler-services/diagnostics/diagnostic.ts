@@ -121,6 +121,7 @@ export enum DiagnosticCode
   ConceptBaseNotFirst = "type.concept-base-not-first",
   MultipleParentConcepts = "type.multiple-parent-concepts",
   AspectIncludesNonAspect = "type.aspect-includes-non-aspect",
+  DuplicateBase = "type.duplicate-base",
 }
 
 export interface Diagnostic

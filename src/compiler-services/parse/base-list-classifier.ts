@@ -50,9 +50,11 @@ export class BaseListClassifier
   public ClassifyConcept(decl: ConceptDecl, diagnostics: Diagnostic[]): ClassifiedBases
   {
     const result: ClassifiedBases = { parent: null, aspects: [] };
+    const seen = new Set<string>();
     let parentSlotTaken = false;
     decl.bases.forEach((base, i) =>
     {
+      if (BaseListClassifier.DiagnoseDuplicate(seen, base, decl.name, diagnostics)) return;
       const kind = this.KindOf(base.name);
       if (kind === BaseKind.Aspect)
       {
@@ -66,11 +68,22 @@ export class BaseListClassifier
         return;
       }
       if (kind === BaseKind.Unknown) return;
+      if (kind === BaseKind.Other)
+      {
+        diagnostics.push(BaseListClassifier.Error(
+          DiagnosticCode.ConceptBaseNotFirst,
+          `concept "${decl.name}" lists "${base.name}" after the first base, but it is not an aspect; only aspects may follow the first base`,
+          base, decl.name));
+        return;
+      }
       const code = parentSlotTaken ? DiagnosticCode.MultipleParentConcepts : DiagnosticCode.ConceptBaseNotFirst;
       const message = parentSlotTaken
         ? `concept "${decl.name}" has more than one parent concept ("${base.name}"); a concept may extend at most one concept`
         : `concept "${decl.name}" lists concept "${base.name}" after an aspect; the parent concept must come first in the base list`;
       diagnostics.push(BaseListClassifier.Error(code, message, base, decl.name));
+      // Still stage the first concept found as the parent so errors do not cascade
+      // from the concept falling back to the Element root.
+      if (result.parent === null) result.parent = base.name;
       parentSlotTaken = true;
     });
     return result;
@@ -80,8 +93,10 @@ export class BaseListClassifier
   public ClassifyAspect(decl: AspectDecl, diagnostics: Diagnostic[]): string[]
   {
     const aspects: string[] = [];
+    const seen = new Set<string>();
     for (const base of decl.includes)
     {
+      if (BaseListClassifier.DiagnoseDuplicate(seen, base, decl.name, diagnostics)) continue;
       const kind = this.KindOf(base.name);
       if (kind === BaseKind.Aspect)
       {
@@ -106,6 +121,23 @@ export class BaseListClassifier
     if (meta === undefined) return BaseKind.Unknown;
     if (meta === MetaKind.Concept) return BaseKind.Concept;
     return meta === MetaKind.Aspect ? BaseKind.Aspect : BaseKind.Other;
+  }
+
+  /** True (after a warning) when `base` repeats an earlier entry of the same list. */
+  private static DiagnoseDuplicate(seen: Set<string>, base: BaseRef, owner: string, diagnostics: Diagnostic[]): boolean
+  {
+    if (!seen.has(base.name))
+    {
+      seen.add(base.name);
+      return false;
+    }
+    diagnostics.push({
+      code: DiagnosticCode.DuplicateBase,
+      severity: Severity.Warning,
+      message: `"${base.name}" is listed more than once in the base list of "${owner}"`,
+      span: base.span, node: owner, path: null,
+    });
+    return true;
   }
 
   private static Error(code: DiagnosticCode, message: string, base: BaseRef, owner: string): Diagnostic
