@@ -9,8 +9,8 @@ import { toJSON, toJSONOwn } from '../json.js';
 const META: SourceFile = {
   uri: 'meta.todl',
   text: `namespace ea {
-    concept Location   { label : string; }
-    concept Technology { label : string; }
+    concept Location   { }
+    concept Technology { }
   }`,
 };
 

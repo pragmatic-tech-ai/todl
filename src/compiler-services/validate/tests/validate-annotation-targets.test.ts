@@ -4,7 +4,7 @@ import { check } from "../../api.js";
 import { DiagnosticCode } from "../../diagnostics/diagnostic.js";
 
 const BASE = `namespace tech {
-  concept Actor { label : string; }
+  concept Actor { }
   annotation Badge { path : string; }
   taxonomy Actors : represents Actor { `;
 
@@ -16,7 +16,7 @@ function codes(termBody: string): DiagnosticCode[]
 
 test("the motivating fixture compiles clean", () => {
   const src = `namespace tech {
-    concept Actor { label : string; }
+    concept Actor { }
     annotation Badge { path : string; }
     taxonomy Actors : represents Actor {
       term Internal {
@@ -30,7 +30,7 @@ test("the motivating fixture compiles clean", () => {
 
 test("a taxonomy-level annotation compiles clean", () => {
   const src = `namespace tech {
-    concept Actor { label : string; }
+    concept Actor { }
     annotation Badge { path : string; }
     taxonomy Actors : represents Actor {
       annotate Badge { path = "resources/actors.svg"; }
@@ -42,7 +42,7 @@ test("a taxonomy-level annotation compiles clean", () => {
 
 test("an unknown param on a taxonomy-level annotation is annotation.unknown-param", () => {
   const src = `namespace tech {
-    concept Actor { label : string; }
+    concept Actor { }
     annotation Badge { path : string; }
     taxonomy Actors : represents Actor {
       annotate Badge { bogus = "x"; }

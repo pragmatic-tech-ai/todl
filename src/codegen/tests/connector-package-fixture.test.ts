@@ -9,7 +9,7 @@ class Harness
 {
   public static readonly Sales = `
 namespace sales {
-  concept Order { total : string; label : string; }
+  concept Order { total : string; }
   concept Customer { name : string; }
   datasource pg { kind = sql; connection = "crm-postgres"; host = "db.internal"; secret = pgpass; }
   model Sales : sales {

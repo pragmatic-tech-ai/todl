@@ -16,7 +16,6 @@ namespace tech_architecture
             participant.
             """;
 
-        label  : label;
         region : string;
         cidr   : string?;
         peers  : network_peer[];

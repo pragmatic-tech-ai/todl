@@ -46,7 +46,7 @@ class UnifiedFixtures
         // Unpublished: no packageVersion.
         return UnifiedFixtures.Storage(
             { type: ProjectType.Library, name: UnifiedFixtures.LibraryId, version: 1, id: UnifiedFixtures.LibraryId },
-            `namespace ms { concept Tenant { label : string?; } }`,
+            `namespace ms { concept Tenant { } }`,
         )
     }
 

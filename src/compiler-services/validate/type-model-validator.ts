@@ -14,12 +14,6 @@ import { ELEMENT_ID, MalformedDerivesError, Repository } from "../model/model.js
 import type { SourceSpan } from "../diagnostics/span.js";
 import { Severity, DiagnosticCode, type Diagnostic } from "../diagnostics/diagnostic.js";
 
-export interface TypeModelOptions
-{
-  /** When true, members declared by the root `Element` count as inherited (redeclaring one is an error). */
-  EnforceRootMemberRule?: boolean;
-}
-
 export class TypeModelValidator
 {
   private static readonly RedeclaredMessage = "concept redeclares member";
@@ -33,16 +27,14 @@ export class TypeModelValidator
   private static readonly Separator = " -> ";
 
   private readonly model: Repository;
-  private readonly enforceRoot: boolean;
   private readonly diagnostics: Diagnostic[] = [];
   private readonly fullCache = new Map<NodeId, Map<string, Set<NodeId>>>();
   private readonly ownNamesCache = new Map<NodeId, Set<string>>();
   private readonly cycleMembers = new Set<NodeId>();
 
-  constructor(model: Repository, options: TypeModelOptions = {})
+  constructor(model: Repository)
   {
     this.model = model;
-    this.enforceRoot = options.EnforceRootMemberRule ?? false;
   }
 
   public Validate(): Diagnostic[]
@@ -289,11 +281,7 @@ export class TypeModelValidator
     }
     else
     {
-      for (const s of this.model.supertypesOf(type))
-      {
-        if (s === ELEMENT_ID && !this.enforceRoot) continue;
-        result.add(s);
-      }
+      for (const s of this.model.supertypesOf(type)) result.add(s);
       for (const a of this.model.AspectsOf(type)) result.add(a);
     }
     result.delete(type);

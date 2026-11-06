@@ -6,9 +6,9 @@ import { toJSON } from "../compiler-services/emit/json.js";
 test("a migrated-style library compiles clean: bare siblings + uses cross-refs", () => {
   const base = toJSON(check([{ uri: "ea.todl", text:
     `namespace techArchitecture {
-       concept Location { label : string; parent : Location?; }
-       concept Category { label : string; }
-       concept Technology { label : string; availableIn : Location; applicableTo : Categories; }
+       concept Location { parent : Location?; }
+       concept Category { }
+       concept Technology { availableIn : Location; applicableTo : Categories; }
        taxonomy Categories : represents Category {
          term PlatformApi { label = "API"; }
          term ConversationalInterface { label = "Chat"; }

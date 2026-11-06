@@ -25,7 +25,7 @@ const CLASS_SRC: SourceFile = {
     text: `namespace acme {
         annotation Author { name : string; }
         package { annotate Author { name = "Acme"; } }
-        concept Location { label : string; }
+        concept Location { }
         taxonomy Regions : represents Location {
             Location euWest { label = "EU West"; }
         }
