@@ -144,6 +144,13 @@ export class ScopedRepository extends Repository
             || this.AspectsOf(type).includes(conceptOrAspect);
     }
 
+    /** A ScopedRepository is a per-request snapshot and its own (empty) graph never signals
+     *  changes, so the base class's memo would never invalidate: compute directly, uncached. */
+    public override QuantifierDomain(conceptOrAspect: NodeId): readonly NodeId[]
+    {
+        return this.InstancesMatching(conceptOrAspect).map((n) => n.id);
+    }
+
     public override InstancesMatching(conceptOrAspect: NodeId): Node[]
     {
         if (!this.visibleIds.has(conceptOrAspect)) return [];
