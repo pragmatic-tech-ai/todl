@@ -62,8 +62,9 @@ export class Builder
   public static readonly StorageIdKey = "storageId";
   /** Concept attr: JSON list of `{ member, expression }` (`derive` entries, expression = source text). */
   public static readonly DerivesAttr = "derives";
-  /** Attr on a member-annotation application node: the annotated member's name. */
-  public static readonly AppliesToMemberAttr = "appliesToMember";
+  /** Attr on a member-annotation application node: the annotated member's name.
+   *  The key starts with `@` so no TODL identifier (annotation parameter) can spell it. */
+  public static readonly AppliesToMemberAttr = "@appliesToMember";
   /** Reserved match-node attr keys (the concept reuses the identity key) and the
    *  two candidate variable names a `same when` rule may reference. */
   public static readonly MatchConceptAttr = Builder.IdentityConceptAttr;
