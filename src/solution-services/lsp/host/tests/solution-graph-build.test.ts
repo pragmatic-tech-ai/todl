@@ -8,7 +8,7 @@ import type { TodlDocument } from '../../../../compiler-services/emit/json.js';
 import { WikiOriginKind } from '../../../project-services/core/wiki-origin.js';
 import { SolutionGraph, type SolutionGraphMember } from '../solution-graph.js';
 
-const META = { uri: 'mm/meta.todl', text: 'namespace ea { concept Location { label : string; } }' };
+const META = { uri: 'mm/meta.todl', text: 'namespace ea { concept Location { } }' };
 const LIB = { uri: 'lib/lib.todl', text: 'namespace lib { import ea; taxonomy MS : represents Location { term azure { } } }' };
 const ARCH = { uri: 'arch/a.todl', text: 'namespace app { import lib; model M : ea { } }' };
 

@@ -24,7 +24,7 @@ class Fixture
     public static readonly AUri = "a/a.todl";
     public static readonly BUri = "b/b.todl";
 
-    public static readonly MetaSource = "namespace ea { concept Location { label : string; } concept Region : Location { } }";
+    public static readonly MetaSource = "namespace ea { concept Location { } concept Region : Location { } }";
     public static readonly ASource = [
         "namespace acme.a {",
         "  import ea;",
@@ -184,7 +184,7 @@ class GateFixture
     public static readonly AUri = "a/a.todl";
     public static readonly BUri = "b/b.todl";
 
-    public static readonly MetaSource = "namespace ea { concept Location { label : string; } }";
+    public static readonly MetaSource = "namespace ea { concept Location { } }";
     public static readonly ASource = [
         "namespace acme.a {",
         "  import ea;",

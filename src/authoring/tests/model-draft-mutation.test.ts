@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { Repository } from "../../compiler-services/model/model.js";
 import { ModelDraft } from "../model-draft.js";
 
-// Meta-model base : concept `component { label : string; impl : Technology }`.
+// Meta-model base : concept `component { impl : Technology }`.
 function base(): Repository
 {
   const r = new Repository();
@@ -11,7 +11,6 @@ function base(): Repository
   b.definePrimitive("string");
   b.defineConcept("technology");
   b.defineConcept("component");
-  b.addField("component", "label", "string");
   b.addField("component", "impl", "technology");
   b.commit();
   return r;

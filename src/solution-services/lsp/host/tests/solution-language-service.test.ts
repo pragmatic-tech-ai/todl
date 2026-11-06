@@ -125,7 +125,7 @@ class BaseWorld
             type: ProjectType.Library, name: BaseWorld.ConsumerId, version: 1, id: BaseWorld.ConsumerId, packageVersion: BaseWorld.ProducerVersion,
             metaModels: [{ id: BaseWorld.ProducerId, version: BaseWorld.ProducerVersion }],
         };
-        this.Producer = BaseWorld.Storage(BaseWorld.ProducerId, producerManifest, "namespace acme { concept Widget { label : string?; } }");
+        this.Producer = BaseWorld.Storage(BaseWorld.ProducerId, producerManifest, "namespace acme { concept Widget { } }");
         this.Consumer = BaseWorld.Storage(BaseWorld.ConsumerId, consumerManifest, "namespace lib { concept Gadget : acme.Widget { } }");
         const solution = new Solution("S");
         solution.AddMember(BaseWorld.ProducerId, "meta-model").Storage = this.Producer;

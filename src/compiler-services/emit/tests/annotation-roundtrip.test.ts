@@ -23,7 +23,7 @@ test("annotation def, application node, Annotated edge, and params round-trip", 
 test("a taxonomy-level annotation round-trips through JSON", () => {
   const { model, diagnostics } = check([{ uri: "a.todl", text:
     `namespace acme {
-      concept Actor { label : string; }
+      concept Actor { }
       annotation Badge { path : string; }
       taxonomy Actors : represents Actor {
         annotate Badge { path = "actors.svg"; }

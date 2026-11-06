@@ -155,7 +155,7 @@ describe("NpmPackageBuildSystem — publish flavor", () =>
     {
         const storage = new FakeStorage();
         await storage.WriteText("project.plexus", JSON.stringify({ type: "meta-model", name: "widgets", version: 1, id: "widgets", packageVersion: "0.1.0" }));
-        await storage.WriteText("model.todl", "namespace acme { concept Widget { label : string?; } }");
+        await storage.WriteText("model.todl", "namespace acme { concept Widget { } }");
         return storage;
     }
 

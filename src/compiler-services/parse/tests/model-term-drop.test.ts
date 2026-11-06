@@ -15,9 +15,9 @@ const errs = (ds: { code: DiagnosticCode; severity: string }[]) =>
 // A base meta-model in namespace `ea`: two concepts + two taxonomies of terms.
 const base = () => toJSON(check([{ uri: "ea.todl", text:
   `namespace ea {
-     concept Technology { label : string; }
-     concept Category   { label : string; }
-     concept Component  { label : string; realisedBy : Technology?; kind : Category?; }
+     concept Technology { }
+     concept Category   { }
+     concept Component  { realisedBy : Technology?; kind : Category?; }
      taxonomy Stack : represents Technology {
        Technology azureOpenai { label = "AO"; }
        Technology azureFunc   { label = "AF"; }
@@ -100,8 +100,8 @@ test("model `uses` of a non-taxonomy is flagged", () => {
 test("a bare id defined by two used taxonomies is ambiguous", () => {
   const b = toJSON(check([{ uri: "ea.todl", text:
     `namespace ea {
-       concept Technology { label : string; }
-       concept Component  { label : string; realisedBy : Technology?; }
+       concept Technology { }
+       concept Component  { realisedBy : Technology?; }
        taxonomy A : represents Technology { Technology dup { label = "A"; } }
        taxonomy B : represents Technology { Technology dup { label = "B"; } }
      }` }]).model);

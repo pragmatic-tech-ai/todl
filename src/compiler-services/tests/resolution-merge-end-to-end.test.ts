@@ -14,7 +14,7 @@ class ResolutionMergeEndToEndFixture
     public static readonly GapFillSource = `
 namespace shop
 {
-    concept Customer { email : string; label : string; updated_at : string; }
+    concept Customer { email : string; updated_at : string; }
     identity Customer key email;
     merge Customer { prefer latest for updated_at; }
 
@@ -28,7 +28,7 @@ namespace shop
     public static readonly ConflictSource = `
 namespace shop
 {
-    concept Customer { email : string; label : string; }
+    concept Customer { email : string; }
     identity Customer key email;
 
     model Book : shop

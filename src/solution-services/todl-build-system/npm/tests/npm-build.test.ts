@@ -14,7 +14,7 @@ import { FakePresentationBaker } from "../../../project-services/core/tests/fake
 import { DefaultPresentationBaker } from "../../../project-services/core/default-presentation-baker.js";
 import { Severity } from "../../../build-system-core/diagnostic-sink.js";
 
-const META = "namespace acme { concept Widget { label : string?; } }";
+const META = "namespace acme { concept Widget { } }";
 const VALID_APP_MU = "Application { resources: { Border x:root {} } }\n";
 
 async function metaProject(): Promise<FakeStorage>
@@ -33,7 +33,7 @@ async function libraryProjectWithIconAndMu(): Promise<FakeStorage>
 {
     const storage = new FakeStorage();
     await storage.WriteText("project.plexus", JSON.stringify({ type: "library", name: "widgets", version: 1, id: "widgets", packageVersion: "0.1.0" }));
-    await storage.WriteText("model.todl", 'namespace acme { concept Widget { label : string?; annotate icon { path = "visuals/w.svg"; } } }');
+    await storage.WriteText("model.todl", 'namespace acme { concept Widget { annotate icon { path = "visuals/w.svg"; } } }');
     await storage.WriteText("visuals/w.svg", "<svg></svg>");
     await storage.WriteText("views/app.mu", VALID_APP_MU);
     return storage;
@@ -192,7 +192,7 @@ async function archProject(): Promise<FakeStorage>
         id: "my-arch", packageVersion: "0.1.0",
         architectures: [{ id: "base-arch", version: "0.1.0" }],
     }));
-    await storage.WriteText("model.todl", "namespace acme { concept App { label : string?; } model M : acme { App a1 { label = \"A1\"; } } }");
+    await storage.WriteText("model.todl", "namespace acme { concept App { } model M : acme { App a1 { label = \"A1\"; } } }");
     return storage;
 }
 

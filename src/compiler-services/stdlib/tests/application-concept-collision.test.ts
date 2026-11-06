@@ -13,7 +13,6 @@ import { Severity } from "../../diagnostics/diagnostic.js";
 // cascade. This is why the prelude marker is named `entrypoint`, not `application`.
 const SRC = `namespace mm {
   concept application {
-    label          : string?;
     app_components : identifier[];
   }
   viewpoint V : frames application

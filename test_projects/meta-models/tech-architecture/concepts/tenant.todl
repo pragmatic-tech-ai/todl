@@ -14,7 +14,6 @@ namespace tech_architecture
             tenant for identity scope.
             """;
 
-        label       : label;
         region      : string?;
 
         relationship in -> location;

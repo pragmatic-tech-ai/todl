@@ -6,7 +6,7 @@ import type { SourceFile } from "../../compiler-services/diagnostics/span.js";
 import { compilePackage, PackageKind } from "../publish.js";
 
 const META_SRC = `namespace ea {
-  concept Technology { label : string; }
+  concept Technology { }
 }`;
 const META: SourceFile = { uri: "ea.todl", text: META_SRC };
 
@@ -14,8 +14,8 @@ const META: SourceFile = { uri: "ea.todl", text: META_SRC };
 const BASE: SourceFile = {
   uri: "meta.todl",
   text: `namespace ea {
-    concept Location   { label : string; }
-    concept Technology { label : string; }
+    concept Location   { }
+    concept Technology { }
   }`,
 };
 const LIB: SourceFile = {

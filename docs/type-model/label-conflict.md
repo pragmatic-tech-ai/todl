@@ -59,3 +59,9 @@ Does anything rely on `label` being required? Today the required `label` is enfo
 Status quo until decided: R4 enforcement against `Element`-inherited members stays off (`EnforceRootMemberRule=false`). This is the plan's default and leaves the model unchanged, not a third option.
 
 Recommendation: A. The annotation-typed field is functionally a string, so `: label` reads as a mistaken type for `string`, but this is an inference from behavior, not something the source states; the author's intent should be confirmed. If required labels are wanted, keep them by adding per-concept invariants rather than redeclaring.
+
+## Decision (2026-11-06): Option A, applied
+
+The product owner chose Option A. In `test_projects/meta-models/tech-architecture/concepts/` the 14 `label : label;` and the 2 `label : string;` (slot, technology) redeclarations were deleted, so every concept inherits `Element.label : string?`; `unit_label : label?;` in `billing-model.todl` is now `unit_label : string?;`. No other concept field in the repo's live sources redeclares an `Element` member or is typed by the `label` annotation (the copies under `user-smoke-tests/` are historical generated output and were left alone).
+
+R4 is now enforced against `Element`: the `EnforceRootMemberRule` option was removed from `TypeModelValidator` and enforcement is unconditional, so a concept redeclaring an `Element` member reports `type.member-redeclared`. A missing `label` is now valid; if a concept needs a required label, add a per-concept invariant. The regression probe over test_architecture, test_hubspoke_project and test_waf_project produced output identical to main (0 / 112 / 586 / 37 diagnostics), because every instance already carried a label.

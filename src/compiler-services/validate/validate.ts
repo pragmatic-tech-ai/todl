@@ -41,9 +41,7 @@ function spanFor(model: Repository, node: NodeId, member: string | null): Source
 
 export function validate(model: Repository): Diagnostic[]
 {
-  // Root `Element` members are not yet treated as inherited (label-conflict finding:
-  // docs/type-model/label-conflict.md), hence EnforceRootMemberRule: false.
-  const diagnostics: Diagnostic[] = new TypeModelValidator(model, { EnforceRootMemberRule: false }).Validate();
+  const diagnostics: Diagnostic[] = new TypeModelValidator(model).Validate();
   for (const node of model.allNodes())
   {
     // Merged-away aliases are represented by their canonical; validating them would

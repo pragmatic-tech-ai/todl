@@ -28,10 +28,10 @@ import type { PackageRef } from "../../../../publish/publish.js";
 import { SolutionManagerService } from "../../../solution-manager/engine/solution-manager-service.js";
 import { SolutionBaseResolver } from "../../../solution-manager/engine/solution-base-resolver.js";
 
-const ARCH_MODEL = "namespace acme { concept Widget { label : string?; } }";
+const ARCH_MODEL = "namespace acme { concept Widget { } }";
 const NpmPackageId = "npm-package";
 const HtmlBundleId = "html-bundle";
-const LIBRARY_WITH_ICON = 'namespace acme { concept Widget { label : string?; annotate icon { path = "visuals/w.svg"; } } }';
+const LIBRARY_WITH_ICON = 'namespace acme { concept Widget { annotate icon { path = "visuals/w.svg"; } } }';
 const ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M0 0h16v16H0z"/></svg>';
 // A consumer architecture's OWN model: extends the bound meta-model's concept by
 // qualified name (rather than redeclaring `acme.Widget` itself), so a successful

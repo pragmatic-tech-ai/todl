@@ -16,9 +16,9 @@ class TypeModelHarness
     return load([{ uri: "t.todl", text: `namespace t {\n${body}\n}` }]).model;
   }
 
-  public static Run(model: Repository, enforceRoot = false): Diagnostic[]
+  public static Run(model: Repository): Diagnostic[]
   {
-    return new TypeModelValidator(model, { EnforceRootMemberRule: enforceRoot }).Validate();
+    return new TypeModelValidator(model).Validate();
   }
 
   public static Codes(body: string): DiagnosticCode[]
@@ -41,12 +41,11 @@ test("redeclaring an aspect-provided member is MemberRedeclared", () =>
   assert.deepEqual(TypeModelHarness.Codes(`aspect a { region : string; }\nconcept c : a { region : string; }`), [DiagnosticCode.MemberRedeclared]);
 });
 
-test("a member shared with Element is flagged only when EnforceRootMemberRule is true", () =>
+test("a concept redeclaring an Element member is MemberRedeclared", () =>
 {
   const m = TypeModelHarness.Model(`concept c { label : string; }`);
   m.builder().defineConcept("todl.Element").addField("todl.Element", "label", "string").commit();
-  assert.equal(TypeModelHarness.Run(m, false).length, 0);
-  assert.equal(TypeModelHarness.Run(m, true).some((d) => d.code === DiagnosticCode.MemberRedeclared), true);
+  assert.equal(TypeModelHarness.Run(m).some((d) => d.code === DiagnosticCode.MemberRedeclared), true);
 });
 
 test("two aspects contributing the same member is one MemberCollision", () =>

@@ -9,9 +9,9 @@ import type { SourceFile } from "../compiler-services/diagnostics/span.js";
 const META: SourceFile = {
   uri: "meta.todl",
   text: `namespace ea {
-    concept Location  { label : string; }
-    concept Technology { label : string; applicableTo : ComponentCategory; }
-    concept Category   { label : string; }
+    concept Location  { }
+    concept Technology { applicableTo : ComponentCategory; }
+    concept Category   { }
     taxonomy ComponentCategory : represents Category { term PlatformApi { label = "API"; } }
   }`,
 };

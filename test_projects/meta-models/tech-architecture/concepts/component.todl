@@ -22,7 +22,6 @@ namespace tech_architecture
         annotate materialize {}
         annotate wiki { path = "wiki/component.md"; }
 
-        label : label;
         slots : slot[];
 
         relationship in -> location?;

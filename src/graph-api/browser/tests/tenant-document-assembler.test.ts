@@ -8,7 +8,7 @@ import { TenantDocumentAssembler, type TenantNodeCell } from "../tenant-document
 import { TodlAppBootstrap } from "../todl-app-bootstrap.js";
 
 const Source =
-    `namespace acme { concept Svc { label : string?; uses : Svc?; } model M : acme { Svc a1 { label = "A1"; } Svc a2 { label = "x"; uses = a1; } } }`;
+    `namespace acme { concept Svc { uses : Svc?; } model M : acme { Svc a1 { label = "A1"; } Svc a2 { label = "x"; uses = a1; } } }`;
 
 class Fixture
 {

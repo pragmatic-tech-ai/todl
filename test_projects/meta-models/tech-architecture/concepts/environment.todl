@@ -28,7 +28,6 @@ namespace tech_architecture
             override per_instance.
             """;
 
-        label     : label;
         region    : string?;
 
         public_ingress : ingress[];

@@ -7,7 +7,7 @@ import { DiagnosticCode } from "../../diagnostics/diagnostic.js";
 // known param on `icon`, so annotating with it compiles clean.
 test("a prelude icon annotation accepts the inherited key param", () => {
   const src = `namespace app {
-    concept Thing { label : string; }
+    concept Thing { }
     concept Widget : Thing {
       annotate icon { path = "resources/w.svg"; key = "mm_icon_w"; }
     }
@@ -18,7 +18,7 @@ test("a prelude icon annotation accepts the inherited key param", () => {
 // Inheritance did not turn `icon` into an open bag: an unknown param is still rejected.
 test("an unknown param on a prelude icon annotation is still annotation.unknown-param", () => {
   const src = `namespace app {
-    concept Thing { label : string; }
+    concept Thing { }
     concept Widget : Thing {
       annotate icon { path = "resources/w.svg"; bogus = "x"; }
     }
@@ -31,7 +31,7 @@ test("an unknown param on a prelude icon annotation is still annotation.unknown-
 // label-valued fields are just `string`.
 test("a prelude label annotation accepts a text param", () => {
   const src = `namespace app {
-    concept Thing { annotate label { text = "A Thing"; } label : string; }
+    concept Thing { annotate label { text = "A Thing"; } }
   }`;
   assert.deepEqual(check([{ uri: "a.todl", text: src }]).diagnostics, []);
 });
