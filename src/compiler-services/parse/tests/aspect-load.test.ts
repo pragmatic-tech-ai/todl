@@ -103,7 +103,7 @@ test("base names may be namespace-qualified across sources", () =>
   assert.deepEqual(r.model.related("t.a", EdgeKind.IncludesAspect, Direction.Out), ["ns.cs"]);
 });
 
-test("derive is stored as source text; member annotations carry AppliesToMemberAttr", () =>
+test("derive is stored as source text; member annotations hang off the member target", () =>
 {
   const r = AspectLoadHarness.Load(
     `annotation heat { level : number; }\naspect cs { region : string; }\n` +
@@ -113,9 +113,12 @@ test("derive is stored as source text; member annotations carry AppliesToMemberA
   assert.deepEqual(derives, [{ member: "region", expression: 'upper( "x" ) + y' }]);
   const app = r.model.resolve("t.a.region@t.heat");
   assert.ok(app);
-  assert.equal(app?.attrs.get(Builder.AppliesToMemberAttr), "region");
   assert.equal(app?.attrs.get("level"), "3");
-  assert.deepEqual(r.model.related("t.a", EdgeKind.Annotated, Direction.Out), ["t.a.region@t.heat"]);
+  const target = r.model.resolve("t.a.region");
+  assert.equal(target?.metaKind, MetaKind.MemberTarget);
+  assert.equal(target?.attrs.get(Builder.MemberTargetNameAttr), "region");
+  assert.deepEqual(r.model.related("t.a.region", EdgeKind.Annotated, Direction.Out), ["t.a.region@t.heat"]);
+  assert.deepEqual(r.model.related("t.a", EdgeKind.Annotated, Direction.Out), []);
 });
 
 test("a non-concept non-aspect base after the first is reported as not an aspect", () =>

@@ -31,6 +31,12 @@ export interface ClassifiedBases
  */
 export class BaseListClassifier
 {
+  private static readonly NotAspectAfterFirstMessage = "after the first base, but it is not an aspect; only aspects may follow the first base";
+  private static readonly MultipleParentsMessage = "a concept may extend at most one concept";
+  private static readonly ConceptAfterAspectMessage = "after an aspect; the parent concept must come first in the base list";
+  private static readonly AspectIncludesNonAspectMessage = "which is not an aspect; an aspect may include only aspects";
+  private static readonly DuplicateBaseMessage = "is listed more than once in the base list of";
+
   private readonly kinds = new Map<string, BaseKind>();
 
   constructor(
@@ -72,14 +78,14 @@ export class BaseListClassifier
       {
         diagnostics.push(BaseListClassifier.Error(
           DiagnosticCode.ConceptBaseNotFirst,
-          `concept "${decl.name}" lists "${base.name}" after the first base, but it is not an aspect; only aspects may follow the first base`,
+          `concept "${decl.name}" lists "${base.name}" ${BaseListClassifier.NotAspectAfterFirstMessage}`,
           base, decl.name));
         return;
       }
       const code = parentSlotTaken ? DiagnosticCode.MultipleParentConcepts : DiagnosticCode.ConceptBaseNotFirst;
       const message = parentSlotTaken
-        ? `concept "${decl.name}" has more than one parent concept ("${base.name}"); a concept may extend at most one concept`
-        : `concept "${decl.name}" lists concept "${base.name}" after an aspect; the parent concept must come first in the base list`;
+        ? `concept "${decl.name}" has more than one parent concept ("${base.name}"); ${BaseListClassifier.MultipleParentsMessage}`
+        : `concept "${decl.name}" lists concept "${base.name}" ${BaseListClassifier.ConceptAfterAspectMessage}`;
       diagnostics.push(BaseListClassifier.Error(code, message, base, decl.name));
       // Still stage the first concept found as the parent so errors do not cascade
       // from the concept falling back to the Element root.
@@ -106,7 +112,7 @@ export class BaseListClassifier
       {
         diagnostics.push(BaseListClassifier.Error(
           DiagnosticCode.AspectIncludesNonAspect,
-          `aspect "${decl.name}" includes "${base.name}", which is not an aspect; an aspect may include only aspects`,
+          `aspect "${decl.name}" includes "${base.name}", ${BaseListClassifier.AspectIncludesNonAspectMessage}`,
           base, decl.name));
       }
     }
@@ -134,7 +140,7 @@ export class BaseListClassifier
     diagnostics.push({
       code: DiagnosticCode.DuplicateBase,
       severity: Severity.Warning,
-      message: `"${base.name}" is listed more than once in the base list of "${owner}"`,
+      message: `"${base.name}" ${BaseListClassifier.DuplicateBaseMessage} "${owner}"`,
       span: base.span, node: owner, path: null,
     });
     return true;

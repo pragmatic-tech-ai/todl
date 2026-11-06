@@ -12,7 +12,6 @@
 
 import { Tier, EdgeKind, Direction, Cardinality, type NodeId, type Node, type Scalar } from "../model/graph.js";
 import { MetaKind } from "../model/kinds.js";
-import { Builder } from "../model/builder.js";
 import { Repository, ScalarBase, type FieldSchema, type RelationshipSchema } from "../model/model.js";
 import { namespaceOf } from "../resolve/resolver.js";
 import { satisfies } from "../predicate/evaluate.js";
@@ -245,7 +244,6 @@ function validateAnnotationApplication(out: Diagnostic[], model: Repository, nod
   for (const key of node.attrs.keys())
   {
     if (key === "namespace") continue; // provenance, not a param
-    if (key === Builder.AppliesToMemberAttr) continue; // member-annotation marker, not a param
     if (!declared.has(key))
     {
       out.push({
@@ -290,18 +288,21 @@ function validateInstance(out: Diagnostic[], model: Repository, node: Node): voi
       : model.related(node.id, EdgeKind.Relationship, Direction.Out, name);
 
   const schema = model.effectiveSchema(node.type ?? "");
+  // A derived member (R7) is computed, never stored: no cardinality obligation.
+  // Assigning one is reported by the type-model validator.
+  const derived = model.DerivedMembersOf(node.type ?? "");
   for (const field of schema.fields)
   {
     const targets = targetsFor(field.name);
     const count = (effAttrs.has(field.name) ? 1 : 0) + targets.length;
-    checkCardinality(out, model, node, field.name, field.cardinality, count, partial);
+    if (!derived.has(field.name)) checkCardinality(out, model, node, field.name, field.cardinality, count, partial);
     checkTaxonomyValue(out, model, node, field, targets);
     checkScalarValue(out, model, node, field, effAttrs);
   }
   for (const relationship of schema.relationships)
   {
     const targets = targetsFor(relationship.name);
-    checkCardinality(out, model, node, relationship.name, relationship.cardinality, targets.length, partial);
+    if (!derived.has(relationship.name)) checkCardinality(out, model, node, relationship.name, relationship.cardinality, targets.length, partial);
     checkTargetTypes(out, model, node, relationship, targets);
   }
   checkUnknownMembers(out, model, node, schema);
@@ -627,18 +628,13 @@ function checkTargetTypes(
 ): void
 {
   if (relationship.targets.length === 0) return;
-  const allowed = new Set<NodeId>();
-  for (const t of relationship.targets)
-  {
-    allowed.add(t);
-    for (const sub of model.subtypesOf(t)) allowed.add(sub);
-  }
   const path = `${node.type}.${relationship.name}`;
   const expected = relationship.targets.join(" | ");
   for (const target of targets)
   {
     const targetNode = model.resolve(target);
-    if (targetNode !== undefined && !allowed.has(targetNode.type ?? ""))
+    // R8: a concept target admits its subtypes, an aspect target every carrier.
+    if (targetNode !== undefined && !relationship.targets.some((t) => model.IsA(targetNode.type ?? "", t)))
     {
       out.push({
         code: DiagnosticCode.TargetTypeMismatch,
@@ -654,7 +650,9 @@ function checkTargetTypes(
 
 function checkInvariants(out: Diagnostic[], model: Repository, node: Node): void
 {
-  for (const concept of [node.type ?? "", ...model.supertypesOf(node.type ?? "")])
+  // R8: invariants of the type, its supertypes and every carried aspect, each once.
+  const type = node.type ?? "";
+  for (const concept of new Set<NodeId>([type, ...model.supertypesOf(type), ...model.AspectsOf(type)]))
   {
     for (const invariant of model.invariantsFor(concept))
     {

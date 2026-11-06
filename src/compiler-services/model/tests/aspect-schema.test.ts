@@ -123,11 +123,6 @@ test("queries terminate on cyclic extends and aspect inclusion", () =>
   assert.ok(m.effectiveSchema("t.network").fields.length >= 2);
 });
 
-test("AppliesToMemberAttr is a key no identifier can spell", () =>
-{
-  assert.match(Builder.AppliesToMemberAttr, /^[^A-Za-z_]/);
-});
-
 test("a user annotation parameter named appliesToMember works on a member annotation", () =>
 {
   const { diagnostics } = check([{ uri: "t.todl", text: `namespace t {

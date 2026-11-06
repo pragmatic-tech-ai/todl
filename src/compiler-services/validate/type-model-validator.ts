@@ -28,6 +28,8 @@ export class TypeModelValidator
   private static readonly DeriveTargetMessage = "derive target is not an aspect-contributed member of";
   private static readonly CycleMessage = "inheritance cycle";
   private static readonly MultipleExtendsMessage = "has more than one Extends edge";
+  private static readonly DuplicateDeriveMessage = "is derived more than once on";
+  private static readonly DerivedAssignedMessage = "is derived and cannot be assigned on";
   private static readonly Separator = " -> ";
 
   private readonly model: Repository;
@@ -196,6 +198,7 @@ export class TypeModelValidator
       return;
     }
     if (derives.length === 0) return;
+    const seen = new Set<string>();
     const contributed = new Set<string>();
     for (const aspect of this.model.AspectsOf(concept))
     {
@@ -203,6 +206,14 @@ export class TypeModelValidator
     }
     for (const derive of derives)
     {
+      if (seen.has(derive.member))
+      {
+        this.diagnostics.push(this.Error(
+          DiagnosticCode.DuplicateDerive, concept, `${concept}.${derive.member}`,
+          `"${derive.member}" ${TypeModelValidator.DuplicateDeriveMessage} "${concept}"`, this.model.spanOf(concept)));
+        continue;
+      }
+      seen.add(derive.member);
       if (contributed.has(derive.member) && !own.has(derive.member)) continue;
       this.diagnostics.push(this.Error(
         DiagnosticCode.DeriveTargetNotContributed, concept, `${concept}.${derive.member}`,
@@ -214,10 +225,29 @@ export class TypeModelValidator
   private CheckInstance(node: Node): void
   {
     if (node.type === null) return;
-    if (this.model.resolve(node.type)?.metaKind !== MetaKind.Aspect) return;
+    if (this.model.resolve(node.type)?.metaKind !== MetaKind.Aspect)
+    {
+      this.CheckDerivedAssignments(node, node.type);
+      return;
+    }
     this.diagnostics.push(this.Error(
       DiagnosticCode.AspectNotInstantiable, node.id, node.type,
       `"${node.id}": "${node.type}" ${TypeModelValidator.NotInstantiableMessage}`, this.model.spanOf(node.id)));
+  }
+
+  /** A derived member (R7) is computed, never stored: an instance may not assign it. */
+  private CheckDerivedAssignments(node: Node, type: NodeId): void
+  {
+    for (const name of this.model.DerivedMembersOf(type))
+    {
+      const assigned = node.attrs.has(name)
+        || this.model.related(node.id, EdgeKind.Relationship, Direction.Out, name).length > 0;
+      if (!assigned) continue;
+      this.diagnostics.push(this.Error(
+        DiagnosticCode.DerivedMemberAssigned, node.id, `${type}.${name}`,
+        `"${name}" ${TypeModelValidator.DerivedAssignedMessage} "${node.id}"`,
+        this.model.spanOf(Repository.memberKey(node.id, name)) ?? this.model.spanOf(node.id)));
+    }
   }
 
   private ReportRedeclared(concept: NodeId, name: string): void
@@ -249,7 +279,10 @@ export class TypeModelValidator
       .filter((a) => this.model.resolve(a)?.metaKind === MetaKind.Aspect);
   }
 
-  /** Every type contributing to `type` besides itself: supertypes (Element only when enforced) and carried aspects. */
+  /** Every type contributing to `type` besides itself: for a concept its supertypes (Element
+   *  only when enforced) and carried aspects; for an aspect its include closure plus the root
+   *  `Element` always — the flag only tolerates CONCEPT redeclarations of Element members, an
+   *  aspect member that Element already provides would otherwise be silently shadowed. */
   private Contributors(type: NodeId): NodeId[]
   {
     const result = new Set<NodeId>();
@@ -257,6 +290,7 @@ export class TypeModelValidator
     if (isAspect)
     {
       for (const a of this.model.closure(type, EdgeKind.IncludesAspect, Direction.Out, false)) result.add(a);
+      if (this.model.resolve(ELEMENT_ID) !== undefined) result.add(ELEMENT_ID);
     }
     else
     {

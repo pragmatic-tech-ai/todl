@@ -62,9 +62,8 @@ export class Builder
   public static readonly StorageIdKey = "storageId";
   /** Concept attr: JSON list of `{ member, expression }` (`derive` entries, expression = source text). */
   public static readonly DerivesAttr = "derives";
-  /** Attr on a member-annotation application node: the annotated member's name.
-   *  The key starts with `@` so no TODL identifier (annotation parameter) can spell it. */
-  public static readonly AppliesToMemberAttr = "@appliesToMember";
+  /** Attr on a member-target node: the annotated member's name. */
+  public static readonly MemberTargetNameAttr = "name";
   /** Reserved match-node attr keys (the concept reuses the identity key) and the
    *  two candidate variable names a `same when` rule may reference. */
   public static readonly MatchConceptAttr = Builder.IdentityConceptAttr;
@@ -231,17 +230,21 @@ export class Builder
   }
 
   /** Stage an annotation application on an inherited/contributed member of `owner`
-   *  (`member <name> { annotate … }`): node `<owner>.<member>@<annotation>` typed by the
-   *  annotation, an `Annotated` edge owner -> application, and the member name carried
-   *  under {@link Builder.AppliesToMemberAttr}. Returns the application id. */
+   *  (`member <name> { annotate … }`, R6). The application hangs off the member target
+   *  `<owner>.<member>` (a {@link MetaKind.MemberTarget} node, staged once), exactly as
+   *  a relationship-member annotation hangs off `<concept>.<rel>`, so concept-level
+   *  annotation readers never see it. The caller guarantees `member` is not one of
+   *  `owner`'s own members. Returns the application id. */
   AnnotateMember(owner: NodeId, member: string, annotationId: NodeId): NodeId
   {
-    const appId = `${owner}.${member}@${annotationId}`;
-    const node = this.makeNode(appId, Tier.Ontology, { type: annotationId });
-    node.attrs.set(Builder.AppliesToMemberAttr, member);
-    this.stagedNodes.push(node);
-    this.stagedEdges.push({ kind: EdgeKind.Annotated, via: null, from: owner, to: appId });
-    return appId;
+    const memberId = `${owner}.${member}`;
+    if (!this.graph.hasNode(memberId) && !this.stagedNodes.some((n) => n.id === memberId))
+    {
+      const node = this.makeNode(memberId, Tier.Ontology, { metaKind: MetaKind.MemberTarget });
+      node.attrs.set(Builder.MemberTargetNameAttr, member);
+      this.stagedNodes.push(node);
+    }
+    return this.annotate(memberId, annotationId);
   }
 
   /** Stage a declared field on `concept`: a scalar/enum/ref-typed property. The

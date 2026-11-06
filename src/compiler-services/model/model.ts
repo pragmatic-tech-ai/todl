@@ -96,6 +96,8 @@ export class Repository
   private readonly spans = new Map<string, SourceSpan>();
   private readonly entityCache = new Map<NodeId, EntityBase>();
   private static readonly MalformedDerivesMessage = "Malformed derives attribute on concept";
+  private static readonly DeriveMemberKey = "member";
+  private static readonly DeriveExpressionKey = "expression";
   // Aspect-closure memo, cleared on any graph mutation.
   private readonly aspectsCache = new Map<NodeId, NodeId[]>();
   private readonly carriedCache = new Map<NodeId, ReadonlySet<NodeId>>();
@@ -695,19 +697,56 @@ export class Repository
     return result;
   }
 
-  /** The concept's own `derive <member> = <expression>;` entries (raw expression text). */
+  /** The concept's own `derive <member> = <expression>;` entries (raw expression text).
+   *  Throws {@link MalformedDerivesError} unless the attribute is a JSON array of
+   *  `{ member: string, expression: string }`. */
   DerivesOf(concept: NodeId): { member: string; expression: string }[]
   {
     const raw = this.resolve(concept)?.attrs.get(Builder.DerivesAttr);
     if (typeof raw !== "string") return [];
+    let parsed: unknown;
     try
     {
-      return JSON.parse(raw) as { member: string; expression: string }[];
+      parsed = JSON.parse(raw);
     }
     catch
     {
       throw new MalformedDerivesError(concept, `${Repository.MalformedDerivesMessage} "${concept}"`);
     }
+    if (!Array.isArray(parsed) || !parsed.every((entry) => Repository.IsDeriveEntry(entry)))
+    {
+      throw new MalformedDerivesError(concept, `${Repository.MalformedDerivesMessage} "${concept}"`);
+    }
+    return parsed as { member: string; expression: string }[];
+  }
+
+  /** Names of members derived (R7) on `type` or any of its supertypes. A malformed
+   *  derives attribute contributes nothing here (the type-model validator reports it). */
+  DerivedMembersOf(type: NodeId): Set<string>
+  {
+    const names = new Set<string>();
+    for (const owner of [type, ...this.supertypesOf(type)])
+    {
+      let derives: { member: string; expression: string }[];
+      try
+      {
+        derives = this.DerivesOf(owner);
+      }
+      catch (error)
+      {
+        if (!(error instanceof MalformedDerivesError)) throw error;
+        continue;
+      }
+      for (const derive of derives) names.add(derive.member);
+    }
+    return names;
+  }
+
+  private static IsDeriveEntry(entry: unknown): boolean
+  {
+    if (typeof entry !== "object" || entry === null) return false;
+    const record = entry as Record<string, unknown>;
+    return typeof record[Repository.DeriveMemberKey] === "string" && typeof record[Repository.DeriveExpressionKey] === "string";
   }
 
   /** Validate the model, returning structured diagnostics (spec §6). */

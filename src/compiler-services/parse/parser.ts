@@ -1427,7 +1427,7 @@ class Parser
   }
 
   /** `: a, b.c, d` — comma-separated dotted paths; the cursor is already past the `:`. */
-  public parseBaseList(): BaseRef[]
+  private parseBaseList(): BaseRef[]
   {
     const refs: BaseRef[] = [];
     do

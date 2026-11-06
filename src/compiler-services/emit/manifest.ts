@@ -124,8 +124,8 @@ export class ManifestEmitter
                 if (r.inverse !== null) def.inverse = r.inverse;
                 relationships[r.name] = def;
             }
-            const invariants = this.repo
-                .invariantsFor(id)
+            const invariants = [id, ...this.introducedAspects(id, schema.extends)]
+                .flatMap((owner) => this.repo.invariantsFor(owner))
                 .map((inv) => inv.description)
                 .filter((s) => s.length > 0);
             out[id] = {
@@ -169,6 +169,18 @@ export class ManifestEmitter
             out[id] = { represents: this.repo.represents(id), roots };
         }
         return out;
+    }
+
+    /**
+     * Aspects `concept` carries that its parent does not. Aspects are not emitted as
+     * concepts, so their invariants ride on the concept introducing them — just as a
+     * supertype's invariants stay on the supertype, a consumer walking `extends`
+     * sees each aspect invariant exactly once.
+     */
+    private introducedAspects(concept: NodeId, parent: NodeId | null): NodeId[]
+    {
+        const inherited = new Set(parent === null ? [] : this.repo.AspectsOf(parent));
+        return this.repo.AspectsOf(concept).filter((aspect) => !inherited.has(aspect));
     }
 
     /** The annotations applied to `nodeId` (via Annotated edges → application nodes). */

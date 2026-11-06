@@ -501,6 +501,7 @@ export interface ConceptDecl
 {
   kind: DeclKind.Concept;
   name: string;
+  /** The first base (may be an aspect; the loader classifies via BaseListClassifier). */
   extends: string | null;
   /** Every entry of the `:` list in order (parent concept first, then aspects);
    * `extends` equals `bases[0]?.name ?? null`. */

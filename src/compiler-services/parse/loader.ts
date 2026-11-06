@@ -85,6 +85,7 @@ import { collectDefinitions, visitReferences } from "./references.js";
 import { NodeIdQualifier } from "./node-id-qualifier.js";
 import { BaseListClassifier } from "./base-list-classifier.js";
 import { DeriveSerializer } from "./derive-serializer.js";
+import { MemberAnnotationTarget } from "./member-annotation-target.js";
 import { PACKAGE_NODE_ID, MetaKind } from "../model/kinds.js";
 import { EdgeKind, Direction, type NodeId, type Scalar } from "../model/graph.js";
 import type { SourceFile, SourceSpan } from "../diagnostics/span.js";
@@ -1196,6 +1197,12 @@ export function loadInto(
       {
         for (const ma of decl.memberAnnotations)
         {
+          const invalid = MemberAnnotationTarget.Diagnose(model, conceptId, ma);
+          if (invalid !== null)
+          {
+            diagnostics.push(invalid);
+            continue;
+          }
           stageApplications(fourth, model, conceptId, ma.annotations, seenApps, diagnostics, asserted, idGenerator, ops, home, resolveRef, rec, ma.member);
         }
       }

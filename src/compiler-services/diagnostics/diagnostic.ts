@@ -130,6 +130,10 @@ export enum DiagnosticCode
   InheritanceCycle = "type.inheritance-cycle",
   MultipleExtendsEdges = "type.multiple-extends-edges",
   MalformedDerives = "type.malformed-derives",
+  // Type-model follow-ups (R6/R7): derived members, member-annotation targets, duplicate derives.
+  DerivedMemberAssigned = "type.derived-member-assigned",
+  MemberAnnotationTargetInvalid = "type.member-annotation-target-invalid",
+  DuplicateDerive = "type.duplicate-derive",
 }
 
 export interface Diagnostic
