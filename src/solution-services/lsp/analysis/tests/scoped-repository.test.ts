@@ -88,3 +88,34 @@ test("a fully visible path still includes the aspect", () =>
     assert.deepEqual([...s.CarriersOf("t.deep")].sort(), ["t.child", "t.root", "t.viaaspect"]);
     assert.deepEqual(s.effectiveSchema("t.child").fields.map((f) => f.name), ["d"]);
 });
+
+class ScopedSubtypeHarness
+{
+    public static readonly Source = `namespace t {
+aspect tag { d : string; }
+concept carrier : tag { }
+concept direct : carrier { }
+concept hidden : carrier { }
+concept behind : hidden { }
+}`;
+
+    public static Scoped(hiddenIds: string[]): ScopedRepository
+    {
+        const model = load([{ uri: "t.todl", text: ScopedSubtypeHarness.Source }]).model;
+        const visible = new Set(model.allNodes().map((n) => n.id).filter((id) => !hiddenIds.includes(id)));
+        return new ScopedRepository(model, visible, visible);
+    }
+}
+
+test("CarriersOf includes a visible subtype of a visible carrier", () =>
+{
+    const s = ScopedSubtypeHarness.Scoped(["t.hidden"]);
+    assert.equal(s.CarriersOf("t.tag").includes("t.direct"), true);
+});
+
+test("CarriersOf excludes a carrier reached only via an invisible subtype", () =>
+{
+    const s = ScopedSubtypeHarness.Scoped(["t.hidden"]);
+    assert.equal(s.CarriersOf("t.tag").includes("t.behind"), false);
+    assert.equal(s.CarriersOf("t.tag").includes("t.hidden"), false);
+});

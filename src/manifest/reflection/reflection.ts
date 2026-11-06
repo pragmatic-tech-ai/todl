@@ -404,9 +404,12 @@ export class TypeInfo
     getSupertypes(): TypeInfo[]
     {
         const out: TypeInfo[] = [];
+        // Stop a cyclic chain at the first repeat (the type itself counts as visited).
+        const visited: TypeInfo[] = [this];
         let base = this.baseType;
-        while (base !== undefined)
+        while (base !== undefined && !visited.some((v) => v.sameTypeAs(base!)))
         {
+            visited.push(base);
             out.push(base);
             base = base.baseType;
         }

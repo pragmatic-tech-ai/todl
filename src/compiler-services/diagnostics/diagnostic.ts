@@ -122,6 +122,13 @@ export enum DiagnosticCode
   MultipleParentConcepts = "type.multiple-parent-concepts",
   AspectIncludesNonAspect = "type.aspect-includes-non-aspect",
   DuplicateBase = "type.duplicate-base",
+  // Type-model rules (R4/R5/R7/R11): no overriding, collisions are errors, aspects are not instance types.
+  MemberRedeclared = "type.member-redeclared",
+  MemberCollision = "type.member-collision",
+  AspectNotInstantiable = "type.aspect-not-instantiable",
+  DeriveTargetNotContributed = "type.derive-target-not-contributed",
+  InheritanceCycle = "type.inheritance-cycle",
+  MultipleExtendsEdges = "type.multiple-extends-edges",
 }
 
 export interface Diagnostic

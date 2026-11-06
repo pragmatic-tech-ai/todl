@@ -18,6 +18,7 @@ import { namespaceOf } from "../resolve/resolver.js";
 import { satisfies } from "../predicate/evaluate.js";
 import type { SourceSpan } from "../diagnostics/span.js";
 import { Severity, DiagnosticCode, type Diagnostic } from "../diagnostics/diagnostic.js";
+import { TypeModelValidator } from "./type-model-validator.js";
 
 // Re-export the shared diagnostic types so existing importers keep resolving them.
 export { Severity, DiagnosticCode, type Diagnostic } from "../diagnostics/diagnostic.js";
@@ -41,7 +42,9 @@ function spanFor(model: Repository, node: NodeId, member: string | null): Source
 
 export function validate(model: Repository): Diagnostic[]
 {
-  const diagnostics: Diagnostic[] = [];
+  // Root `Element` members are not yet treated as inherited (label-conflict finding:
+  // docs/type-model/label-conflict.md), hence EnforceRootMemberRule: false.
+  const diagnostics: Diagnostic[] = new TypeModelValidator(model, { EnforceRootMemberRule: false }).Validate();
   for (const node of model.allNodes())
   {
     // Merged-away aliases are represented by their canonical; validating them would

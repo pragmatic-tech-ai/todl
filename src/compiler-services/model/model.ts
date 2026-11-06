@@ -699,6 +699,12 @@ export class Repository
     return this.spans.get(key) ?? null;
   }
 
+  /** Key for the span of a concept's `derive <member>` entry. */
+  static deriveKey(concept: NodeId, member: string): string
+  {
+    return `${concept}#derive:${member}`;
+  }
+
   /** Composite key for a per-instance member span. */
   static memberKey(node: NodeId, member: string): string
   {

@@ -68,6 +68,8 @@ import {
   ValueKind,
   type MergeStrategy,
   type Declaration,
+  type ConceptDecl,
+  type AspectDecl,
   type InstanceDecl,
   type ModelDecl,
   type AnnotationApplication,
@@ -1280,10 +1282,13 @@ function recordSpans(model: Repository, units: readonly { ns: string; decl: Decl
     switch (declaration.kind)
     {
       case DeclKind.Primitive:
-      case DeclKind.Concept:
-      case DeclKind.Aspect:
       case DeclKind.Viewpoint:
         model.recordSpan(NodeIdQualifier.Qualify(ns, declaration.name), declaration.span);
+        break;
+      case DeclKind.Concept:
+      case DeclKind.Aspect:
+        model.recordSpan(NodeIdQualifier.Qualify(ns, declaration.name), declaration.span);
+        recordTypeMemberSpans(model, declaration, NodeIdQualifier.Qualify(ns, declaration.name));
         break;
       case DeclKind.Taxonomy:
       {
@@ -1323,6 +1328,17 @@ function recordSpans(model: Repository, units: readonly { ns: string; decl: Decl
         break; // application spans are recorded during the applications pass
     }
   }
+}
+
+/** Record member-name spans (and `derive` spans) of a concept or aspect for type-model diagnostics. */
+function recordTypeMemberSpans(model: Repository, decl: ConceptDecl | AspectDecl, id: string): void
+{
+  for (const member of [...decl.fields, ...decl.relationships])
+  {
+    if (member.nameSpan !== undefined) model.recordSpan(Repository.memberKey(id, member.name), member.nameSpan);
+  }
+  if (decl.kind !== DeclKind.Concept) return;
+  for (const derive of decl.derives) model.recordSpan(Repository.deriveKey(id, derive.member), derive.span);
 }
 
 function recordInstanceSpans(model: Repository, decl: InstanceDecl, ns: string): void
