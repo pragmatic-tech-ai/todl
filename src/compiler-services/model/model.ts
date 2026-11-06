@@ -100,6 +100,8 @@ export class Repository
   private readonly aspectsCache = new Map<NodeId, NodeId[]>();
   private readonly carriedCache = new Map<NodeId, ReadonlySet<NodeId>>();
   private readonly carriersCache = new Map<NodeId, NodeId[]>();
+  // Predicate quantifier domains (InstancesMatching ids), cleared on any graph mutation.
+  private readonly domainCache = new Map<NodeId, NodeId[]>();
 
   constructor(graph: Graph = new Graph())
   {
@@ -114,6 +116,21 @@ export class Repository
     this.aspectsCache.clear();
     this.carriedCache.clear();
     this.carriersCache.clear();
+    this.domainCache.clear();
+  }
+
+  /** Ids of every instance whose type `IsA` the argument (spec R8), memoized until the
+   *  graph changes so a quantifier evaluated once per instance stays linear. Resolves
+   *  through the (overridable) {@link InstancesMatching}. Callers must not mutate it. */
+  QuantifierDomain(conceptOrAspect: NodeId): readonly NodeId[]
+  {
+    let cached = this.domainCache.get(conceptOrAspect);
+    if (cached === undefined)
+    {
+      cached = this.InstancesMatching(conceptOrAspect).map((n) => n.id);
+      this.domainCache.set(conceptOrAspect, cached);
+    }
+    return cached;
   }
 
   /** Register a derived member (spec §4.4): a comprehension queried per instance. */
