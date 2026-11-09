@@ -1,73 +1,17 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { load } from "../../parse/loader.js";
 import type { Repository } from "../../model/model.js";
 import { MetaKind } from "../../model/kinds.js";
-import { ManifestEmitter } from "../manifest.js";
-import { ManifestWriter } from "../../../manifest/manifest-writer.js";
-import { Manifest } from "../../../manifest/reflection/reflection.js";
-import { MetadataSnapshot } from "../../../domain/metadata-snapshot.js";
+import { EngineFixture } from "../../../engine-bridge/tests/EngineFixture.js";
 import { GraphQuery } from "../../../graph-api/graph-query-engine.js";
 
-/** Builds the repository and manifest-side view of fixtures so the two can be compared. */
+/** Compares the manifest-side view of fixtures with the repository. */
 class AgreementHarness
 {
-    private static readonly FixtureDir = new URL("../../parse/tests/fixtures/", import.meta.url);
-    private static readonly Model = "agree";
-    private static readonly Version = "1.0.0";
-    private static readonly FixtureExtension = ".todl";
-    static readonly ExpectedUnbindable = ["demo.orderFulfillment.orderToValidate", "demo.orderFulfillment.sales"];
-    /** The metamodel fixtures the instance fixtures import; loaded with every fixture so its types resolve. */
-    private static readonly Dependencies = ["primitives.todl", "enums.todl", "concepts.todl"];
-
-    public static FixtureNames(): string[]
-    {
-        return readdirSync(fileURLToPath(AgreementHarness.FixtureDir))
-            .filter((f) => f.endsWith(AgreementHarness.FixtureExtension))
-            .sort();
-    }
-
-    public static Source(name: string): { uri: string; text: string }
-    {
-        const text = readFileSync(fileURLToPath(new URL(name, AgreementHarness.FixtureDir)), "utf8");
-        return { uri: name, text };
-    }
-
-    public static Repo(names: string[]): Repository
-    {
-        const all = [...new Set([...AgreementHarness.Dependencies, ...names])];
-        return load(all.map((n) => AgreementHarness.Source(n))).model;
-    }
-
-    /** Ids of the data nodes whose type the metamodel never declares, so they cannot bind. */
-    public static Unbindable(repo: Repository): string[]
-    {
-        const { manifest, graph } = new ManifestEmitter(repo, AgreementHarness.Model, AgreementHarness.Version).emit();
-        const known = new Set(Object.keys(manifest.concepts));
-        return graph.nodes.filter((n) => !known.has(n.type)).map((n) => n.id).sort();
-    }
-
-    public static Graph(repo: Repository): MetadataSnapshot
-    {
-        const { manifest, graph } = new ManifestEmitter(repo, AgreementHarness.Model, AgreementHarness.Version).emit();
-        const reflected = Manifest.load(ManifestWriter.fromLogical(manifest).toBinary());
-        const frozen = new MetadataSnapshot();
-        frozen.PreRegister(reflected);
-        frozen.Finalize(reflected);
-        const unbindable = new Set(AgreementHarness.Unbindable(repo));
-        const nodes = graph.nodes.filter((n) => !unbindable.has(n.id));
-        const ids = new Set(nodes.map((n) => n.id));
-        const edges = graph.edges.filter((e) => ids.has(e.from) && ids.has(e.to));
-        frozen.BindSeed({ ...graph, nodes, edges }, graph.manifestRef);
-        return frozen;
-    }
-
     /** Asserts manifest and repository agree; returns the number of (type, target) pairs compared. */
     public static Check(repo: Repository, label: string): number
     {
-        const frozen = AgreementHarness.Graph(repo);
+        const frozen = EngineFixture.Graph(repo);
         const query = new GraphQuery(frozen);
         const manifest = frozen.manifests[0]!;
         const types = [...repo.nodesOfMetaKind(MetaKind.Concept), ...repo.nodesOfMetaKind(MetaKind.Aspect)];
@@ -117,33 +61,33 @@ describe("manifest agrees with repository", () =>
 {
     test("manifest agrees with repository on every fixture", () =>
     {
-        const names = AgreementHarness.FixtureNames();
+        const names = EngineFixture.FixtureNames();
         assert.ok(names.includes("aspects.todl"));
         assert.ok(names.includes("aspects-order.todl"));
         for (const name of names)
         {
-            AgreementHarness.Check(AgreementHarness.Repo([name]), name);
+            AgreementHarness.Check(EngineFixture.Repo([name]), name);
         }
-        assert.ok(AgreementHarness.Check(AgreementHarness.Repo(names), "corpus") > 0);
+        assert.ok(AgreementHarness.Check(EngineFixture.Repo(names), "corpus") > 0);
     });
 
     test("exactly the known-undeclared nodes are excluded from binding", () =>
     {
         // order-fulfillment.todl uses concepts (Lane, SequenceFlow) its metamodel never declares.
         const dropped = new Map<string, string[]>();
-        for (const name of AgreementHarness.FixtureNames())
-            dropped.set(name, AgreementHarness.Unbindable(AgreementHarness.Repo([name])));
+        for (const name of EngineFixture.FixtureNames())
+            dropped.set(name, EngineFixture.Unbindable(EngineFixture.Repo([name])));
         for (const [name, ids] of dropped)
         {
-            const expected = name === "order-fulfillment.todl" ? AgreementHarness.ExpectedUnbindable : [];
+            const expected = name === "order-fulfillment.todl" ? EngineFixture.ExpectedUnbindable : [];
             assert.deepEqual(ids, expected, `${name}: unbindable nodes`);
         }
     });
 
     test("aspect ordering: own, then inherited, then aspects; diamond carried once; wide closure order", () =>
     {
-        const repo = AgreementHarness.Repo(["aspects-order.todl"]);
-        const manifest = AgreementHarness.Graph(repo).manifests[0]!;
+        const repo = EngineFixture.Repo(["aspects-order.todl"]);
+        const manifest = EngineFixture.Graph(repo).manifests[0]!;
         const ns = "demo.aspectOrder.";
         const names = (type: string) => manifest.getType(ns + type)!.getFields().map((f) => f.name);
         assert.deepEqual(names("Phone"), [
@@ -162,8 +106,8 @@ describe("manifest agrees with repository", () =>
 
     test("a concept member shadows a same-named aspect member (first name wins)", () =>
     {
-        const repo = AgreementHarness.Repo(["aspects-order.todl"]);
-        const manifest = AgreementHarness.Graph(repo).manifests[0]!;
+        const repo = EngineFixture.Repo(["aspects-order.todl"]);
+        const manifest = EngineFixture.Graph(repo).manifests[0]!;
         const tag = manifest.getType("demo.aspectOrder.Clash")!.getFields().filter((f) => f.name === "tag");
         assert.equal(tag.length, 1);
         assert.equal(tag[0]!.declaringType.fullName, "demo.aspectOrder.Clash");
@@ -171,7 +115,7 @@ describe("manifest agrees with repository", () =>
 
     test("the aspects fixture's carriers are found through the aspect", () =>
     {
-        const frozen = AgreementHarness.Graph(AgreementHarness.Repo(["aspects.todl"]));
+        const frozen = EngineFixture.Graph(EngineFixture.Repo(["aspects.todl"]));
         const ids = new GraphQuery(frozen).InstancesOf("demo.aspects.Asset").map((m) => m.node.id).sort();
         assert.deepEqual(ids, ["demo.aspects.lap01", "demo.aspects.rack01", "demo.aspects.web01"]);
     });
