@@ -147,6 +147,18 @@ class AnnotatedTermFixture
     public static readonly Uri = "model.todl";
     public static readonly Namespace = "acme";
     public static readonly Application = "acme.Kinds.Big@todl.icon";
+    public static readonly Term = "acme.Kinds.Big";
+    public static readonly NestedApplication = "acme.Kinds.Big@todl.icon@todl.icon";
+    public static readonly Concept = "acme.Widget";
+    public static readonly First = "acme.a1";
+    public static readonly Second = "acme.a2";
+    public static readonly Label = "label2";
+    public static readonly SecondLabel = "b";
+    public static readonly Annotate = "annotate icon";
+    public static readonly AnnotateAll = /annotate icon/g;
+    public static readonly ReEmittedApplication = /icon\s+\w+\s*\{/;
+    public static readonly AnnotatedKind = "Annotated";
+    public static readonly Empty = "";
     public static readonly FileSeparator = "\n";
     public static readonly Source = "namespace acme { concept Widget { label2 : string?; } "
         + "taxonomy Kinds : represents Widget { term Big { annotate icon { path = \"big.svg\"; } } } "
@@ -156,6 +168,11 @@ class AnnotatedTermFixture
     {
         return ModelDraft.fromSources([], [...files].map(([uri, text]) => ({ uri, text })), { namespace: AnnotatedTermFixture.Namespace });
     }
+
+    public static Ids(draft: ModelDraft): string[]
+    {
+        return draft.ownInstances().map((e) => e.id).sort();
+    }
 }
 
 describe("ModelDraft over a member whose co-located term is annotated", () =>
@@ -163,20 +180,32 @@ describe("ModelDraft over a member whose co-located term is annotated", () =>
     test("the annotation application is frozen schema, not an own instance", () =>
     {
         const d = AnnotatedTermFixture.Open();
-        assert.deepEqual(d.ownInstances().map((e) => e.id), ["acme.a1"]);
+        assert.deepEqual(AnnotatedTermFixture.Ids(d), [AnnotatedTermFixture.First]);
         assert.equal(d.Owns(AnnotatedTermFixture.Application), false);
     });
 
     test("an added instance round-trips without re-emitting the annotation into the model block, and still compiles", () =>
     {
         const d = AnnotatedTermFixture.Open();
-        d.add({ concept: "acme.Widget", id: "acme.a2", scalars: new Map([["label2", "b"]]) });
+        d.add({ concept: AnnotatedTermFixture.Concept, id: AnnotatedTermFixture.Second, scalars: new Map([[AnnotatedTermFixture.Label, AnnotatedTermFixture.SecondLabel]]) });
         const files = d.toTodlByFile();
         const text = [...files.values()].join(AnnotatedTermFixture.FileSeparator);
-        assert.equal(text.split("annotate icon").length - 1, 1, text);
-        assert.ok(!/icon\s+\w+\s*\{/.test(text.replace(/annotate icon/g, "")), text);
+        assert.equal(text.split(AnnotatedTermFixture.Annotate).length - 1, 1, text);
+        assert.ok(!AnnotatedTermFixture.ReEmittedApplication.test(text.replace(AnnotatedTermFixture.AnnotateAll, AnnotatedTermFixture.Empty)), text);
         const again = AnnotatedTermFixture.Open(files);
         assert.deepEqual(again.diagnostics.filter((x) => x.severity === Severity.Error), []);
-        assert.deepEqual(again.ownInstances().map((e) => e.id).sort(), ["acme.a1", "acme.a2"]);
+        assert.deepEqual(AnnotatedTermFixture.Ids(again), [AnnotatedTermFixture.First, AnnotatedTermFixture.Second]);
+    });
+
+    test("the annotation freeze is a fixed point: an annotation on an annotation is frozen whatever the edge order", () =>
+    {
+        // The nested application's edge comes first, so a single pass would miss it.
+        const edges = [
+            { kind: AnnotatedTermFixture.AnnotatedKind, via: null, from: AnnotatedTermFixture.Application, to: AnnotatedTermFixture.NestedApplication },
+            { kind: AnnotatedTermFixture.AnnotatedKind, via: null, from: AnnotatedTermFixture.Term, to: AnnotatedTermFixture.Application },
+        ];
+        const frozen = new Set<string>([AnnotatedTermFixture.Term]);
+        ModelDraft.FreezeAnnotations(edges, frozen);
+        assert.deepEqual([...frozen].sort(), [AnnotatedTermFixture.Term, AnnotatedTermFixture.Application, AnnotatedTermFixture.NestedApplication].sort());
     });
 });

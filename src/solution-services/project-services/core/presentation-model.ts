@@ -4,6 +4,7 @@
 // rather than free functions — the OOP counterpart of the former functional module.
 
 import { AnnotationProjector } from '../../../publish/reflect.js'
+import { ModelShardExtractor } from '../../../model-data/model-shard-extractor.js'
 import { type TodlDocument, type JsonNode } from '../../../compiler-services/emit/json.js'
 
 // The ontology-tier typeOf values presented as first-class entities. `field` (concept
@@ -96,7 +97,7 @@ export class PresentationResourceEmitter
     // icon/label renders. In model order.
     public static ClassEntities(model: TodlDocument): JsonNode[]
     {
-        return model.nodes.filter((n) => n.tier === 'Instance' && n.isClass)
+        return model.nodes.filter((n) => n.tier === ModelShardExtractor.InstanceTier && n.isClass)
     }
 
     // A raster (bitmap) icon path — baked as a BitmapImage vs an SVG IconDefinition.

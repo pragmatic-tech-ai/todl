@@ -5,6 +5,7 @@
  */
 
 import { MetaKind } from "../compiler-services/model/kinds.js";
+import { ModelShardExtractor } from "../model-data/model-shard-extractor.js";
 import type { TodlDocument, JsonNode, JsonEdge } from "../compiler-services/emit/json.js";
 
 const ANNOTATED = "Annotated";
@@ -137,7 +138,7 @@ export function deriveClasses(model: TodlDocument, annotationsFrom?: TodlDocumen
   for (const n of model.nodes)
   {
     const attrs = n.attrs as Record<string, unknown>;
-    if (n.tier !== "Instance" || !n.isClass) continue;
+    if (n.tier !== ModelShardExtractor.InstanceTier || !n.isClass) continue;
     const cls: PublishedClass = { id: n.id, concept: n.type ?? "" };
     if (n.localId !== null) cls.localId = n.localId;
     else if (typeof attrs.id === "string") cls.localId = attrs.id;

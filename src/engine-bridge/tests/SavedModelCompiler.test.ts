@@ -4,7 +4,6 @@ import { checkAgainst } from '../../compiler-services/api.js';
 import { toJSON, type TodlDocument } from '../../compiler-services/emit/json.js';
 import { DiagnosticCode, Severity } from '../../compiler-services/diagnostics/diagnostic.js';
 import type { SourceFile } from '../../compiler-services/diagnostics/span.js';
-import { EngineBridgeError, EngineBridgeErrorCode } from '../EngineBridgeError.js';
 import { SavedModelCompiler, type ISavedModel } from '../SavedModelCompiler.js';
 import { SnapshotDescriber } from '../SnapshotDescriber.js';
 import { TodlNames } from '../TodlNames.js';
@@ -205,10 +204,25 @@ describe('SavedModelCompiler', () =>
         assert.deepEqual(SavedFixture.Packages(models), [SavedFixture.Solution, SavedFixture.One]);
     });
 
-    test('a model id equal to the solution name throws', () =>
+    test('a model id equal to the solution name is a diagnostic; that model is skipped and its instances go to the solution package', () =>
     {
-        const models = [SavedFixture.Model(SavedFixture.Solution, [SavedFixture.Schema])];
-        assert.throws(() => SavedModelCompiler.Compile(models, [], SavedFixture.Solution),
-            (e: unknown) => e instanceof EngineBridgeError && e.Code === EngineBridgeErrorCode.SolutionModelCollision);
+        const member1 = [SavedFixture.Schema, SavedFixture.TwoModels];
+        const models = [SavedFixture.Model(SavedFixture.Solution, member1), SavedFixture.Model(SavedFixture.Two, member1)];
+        const saved = SavedModelCompiler.Compile(models, [], SavedFixture.Solution);
+        assert.deepEqual(saved.Diagnostics.map((d) => [d.code, d.severity, d.node]), [[DiagnosticCode.SavedModelSolutionCollision, Severity.Warning, SavedFixture.Solution]]);
+        assert.deepEqual(saved.Snapshot.manifests.map((m) => m.model), [SavedFixture.Solution, SavedFixture.Two]);
+        // m.One is not listed, so t1 is outside every given model: the solution package owns it.
+        assert.equal(saved.Snapshot.HomeModelOf(SavedFixture.T1), SavedFixture.Solution);
+        assert.equal(saved.Snapshot.HomeModelOf(SavedFixture.T2), SavedFixture.Two);
+    });
+
+    test('a colliding entry alone yields only the solution package, which owns every instance', () =>
+    {
+        const member1 = [SavedFixture.Schema, SavedFixture.TwoModels];
+        const saved = SavedModelCompiler.Compile([SavedFixture.Model(SavedFixture.Solution, member1)], [], SavedFixture.Solution);
+        assert.deepEqual(saved.Diagnostics.map((d) => d.code), [DiagnosticCode.SavedModelSolutionCollision]);
+        assert.deepEqual(saved.Snapshot.manifests.map((m) => m.model), [SavedFixture.Solution]);
+        assert.equal(saved.Snapshot.HomeModelOf(SavedFixture.T1), SavedFixture.Solution);
+        assert.equal(saved.Snapshot.HomeModelOf(SavedFixture.T2), SavedFixture.Solution);
     });
 });

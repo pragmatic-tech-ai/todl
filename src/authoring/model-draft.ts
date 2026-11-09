@@ -23,8 +23,6 @@ import { ModelBlockSplicer, SourceLayout } from "./source-layout.js";
 const INSTANCE_TIER = Tier[Tier.Instance];
 const RELATIONSHIP = EdgeKind[EdgeKind.Relationship];
 const MODEL_TYPEOF = "model";
-const CONTAINS = EdgeKind[EdgeKind.Contains];
-const ANNOTATED = EdgeKind[EdgeKind.Annotated];
 
 /** A plain instance record; Phase 5 codegen emits these, Phase 4 accepts them. */
 export interface InstanceDescriptor
@@ -56,6 +54,9 @@ export interface ModelDraftOptions
 
 export class ModelDraft
 {
+  private static readonly Contains = EdgeKind[EdgeKind.Contains];
+  private static readonly Annotated = EdgeKind[EdgeKind.Annotated];
+
   private own: TodlDocument = { nodes: [], edges: [] };
   private modelCache: Repository | undefined = undefined;
   private readonly baseIds: ReadonlySet<NodeId>;
@@ -123,11 +124,9 @@ export class ModelDraft
       .map((n) => n.id));
     // An annotation application (`annotate x { ... }` on a term, class or concept) is a node without a metaKind that
     // hangs off its element by an Annotated edge: it belongs to that element, so it is frozen with it (else it would
-    // read as an own instance and be re-emitted into a model block).
-    for (const e of compiled.edges)
-    {
-      if (e.kind === ANNOTATED && frozen.has(String(e.from))) frozen.add(String(e.to));
-    }
+    // read as an own instance and be re-emitted into a model block). Iterated to a fixed point, so an annotation on
+    // an annotation is frozen too, whatever the edge order.
+    ModelDraft.FreezeAnnotations(compiled.edges, frozen);
     const schema: TodlDocument = {
       nodes: declared.filter((n) => frozen.has(n.id)),
       edges: compiled.edges.filter((e) => frozen.has(String(e.from))),
@@ -147,7 +146,7 @@ export class ModelDraft
     // writes `model <declared name>` rather than a synthesized one.
     for (const e of compiled.edges)
     {
-      if (e.kind === CONTAINS && modelIds.has(String(e.from)) && ownIds.has(String(e.to))) draft.modelOf.set(String(e.to), String(e.from));
+      if (e.kind === ModelDraft.Contains && modelIds.has(String(e.from)) && ownIds.has(String(e.to))) draft.modelOf.set(String(e.to), String(e.from));
     }
     for (const id of modelIds)
     {
@@ -167,6 +166,25 @@ export class ModelDraft
     }
     draft.defaultModel = opts.model;
     return draft;
+  }
+
+  /** @internal Adds to `frozen` every annotation application hanging (Annotated edge) off a frozen node, until nothing
+   *  changes (a fixed point: an annotation on an annotation is frozen whatever the edge order). */
+  public static FreezeAnnotations(edges: TodlDocument["edges"], frozen: Set<NodeId>): void
+  {
+    let grew = true;
+    while (grew)
+    {
+      grew = false;
+      for (const e of edges)
+      {
+        if (e.kind === ModelDraft.Annotated && frozen.has(String(e.from)) && !frozen.has(String(e.to)))
+        {
+          frozen.add(String(e.to));
+          grew = true;
+        }
+      }
+    }
   }
 
   /** The home file (source uri) of an own node, or undefined. */

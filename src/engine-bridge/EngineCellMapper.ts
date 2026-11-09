@@ -15,9 +15,9 @@ type EngineNode = Cypher.NodeCellDto['$node'];
 
 /**
  * The members an access scope hides on a concept's nodes, as the engine decides them (a scoped `GraphReader`
- * satisfies it; pass a reader opened under the result's own scope, or one under
- * `AccessScope.System` for an unscoped result). Only consulted for fields the engine holds as relationships: a node cell cannot tell a hidden
- * relationship from an empty one, while a hidden property is simply absent from the cell's properties.
+ * satisfies it; pass a reader opened under the result's own scope, or one under `AccessScope.System` for an
+ * unscoped result). Only consulted for fields the engine holds as relationships: a node cell cannot tell a
+ * hidden relationship from an empty one, while a hidden property is simply absent from the cell's properties.
  */
 export interface IHiddenMembers
 {

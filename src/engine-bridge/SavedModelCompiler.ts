@@ -9,7 +9,6 @@ import { Manifest } from '../manifest/reflection/reflection.js';
 import { ManifestWriter } from '../manifest/manifest-writer.js';
 import { ModelShardExtractor } from '../model-data/model-shard-extractor.js';
 import { PackageManifestBridge } from '../solution-services/package-manager/package-manifest-bridge.js';
-import { EngineBridgeError, EngineBridgeErrorCode } from './EngineBridgeError.js';
 import { MessageFormat } from './MessageFormat.js';
 
 /** One saved model of a solution: its model id (the TODL `model` declaration's node id) and the saved sources of its member. */
@@ -50,18 +49,17 @@ class SavedPackage
 export class SavedModelCompiler
 {
     private static readonly Version = '0.0.0';
-    private static readonly SolutionCollisionMessage = 'Model "{0}" has the solution\'s name; the solution package owns the instances outside every model';
+    private static readonly SolutionCollisionMessage = 'Saved model "{0}" has the solution\'s name; it gets no package and its instances go to the solution package';
     private static readonly UndeclaredMessage = 'Saved model "{0}" is declared by none of the saved sources; it gets no package';
     private static readonly DuplicateMessage = 'Saved model "{0}" is listed more than once; the first entry is used';
 
     /**
-     * Throws {@link EngineBridgeError} (`SolutionModelCollision`) when a model id equals `solutionName`: the two
-     * packages would be one, and solution-owned instances would read as that model's. A model id no saved source
-     * declares, or one listed twice, is reported in `Diagnostics` as a warning and skipped.
+     * A model id equal to `solutionName` (ruling F-d: the two packages would be one, and solution-owned instances
+     * would read as that model's), a model id no saved source declares, and one listed twice are each reported in
+     * `Diagnostics` as a warning and skipped: that model gets no package, so its instances fall to the solution package.
      */
     public static Compile(models: readonly ISavedModel[], bases: readonly TodlDocument[], solutionName: string): ISavedSnapshot
     {
-        SavedModelCompiler.GuardSolutionName(models, solutionName);
         const compiled = checkAgainst([...bases], SavedModelCompiler.SourcesOf(models));
         const diagnostics: Diagnostic[] = [...compiled.diagnostics];
         const repository = compiled.model;
@@ -91,16 +89,6 @@ export class SavedModelCompiler
         return { Snapshot: snapshot, Repository: repository, Diagnostics: diagnostics };
     }
 
-    private static GuardSolutionName(models: readonly ISavedModel[], solutionName: string): void
-    {
-        const colliding = models.find((m) => m.ModelId === solutionName);
-        if (colliding !== undefined)
-        {
-            throw new EngineBridgeError(EngineBridgeErrorCode.SolutionModelCollision,
-                MessageFormat.Format(SavedModelCompiler.SolutionCollisionMessage, colliding.ModelId));
-        }
-    }
-
     /** The union of every model's sources, each uri once (models of one member share its files). */
     private static SourcesOf(models: readonly ISavedModel[]): SourceFile[]
     {
@@ -117,7 +105,7 @@ export class SavedModelCompiler
 
     /**
      * Splits the emitted seed into the solution package and one package per given model; an edge goes with its source
-     * node. A duplicate or undeclared model id gets a warning and no package.
+     * node. A model id equal to the solution name, a duplicate or an undeclared one gets a warning and no package.
      */
     private static Partition(repository: Repository, models: readonly ISavedModel[], solutionName: string,
         nodes: readonly DataNode[], edges: readonly DataEdge[], diagnostics: Diagnostic[]): Map<string, SavedPackage>
@@ -128,6 +116,11 @@ export class SavedModelCompiler
         const declared = new Set(ModelShardExtractor.ModelsOf(doc));
         for (const model of models)
         {
+            if (model.ModelId === solutionName)
+            {
+                diagnostics.push(SavedModelCompiler.Warning(DiagnosticCode.SavedModelSolutionCollision, SavedModelCompiler.SolutionCollisionMessage, model.ModelId));
+                continue;
+            }
             if (packages.has(model.ModelId))
             {
                 diagnostics.push(SavedModelCompiler.Warning(DiagnosticCode.SavedModelDuplicate, SavedModelCompiler.DuplicateMessage, model.ModelId));

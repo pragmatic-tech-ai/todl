@@ -427,11 +427,22 @@ describe('TodlFileConnector', () =>
         assert.equal(workspace.Files.has(ConnectorFx.DefaultFile), false);
         // A torn write of a file the commit was creating is removed.
         const created = await ConnectorFx.Applied(connector, [ConnectorFx.Create(ConnectorFx.W5, ConnectorFx.Widget)]);
-        // main.todl is re-emitted (its model block normalized) and written first; the new default file second.
-        workspace.FailWrite(2);
+        // main.todl is untouched by this create (its emission equals its baseline), so it is not rewritten: the new
+        // default file is the only write, torn.
+        workspace.FailWrite(1);
         ConnectorFx.AssertBridge(await ConnectorFx.Rejection(created.Commit()), EngineBridgeErrorCode.PersistFailed);
         assert.equal(workspace.Files.has(ConnectorFx.DefaultFile), false);
         assert.equal(workspace.Files.get(ConnectorFx.MainFile), ConnectorFx.Shop);
+    });
+
+    test('a file the transaction\'s changes leave as it emitted at open is never rewritten (no re-format)', async () =>
+    {
+        const workspace = ConnectorFx.Workspace();
+        const connector = new TodlFileConnector(workspace);
+        const txn = await ConnectorFx.Applied(connector, [ConnectorFx.Create(ConnectorFx.W5, ConnectorFx.Widget)]);
+        await txn.Commit();
+        assert.deepEqual(workspace.Log, [ConnectorFx.Written(ConnectorFx.DefaultFile)]);
+        assert.equal(workspace.Files.get(ConnectorFx.MainFile), ConnectorFx.Shop, 'byte-identical: not even normalized');
     });
 
     test('several models commit in owner-name order', async () =>
@@ -495,7 +506,7 @@ describe('TodlFileConnector', () =>
         ]);
         const error = ConnectorFx.AssertBridge(await ConnectorFx.Rejection(txn.Commit()), EngineBridgeErrorCode.Stale);
         assert.doesNotMatch(error.message, ConnectorFx.Unrestored);
-        assert.equal(workspace.Files.get(Duo.File), Duo.Text, 'the first model' + "'" + 's write was restored');
+        assert.equal(workspace.Files.get(Duo.File), Duo.Text, "the first model's write was restored");
     });
 
     test('a write that cannot be restored is still counted', async () =>

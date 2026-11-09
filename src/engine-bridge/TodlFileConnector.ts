@@ -430,6 +430,12 @@ class TodlFileTransaction implements IConnectorTransaction
     private static readonly OwnerSeparator = ', ';
 
     private readonly sessions = new Map<string, ITodlDraftSession>();
+    /**
+     * Per owner, what its draft emitted per file when the session opened (before any change). A file whose emission is
+     * unchanged was not touched by this transaction's changes to that model and is never written, so a model that
+     * shares its member with another never rewrites (re-formats) a file only the other model's changes touched.
+     */
+    private readonly baselines = new Map<string, ReadonlyMap<string, string>>();
     private readonly written: WrittenFile[] = [];
     private state = TransactionState.Open;
     private committing: Promise<void> | undefined;
@@ -470,6 +476,7 @@ class TodlFileTransaction implements IConnectorTransaction
         const owners = this.Owners();
         this.state = TransactionState.Finished;
         this.sessions.clear();
+        this.baselines.clear();
         if (!committed)
         {
             return;
@@ -551,11 +558,28 @@ class TodlFileTransaction implements IConnectorTransaction
                 throw new EngineBridgeError(EngineBridgeErrorCode.NotEditable, MessageFormat.Format(TodlFileTransaction.NotEditableMessage, owner));
             }
             this.sessions.set(owner, session);
+            this.baselines.set(owner, TodlFileTransaction.Baseline(session));
         }
         return session;
     }
 
-    /** The model's files whose emitted text differs from what they hold now (new files included), with their originals. */
+    /** The session's untouched emission per file; empty when it cannot emit (Changed reports that failure). */
+    private static Baseline(session: ITodlDraftSession): ReadonlyMap<string, string>
+    {
+        try
+        {
+            return session.Draft.toTodlByFile();
+        }
+        catch
+        {
+            return new Map<string, string>();
+        }
+    }
+
+    /**
+     * The model's files whose emitted text differs from what they hold now (new files included), with their originals.
+     * A file the model's changes left as it emitted at open (its baseline) is skipped: nothing of this model changed there.
+     */
     private async Changed(owner: string, session: ITodlDraftSession): Promise<WrittenFile[]>
     {
         let targets: [string, string][];
@@ -568,8 +592,13 @@ class TodlFileTransaction implements IConnectorTransaction
             throw new EngineBridgeError(EngineBridgeErrorCode.PersistFailed, MessageFormat.Format(TodlFileTransaction.EmitMessage, owner), error);
         }
         const changed: WrittenFile[] = [];
+        const baseline = this.baselines.get(owner);
         for (const [uri, text] of targets)
         {
+            if (baseline?.get(uri) === text)
+            {
+                continue;
+            }
             let original: string | undefined;
             try
             {

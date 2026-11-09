@@ -11,7 +11,10 @@ export enum EngineBridgeErrorCode
     MessageTemplate,
     /** A connector transaction was used after it stopped taking changes (committing, committed or reverted). */
     TransactionClosed,
-    /** A saved model's id equals the solution name, whose package owns the instances outside every model. */
+    /**
+     * Retired (ruling F-d): a saved model whose id equals the solution name is now the compile diagnostic
+     * `DiagnosticCode.SavedModelSolutionCollision`, not an error. Kept so later values are never renumbered.
+     */
     SolutionModelCollision,
 }
 

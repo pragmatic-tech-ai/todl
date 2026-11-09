@@ -24,6 +24,9 @@ class DescribeFixture
 {
     public static readonly Model = 'shop.p';
     public static readonly Version = '1.0.0';
+    public static readonly BigTerm = 'shop.Kinds.Big';
+    /** The canonical digest of the Shop description (terms included); changes only when the description's content does. */
+    public static readonly ShopVersion = '9724522078c1e953bb614ab4355e4f57587505460af0c517302ad7c9b66b2f9d';
     public static readonly Shop = `namespace shop
 {
     primitive sku : string { }
@@ -322,6 +325,13 @@ describe('SnapshotDescriber', () =>
         assert.equal(await version(DescribeFixture.Shop), base);
         assert.equal(await version(DescribeFixture.Shop.replace('count = 3;', 'count   =   3 ;\n')), base);
         assert.notEqual(await version(DescribeFixture.Shop.replace('count = 3;', 'count = 4;')), base);
+    });
+
+    test('version of a term-bearing description is a pinned literal digest', async () =>
+    {
+        const { Description } = DescribeFixture.Describe(await DescribeFixture.ShopSnapshot(DescribeFixture.Shop));
+        assert.ok(Description.Seed.some((n) => n.PublicId === DescribeFixture.BigTerm), 'the fixture carries taxonomy terms');
+        assert.equal(Description.Version, DescribeFixture.ShopVersion);
     });
 
     test('external binding goes to External, not Bindings', async () =>
