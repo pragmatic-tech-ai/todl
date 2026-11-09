@@ -15,9 +15,10 @@ export class EngineBridgeError extends Error
 
     public readonly Code: EngineBridgeErrorCode;
 
-    public constructor(code: EngineBridgeErrorCode, message: string)
+    /** `cause`, when given, is the underlying failure (a storage or emitter error), kept for diagnostics. */
+    public constructor(code: EngineBridgeErrorCode, message: string, cause?: unknown)
     {
-        super(message);
+        super(message, cause === undefined ? undefined : { cause });
         this.name = EngineBridgeError.ErrorName;
         this.Code = code;
     }

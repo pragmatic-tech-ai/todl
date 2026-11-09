@@ -4,7 +4,10 @@ import {
     AccessScope,
     ConnectorChangeSet,
     ConnectorError,
+    Cypher,
+    DateTimeValue,
     DateValue,
+    DurationValue,
     GraphEngine,
     StorageKind,
     WriteOp,
@@ -13,11 +16,13 @@ import {
     type IConnectorTransaction,
 } from '@pragmatic-tech-ai/graph';
 import { ModelDraft } from '../../authoring/model-draft.js';
+import { checkAgainst } from '../../compiler-services/api.js';
 import { Severity } from '../../compiler-services/diagnostics/diagnostic.js';
 import { Domain } from '../../domain/domain.js';
 import { MemoryPackageSource } from '../../domain/memory-package-source.js';
-import { compilePackage } from '../../publish/publish.js';
+import { compilePackage, PackageKind, type PackageRef } from '../../publish/publish.js';
 import { PackageManifestBridge } from '../../solution-services/package-manager/package-manifest-bridge.js';
+import type { TodlDocument } from '../../compiler-services/emit/json.js';
 import { EngineBridgeError, EngineBridgeErrorCode } from '../EngineBridgeError.js';
 import { SnapshotDescriber } from '../SnapshotDescriber.js';
 import { TodlFileConnector } from '../TodlFileConnector.js';
@@ -38,6 +43,23 @@ class ConnectorFx
     public static readonly Loc = 'shop.Loc';
     public static readonly Big = 'shop.Kinds.Big';
     public static readonly Small = 'shop.Kinds.Small';
+    public static readonly W0 = 'shop.w0';
+    public static readonly W1 = 'shop.w1';
+    public static readonly W2 = 'shop.w2';
+    public static readonly W5 = 'shop.w5';
+    public static readonly L1 = 'shop.l1';
+    public static readonly L2 = 'shop.l2';
+    public static readonly Missing = 'shop.nope';
+    public static readonly Name = 'name';
+    public static readonly Count = 'count';
+    public static readonly Weight = 'weight';
+    public static readonly Kind = 'kind';
+    public static readonly Kinds = 'kinds';
+    public static readonly Home = 'home';
+    public static readonly Parts = 'parts';
+    public static readonly Changed = 'changed';
+    public static readonly First = 'first';
+    public static readonly Second = 'second';
     public static readonly Shop = `namespace shop
 {
     concept Loc { }
@@ -57,10 +79,29 @@ class ConnectorFx
     }
 }`;
 
+    /** Two independent one-file models, for the multi-model rules. */
+    public static readonly Alpha = { Model: 'alpha.p', Namespace: 'alpha', File: 'alpha.todl', Box: 'alpha.Box', Node: 'alpha.b', Text: 'namespace alpha { concept Box { name : string?; } model A : alpha { Box b { } } }' };
+    public static readonly Beta = { Model: 'beta.p', Namespace: 'beta', File: 'beta.todl', Box: 'beta.Box', Node: 'beta.b', Text: 'namespace beta { concept Box { name : string?; } model B : beta { Box b { } } }' };
+
+    /** A model in another package that references a shop node. */
+    public static readonly Other = { Model: 'other.p', Namespace: 'other', File: 'other.todl', Pin: 'other.Pin', Node: 'other.p', At: 'at', Text: 'namespace other { concept Pin { relationship at -> shop.Loc?; } model O : other { Pin p { at = shop.l1; } } }' };
+    public static readonly DetachLocs = 'MATCH (l:`shop.Loc`) DETACH DELETE l';
+
     public static Workspace(): MemoryModelWorkspace
     {
         const workspace = new MemoryModelWorkspace();
         workspace.Add(ConnectorFx.Model, ConnectorFx.Namespace, { [ConnectorFx.MainFile]: ConnectorFx.Shop });
+        return workspace;
+    }
+
+    /** Alpha and Beta, registered in the given order. */
+    public static TwoModels(betaFirst: boolean): MemoryModelWorkspace
+    {
+        const workspace = new MemoryModelWorkspace();
+        for (const m of betaFirst ? [ConnectorFx.Beta, ConnectorFx.Alpha] : [ConnectorFx.Alpha, ConnectorFx.Beta])
+        {
+            workspace.Add(m.Model, m.Namespace, { [m.File]: m.Text });
+        }
         return workspace;
     }
 
@@ -97,10 +138,10 @@ class ConnectorFx
     }
 
     /** The model as the workspace's files now hold it, re-parsed. */
-    public static Reparsed(workspace: MemoryModelWorkspace, uris: readonly string[] = [ConnectorFx.MainFile, ConnectorFx.DefaultFile]): ModelDraft
+    public static Reparsed(workspace: MemoryModelWorkspace, uris: readonly string[] = [ConnectorFx.MainFile, ConnectorFx.DefaultFile], namespace: string = ConnectorFx.Namespace, bases: Parameters<typeof ModelDraft.fromSources>[0] = []): ModelDraft
     {
         const sources = uris.filter((u) => workspace.Files.has(u)).map((uri) => ({ uri, text: workspace.Files.get(uri)! }));
-        return ModelDraft.fromSources([], sources, { namespace: ConnectorFx.Namespace });
+        return ModelDraft.fromSources(bases, sources, { namespace });
     }
 
     public static Attrs(draft: ModelDraft, id: string): Record<string, unknown> | undefined
@@ -127,21 +168,39 @@ class ConnectorFx
         assert.fail('expected a rejection');
     }
 
-    public static AssertBridge(error: unknown, code: EngineBridgeErrorCode): void
+    public static AssertBridge(error: unknown, code: EngineBridgeErrorCode): EngineBridgeError
     {
         assert.ok(error instanceof EngineBridgeError, String(error));
         assert.equal(error.Code, code, error.message);
+        return error;
     }
 
-    /** The shop package compiled and loaded, described with the file connector as the default. */
-    public static async Engine(connector: TodlFileConnector): Promise<GraphEngine>
+    public static Written(uri: string): string
+    {
+        return MemoryModelWorkspace.WriteVerb + uri;
+    }
+
+    public static Deleted(uri: string): string
+    {
+        return MemoryModelWorkspace.DeleteVerb + uri;
+    }
+
+    /** Compiles `sources` (each `{ model, file, text }`, later ones over the earlier) and opens an engine described from them with the file connector as the default. */
+    public static async Engine(connector: TodlFileConnector, sources: readonly { Model: string; File: string; Text: string }[] = [{ Model: ConnectorFx.Model, File: ConnectorFx.MainFile, Text: ConnectorFx.Shop }]): Promise<GraphEngine>
     {
         const store = new MemoryPackageSource();
-        const out = compilePackage([], [{ uri: ConnectorFx.MainFile, text: ConnectorFx.Shop }], { id: ConnectorFx.Model, version: ConnectorFx.Version });
-        assert.ok(out.ok, JSON.stringify(out.errors));
-        store.Add(PackageManifestBridge.toResolved(out.package!));
+        const bases: TodlDocument[] = [];
+        const dependencies: PackageRef[] = [];
+        for (const source of sources)
+        {
+            const out = compilePackage(bases, [{ uri: source.File, text: source.Text }], { id: source.Model, version: ConnectorFx.Version }, [...dependencies]);
+            assert.ok(out.ok, JSON.stringify(out.errors));
+            store.Add(PackageManifestBridge.toResolved(out.package!));
+            bases.push(out.package!.fullDocument);
+            dependencies.push({ kind: PackageKind.Architecture, id: source.Model, version: ConnectorFx.Version });
+        }
         const domain = new Domain(store);
-        await domain.load({ model: ConnectorFx.Model, version: ConnectorFx.Version });
+        await domain.load({ model: sources[sources.length - 1]!.Model, version: ConnectorFx.Version });
         const { Description } = SnapshotDescriber.Describe(domain.graph, { DefaultConnector: TodlNames.FileConnector });
         return GraphEngine.Open({ Description, Storage: { Kind: StorageKind.Memory }, Connectors: [connector] });
     }
@@ -160,53 +219,53 @@ describe('TodlFileConnector', () =>
         const workspace = ConnectorFx.Workspace();
         const connector = new TodlFileConnector(workspace);
         const txn = await ConnectorFx.Applied(connector, [
-            ConnectorFx.Create('shop.w2', ConnectorFx.Widget),
-            ConnectorFx.Set('shop.w2', 'name', 'two'),
-            ConnectorFx.Set('shop.w2', 'count', 5n),
-            ConnectorFx.Set('shop.w2', 'weight', 2.5),
-            ConnectorFx.Set('shop.w2', TodlNames.Label, 'Two'),
-            ConnectorFx.Set('shop.w2', 'kind', ConnectorFx.Big),
-            ConnectorFx.Link('shop.w2', 'kinds', ConnectorFx.Small),
-            ConnectorFx.Link('shop.w2', 'home', 'shop.l1'),
-            ConnectorFx.Link('shop.w0', 'parts', 'shop.w2'),
-            ConnectorFx.Set('shop.w0', 'kind', ConnectorFx.Big),
-            ConnectorFx.Unlink('shop.w0', 'kinds', ConnectorFx.Big),
-            ConnectorFx.Delete('shop.l2', ConnectorFx.Loc),
+            ConnectorFx.Create(ConnectorFx.W2, ConnectorFx.Widget),
+            ConnectorFx.Set(ConnectorFx.W2, ConnectorFx.Name, 'two'),
+            ConnectorFx.Set(ConnectorFx.W2, ConnectorFx.Count, 5n),
+            ConnectorFx.Set(ConnectorFx.W2, ConnectorFx.Weight, 2.5),
+            ConnectorFx.Set(ConnectorFx.W2, TodlNames.Label, 'Two'),
+            ConnectorFx.Set(ConnectorFx.W2, ConnectorFx.Kind, ConnectorFx.Big),
+            ConnectorFx.Link(ConnectorFx.W2, ConnectorFx.Kinds, ConnectorFx.Small),
+            ConnectorFx.Link(ConnectorFx.W2, ConnectorFx.Home, ConnectorFx.L1),
+            ConnectorFx.Link(ConnectorFx.W0, ConnectorFx.Parts, ConnectorFx.W2),
+            ConnectorFx.Set(ConnectorFx.W0, ConnectorFx.Kind, ConnectorFx.Big),
+            ConnectorFx.Unlink(ConnectorFx.W0, ConnectorFx.Kinds, ConnectorFx.Big),
+            ConnectorFx.Delete(ConnectorFx.L2, ConnectorFx.Loc),
         ]);
         await txn.Commit();
         const draft = ConnectorFx.Reparsed(workspace);
         assert.deepEqual(draft.diagnostics.filter((d) => d.severity === Severity.Error), []);
         // TODL keeps numeric literals as decimal strings once parsed.
-        assert.deepEqual(ConnectorFx.Attrs(draft, 'shop.w2'), { type: ConnectorFx.Widget, name: 'two', count: '5', weight: '2.5', label: 'Two' });
+        assert.deepEqual(ConnectorFx.Attrs(draft, ConnectorFx.W2), { type: ConnectorFx.Widget, name: 'two', count: '5', weight: '2.5', label: 'Two' });
         assert.match(workspace.Files.get(ConnectorFx.DefaultFile)!, /count = 5;/);
-        assert.deepEqual(ConnectorFx.Refs(draft, 'shop.w2', 'kind'), [ConnectorFx.Big]);
-        assert.deepEqual(ConnectorFx.Refs(draft, 'shop.w2', 'kinds'), [ConnectorFx.Small]);
-        assert.deepEqual(ConnectorFx.Refs(draft, 'shop.w2', 'home'), ['shop.l1']);
-        assert.deepEqual(ConnectorFx.Refs(draft, 'shop.w0', 'parts'), ['shop.w2']);
-        assert.deepEqual(ConnectorFx.Refs(draft, 'shop.w0', 'kind'), [ConnectorFx.Big]);
-        assert.deepEqual(ConnectorFx.Refs(draft, 'shop.w0', 'kinds'), []);
-        assert.equal(ConnectorFx.Attrs(draft, 'shop.l2'), undefined);
-        assert.deepEqual(ConnectorFx.Attrs(draft, 'shop.w0'), { type: ConnectorFx.Widget, name: 'w' });
+        assert.deepEqual(ConnectorFx.Refs(draft, ConnectorFx.W2, ConnectorFx.Kind), [ConnectorFx.Big]);
+        assert.deepEqual(ConnectorFx.Refs(draft, ConnectorFx.W2, ConnectorFx.Kinds), [ConnectorFx.Small]);
+        assert.deepEqual(ConnectorFx.Refs(draft, ConnectorFx.W2, ConnectorFx.Home), [ConnectorFx.L1]);
+        assert.deepEqual(ConnectorFx.Refs(draft, ConnectorFx.W0, ConnectorFx.Parts), [ConnectorFx.W2]);
+        assert.deepEqual(ConnectorFx.Refs(draft, ConnectorFx.W0, ConnectorFx.Kind), [ConnectorFx.Big]);
+        assert.deepEqual(ConnectorFx.Refs(draft, ConnectorFx.W0, ConnectorFx.Kinds), []);
+        assert.equal(ConnectorFx.Attrs(draft, ConnectorFx.L2), undefined);
+        assert.deepEqual(ConnectorFx.Attrs(draft, ConnectorFx.W0), { type: ConnectorFx.Widget, name: 'w' });
     });
 
     test('null removes field', async () =>
     {
         const workspace = ConnectorFx.Workspace();
         const connector = new TodlFileConnector(workspace);
-        const first = await ConnectorFx.Applied(connector, [ConnectorFx.Set('shop.w1', TodlNames.Label, 'One')]);
+        const first = await ConnectorFx.Applied(connector, [ConnectorFx.Set(ConnectorFx.W1, TodlNames.Label, 'One')]);
         await first.Commit();
-        assert.equal(ConnectorFx.Attrs(ConnectorFx.Reparsed(workspace), 'shop.w1')?.label, 'One');
+        assert.equal(ConnectorFx.Attrs(ConnectorFx.Reparsed(workspace), ConnectorFx.W1)?.label, 'One');
         const txn = await ConnectorFx.Applied(connector, [
-            ConnectorFx.Set('shop.w0', 'name', null),
-            ConnectorFx.Set('shop.w0', 'kind', null),
-            ConnectorFx.Set('shop.w1', TodlNames.Label, null),
+            ConnectorFx.Set(ConnectorFx.W0, ConnectorFx.Name, null),
+            ConnectorFx.Set(ConnectorFx.W0, ConnectorFx.Kind, null),
+            ConnectorFx.Set(ConnectorFx.W1, TodlNames.Label, null),
         ]);
         await txn.Commit();
         const draft = ConnectorFx.Reparsed(workspace);
-        assert.deepEqual(ConnectorFx.Attrs(draft, 'shop.w0'), { type: ConnectorFx.Widget });
-        assert.deepEqual(ConnectorFx.Refs(draft, 'shop.w0', 'kind'), []);
-        assert.deepEqual(ConnectorFx.Refs(draft, 'shop.w0', 'kinds'), [ConnectorFx.Big]);
-        assert.deepEqual(ConnectorFx.Attrs(draft, 'shop.w1'), { type: ConnectorFx.Widget });
+        assert.deepEqual(ConnectorFx.Attrs(draft, ConnectorFx.W0), { type: ConnectorFx.Widget });
+        assert.deepEqual(ConnectorFx.Refs(draft, ConnectorFx.W0, ConnectorFx.Kind), []);
+        assert.deepEqual(ConnectorFx.Refs(draft, ConnectorFx.W0, ConnectorFx.Kinds), [ConnectorFx.Big]);
+        assert.deepEqual(ConnectorFx.Attrs(draft, ConnectorFx.W1), { type: ConnectorFx.Widget });
     });
 
     test('foreign id rejected', async () =>
@@ -224,15 +283,19 @@ describe('TodlFileConnector', () =>
     {
         const connector = new TodlFileConnector(ConnectorFx.Workspace());
         const values: [string, CellValue][] = [
-            ['count', 2n ** 60n],
-            ['count', new DateValue(3)],
-            ['weight', Number.NaN],
+            [ConnectorFx.Count, 2n ** 60n],
+            [ConnectorFx.Count, new DateValue(3)],
+            [ConnectorFx.Count, new DateTimeValue(1_000_000n, 'UTC')],
+            [ConnectorFx.Count, new DurationValue(1, 2, 3n)],
+            [ConnectorFx.Weight, Number.NaN],
+            [ConnectorFx.Weight, Number.POSITIVE_INFINITY],
+            [ConnectorFx.Weight, Number.NEGATIVE_INFINITY],
             [TodlNames.Class, ConnectorFx.Big],
         ];
         for (const [member, value] of values)
         {
             const txn = await connector.Begin();
-            ConnectorFx.AssertBridge(await ConnectorFx.Rejection(txn.Apply(new ConnectorChangeSet([ConnectorFx.Set('shop.w0', member, value)]))), EngineBridgeErrorCode.UnsupportedValue);
+            ConnectorFx.AssertBridge(await ConnectorFx.Rejection(txn.Apply(new ConnectorChangeSet([ConnectorFx.Set(ConnectorFx.W0, member, value)]))), EngineBridgeErrorCode.UnsupportedValue);
             await txn.Revert();
         }
     });
@@ -242,17 +305,17 @@ describe('TodlFileConnector', () =>
         const workspace = ConnectorFx.Workspace();
         const connector = new TodlFileConnector(workspace);
         const txn = await connector.Begin();
-        const change = ConnectorFx.Set('lib.x', 'name', 'n', ConnectorFx.Widget, 'lib.p');
+        const change = ConnectorFx.Set('lib.x', ConnectorFx.Name, 'n', ConnectorFx.Widget, 'lib.p');
         ConnectorFx.AssertBridge(await ConnectorFx.Rejection(txn.Apply(new ConnectorChangeSet([change]))), EngineBridgeErrorCode.NotEditable);
         await txn.Revert();
         const writes = [
-            ConnectorFx.Set('shop.nope', 'name', 'n'),
-            ConnectorFx.Set('shop.nope', 'kind', null),
-            ConnectorFx.Unlink('shop.nope', 'kinds', ConnectorFx.Big),
-            ConnectorFx.Link('shop.w0', 'parts', 'shop.nope'),
-            ConnectorFx.Delete('shop.nope', ConnectorFx.Widget),
+            ConnectorFx.Set(ConnectorFx.Missing, ConnectorFx.Name, 'n'),
+            ConnectorFx.Set(ConnectorFx.Missing, ConnectorFx.Kind, null),
+            ConnectorFx.Unlink(ConnectorFx.Missing, ConnectorFx.Kinds, ConnectorFx.Big),
+            ConnectorFx.Link(ConnectorFx.W0, ConnectorFx.Parts, ConnectorFx.Missing),
+            ConnectorFx.Delete(ConnectorFx.Missing, ConnectorFx.Widget),
             ConnectorFx.Delete(ConnectorFx.Big, ConnectorFx.Widget),
-            ConnectorFx.Create('shop.w1', ConnectorFx.Widget),
+            ConnectorFx.Create(ConnectorFx.W1, ConnectorFx.Widget),
         ];
         for (const write of writes)
         {
@@ -267,7 +330,7 @@ describe('TodlFileConnector', () =>
     {
         const workspace = ConnectorFx.Workspace();
         const connector = new TodlFileConnector(workspace);
-        const txn = await ConnectorFx.Applied(connector, [ConnectorFx.Set('shop.w1', 'name', 'mine')]);
+        const txn = await ConnectorFx.Applied(connector, [ConnectorFx.Set(ConnectorFx.W1, ConnectorFx.Name, 'mine')]);
         const external = ConnectorFx.Shop.replace('Widget w1 { }', 'Widget w1 { name = "theirs"; }');
         workspace.Files.set(ConnectorFx.MainFile, external);
         ConnectorFx.AssertBridge(await ConnectorFx.Rejection(txn.Commit()), EngineBridgeErrorCode.Stale);
@@ -281,13 +344,23 @@ describe('TodlFileConnector', () =>
     {
         const workspace = ConnectorFx.Workspace();
         const connector = new TodlFileConnector(workspace);
-        const txn = await ConnectorFx.Applied(connector, [ConnectorFx.Set('shop.w1', 'name', 'dropped')]);
+        const txn = await ConnectorFx.Applied(connector, [ConnectorFx.Set(ConnectorFx.W1, ConnectorFx.Name, 'dropped')]);
         await txn.Revert();
         assert.deepEqual(workspace.Log, []);
         assert.equal(workspace.Files.get(ConnectorFx.MainFile), ConnectorFx.Shop);
-        const next = await ConnectorFx.Applied(connector, [ConnectorFx.Set('shop.w1', 'name', 'kept')]);
+        const next = await ConnectorFx.Applied(connector, [ConnectorFx.Set(ConnectorFx.W1, ConnectorFx.Name, 'kept')]);
         await next.Commit();
-        assert.equal(ConnectorFx.Attrs(ConnectorFx.Reparsed(workspace), 'shop.w1')?.name, 'kept');
+        assert.equal(ConnectorFx.Attrs(ConnectorFx.Reparsed(workspace), ConnectorFx.W1)?.name, 'kept');
+    });
+
+    test('a second commit rejects instead of throwing', async () =>
+    {
+        const connector = new TodlFileConnector(ConnectorFx.Workspace());
+        const txn = await ConnectorFx.Applied(connector, [ConnectorFx.Set(ConnectorFx.W1, ConnectorFx.Name, ConnectorFx.Changed)]);
+        await txn.Commit();
+        let again: Promise<void> | undefined;
+        assert.doesNotThrow(() => { again = txn.Commit(); });
+        assert.ok(await ConnectorFx.Rejection(again!) instanceof Error);
     });
 
     test('revert after commit restores originals', async () =>
@@ -295,8 +368,8 @@ describe('TodlFileConnector', () =>
         const workspace = ConnectorFx.Workspace();
         const connector = new TodlFileConnector(workspace);
         const txn = await ConnectorFx.Applied(connector, [
-            ConnectorFx.Set('shop.w1', 'name', 'changed'),
-            ConnectorFx.Create('shop.w5', ConnectorFx.Widget),
+            ConnectorFx.Set(ConnectorFx.W1, ConnectorFx.Name, ConnectorFx.Changed),
+            ConnectorFx.Create(ConnectorFx.W5, ConnectorFx.Widget),
         ]);
         await txn.Commit();
         assert.ok(workspace.Files.has(ConnectorFx.DefaultFile), 'the commit created the default file');
@@ -304,14 +377,14 @@ describe('TodlFileConnector', () =>
         await txn.Revert();
         assert.equal(workspace.Files.get(ConnectorFx.MainFile), ConnectorFx.Shop);
         assert.equal(workspace.Files.has(ConnectorFx.DefaultFile), false);
-        assert.deepEqual(workspace.Log.slice(-2), [`${MemoryModelWorkspace.DeleteVerb}${ConnectorFx.DefaultFile}`, `${MemoryModelWorkspace.WriteVerb}${ConnectorFx.MainFile}`]);
+        assert.deepEqual(workspace.Log.slice(-2), [ConnectorFx.Deleted(ConnectorFx.DefaultFile), ConnectorFx.Written(ConnectorFx.MainFile)]);
     });
 
     test('revert after commit does not overwrite a later write', async () =>
     {
         const workspace = ConnectorFx.Workspace();
         const connector = new TodlFileConnector(workspace);
-        const txn = await ConnectorFx.Applied(connector, [ConnectorFx.Set('shop.w1', 'name', 'changed')]);
+        const txn = await ConnectorFx.Applied(connector, [ConnectorFx.Set(ConnectorFx.W1, ConnectorFx.Name, ConnectorFx.Changed)]);
         await txn.Commit();
         const later = workspace.Files.get(ConnectorFx.MainFile)! + '\n';
         workspace.Files.set(ConnectorFx.MainFile, later);
@@ -324,41 +397,92 @@ describe('TodlFileConnector', () =>
         const workspace = ConnectorFx.Workspace();
         const connector = new TodlFileConnector(workspace);
         const txn = await ConnectorFx.Applied(connector, [
-            ConnectorFx.Set('shop.w1', 'name', 'changed'),
-            ConnectorFx.Create('shop.w5', ConnectorFx.Widget),
+            ConnectorFx.Set(ConnectorFx.W1, ConnectorFx.Name, ConnectorFx.Changed),
+            ConnectorFx.Create(ConnectorFx.W5, ConnectorFx.Widget),
         ]);
         workspace.FailWriteAt = 2;
-        ConnectorFx.AssertBridge(await ConnectorFx.Rejection(txn.Commit()), EngineBridgeErrorCode.PersistFailed);
+        const error = ConnectorFx.AssertBridge(await ConnectorFx.Rejection(txn.Commit()), EngineBridgeErrorCode.PersistFailed);
+        assert.equal((error.cause as Error).message, MemoryModelWorkspace.WriteFailure, 'the storage error is the cause');
         assert.equal(workspace.Files.get(ConnectorFx.MainFile), ConnectorFx.Shop);
         assert.equal(workspace.Files.has(ConnectorFx.DefaultFile), false);
         await txn.Revert();
         assert.equal(workspace.Files.get(ConnectorFx.MainFile), ConnectorFx.Shop);
     });
 
-    test('several models commit in owner-name order', async () =>
+    test('a torn write is restored', async () =>
     {
-        const workspace = new MemoryModelWorkspace();
-        const alpha = 'namespace alpha { concept Box { name : string?; } model A : alpha { Box b { } } }';
-        const beta = 'namespace beta { concept Box { name : string?; } model B : beta { Box b { } } }';
-        workspace.Add('beta.p', 'beta', { 'beta.todl': beta });
-        workspace.Add('alpha.p', 'alpha', { 'alpha.todl': alpha });
+        const workspace = ConnectorFx.Workspace();
         const connector = new TodlFileConnector(workspace);
         const txn = await ConnectorFx.Applied(connector, [
-            ConnectorFx.Set('beta.b', 'name', 'B', 'beta.Box', 'beta.p'),
-            ConnectorFx.Set('alpha.b', 'name', 'A', 'alpha.Box', 'alpha.p'),
+            ConnectorFx.Set(ConnectorFx.W1, ConnectorFx.Name, ConnectorFx.Changed),
+            ConnectorFx.Create(ConnectorFx.W5, ConnectorFx.Widget),
+        ]);
+        workspace.FailWriteAt = 1;
+        workspace.TornWrite = true;
+        ConnectorFx.AssertBridge(await ConnectorFx.Rejection(txn.Commit()), EngineBridgeErrorCode.PersistFailed);
+        assert.equal(workspace.Files.get(ConnectorFx.MainFile), ConnectorFx.Shop, 'the half-written file holds its original again');
+        assert.equal(workspace.Files.has(ConnectorFx.DefaultFile), false);
+        // A torn write of a file the commit was creating is removed.
+        const created = await ConnectorFx.Applied(connector, [ConnectorFx.Create(ConnectorFx.W5, ConnectorFx.Widget)]);
+        // main.todl is re-emitted (its model block normalized) and written first; the new default file second.
+        workspace.FailWrite(2);
+        ConnectorFx.AssertBridge(await ConnectorFx.Rejection(created.Commit()), EngineBridgeErrorCode.PersistFailed);
+        assert.equal(workspace.Files.has(ConnectorFx.DefaultFile), false);
+        assert.equal(workspace.Files.get(ConnectorFx.MainFile), ConnectorFx.Shop);
+    });
+
+    test('several models commit in owner-name order', async () =>
+    {
+        const { Alpha, Beta } = ConnectorFx;
+        const workspace = ConnectorFx.TwoModels(true);
+        const connector = new TodlFileConnector(workspace);
+        const txn = await ConnectorFx.Applied(connector, [
+            ConnectorFx.Set(Beta.Node, ConnectorFx.Name, 'B', Beta.Box, Beta.Model),
+            ConnectorFx.Set(Alpha.Node, ConnectorFx.Name, 'A', Alpha.Box, Alpha.Model),
         ]);
         await txn.Commit();
-        assert.deepEqual(workspace.Log, [`${MemoryModelWorkspace.WriteVerb}alpha.todl`, `${MemoryModelWorkspace.WriteVerb}beta.todl`]);
-        assert.match(workspace.Files.get('alpha.todl')!, /name = "A"/);
-        assert.match(workspace.Files.get('beta.todl')!, /name = "B"/);
+        assert.deepEqual(workspace.Log, [ConnectorFx.Written(Alpha.File), ConnectorFx.Written(Beta.File)]);
+        assert.match(workspace.Files.get(Alpha.File)!, /name = "A"/);
+        assert.match(workspace.Files.get(Beta.File)!, /name = "B"/);
+    });
+
+    test('a stale later model fails the commit before any model is written', async () =>
+    {
+        const { Alpha, Beta } = ConnectorFx;
+        const workspace = ConnectorFx.TwoModels(false);
+        const connector = new TodlFileConnector(workspace);
+        const txn = await ConnectorFx.Applied(connector, [
+            ConnectorFx.Set(Alpha.Node, ConnectorFx.Name, 'A', Alpha.Box, Alpha.Model),
+            ConnectorFx.Set(Beta.Node, ConnectorFx.Name, 'B', Beta.Box, Beta.Model),
+        ]);
+        workspace.Files.set(Beta.File, Beta.Text + '\n');
+        ConnectorFx.AssertBridge(await ConnectorFx.Rejection(txn.Commit()), EngineBridgeErrorCode.Stale);
+        assert.deepEqual(workspace.Log, [], 'no write-then-restore');
+        assert.equal(workspace.Files.get(Alpha.File), Alpha.Text);
+        assert.equal(workspace.Files.get(Beta.File), Beta.Text + '\n');
+    });
+
+    test('a later model failing to write restores the earlier ones', async () =>
+    {
+        const { Alpha, Beta } = ConnectorFx;
+        const workspace = ConnectorFx.TwoModels(false);
+        const connector = new TodlFileConnector(workspace);
+        const txn = await ConnectorFx.Applied(connector, [
+            ConnectorFx.Set(Alpha.Node, ConnectorFx.Name, 'A', Alpha.Box, Alpha.Model),
+            ConnectorFx.Set(Beta.Node, ConnectorFx.Name, 'B', Beta.Box, Beta.Model),
+        ]);
+        workspace.FailWriteAt = 2;
+        ConnectorFx.AssertBridge(await ConnectorFx.Rejection(txn.Commit()), EngineBridgeErrorCode.PersistFailed);
+        assert.equal(workspace.Files.get(Alpha.File), Alpha.Text);
+        assert.equal(workspace.Files.get(Beta.File), Beta.Text);
     });
 
     test('a commit waits for the in-flight commit of its model, then sees it stale', async () =>
     {
         const workspace = ConnectorFx.Workspace();
         const connector = new TodlFileConnector(workspace);
-        const first = await ConnectorFx.Applied(connector, [ConnectorFx.Set('shop.w0', 'name', 'first')]);
-        const second = await ConnectorFx.Applied(connector, [ConnectorFx.Set('shop.w1', 'name', 'second')]);
+        const first = await ConnectorFx.Applied(connector, [ConnectorFx.Set(ConnectorFx.W0, ConnectorFx.Name, ConnectorFx.First)]);
+        const second = await ConnectorFx.Applied(connector, [ConnectorFx.Set(ConnectorFx.W1, ConnectorFx.Name, ConnectorFx.Second)]);
         let release: () => void = () => undefined;
         workspace.Gate = new Promise<void>((resolve) => { release = resolve; });
         const committed = first.Commit();
@@ -370,26 +494,8 @@ describe('TodlFileConnector', () =>
         await committed;
         ConnectorFx.AssertBridge(await rejected, EngineBridgeErrorCode.Stale);
         const draft = ConnectorFx.Reparsed(workspace);
-        assert.equal(ConnectorFx.Attrs(draft, 'shop.w0')?.name, 'first');
-        assert.equal(ConnectorFx.Attrs(draft, 'shop.w1')?.name, undefined);
-    });
-
-    test('a later model failing restores the earlier ones', async () =>
-    {
-        const workspace = new MemoryModelWorkspace();
-        const alpha = 'namespace alpha { concept Box { name : string?; } model A : alpha { Box b { } } }';
-        const beta = 'namespace beta { concept Box { name : string?; } model B : beta { Box b { } } }';
-        workspace.Add('alpha.p', 'alpha', { 'alpha.todl': alpha });
-        workspace.Add('beta.p', 'beta', { 'beta.todl': beta });
-        const connector = new TodlFileConnector(workspace);
-        const txn = await ConnectorFx.Applied(connector, [
-            ConnectorFx.Set('alpha.b', 'name', 'A', 'alpha.Box', 'alpha.p'),
-            ConnectorFx.Set('beta.b', 'name', 'B', 'beta.Box', 'beta.p'),
-        ]);
-        workspace.Files.set('beta.todl', beta + '\n');
-        ConnectorFx.AssertBridge(await ConnectorFx.Rejection(txn.Commit()), EngineBridgeErrorCode.Stale);
-        assert.equal(workspace.Files.get('alpha.todl'), alpha);
-        assert.equal(workspace.Files.get('beta.todl'), beta + '\n');
+        assert.equal(ConnectorFx.Attrs(draft, ConnectorFx.W0)?.name, ConnectorFx.First);
+        assert.equal(ConnectorFx.Attrs(draft, ConnectorFx.W1)?.name, undefined);
     });
 
     test('concurrent writes to one model: second is stale', async () =>
@@ -405,8 +511,8 @@ describe('TodlFileConnector', () =>
             workspace.OnOpen = (opened) => { if (opened === 2) release(); };
             const first = await engine.Begin(AccessScope.System);
             const second = await engine.Begin(AccessScope.System);
-            first.SetProperty('shop.w0', 'name', 'first');
-            second.SetProperty('shop.w1', 'name', 'second');
+            first.SetProperty(ConnectorFx.W0, ConnectorFx.Name, ConnectorFx.First);
+            second.SetProperty(ConnectorFx.W1, ConnectorFx.Name, ConnectorFx.Second);
             const committed = first.Commit();
             const rejected = ConnectorFx.Rejection(second.Commit());
             await committed;
@@ -417,9 +523,38 @@ describe('TodlFileConnector', () =>
             assert.equal(error.Connector, TodlFileConnector.ConnectorName);
             ConnectorFx.AssertBridge(error.cause, EngineBridgeErrorCode.Stale);
             const draft = ConnectorFx.Reparsed(workspace);
-            assert.equal(ConnectorFx.Attrs(draft, 'shop.w0')?.name, 'first');
-            assert.equal(ConnectorFx.Attrs(draft, 'shop.w1')?.name, undefined);
-            assert.deepEqual(workspace.Log, [`${MemoryModelWorkspace.WriteVerb}${ConnectorFx.MainFile}`]);
+            assert.equal(ConnectorFx.Attrs(draft, ConnectorFx.W0)?.name, ConnectorFx.First);
+            assert.equal(ConnectorFx.Attrs(draft, ConnectorFx.W1)?.name, undefined);
+            assert.deepEqual(workspace.Log, [ConnectorFx.Written(ConnectorFx.MainFile)]);
+        }
+        finally
+        {
+            await engine.dispose();
+        }
+    });
+
+    test('a Cypher DETACH DELETE removes the reference held in another model\'s file', async () =>
+    {
+        const { Other } = ConnectorFx;
+        const shopBase = checkAgainst([], [{ uri: ConnectorFx.MainFile, text: ConnectorFx.Shop }]).model;
+        const workspace = ConnectorFx.Workspace();
+        workspace.Add(Other.Model, Other.Namespace, { [Other.File]: Other.Text }, [shopBase]);
+        const connector = new TodlFileConnector(workspace);
+        const engine = await ConnectorFx.Engine(connector, [
+            { Model: ConnectorFx.Model, File: ConnectorFx.MainFile, Text: ConnectorFx.Shop },
+            { Model: Other.Model, File: Other.File, Text: Other.Text },
+        ]);
+        try
+        {
+            // The engine routes DETACH DELETE's explicit Unlink of other.p -at-> shop.l1 by its source's owner, other.p.
+            await new Cypher.CypherEngine(engine).Execute(AccessScope.System, ConnectorFx.DetachLocs);
+            const other = ConnectorFx.Reparsed(workspace, [Other.File], Other.Namespace, [shopBase]);
+            assert.deepEqual(ConnectorFx.Refs(other, Other.Node, Other.At), []);
+            assert.deepEqual(other.diagnostics.filter((d) => d.severity === Severity.Error), []);
+            const shop = ConnectorFx.Reparsed(workspace);
+            assert.equal(ConnectorFx.Attrs(shop, ConnectorFx.L1), undefined);
+            assert.equal(ConnectorFx.Attrs(shop, ConnectorFx.L2), undefined);
+            assert.deepEqual(ConnectorFx.Refs(shop, ConnectorFx.W0, ConnectorFx.Home), []);
         }
         finally
         {
