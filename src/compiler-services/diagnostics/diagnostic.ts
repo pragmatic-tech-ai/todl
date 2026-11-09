@@ -134,6 +134,9 @@ export enum DiagnosticCode
   DerivedMemberAssigned = "type.derived-member-assigned",
   MemberAnnotationTargetInvalid = "type.member-annotation-target-invalid",
   DuplicateDerive = "type.duplicate-derive",
+  // Saved-snapshot compile (engine bridge): a listed saved model no source declares, or one listed twice.
+  SavedModelUndeclared = "saved-model.undeclared",
+  SavedModelDuplicate = "saved-model.duplicate",
 }
 
 export interface Diagnostic

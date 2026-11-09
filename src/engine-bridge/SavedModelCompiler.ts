@@ -2,13 +2,15 @@ import { checkAgainst } from '../compiler-services/api.js';
 import { toJSON, type TodlDocument } from '../compiler-services/emit/json.js';
 import { ManifestEmitter, type DataEdge, type DataNode } from '../compiler-services/emit/manifest.js';
 import type { SourceFile } from '../compiler-services/diagnostics/span.js';
-import type { Diagnostic } from '../compiler-services/diagnostics/diagnostic.js';
+import { DiagnosticCode, Severity, type Diagnostic } from '../compiler-services/diagnostics/diagnostic.js';
 import type { Repository } from '../compiler-services/model/model.js';
 import { MetadataSnapshot } from '../domain/metadata-snapshot.js';
 import { Manifest } from '../manifest/reflection/reflection.js';
 import { ManifestWriter } from '../manifest/manifest-writer.js';
 import { ModelShardExtractor } from '../model-data/model-shard-extractor.js';
 import { PackageManifestBridge } from '../solution-services/package-manager/package-manifest-bridge.js';
+import { EngineBridgeError, EngineBridgeErrorCode } from './EngineBridgeError.js';
+import { MessageFormat } from './MessageFormat.js';
 
 /** One saved model of a solution: its model id (the TODL `model` declaration's node id) and the saved sources of its member. */
 export interface ISavedModel
@@ -48,14 +50,23 @@ class SavedPackage
 export class SavedModelCompiler
 {
     private static readonly Version = '0.0.0';
-    private static readonly InstanceTier = 'Instance';
+    private static readonly SolutionCollisionMessage = 'Model "{0}" has the solution\'s name; the solution package owns the instances outside every model';
+    private static readonly UndeclaredMessage = 'Saved model "{0}" is declared by none of the saved sources; it gets no package';
+    private static readonly DuplicateMessage = 'Saved model "{0}" is listed more than once; the first entry is used';
 
+    /**
+     * Throws {@link EngineBridgeError} (`SolutionModelCollision`) when a model id equals `solutionName`: the two
+     * packages would be one, and solution-owned instances would read as that model's. A model id no saved source
+     * declares, or one listed twice, is reported in `Diagnostics` as a warning and skipped.
+     */
     public static Compile(models: readonly ISavedModel[], bases: readonly TodlDocument[], solutionName: string): ISavedSnapshot
     {
+        SavedModelCompiler.GuardSolutionName(models, solutionName);
         const compiled = checkAgainst([...bases], SavedModelCompiler.SourcesOf(models));
+        const diagnostics: Diagnostic[] = [...compiled.diagnostics];
         const repository = compiled.model;
         const { manifest, graph } = new ManifestEmitter(repository, solutionName, SavedModelCompiler.Version).emit();
-        const packages = SavedModelCompiler.Partition(repository, models, solutionName, graph.nodes, graph.edges);
+        const packages = SavedModelCompiler.Partition(repository, models, solutionName, graph.nodes, graph.edges, diagnostics);
         const ordered = SavedModelCompiler.DepsFirst(packages, solutionName);
         const snapshot = new MetadataSnapshot();
         for (const pkg of ordered)
@@ -66,7 +77,8 @@ export class SavedModelCompiler
         }
         for (const pkg of ordered)
         {
-            // A saved file that does not compile can leave instances of undeclared types; they cannot bind.
+            // A saved file that does not compile can leave instances of undeclared types; they cannot bind, and the
+            // compile diagnostics already report why.
             const nodes = pkg.Nodes.filter((n) => snapshot.ownerOf(n.type) !== undefined);
             const bound = new Set(nodes.map((n) => n.id));
             const seed = PackageManifestBridge.seedOf({
@@ -76,7 +88,17 @@ export class SavedModelCompiler
             });
             snapshot.BindSeed(seed, { model: pkg.Model, version: SavedModelCompiler.Version });
         }
-        return { Snapshot: snapshot, Repository: repository, Diagnostics: compiled.diagnostics };
+        return { Snapshot: snapshot, Repository: repository, Diagnostics: diagnostics };
+    }
+
+    private static GuardSolutionName(models: readonly ISavedModel[], solutionName: string): void
+    {
+        const colliding = models.find((m) => m.ModelId === solutionName);
+        if (colliding !== undefined)
+        {
+            throw new EngineBridgeError(EngineBridgeErrorCode.SolutionModelCollision,
+                MessageFormat.Format(SavedModelCompiler.SolutionCollisionMessage, colliding.ModelId));
+        }
     }
 
     /** The union of every model's sources, each uri once (models of one member share its files). */
@@ -93,9 +115,12 @@ export class SavedModelCompiler
         return [...byUri.values()];
     }
 
-    /** Splits the emitted seed into the solution package and one package per given model; an edge goes with its source node. */
+    /**
+     * Splits the emitted seed into the solution package and one package per given model; an edge goes with its source
+     * node. A duplicate or undeclared model id gets a warning and no package.
+     */
     private static Partition(repository: Repository, models: readonly ISavedModel[], solutionName: string,
-        nodes: readonly DataNode[], edges: readonly DataEdge[]): Map<string, SavedPackage>
+        nodes: readonly DataNode[], edges: readonly DataEdge[], diagnostics: Diagnostic[]): Map<string, SavedPackage>
     {
         const packages = new Map<string, SavedPackage>([[solutionName, new SavedPackage(solutionName)]]);
         const homeOf = new Map<string, SavedPackage>();
@@ -103,12 +128,21 @@ export class SavedModelCompiler
         const declared = new Set(ModelShardExtractor.ModelsOf(doc));
         for (const model of models)
         {
-            if (packages.has(model.ModelId) || !declared.has(model.ModelId)) continue;
+            if (packages.has(model.ModelId))
+            {
+                diagnostics.push(SavedModelCompiler.Warning(DiagnosticCode.SavedModelDuplicate, SavedModelCompiler.DuplicateMessage, model.ModelId));
+                continue;
+            }
+            if (!declared.has(model.ModelId))
+            {
+                diagnostics.push(SavedModelCompiler.Warning(DiagnosticCode.SavedModelUndeclared, SavedModelCompiler.UndeclaredMessage, model.ModelId));
+                continue;
+            }
             const pkg = new SavedPackage(model.ModelId);
             packages.set(model.ModelId, pkg);
             for (const node of ModelShardExtractor.Extract(doc, model.ModelId).nodes)
             {
-                if (node.tier === SavedModelCompiler.InstanceTier && !homeOf.has(node.id)) homeOf.set(node.id, pkg);
+                if (node.tier === ModelShardExtractor.InstanceTier && !homeOf.has(node.id)) homeOf.set(node.id, pkg);
             }
         }
         const solution = packages.get(solutionName)!;
@@ -121,6 +155,12 @@ export class SavedModelCompiler
             if (to !== from && from !== solution) from.DependsOn.add(to.Model);
         }
         return packages;
+    }
+
+    /** A whole-model warning about one saved model id. */
+    private static Warning(code: DiagnosticCode, template: string, modelId: string): Diagnostic
+    {
+        return { code, severity: Severity.Warning, message: MessageFormat.Format(template, modelId), span: null, node: modelId, path: null };
     }
 
     /** The packages in dependency order: the solution package first, then a stable post-order over model references (a cycle keeps input order). */

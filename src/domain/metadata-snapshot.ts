@@ -89,8 +89,12 @@ export class MetadataSnapshot implements ManifestHost
     private readonly order: Manifest[] = [];
     private readonly seedOrigin = new Map<string, string>(); // node id → origin identity
     private readonly seedOriginModel = new Map<string, string>(); // node id → origin package model id (last binder)
-    private readonly seedHomeModel = new Map<string, string>(); // node id → home package model id (first binder)
-    private readonly homeSeed = new Map<string, HomeSeed>(); // node id → the node as its home package bound it
+    /**
+     * node id → the node object as its HOME (first-binding) package bound it, with that package. A dependent that re-binds
+     * the node replaces it in the heap but not here, so this map deliberately retains the replaced home object (its attrs
+     * and folded refs) until the node is evicted: that is what Evict restores. Memory: one extra object per re-bound node.
+     */
+    private readonly homeSeed = new Map<string, HomeSeed>();
     private readonly nodes = new Heap();
 
     /** The `model@version` identity used for dedup / attribution. */
@@ -236,7 +240,6 @@ export class MetadataSnapshot implements ManifestHost
             if (home === undefined || home.Origin === originId)
             {
                 this.homeSeed.set(node.id, { Node: node, Origin: originId, Model: boundTo.model });
-                this.seedHomeModel.set(node.id, boundTo.model);
             }
         }
         for (const edge of data.edges ?? [])
@@ -272,7 +275,7 @@ export class MetadataSnapshot implements ManifestHost
      */
     HomeModelOf(nodeId: string): string | undefined
     {
-        return this.seedHomeModel.get(nodeId);
+        return this.homeSeed.get(nodeId)?.Model;
     }
 
     /**
@@ -299,7 +302,6 @@ export class MetadataSnapshot implements ManifestHost
                     this.nodes.remove(node.id);
                     this.seedOrigin.delete(node.id);
                     this.seedOriginModel.delete(node.id);
-                    this.seedHomeModel.delete(node.id);
                     this.homeSeed.delete(node.id);
                 }
             }
@@ -308,7 +310,6 @@ export class MetadataSnapshot implements ManifestHost
                 const origin = this.seedOrigin.get(node.id)!;
                 const model = this.seedOriginModel.get(node.id)!;
                 this.homeSeed.set(node.id, { Node: node, Origin: origin, Model: model });
-                this.seedHomeModel.set(node.id, model);
             }
         }
     }

@@ -10,7 +10,8 @@ import type { TodlDocument, JsonNode } from "../compiler-services/emit/json.js";
 
 export class ModelShardExtractor
 {
-    private static readonly InstanceTier = "Instance";
+    /** The serialized `tier` of an instance node (`JsonNode.tier`); the one home of this literal. */
+    public static readonly InstanceTier = "Instance";
     private static readonly ContainsKind = "Contains";
 
     /** Every model container id in the document (metaKind === MetaKind.Model). */

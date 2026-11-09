@@ -1,5 +1,6 @@
 import type { TodlDocument } from "../compiler-services/emit/json.js";
 import type { ModelConnectorPlan } from "./connector-plan.js";
+import { ModelShardExtractor } from "./model-shard-extractor.js";
 
 /**
  * The bound concepts whose pulled records can never be merged with another record, so a pushed filter that drops a
@@ -16,7 +17,6 @@ export class MergeFreeConcepts
     private static readonly KeyAttr = "key";
     private static readonly StorageIdKey = "storageId";
     private static readonly ExtendsEdge = "Extends";
-    private static readonly InstanceTier = "Instance";
 
     public static Of(plan: ModelConnectorPlan, base: TodlDocument): ReadonlySet<string>
     {
@@ -32,7 +32,7 @@ export class MergeFreeConcepts
             parents.set(from, [...(parents.get(from) ?? []), to]);
             children.set(to, [...(children.get(to) ?? []), from]);
         }
-        const instanceTypes = new Set(base.nodes.filter((n) => n.tier === MergeFreeConcepts.InstanceTier && n.type !== null).map((n) => n.type!));
+        const instanceTypes = new Set(base.nodes.filter((n) => n.tier === ModelShardExtractor.InstanceTier && n.type !== null).map((n) => n.type!));
         for (const binding of plan.Bindings)
         {
             const family = new Set([...MergeFreeConcepts.Reach(binding.Concept, parents), ...MergeFreeConcepts.Reach(binding.Concept, children)]);

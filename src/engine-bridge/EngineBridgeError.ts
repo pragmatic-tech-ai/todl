@@ -11,6 +11,8 @@ export enum EngineBridgeErrorCode
     MessageTemplate,
     /** A connector transaction was used after it stopped taking changes (committing, committed or reverted). */
     TransactionClosed,
+    /** A saved model's id equals the solution name, whose package owns the instances outside every model. */
+    SolutionModelCollision,
 }
 
 /** Failure raised by the TODL-on-engine bridge; Code identifies the category. */

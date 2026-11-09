@@ -6,6 +6,7 @@
 
 import type { JsonEdge, JsonNode, TodlDocument } from "../../compiler-services/emit/json.js";
 import { CypherCellCodec } from "../../cypher/cell-codec.js";
+import { ModelShardExtractor } from "../../model-data/model-shard-extractor.js";
 
 export interface TenantFieldCell
 {
@@ -24,7 +25,6 @@ export interface TenantNodeCell
 export class TenantDocumentAssembler
 {
     private static readonly OntologyTier = "Ontology";
-    private static readonly InstanceTier = "Instance";
     private static readonly ConceptKind = "concept";
     private static readonly ModelKind = "model";
     private static readonly ContainsEdge = "Contains";
@@ -105,7 +105,7 @@ export class TenantDocumentAssembler
         }
         return {
             id: cell.id,
-            tier: TenantDocumentAssembler.InstanceTier,
+            tier: ModelShardExtractor.InstanceTier,
             type: concept.id,
             metaKind: null,
             namespace: cut < 0 ? concept.namespace : cell.id.slice(0, cut),
