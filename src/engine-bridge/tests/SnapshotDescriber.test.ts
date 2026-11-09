@@ -609,3 +609,22 @@ describe('SnapshotDescriber type-model collisions and cycles (PF-b)', () =>
         await DescribeFixture.Opens(described.Description);
     });
 });
+
+class SeedPropertiesFx
+{
+    public static readonly Members = [
+        { Name: 'n', Kind: MemberKind.Property, Type: ValueType.Int64 },
+        { Name: 's', Kind: MemberKind.Property, Type: ValueType.String },
+        { Name: 'r', Kind: MemberKind.Relationship },
+    ];
+    public static readonly Cls = 'm.Premium';
+}
+
+test('SeedProperties converts attrs as the seed does, defaulting label and class and skipping what does not fit', () =>
+{
+    const attrs = new Map<string, string | number | boolean>([['n', '42'], ['s', 'x'], ['r', 'y'], ['other', 'z']]);
+    const properties = SnapshotDescriber.SeedProperties(SeedPropertiesFx.Members, attrs, SeedPropertiesFx.Cls);
+    assert.deepEqual([...properties], [[TodlNames.Label, null], [TodlNames.Class, SeedPropertiesFx.Cls], ['n', 42n], ['s', 'x']]);
+    const mismatched = SnapshotDescriber.SeedProperties(SeedPropertiesFx.Members, new Map([['n', 'not a number']]), null);
+    assert.deepEqual([...mismatched], [[TodlNames.Label, null], [TodlNames.Class, null]]);
+});

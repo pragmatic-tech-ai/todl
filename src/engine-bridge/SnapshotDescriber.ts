@@ -231,6 +231,27 @@ export class SnapshotDescriber
 
     private constructor(private readonly snapshot: MetadataSnapshot, private readonly options: IDescribeOptions) {}
 
+    /**
+     * The engine property values a node with these scalar `attrs` would carry, converted as the seed converts them:
+     * `label` null and `class` = `cls` unless an attr sets them, then every attr naming a property of `members` (the
+     * concept's effective engine members) converted to that property's value type; an attr that names no property, or
+     * does not convert, is left out (the seed skips it with a diagnostic). For a host that asks the engine about a
+     * node it does not hold as an instance (GraphReader.Admits): the server's schema-level class and term nodes.
+     */
+    public static SeedProperties(members: readonly { readonly Name: string; readonly Kind: MemberKind; readonly Type?: ValueType }[], attrs: ReadonlyMap<string, Scalar>, cls: string | null): Map<string, CellValue>
+    {
+        const properties = new Map<string, CellValue>([[TodlNames.Label, null], [TodlNames.Class, cls]]);
+        for (const member of members)
+        {
+            if (member.Kind !== MemberKind.Property) continue;
+            const raw = attrs.get(member.Name);
+            if (raw === undefined) continue;
+            const converted = CellConverter.Convert(member.Type, raw);
+            if (converted.Failure === undefined) properties.set(member.Name, converted.Value!);
+        }
+        return properties;
+    }
+
     public static Describe(snapshot: MetadataSnapshot, options: IDescribeOptions): ISnapshotDescription
     {
         return new SnapshotDescriber(snapshot, options).Run();
