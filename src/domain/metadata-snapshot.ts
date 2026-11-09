@@ -78,6 +78,7 @@ export class MetadataSnapshot implements ManifestHost
     private readonly byIdentity = new Map<string, Manifest>();
     private readonly order: Manifest[] = [];
     private readonly seedOrigin = new Map<string, string>(); // node id → origin identity
+    private readonly seedOriginModel = new Map<string, string>(); // node id → origin package model id
     private readonly nodes = new Heap();
 
     /** The `model@version` identity used for dedup / attribution. */
@@ -218,6 +219,7 @@ export class MetadataSnapshot implements ManifestHost
                 throw new Error(`cannot bind node "${node.id}": no loaded manifest defines type "${node.type}"`);
             this.nodes.add(node);
             this.seedOrigin.set(node.id, originId);
+            this.seedOriginModel.set(node.id, boundTo.model);
         }
         for (const edge of data.edges ?? [])
         {
@@ -234,6 +236,15 @@ export class MetadataSnapshot implements ManifestHost
         return this.seedOrigin.get(nodeId);
     }
 
+    /**
+     * The package model id (`PackageRef.model`, e.g. `shop.p` — not the TODL `model` declaration name) of the package
+     * whose BindSeed attributed this heap node: the model part of {@link originOf}, without parsing it.
+     */
+    OriginModelOf(nodeId: string): string | undefined
+    {
+        return this.seedOriginModel.get(nodeId);
+    }
+
     /** Remove every heap node attributed to `identity`. */
     Evict(identity: string): void
     {
@@ -243,6 +254,7 @@ export class MetadataSnapshot implements ManifestHost
             {
                 this.nodes.remove(node.id);
                 this.seedOrigin.delete(node.id);
+                this.seedOriginModel.delete(node.id);
             }
         }
     }
