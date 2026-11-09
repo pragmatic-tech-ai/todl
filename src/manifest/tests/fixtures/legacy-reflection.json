@@ -1,0 +1,197 @@
+{
+ "model": "legacy",
+ "version": "1.0.0",
+ "root": "",
+ "types": [
+  {
+   "fullName": "adl.metaModels.bpmn.concepts.EventTrigger",
+   "kind": 0,
+   "base": null,
+   "supertypes": [],
+   "fields": [],
+   "rels": [],
+   "annotations": []
+  },
+  {
+   "fullName": "adl.metaModels.bpmn.concepts.FlowType",
+   "kind": 0,
+   "base": null,
+   "supertypes": [],
+   "fields": [],
+   "rels": [],
+   "annotations": []
+  },
+  {
+   "fullName": "adl.metaModels.bpmn.concepts.Task",
+   "kind": 0,
+   "base": null,
+   "supertypes": [],
+   "fields": [
+    [
+     "label",
+     "string",
+     0,
+     "adl.metaModels.bpmn.concepts.Task"
+    ],
+    [
+     "type",
+     "adl.metaModels.bpmn.enums.TaskType",
+     0,
+     "adl.metaModels.bpmn.concepts.Task"
+    ],
+    [
+     "assignee",
+     "string",
+     1,
+     "adl.metaModels.bpmn.concepts.Task"
+    ]
+   ],
+   "rels": [
+    [
+     "livesIn",
+     [],
+     0,
+     null,
+     "adl.metaModels.bpmn.concepts.Task"
+    ],
+    [
+     "incoming",
+     [],
+     2,
+     null,
+     "adl.metaModels.bpmn.concepts.Task"
+    ],
+    [
+     "outgoing",
+     [],
+     2,
+     null,
+     "adl.metaModels.bpmn.concepts.Task"
+    ]
+   ],
+   "annotations": []
+  },
+  {
+   "fullName": "adl.metaModels.bpmn.concepts.Event",
+   "kind": 0,
+   "base": null,
+   "supertypes": [],
+   "fields": [
+    [
+     "label",
+     "string",
+     1,
+     "adl.metaModels.bpmn.concepts.Event"
+    ],
+    [
+     "eventType",
+     "adl.metaModels.bpmn.enums.EventType",
+     0,
+     "adl.metaModels.bpmn.concepts.Event"
+    ],
+    [
+     "trigger",
+     "adl.metaModels.bpmn.concepts.EventTrigger",
+     1,
+     "adl.metaModels.bpmn.concepts.Event"
+    ]
+   ],
+   "rels": [
+    [
+     "livesIn",
+     [],
+     0,
+     null,
+     "adl.metaModels.bpmn.concepts.Event"
+    ],
+    [
+     "incoming",
+     [],
+     2,
+     null,
+     "adl.metaModels.bpmn.concepts.Event"
+    ],
+    [
+     "outgoing",
+     [],
+     2,
+     null,
+     "adl.metaModels.bpmn.concepts.Event"
+    ]
+   ],
+   "annotations": []
+  },
+  {
+   "fullName": "demo.aspects.Server",
+   "kind": 0,
+   "base": null,
+   "supertypes": [],
+   "fields": [],
+   "rels": [],
+   "annotations": []
+  },
+  {
+   "fullName": "demo.aspects.RackServer",
+   "kind": 0,
+   "base": "demo.aspects.Server",
+   "supertypes": [
+    "demo.aspects.Server"
+   ],
+   "fields": [],
+   "rels": [],
+   "annotations": []
+  },
+  {
+   "fullName": "demo.aspects.Laptop",
+   "kind": 0,
+   "base": null,
+   "supertypes": [],
+   "fields": [],
+   "rels": [],
+   "annotations": []
+  },
+  {
+   "fullName": "demo.aspects.Person",
+   "kind": 0,
+   "base": null,
+   "supertypes": [],
+   "fields": [
+    [
+     "name",
+     "string",
+     0,
+     "demo.aspects.Person"
+    ]
+   ],
+   "rels": [],
+   "annotations": []
+  },
+  {
+   "fullName": "string",
+   "kind": 1,
+   "base": null,
+   "supertypes": [],
+   "fields": [],
+   "rels": [],
+   "annotations": []
+  },
+  {
+   "fullName": "adl.metaModels.bpmn.enums.TaskType",
+   "kind": 1,
+   "base": null,
+   "supertypes": [],
+   "fields": [],
+   "rels": [],
+   "annotations": []
+  },
+  {
+   "fullName": "adl.metaModels.bpmn.enums.EventType",
+   "kind": 1,
+   "base": null,
+   "supertypes": [],
+   "fields": [],
+   "rels": [],
+   "annotations": []
+  }
+ ]
+}

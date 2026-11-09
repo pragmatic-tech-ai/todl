@@ -7,7 +7,7 @@ const EMPTY = {
   strings: 1, consts: 1,
   typeInfo: 0, field: 0, rel: 0, target: 0, class: 0,
   fixed: 0, taxonomy: 0, imports: 0, typeRef: 0,
-  annotation: 0, annotationArg: 0,
+  annotation: 0, annotationArg: 0, typeAspect: 0,
 };
 
 describe("IndexWidths — u16/u32 selection + reserved flags (SPEC-04 §7.4)", () => {

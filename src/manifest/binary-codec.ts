@@ -41,6 +41,7 @@ export class BinarySerializer
             typeRef: rowsOf(TableId.TypeRef).length,
             annotation: rowsOf(TableId.Annotation).length,
             annotationArg: rowsOf(TableId.AnnotationArg).length,
+            typeAspect: rowsOf(TableId.TypeAspect).length,
         };
         const widths = IndexWidths.fromCounts(counts);
         const strBytes = strings.toBytes();

@@ -1,0 +1,31 @@
+namespace demo.aspects
+{
+    aspect Asset
+    {
+        tag : string;
+    }
+
+    aspect Tracked : Asset { }
+
+    concept Server : Tracked { }
+
+    concept RackServer : Server { }
+
+    concept Laptop : Asset { }
+
+    concept Person
+    {
+        name : string;
+    }
+
+    model Fleet : demo.aspects
+    {
+        Server web01 { tag = "srv-1"; }
+
+        RackServer rack01 { tag = "rack-1"; }
+
+        Laptop lap01 { tag = "lap-1"; }
+
+        Person alice { name = "Alice"; }
+    }
+}

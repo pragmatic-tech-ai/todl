@@ -53,6 +53,23 @@ export interface ConceptDef
     invariants: string[];
     /** Annotations applied to this concept. */
     annotations: AnnotationApp[];
+    /** Directly included aspect ids, in declaration order. Absent (older manifests) = none. */
+    aspects?: string[];
+}
+
+/** A member bundle concepts carry (type model R3): members plus the aspects it includes. */
+export interface AspectDef
+{
+    /** DECLARED-OWN scalar fields, keyed by field name. */
+    fields: Record<string, FieldDef>;
+    /** DECLARED-OWN reference relationships, keyed by relationship name. */
+    relationships: Record<string, RelationshipDef>;
+    /** Directly included aspect ids, in declaration order. */
+    aspects: string[];
+    /** Opaque invariant expressions for v1. */
+    invariants: string[];
+    /** Annotations applied to this aspect. */
+    annotations: AnnotationApp[];
 }
 
 export interface ClassDef
@@ -87,6 +104,8 @@ export interface LogicalManifest
     /** The virtual root; always "Element". */
     root: string;
     concepts: Record<string, ConceptDef>;
+    /** Aspect definitions keyed by id. Absent (older manifests) = none. */
+    aspects?: Record<string, AspectDef>;
     classes: Record<string, ClassDef>;
     taxonomies: Record<string, TaxonomyDef>;
 }

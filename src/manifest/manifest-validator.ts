@@ -90,7 +90,8 @@ export class ManifestValidator
     private tableRows(json: ManifestJson, table: TableId): number[][]
     {
         // TableId enum name matches the JSON key (TypeInfo, Field, …).
-        return (json.tables as Record<string, number[][]>)[TableId[table]]!;
+        // A table absent from older manifests (e.g. TypeAspect) is empty.
+        return (json.tables as Record<string, number[][] | undefined>)[TableId[table]] ?? [];
     }
 
     private checkColumn(
@@ -130,8 +131,8 @@ export class ManifestValidator
                 break;
             }
             case ColKind.U8:
-                if (col.name === "kind" && (value < 0 || value > 9))
-                    err(`${where}: MetaKind code ${value} out of range 0..9`);
+                if (col.name === "kind" && (value < 0 || value > 10))
+                    err(`${where}: MetaKind code ${value} out of range 0..10`);
                 if (col.name === "card" && (value < 0 || value > 3))
                     err(`${where}: Cardinality code ${value} out of range 0..3`);
                 break;

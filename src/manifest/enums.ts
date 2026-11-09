@@ -3,7 +3,7 @@
 // The manifest module keeps its OWN numeric MetaKind independent of the string
 // enum in src/model/kinds.ts (SPEC-04 §3.1); the SPEC-03 bridge maps, never casts.
 
-/** Language construct of a type row (`TypeInfo.kind`). Codes 0..9. */
+/** Language construct of a type row (`TypeInfo.kind`). Codes 0..10. */
 export enum MetaKind
 {
     Concept = 0,
@@ -16,6 +16,7 @@ export enum MetaKind
     Viewpoint = 7,
     Model = 8,
     Package = 9,
+    Aspect = 10, // a member bundle concepts carry; appended, so older manifests never contain it
 }
 
 /**
@@ -46,6 +47,7 @@ export enum TableId
     TypeRef = 8,
     Annotation = 9,     // Applied annotations (target → annotation type + args)
     AnnotationArg = 10, // One annotation argument (name + const value)
+    TypeAspect = 11,    // Directly included aspects of a type (absent in older manifests = none)
 }
 
 /** Stable heap ids (SPEC-04 §7.2). */

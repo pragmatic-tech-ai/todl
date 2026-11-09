@@ -13,7 +13,7 @@ import { Base64 } from "./bytes.js";
 import { TableId, MetaKind } from "./enums.js";
 import { TypeDefOrRef } from "./token.js";
 import { BinarySerializer } from "./binary-codec.js";
-import { CardinalityGlyph, ManifestModel, type LogicalManifest, type AnnotationApp, type Scalar } from "./logical.js";
+import { CardinalityGlyph, ManifestModel, type LogicalManifest, type AnnotationApp, type Scalar, type FieldDef, type RelationshipDef } from "./logical.js";
 import type {
     TypeInfoRec,
     FieldRec,
@@ -26,6 +26,7 @@ import type {
     TypeRefRec,
     AnnotationRec,
     AnnotationArgRec,
+    TypeAspectRec,
     ManifestJson,
 } from "./records.js";
 
@@ -45,6 +46,7 @@ export class ManifestWriter
     private readonly typeRefs: TypeRefRec[] = [];
     private readonly annotations: AnnotationRec[] = [];
     private readonly annotationArgs: AnnotationArgRec[] = [];
+    private readonly typeAspects: TypeAspectRec[] = [];
 
     private rootRow = 0;
 
@@ -136,6 +138,12 @@ export class ManifestWriter
         return this.annotationArgs.length;
     }
 
+    addTypeAspect(rec: TypeAspectRec): number
+    {
+        this.typeAspects.push(rec);
+        return this.typeAspects.length;
+    }
+
     setRoot(typeInfoRow: number): void
     {
         this.rootRow = typeInfoRow;
@@ -168,6 +176,8 @@ export class ManifestWriter
                 return this.annotations.length;
             case TableId.AnnotationArg:
                 return this.annotationArgs.length;
+            case TableId.TypeAspect:
+                return this.typeAspects.length;
         }
     }
 
@@ -210,6 +220,8 @@ export class ManifestWriter
                 return this.annotations.map((r) => [r.annotation, r.argStart, r.argCount]);
             case TableId.AnnotationArg:
                 return this.annotationArgs.map((r) => [r.name, r.value]);
+            case TableId.TypeAspect:
+                return this.typeAspects.map((r) => [r.type, r.aspect, r.order]);
         }
     }
 
@@ -238,6 +250,7 @@ export class ManifestWriter
                 TypeRef: this.rowsOf(TableId.TypeRef),
                 Annotation: this.rowsOf(TableId.Annotation),
                 AnnotationArg: this.rowsOf(TableId.AnnotationArg),
+                TypeAspect: this.rowsOf(TableId.TypeAspect),
             },
         };
     }
@@ -276,6 +289,9 @@ export class ManifestWriter
         const w = new ManifestWriter(m.model, m.version);
         const model = new ManifestModel(m);
         const conceptIds = Object.keys(m.concepts);
+        // `aspects` is a late addition to the logical sidecar — older JSON omits it.
+        const aspectDefs = m.aspects ?? {};
+        const aspectIds = Object.keys(aspectDefs);
 
         // Every type id referenced by a coded column, in first-encounter order.
         const referenced: string[] = [];
@@ -286,10 +302,17 @@ export class ManifestWriter
             if (c.extends !== null) see(c.extends);
             for (const f of Object.values(c.fields)) see(f.type);
             for (const r of Object.values(c.relationships)) for (const t of r.targets) see(t);
+            for (const a of c.aspects ?? []) see(a);
+        }
+        for (const a of Object.values(aspectDefs))
+        {
+            for (const f of Object.values(a.fields)) see(f.type);
+            for (const r of Object.values(a.relationships)) for (const t of r.targets) see(t);
+            for (const included of a.aspects ?? []) see(included);
         }
         for (const cls of Object.values(m.classes)) see(cls.concept);
         for (const tax of Object.values(m.taxonomies)) for (const t of tax.represents) see(t);
-        const primitiveIds = referenced.filter((id) => !(id in m.concepts));
+        const primitiveIds = referenced.filter((id) => !(id in m.concepts) && !(id in aspectDefs));
 
         // Annotation type ids applied anywhere (concept / rel / class), in
         // first-encounter order — synthesized as Annotation-kind TypeInfo rows
@@ -308,12 +331,18 @@ export class ManifestWriter
             seeAnnot(c.annotations);
             for (const r of Object.values(c.relationships)) seeAnnot(r.annotations);
         }
+        for (const a of Object.values(aspectDefs))
+        {
+            seeAnnot(a.annotations);
+            for (const r of Object.values(a.relationships)) seeAnnot(r.annotations);
+        }
         for (const cls of Object.values(m.classes)) seeAnnot(cls.annotations);
 
         // Precompute rows so coded references can point forward.
         const typeRow = new Map<string, number>();
         let ti = 0;
         for (const cid of conceptIds) typeRow.set(cid, ++ti);
+        for (const aid of aspectIds) typeRow.set(aid, ++ti);
         for (const pid of primitiveIds) typeRow.set(pid, ++ti);
         for (const aid of annotationIds) if (!typeRow.has(aid)) typeRow.set(aid, ++ti);
         const taxRow = new Map<string, number>();
@@ -346,10 +375,16 @@ export class ManifestWriter
             return [annotStart, apps.length];
         };
 
-        // Pass 1: concept TypeInfo rows (+ Field / Rel / Target slices), in order.
-        for (const cid of conceptIds)
+        // Pass 1: concept and aspect TypeInfo rows (+ Field / Rel / Target slices), in order.
+        // A concept and an aspect lower identically — only the kind and `extends` differ.
+        const packType = (
+            id: string,
+            c: { fields: Record<string, FieldDef>; relationships: Record<string, RelationshipDef>; annotations: AnnotationApp[] },
+            kind: MetaKind,
+            extendsId: string | null,
+        ): void =>
         {
-            const c = m.concepts[cid]!;
+            const cid = id;
             const fieldEntries = Object.entries(c.fields);
             const fieldStart = fieldEntries.length > 0 ? w.rowCount(TableId.Field) + 1 : 0;
             for (const [fname, fdef] of fieldEntries)
@@ -383,8 +418,8 @@ export class ManifestWriter
             w.addTypeInfo({
                 name: cname,
                 ns: cns,
-                kind: MetaKind.Concept,
-                extends: c.extends !== null ? coded(c.extends) : 0,
+                kind,
+                extends: extendsId !== null ? coded(extendsId) : 0,
                 fieldStart,
                 fieldCount: fieldEntries.length,
                 relStart,
@@ -392,7 +427,21 @@ export class ManifestWriter
                 annotStart: cAnnotStart,
                 annotCount: cAnnotCount,
             });
+        };
+        for (const cid of conceptIds)
+        {
+            const c = m.concepts[cid]!;
+            packType(cid, c, MetaKind.Concept, c.extends);
         }
+        for (const aid of aspectIds) packType(aid, aspectDefs[aid]!, MetaKind.Aspect, null);
+        // TypeAspect rows: each type's directly included aspects, in declaration order.
+        const packAspects = (id: string, included: string[] | undefined): void =>
+        {
+            (included ?? []).forEach((aspect, order) =>
+                w.addTypeAspect({ type: coded(id), aspect: coded(aspect), order }));
+        };
+        for (const cid of conceptIds) packAspects(cid, m.concepts[cid]!.aspects);
+        for (const aid of aspectIds) packAspects(aid, aspectDefs[aid]!.aspects);
         // Synthesized primitive TypeInfo rows (kind Primitive, no members).
         for (const pid of primitiveIds)
         {

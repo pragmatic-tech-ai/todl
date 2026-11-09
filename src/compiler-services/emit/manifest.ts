@@ -15,7 +15,7 @@
 // resolution used by validation / typed clients. See JOURNAL (SPEC-03 note).
 
 import { Repository } from "../model/model.js";
-import { EdgeKind, Direction, Tier, type Scalar, type NodeId } from "../model/graph.js";
+import { EdgeKind, Direction, Tier, type Cardinality, type Scalar, type NodeId } from "../model/graph.js";
 import { MetaKind } from "../model/kinds.js";
 import {
     CardinalityGlyph,
@@ -26,6 +26,7 @@ import {
     type FieldDef,
     type TaxonomyDef,
     type AnnotationApp,
+    type AspectDef,
 } from "../../manifest/logical.js";
 
 /** The manifest version a data graph is pinned to. */
@@ -81,7 +82,7 @@ export class ManifestEmitter
     /** The replicated meta/ontology manifest. */
     emitManifest(): LogicalManifest
     {
-        return {
+        const manifest: LogicalManifest = {
             format: "todl-manifest/1",
             model: this.model,
             version: this.version,
@@ -90,6 +91,9 @@ export class ManifestEmitter
             classes: this.emitClasses(),
             taxonomies: this.emitTaxonomies(),
         };
+        const aspects = this.emitAspects();
+        if (aspects !== undefined) manifest.aspects = aspects;
+        return manifest;
     }
 
     /** The sharded, flattened instance graph pinned to the manifest. */
@@ -110,28 +114,78 @@ export class ManifestEmitter
         for (const id of this.repo.nodesOfMetaKind(MetaKind.Concept))
         {
             const schema = this.repo.schemaOf(id);
-            const fields: Record<string, FieldDef> = {};
-            for (const f of schema.fields)
-                fields[f.name] = { type: f.type, card: CardinalityGlyph.toGlyph(f.cardinality) };
-            const relationships: Record<string, RelationshipDef> = {};
-            for (const r of schema.relationships)
-            {
-                const def: RelationshipDef = {
-                    targets: r.targets,
-                    card: CardinalityGlyph.toGlyph(r.cardinality),
-                    annotations: this.annotationsOf(`${id}.${r.name}`),
-                };
-                if (r.inverse !== null) def.inverse = r.inverse;
-                relationships[r.name] = def;
-            }
             const invariants = [id, ...this.introducedAspects(id, schema.extends)]
                 .flatMap((owner) => this.repo.invariantsFor(owner))
                 .map((inv) => inv.description)
                 .filter((s) => s.length > 0);
-            out[id] = {
-                extends: schema.extends, fields, relationships, invariants,
+            const def: ConceptDef = {
+                extends: schema.extends,
+                fields: this.fieldDefs(schema.fields),
+                relationships: this.relationshipDefs(id, schema.relationships),
+                invariants,
                 annotations: this.annotationsOf(id),
             };
+            const aspects = this.includedAspects(id);
+            if (aspects.length > 0) def.aspects = aspects;
+            out[id] = def;
+        }
+        return out;
+    }
+
+    /**
+     * The aspect definitions, or `undefined` when the model declares none (so a model
+     * without aspects emits exactly the manifest it always did). An aspect's own invariants
+     * are listed here; the concept that introduces the aspect still folds them in too.
+     */
+    private emitAspects(): Record<string, AspectDef> | undefined
+    {
+        const ids = this.repo.nodesOfMetaKind(MetaKind.Aspect);
+        if (ids.length === 0) return undefined;
+        const out: Record<string, AspectDef> = {};
+        for (const id of ids)
+        {
+            const schema = this.repo.schemaOf(id);
+            out[id] = {
+                fields: this.fieldDefs(schema.fields),
+                relationships: this.relationshipDefs(id, schema.relationships),
+                aspects: this.includedAspects(id),
+                invariants: this.repo.invariantsFor(id).map((inv) => inv.description).filter((s) => s.length > 0),
+                annotations: this.annotationsOf(id),
+            };
+        }
+        return out;
+    }
+
+    /** The aspects `owner` includes directly, in declaration order. */
+    private includedAspects(owner: NodeId): NodeId[]
+    {
+        return this.repo
+            .related(owner, EdgeKind.IncludesAspect, Direction.Out)
+            .filter((id) => this.repo.resolve(id)?.metaKind === MetaKind.Aspect);
+    }
+
+    private fieldDefs(fields: readonly { name: string; type: string; cardinality: Cardinality }[]): Record<string, FieldDef>
+    {
+        const out: Record<string, FieldDef> = {};
+        for (const f of fields) out[f.name] = { type: f.type, card: CardinalityGlyph.toGlyph(f.cardinality) };
+        return out;
+    }
+
+    private relationshipDefs(
+        owner: NodeId,
+        relationships: readonly { name: string; targets: string[]; cardinality: Cardinality; inverse: string | null }[],
+    ): Record<string, RelationshipDef>
+    {
+        const out: Record<string, RelationshipDef> = {};
+        for (const r of relationships)
+        {
+            const def: RelationshipDef = {
+                targets: r.targets,
+                card: CardinalityGlyph.toGlyph(r.cardinality),
+                annotations: this.annotationsOf(`${owner}.${r.name}`),
+            };
+            if (r.inverse !== null) def.inverse = r.inverse;
+            out[r.name] = def;
         }
         return out;
     }

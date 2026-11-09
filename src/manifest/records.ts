@@ -105,6 +105,17 @@ export interface AnnotationArgRec
 }
 
 /**
+ * §5.12 TypeAspect: one directly included aspect of a type (concept or aspect), in
+ * declaration order. Added after format 1 shipped; an older manifest simply has no rows.
+ */
+export interface TypeAspectRec
+{
+    type: number; // TypeDefOrRef coded (the including type)
+    aspect: number; // TypeDefOrRef coded (the aspect it includes)
+    order: number; // declaration position within the including type
+}
+
+/**
  * The JSON debug view (§8): a positional 1:1 mirror of the binary — same
  * column order, same numeric indices (NOT names, NOT resolved values). Rows
  * are arrays of column values in binary column order; `const[]` entries are
@@ -130,5 +141,7 @@ export interface ManifestJson
         TypeRef: number[][];
         Annotation: number[][];
         AnnotationArg: number[][];
+        /** Absent in manifests written before aspects existed (= no rows). */
+        TypeAspect?: number[][];
     };
 }

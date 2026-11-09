@@ -14,7 +14,7 @@ import { BinarySerializer } from "./binary-codec.js";
 import type {
     TypeInfoRec, FieldRec, RelRec, TargetRec, ClassRec,
     FixedRec, TaxonomyRec, ImportsRec, TypeRefRec,
-    AnnotationRec, AnnotationArgRec, ManifestJson,
+    AnnotationRec, AnnotationArgRec, TypeAspectRec, ManifestJson,
 } from "./records.js";
 
 export class ManifestReader
@@ -79,7 +79,13 @@ export class ManifestReader
         const tables = new Map<TableId, number[][]>();
         for (const table of ManifestSchema.order)
         {
-            const dir = tableDir.get(table)!;
+            // A table the file predates (TypeAspect in older manifests) is simply empty.
+            const dir = tableDir.get(table);
+            if (dir === undefined)
+            {
+                tables.set(table, []);
+                continue;
+            }
             const cols = ManifestSchema.columns(table);
             const rows: number[][] = [];
             for (let row = 0; row < dir.rowCount; row++)
@@ -120,6 +126,7 @@ export class ManifestReader
         tables.set(TableId.TypeRef, json.tables.TypeRef.map((r) => r.slice()));
         tables.set(TableId.Annotation, json.tables.Annotation.map((r) => r.slice()));
         tables.set(TableId.AnnotationArg, json.tables.AnnotationArg.map((r) => r.slice()));
+        tables.set(TableId.TypeAspect, (json.tables.TypeAspect ?? []).map((r) => r.slice()));
         const formatVersion = Number(json.format.split("/")[1] ?? ManifestSchema.FORMAT_VERSION);
         return new ManifestReader(json.model, json.version, formatVersion, json.root, strings, consts, tables);
     }
@@ -238,6 +245,12 @@ export class ManifestReader
         return { name: v[0]!, value: v[1]! };
     }
 
+    typeAspect(row: number): TypeAspectRec
+    {
+        const v = this.row(TableId.TypeAspect, row);
+        return { type: v[0]!, aspect: v[1]!, order: v[2]! };
+    }
+
     // ---- slice iterators (member ranges captured as [start, count]) ----
 
     /** Declared fields of a TypeInfo row (its `[fieldStart, fieldCount]`). */
@@ -320,6 +333,7 @@ export class ManifestReader
                 TypeRef: t(TableId.TypeRef),
                 Annotation: t(TableId.Annotation),
                 AnnotationArg: t(TableId.AnnotationArg),
+                TypeAspect: t(TableId.TypeAspect),
             },
         };
     }

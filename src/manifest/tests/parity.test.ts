@@ -2,7 +2,7 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { ManifestWriter } from "../manifest-writer.js";
 import { ManifestReader } from "../manifest-reader.js";
-import { MetaKind, Cardinality } from "../enums.js";
+import { MetaKind, Cardinality, TableId } from "../enums.js";
 import { TypeDefOrRef } from "../token.js";
 
 // A canonical little manifest — shared by the golden fixture and the parity
@@ -27,8 +27,9 @@ function buildCanonical(): ManifestWriter
   return w;
 }
 
-// Frozen bytes of buildCanonical().toBinary() — the format's golden fixture.
-const GOLDEN_HEX =
+// Frozen bytes of buildCanonical().toBinary() as written BEFORE the TypeAspect table existed.
+// Older manifests in the wild look like this; they must keep loading.
+const LEGACY_GOLDEN_HEX =
   "544f444d010000000400050002000b02001300020000009c00000001050001000000c4" +
   "000000020d0000000000cc00000003020000000000cc00000004100000000000cc0000" +
   "0005040000000000cc00000006060000000000cc00000007040000000000cc00000008" +
@@ -36,6 +37,17 @@ const GOLDEN_HEX =
   "00002300000001f0000000010000000002000000000000000000000000000000000000" +
   "030004000002000100010000000000000000000000010000000000000000046e616d65" +
   "07456c656d656e7409436f6d706f6e656e740473686f7005312e302e300000";
+
+// Frozen bytes of buildCanonical().toBinary() — the format's golden fixture.
+const GOLDEN_HEX =
+  "544f444d010000000400050002000c0200130002000000a800000001050001000000d0" +
+  "000000020d0000000000d800000003020000000000d800000004100000000000d80000" +
+  "0005040000000000d800000006060000000000d800000007040000000000d800000008" +
+  "040000000000d800000009060000000000d80000000a040000000000d80000000b0600" +
+  "00000000d800000000d80000002300000001fc00000001000000000002000000000000" +
+  "0000000000000000000000000300040000020001000100000000000000000000000100" +
+  "00000000000000046e616d6507456c656d656e7409436f6d706f6e656e740473686f70" +
+  "05312e302e300000";
 
 function toHex(bytes: Uint8Array): string
 {
@@ -55,6 +67,14 @@ describe("golden fixture (SPEC-04 §11.4) — format is byte-stable", () => {
     assert.equal(reader.model, "shop");
     assert.equal(reader.version, "1.0.0");
     assert.equal(reader.getString(reader.typeInfo(2).name), "Component");
+  });
+
+  test("a manifest written before TypeAspect existed still loads (no aspect rows)", () => {
+    const bytes = Uint8Array.from(LEGACY_GOLDEN_HEX.match(/../g)!.map((h) => parseInt(h, 16)));
+    const reader = ManifestReader.fromBinary(bytes);
+    assert.equal(reader.model, "shop");
+    assert.equal(reader.getString(reader.typeInfo(2).name), "Component");
+    assert.equal(reader.rowCount(TableId.TypeAspect), 0);
   });
 });
 

@@ -57,7 +57,7 @@ export class ManifestSchema
     static readonly order: readonly TableId[] = [
         TableId.TypeInfo, TableId.Field, TableId.Rel, TableId.Target,
         TableId.Class, TableId.Fixed, TableId.Taxonomy, TableId.Imports, TableId.TypeRef,
-        TableId.Annotation, TableId.AnnotationArg,
+        TableId.Annotation, TableId.AnnotationArg, TableId.TypeAspect,
     ];
 
     /** Columns of `table`, in binary column order (matches §8 JSON order). */
@@ -138,6 +138,12 @@ export class ManifestSchema
                 return [
                     new Column("name", ColKind.Str),
                     new Column("value", ColKind.Const),
+                ];
+            case TableId.TypeAspect:
+                return [
+                    new Column("type", ColKind.Coded),
+                    new Column("aspect", ColKind.Coded),
+                    new Column("order", ColKind.U16),
                 ];
         }
     }

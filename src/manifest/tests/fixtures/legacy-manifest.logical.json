@@ -1,0 +1,250 @@
+{
+ "format": "todl-manifest/1",
+ "model": "legacy",
+ "version": "1.0.0",
+ "root": "todl.Element",
+ "concepts": {
+  "adl.metaModels.bpmn.concepts.EventTrigger": {
+   "extends": null,
+   "fields": {},
+   "relationships": {},
+   "invariants": [],
+   "annotations": []
+  },
+  "adl.metaModels.bpmn.concepts.FlowType": {
+   "extends": null,
+   "fields": {},
+   "relationships": {},
+   "invariants": [],
+   "annotations": []
+  },
+  "adl.metaModels.bpmn.concepts.Task": {
+   "extends": null,
+   "fields": {
+    "label": {
+     "type": "string",
+     "card": "1"
+    },
+    "type": {
+     "type": "adl.metaModels.bpmn.enums.TaskType",
+     "card": "1"
+    },
+    "assignee": {
+     "type": "string",
+     "card": "?"
+    }
+   },
+   "relationships": {
+    "livesIn": {
+     "targets": [],
+     "card": "1",
+     "annotations": []
+    },
+    "incoming": {
+     "targets": [],
+     "card": "*",
+     "annotations": []
+    },
+    "outgoing": {
+     "targets": [],
+     "card": "*",
+     "annotations": []
+    }
+   },
+   "invariants": [
+    "A service or script task should carry no assignee — no human in the loop."
+   ],
+   "annotations": []
+  },
+  "adl.metaModels.bpmn.concepts.Event": {
+   "extends": null,
+   "fields": {
+    "label": {
+     "type": "string",
+     "card": "?"
+    },
+    "eventType": {
+     "type": "adl.metaModels.bpmn.enums.EventType",
+     "card": "1"
+    },
+    "trigger": {
+     "type": "adl.metaModels.bpmn.concepts.EventTrigger",
+     "card": "?"
+    }
+   },
+   "relationships": {
+    "livesIn": {
+     "targets": [],
+     "card": "1",
+     "annotations": []
+    },
+    "incoming": {
+     "targets": [],
+     "card": "*",
+     "annotations": []
+    },
+    "outgoing": {
+     "targets": [],
+     "card": "*",
+     "annotations": []
+    }
+   },
+   "invariants": [
+    "Start events have no incoming sequence flows.",
+    "End events have no outgoing sequence flows."
+   ],
+   "annotations": []
+  },
+  "demo.aspects.Server": {
+   "extends": null,
+   "fields": {},
+   "relationships": {},
+   "invariants": [],
+   "annotations": []
+  },
+  "demo.aspects.RackServer": {
+   "extends": "demo.aspects.Server",
+   "fields": {},
+   "relationships": {},
+   "invariants": [],
+   "annotations": []
+  },
+  "demo.aspects.Laptop": {
+   "extends": null,
+   "fields": {},
+   "relationships": {},
+   "invariants": [],
+   "annotations": []
+  },
+  "demo.aspects.Person": {
+   "extends": null,
+   "fields": {
+    "name": {
+     "type": "string",
+     "card": "1"
+    }
+   },
+   "relationships": {},
+   "invariants": [],
+   "annotations": []
+  }
+ },
+ "classes": {
+  "adl.metaModels.bpmn.enums.TaskType.None": {
+   "concept": "adl.metaModels.bpmn.concepts.Task",
+   "narrower": [],
+   "fixed": {
+    "label": "Unspecialised"
+   },
+   "annotations": [],
+   "taxonomy": "adl.metaModels.bpmn.enums.TaskType"
+  },
+  "adl.metaModels.bpmn.enums.TaskType.User": {
+   "concept": "adl.metaModels.bpmn.concepts.Task",
+   "narrower": [],
+   "fixed": {
+    "label": "User Task"
+   },
+   "annotations": [],
+   "taxonomy": "adl.metaModels.bpmn.enums.TaskType"
+  },
+  "adl.metaModels.bpmn.enums.TaskType.Service": {
+   "concept": "adl.metaModels.bpmn.concepts.Task",
+   "narrower": [],
+   "fixed": {
+    "label": "Service Task"
+   },
+   "annotations": [],
+   "taxonomy": "adl.metaModels.bpmn.enums.TaskType"
+  },
+  "adl.metaModels.bpmn.enums.TaskType.Manual": {
+   "concept": "adl.metaModels.bpmn.concepts.Task",
+   "narrower": [],
+   "fixed": {
+    "label": "Manual Task"
+   },
+   "annotations": [],
+   "taxonomy": "adl.metaModels.bpmn.enums.TaskType"
+  },
+  "adl.metaModels.bpmn.enums.TaskType.Script": {
+   "concept": "adl.metaModels.bpmn.concepts.Task",
+   "narrower": [],
+   "fixed": {
+    "label": "Script Task"
+   },
+   "annotations": [],
+   "taxonomy": "adl.metaModels.bpmn.enums.TaskType"
+  },
+  "adl.metaModels.bpmn.enums.TaskType.Send": {
+   "concept": "adl.metaModels.bpmn.concepts.Task",
+   "narrower": [],
+   "fixed": {
+    "label": "Send Task"
+   },
+   "annotations": [],
+   "taxonomy": "adl.metaModels.bpmn.enums.TaskType"
+  },
+  "adl.metaModels.bpmn.enums.TaskType.Receive": {
+   "concept": "adl.metaModels.bpmn.concepts.Task",
+   "narrower": [],
+   "fixed": {
+    "label": "Receive Task"
+   },
+   "annotations": [],
+   "taxonomy": "adl.metaModels.bpmn.enums.TaskType"
+  },
+  "adl.metaModels.bpmn.enums.EventType.Start": {
+   "concept": "adl.metaModels.bpmn.concepts.Event",
+   "narrower": [],
+   "fixed": {
+    "label": "Start"
+   },
+   "annotations": [],
+   "taxonomy": "adl.metaModels.bpmn.enums.EventType"
+  },
+  "adl.metaModels.bpmn.enums.EventType.Intermediate": {
+   "concept": "adl.metaModels.bpmn.concepts.Event",
+   "narrower": [],
+   "fixed": {
+    "label": "Intermediate"
+   },
+   "annotations": [],
+   "taxonomy": "adl.metaModels.bpmn.enums.EventType"
+  },
+  "adl.metaModels.bpmn.enums.EventType.End": {
+   "concept": "adl.metaModels.bpmn.concepts.Event",
+   "narrower": [],
+   "fixed": {
+    "label": "End"
+   },
+   "annotations": [],
+   "taxonomy": "adl.metaModels.bpmn.enums.EventType"
+  }
+ },
+ "taxonomies": {
+  "adl.metaModels.bpmn.enums.TaskType": {
+   "represents": [
+    "adl.metaModels.bpmn.concepts.Task"
+   ],
+   "roots": [
+    "adl.metaModels.bpmn.enums.TaskType.None",
+    "adl.metaModels.bpmn.enums.TaskType.User",
+    "adl.metaModels.bpmn.enums.TaskType.Service",
+    "adl.metaModels.bpmn.enums.TaskType.Manual",
+    "adl.metaModels.bpmn.enums.TaskType.Script",
+    "adl.metaModels.bpmn.enums.TaskType.Send",
+    "adl.metaModels.bpmn.enums.TaskType.Receive"
+   ]
+  },
+  "adl.metaModels.bpmn.enums.EventType": {
+   "represents": [
+    "adl.metaModels.bpmn.concepts.Event"
+   ],
+   "roots": [
+    "adl.metaModels.bpmn.enums.EventType.Start",
+    "adl.metaModels.bpmn.enums.EventType.Intermediate",
+    "adl.metaModels.bpmn.enums.EventType.End"
+   ]
+  }
+ }
+}

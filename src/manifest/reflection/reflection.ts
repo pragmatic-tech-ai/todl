@@ -73,6 +73,9 @@ export class Tokens
 export class Manifest
 {
     private host: ManifestHost | undefined;
+    /** Immutable once loaded, so the direct-aspect index and carried sets are computed once. */
+    private directAspects: Map<number, TypeInfo[]> | undefined;
+    private readonly carriedAspects = new Map<number, TypeInfo[]>();
 
     private constructor(private readonly reader: ManifestReader) {}
 
@@ -270,6 +273,58 @@ export class Manifest
         return out;
     }
 
+    /** @internal The aspects `typeRow` includes directly, in declaration order. */
+    declaredAspectsOf(typeRow: number): TypeInfo[]
+    {
+        if (this.directAspects === undefined)
+        {
+            const byType = new Map<number, { order: number; aspect: TypeInfo }[]>();
+            for (let r = 1; r <= this.reader.rowCount(TableId.TypeAspect); r++)
+            {
+                const rec = this.reader.typeAspect(r);
+                const aspect = this.resolveTypeRef(rec.aspect);
+                if (aspect === undefined || rec.type === 0) continue;
+                const owner = TypeDefOrRef.decode(rec.type).row;
+                const bucket = byType.get(owner) ?? [];
+                bucket.push({ order: rec.order, aspect });
+                byType.set(owner, bucket);
+            }
+            this.directAspects = new Map();
+            for (const [owner, bucket] of byType)
+                this.directAspects.set(owner, bucket.sort((a, b) => a.order - b.order).map((e) => e.aspect));
+        }
+        return this.directAspects.get(typeRow) ?? [];
+    }
+
+    /**
+     * @internal Every aspect `type` carries, mirroring `Repository.AspectsOf`: for the
+     * type then each supertype nearest-first, its direct aspects followed by what they
+     * include transitively (breadth-first); each once, aspects only.
+     */
+    carriedAspectsOf(type: TypeInfo): TypeInfo[]
+    {
+        const row = Tokens.row(type.token);
+        const cached = this.carriedAspects.get(row);
+        if (cached !== undefined) return cached;
+        const result: TypeInfo[] = [];
+        const seen = new Set<string>();
+        for (const owner of [type, ...type.getSupertypes()])
+        {
+            const direct = owner.getDeclaredAspects();
+            if (direct.length === 0) continue;
+            const reached = [...direct];
+            for (const aspect of direct) reached.push(...aspect.includedAspectClosure());
+            for (const aspect of reached)
+            {
+                if (!aspect.isAspect || seen.has(aspect.identity)) continue;
+                seen.add(aspect.identity);
+                result.push(aspect);
+            }
+        }
+        this.carriedAspects.set(row, result);
+        return result;
+    }
+
     /** @internal The concept whose declared Field slice contains `fieldRow`. */
     private fieldDeclarer(fieldRow: number): TypeInfo | undefined
     {
@@ -331,6 +386,50 @@ export class TypeInfo
         return this.rec.kind;
     }
 
+    /** True for an aspect: a member bundle concepts carry rather than extend. */
+    get isAspect(): boolean
+    {
+        return this.rec.kind === MetaKind.Aspect;
+    }
+
+    /** Manifest-qualified identity key (see {@link sameTypeAs}). @internal */
+    get identity(): string
+    {
+        return `${this.manifest.model}@${this.manifest.version}:${this.fullName}`;
+    }
+
+    /** The aspects this type includes directly, in declaration order. */
+    getDeclaredAspects(): TypeInfo[]
+    {
+        return this.manifest.declaredAspectsOf(this.row);
+    }
+
+    /**
+     * Every aspect this type carries: its own, its supertypes', and those they include
+     * transitively, each once, in `Repository.AspectsOf` order.
+     */
+    getAspects(): TypeInfo[]
+    {
+        return [...this.manifest.carriedAspectsOf(this)];
+    }
+
+    /** @internal Aspects reachable from this one through inclusion (proper closure, cycle-safe). */
+    includedAspectClosure(): TypeInfo[]
+    {
+        const seen = new Set<string>();
+        const result: TypeInfo[] = [];
+        const queue = [...this.getDeclaredAspects()];
+        for (let head = 0; head < queue.length; head++)
+        {
+            const current = queue[head]!;
+            if (seen.has(current.identity)) continue;
+            seen.add(current.identity);
+            result.push(current);
+            queue.push(...current.getDeclaredAspects());
+        }
+        return result;
+    }
+
     /** The single `extends` parent, or undefined for Element (virtual root). */
     get baseType(): TypeInfo | undefined
     {
@@ -355,12 +454,18 @@ export class TypeInfo
         return out;
     }
 
-    /** Effective fields: own + inherited via baseType; override → nearest declarer wins. */
+    /** Where effective members come from, in precedence order: self, supertypes nearest-first, then carried aspects. */
+    private memberSources(): TypeInfo[]
+    {
+        return [this as TypeInfo, ...this.getSupertypes(), ...this.getAspects()];
+    }
+
+    /** Effective fields: own + inherited via baseType + carried aspects; the first declarer of a name wins. */
     getFields(): FieldInfo[]
     {
         const seen = new Set<string>();
         const out: FieldInfo[] = [];
-        for (const ancestor of [this as TypeInfo, ...this.getSupertypes()])
+        for (const ancestor of this.memberSources())
         {
             for (const f of ancestor.getDeclaredFields())
             {
@@ -382,7 +487,7 @@ export class TypeInfo
     {
         const seen = new Set<string>();
         const out: RelationshipInfo[] = [];
-        for (const ancestor of [this as TypeInfo, ...this.getSupertypes()])
+        for (const ancestor of this.memberSources())
         {
             for (const r of ancestor.getDeclaredRelationships())
             {
@@ -437,10 +542,11 @@ export class TypeInfo
         return this.getSupertypes().some((t) => t.sameTypeAs(other));
     }
 
-    /** Reflexive: `this` is assignable FROM `other` (other == this or subtype). */
+    /** Reflexive: `this` is assignable FROM `other` (other == this, a subtype, or - for an aspect - a carrier). */
     isAssignableFrom(other: TypeInfo): boolean
     {
-        return other.sameTypeAs(this) || other.isSubtypeOf(this);
+        if (other.sameTypeAs(this) || other.isSubtypeOf(this)) return true;
+        return this.isAspect && other.getAspects().some((a) => a.sameTypeAs(this));
     }
 
     /** Declared invariants — [] in v1 (no invariant table yet; SPEC-03/04 open Q). */
