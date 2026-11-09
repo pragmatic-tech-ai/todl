@@ -55,6 +55,53 @@ class ImportClosureWalker
         }
     }
 
+    /**
+     * Every file under `srcRoot` outside `bridgeDir` (tests included) that imports the engine, or imports a module
+     * of the bridge directly (whose closure may reach the engine).
+     */
+    public static BoundaryOffenders(srcRoot: string, bridgeDir: string): string[]
+    {
+        const walker = new ImportClosureWalker();
+        const offenders: string[] = [];
+        for (const file of ImportClosureWalker.TsFiles(srcRoot))
+        {
+            if (file.startsWith(bridgeDir + path.sep))
+            {
+                continue;
+            }
+            const source = fs.readFileSync(file, ImportClosureWalker.Utf8);
+            for (const match of source.matchAll(ImportClosureWalker.SpecifierPattern))
+            {
+                const specifier = match[1] ?? match[2] ?? match[3] ?? match[4] ?? '';
+                const engine = specifier === ImportClosureWalker.EngineSpecifier || specifier.startsWith(ImportClosureWalker.EngineSpecifier + '/');
+                const resolved = specifier.startsWith(ImportClosureWalker.RelativePrefix) ? walker.Resolve(file, specifier) : undefined;
+                if (engine || (resolved !== undefined && resolved.startsWith(bridgeDir + path.sep)))
+                {
+                    offenders.push(path.relative(srcRoot, file));
+                }
+            }
+        }
+        return offenders;
+    }
+
+    private static TsFiles(dir: string): string[]
+    {
+        const out: string[] = [];
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true }))
+        {
+            const full = path.join(dir, entry.name);
+            if (entry.isDirectory())
+            {
+                out.push(...ImportClosureWalker.TsFiles(full));
+            }
+            else if (entry.isFile() && entry.name.endsWith(ImportClosureWalker.TsExtension))
+            {
+                out.push(full);
+            }
+        }
+        return out;
+    }
+
     private Resolve(from: string, specifier: string): string | undefined
     {
         const base = path.resolve(path.dirname(from), specifier);
@@ -75,6 +122,12 @@ test('the package root import closure never reaches the graph engine', () =>
     assert.ok(result.Files > 10, 'walker should traverse the package');
     assert.deepEqual(result.Offenders, []);
     assert.deepEqual(result.Unresolved, []);
+});
+
+test('no file outside src/engine-bridge, tests included, imports the engine or the bridge', () =>
+{
+    const bridge = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+    assert.deepEqual(ImportClosureWalker.BoundaryOffenders(path.dirname(bridge), bridge), []);
 });
 
 test('the engine subpath resolves', async () =>

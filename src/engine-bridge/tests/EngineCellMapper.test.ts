@@ -2,7 +2,7 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { AccessScope, Cypher } from "@pragmatic-tech-ai/graph";
 import { Snapshot, type MirrorSnapshot } from "../../graph-api/index.js";
-import { compilePackage } from "../../publish/publish.js";
+import { compilePackage, PackageKind } from "../../publish/publish.js";
 import { PackageManifestBridge } from "../../solution-services/package-manager/package-manifest-bridge.js";
 import { Domain } from "../../domain/domain.js";
 import { MemoryPackageSource } from "../../domain/memory-package-source.js";
@@ -10,20 +10,39 @@ import type { CypherResultDto } from "../../cypher/index.js";
 import type { MetadataSnapshot } from "../../domain/metadata-snapshot.js";
 import { TodlNames } from "../TodlNames.js";
 import { EngineCellMapper } from "../EngineCellMapper.js";
+import { MessageFormat } from "../MessageFormat.js";
 import { EngineFixture } from "./EngineFixture.js";
+import { ManifestFixture } from "../../compiler-services/emit/tests/ManifestFixture.js";
 
 /** Runs queries on a fixture's engine and maps the result cells. */
 class MapperHarness
 {
     public static readonly AllNodes = "MATCH (n) RETURN n";
     public static readonly NodeKey = "$node";
-    public static readonly PassThroughQuery = "RETURN 1 AS a, 'x' AS b, null AS c, [1, 2] AS d, {k: 1} AS e, {`" + MapperHarness.NodeKey + "`: 1} AS f, 2.5 AS g";
+    public static readonly Text = "x";
+    public static readonly MapField = "k";
+    public static readonly PassThroughQuery = `RETURN 1 AS a, '${MapperHarness.Text}' AS b, null AS c, [1, 2] AS d, {${MapperHarness.MapField}: 1} AS e, {\`${MapperHarness.NodeKey}\`: 1} AS f, 2.5 AS g`;
     public static readonly MapKey = "$map";
-    public static readonly NestedQuery = "MATCH (n) WITH collect(n) AS ns RETURN ns AS l, {k: ns} AS m";
+    public static readonly NestedQuery = `MATCH (n) WITH collect(n) AS ns RETURN ns AS l, {${MapperHarness.MapField}: ns} AS m`;
     public static readonly ShopName = "shop";
+    /** Two packages whose manifests both declare one term (the dependent's full closure): the term-dedup path. */
+    public static readonly TwoPackagesName = "two-packages";
     public static readonly AspectsFixture = "aspects.todl";
     public static readonly OrderFixture = "order-fulfillment.todl";
-    private static readonly Fixtures = [MapperHarness.AspectsFixture, MapperHarness.OrderFixture, MapperHarness.ShopName];
+    private static readonly Fixtures = [MapperHarness.AspectsFixture, MapperHarness.OrderFixture, MapperHarness.ShopName, MapperHarness.TwoPackagesName];
+    public static readonly ParityTitle = "parity with Snapshot.of: {0}";
+    public static readonly PassThroughTitle = "non-node cells pass through";
+    public static readonly NestedTitle = "nested nodes in lists and maps are mapped";
+    public static readonly LabelTitle = "label precedence: explicit label, then name, then id";
+    public static readonly DedupTitle = "a term declared by two manifests maps once, first declaration winning";
+    public static readonly SharedTerm = "a.K.T";
+    private static readonly MissingRowMessage = "{0}: {1} missing from the engine rows";
+    private static readonly RowMessage = "{0}: {1}";
+    private static readonly DuplicateRowsMessage = "{0}: one row per node";
+    private static readonly TermRowsMessage = "{0}: term rows";
+    private static readonly NodeCountMessage = "{0}: {1} nodes";
+    private static readonly PackageA = { Id: "pkg.a", Uri: "a.todl", Text: "namespace a { concept A { } taxonomy K : represents A { term T { label = \"Tee\"; } } model MA : a { A a1 { } } }" };
+    private static readonly PackageB = { Id: "pkg.b", Uri: "b.todl", Text: "namespace b { import a; model MB : a { a.A b1 { } } }" };
     private static readonly ShopUri = "shop.todl";
     public static readonly ExplicitId = "shop.w3";
     public static readonly ExplicitLabel = "Explicit";
@@ -76,9 +95,36 @@ class MapperHarness
         return domain.graph;
     }
 
+    /** pkg.a declares taxonomy K; pkg.b depends on it, so pkg.b's manifest carries K's term too. */
+    public static async TwoPackagesGraph(): Promise<MetadataSnapshot>
+    {
+        const { PackageA, PackageB, ShopVersion } = MapperHarness;
+        const a = compilePackage([], [{ uri: PackageA.Uri, text: PackageA.Text }], { id: PackageA.Id, version: ShopVersion });
+        assert.ok(a.ok, JSON.stringify(a.errors));
+        const b = compilePackage([a.package!.document], [{ uri: PackageB.Uri, text: PackageB.Text }], { id: PackageB.Id, version: ShopVersion },
+            [{ kind: PackageKind.Library, id: PackageA.Id, version: ShopVersion }]);
+        assert.ok(b.ok, JSON.stringify(b.errors));
+        const domain = new Domain(new MemoryPackageSource([PackageManifestBridge.toResolved(a.package!), PackageManifestBridge.toResolved(b.package!)]));
+        await domain.load({ model: PackageB.Id, version: ShopVersion });
+        return domain.graph;
+    }
+
+    public static async Graph(fixture: string): Promise<MetadataSnapshot>
+    {
+        switch (fixture)
+        {
+            case MapperHarness.ShopName:
+                return MapperHarness.ShopGraph();
+            case MapperHarness.TwoPackagesName:
+                return MapperHarness.TwoPackagesGraph();
+            default:
+                return ManifestFixture.Graph(ManifestFixture.Repo([fixture]));
+        }
+    }
+
     public static async Run(fixture: string, query: string): Promise<{ graph: MetadataSnapshot; mapped: CypherResultDto; raw: Cypher.CypherResultDto }>
     {
-        return MapperHarness.RunOn(fixture === MapperHarness.ShopName ? await MapperHarness.ShopGraph() : EngineFixture.Graph(EngineFixture.Repo([fixture])), query);
+        return MapperHarness.RunOn(await MapperHarness.Graph(fixture), query);
     }
 
     public static async RunOn(graph: MetadataSnapshot, query: string): Promise<{ graph: MetadataSnapshot; mapped: CypherResultDto; raw: Cypher.CypherResultDto }>
@@ -133,23 +179,24 @@ class MapperHarness
             const snap = (row[0] as unknown as Record<string, MirrorSnapshot>)[MapperHarness.NodeKey]!;
             byId.set(snap.id, snap);
         }
+        assert.equal(byId.size, mapped.Rows.length, MessageFormat.Format(MapperHarness.DuplicateRowsMessage, fixture));
         const nodes = graph.allNodes();
         for (const node of nodes)
         {
             const got = byId.get(node.id);
-            assert.ok(got !== undefined, `${fixture}: ${node.id} missing from the engine rows`);
-            assert.deepEqual(got, Snapshot.of(graph.reflect(node)), `${fixture}: ${node.id}`);
+            assert.ok(got !== undefined, MessageFormat.Format(MapperHarness.MissingRowMessage, fixture, node.id));
+            assert.deepEqual(got, Snapshot.of(graph.reflect(node)), MessageFormat.Format(MapperHarness.RowMessage, fixture, node.id));
         }
         // Terms are not heap nodes, so Snapshot.of cannot project them; their rows are asserted exactly against the
         // terms the manifests declare (the engine seeds each declared term once, first declaration winning).
         const terms = MapperHarness.DeclaredTerms(graph);
         const termRows = [...byId.values()].filter((snap) => graph.getNode(snap.id) === undefined);
-        assert.deepEqual(termRows.map((snap) => snap.id).sort(), [...terms.keys()].sort(), `${fixture}: term rows`);
+        assert.deepEqual(termRows.map((snap) => snap.id).sort(), [...terms.keys()].sort(), MessageFormat.Format(MapperHarness.TermRowsMessage, fixture));
         for (const row of termRows)
         {
-            assert.deepEqual(row, terms.get(row.id), `${fixture}: ${row.id}`);
+            assert.deepEqual(row, terms.get(row.id), MessageFormat.Format(MapperHarness.RowMessage, fixture, row.id));
         }
-        assert.ok(nodes.length >= MapperHarness.MinimumNodes, `${fixture}: ${nodes.length} nodes`);
+        assert.ok(nodes.length >= MapperHarness.MinimumNodes, MessageFormat.Format(MapperHarness.NodeCountMessage, fixture, String(nodes.length)));
         return nodes.length;
     }
 }
@@ -158,19 +205,19 @@ describe("EngineCellMapper", () =>
 {
     for (const fixture of MapperHarness.FixtureNames)
     {
-        test(`parity with Snapshot.of: ${fixture}`, async () =>
+        test(MessageFormat.Format(MapperHarness.ParityTitle, fixture), async () =>
         {
             await MapperHarness.CheckParity(fixture);
         });
     }
 
-    test("non-node cells pass through", async () =>
+    test(MapperHarness.PassThroughTitle, async () =>
     {
         const { mapped } = await MapperHarness.Run(MapperHarness.AspectsFixture, MapperHarness.PassThroughQuery);
-        assert.deepEqual(mapped.Rows[0], [1, "x", null, [1, 2], { k: 1 }, { [MapperHarness.MapKey]: { [MapperHarness.NodeKey]: 1 } }, 2.5]);
+        assert.deepEqual(mapped.Rows[0], [1, MapperHarness.Text, null, [1, 2], { [MapperHarness.MapField]: 1 }, { [MapperHarness.MapKey]: { [MapperHarness.NodeKey]: 1 } }, 2.5]);
     });
 
-    test("nested nodes in lists and maps are mapped", async () =>
+    test(MapperHarness.NestedTitle, async () =>
     {
         const { mapped, graph } = await MapperHarness.Run(MapperHarness.AspectsFixture, MapperHarness.NestedQuery);
         const [list, map] = mapped.Rows[0] as [unknown[], Record<string, unknown>];
@@ -184,10 +231,19 @@ describe("EngineCellMapper", () =>
             compared++;
         }
         assert.ok(compared > 0);
-        assert.deepEqual(map["k"], list);
+        assert.deepEqual(map[MapperHarness.MapField], list);
     });
 
-    test("label precedence: explicit label, then name, then id", async () =>
+    test(MapperHarness.DedupTitle, async () =>
+    {
+        const graph = await MapperHarness.TwoPackagesGraph();
+        const declaring = graph.manifests.filter((m) => m.taxonomies().some((t) => t.getTerms().some((term) => term.id === MapperHarness.SharedTerm)));
+        assert.equal(declaring.length, 2);
+        assert.deepEqual([...MapperHarness.DeclaredTerms(graph).keys()], [MapperHarness.SharedTerm]);
+        await MapperHarness.CheckParity(MapperHarness.TwoPackagesName);
+    });
+
+    test(MapperHarness.LabelTitle, async () =>
     {
         const { mapped } = await MapperHarness.RunOn(await MapperHarness.ShopGraph(), MapperHarness.AllNodes);
         const labels = new Map<string, string>();

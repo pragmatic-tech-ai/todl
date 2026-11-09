@@ -4,6 +4,7 @@ import type { Repository } from "../../compiler-services/model/model.js";
 import { MessageFormat } from "../MessageFormat.js";
 import { DescribeDiagnosticCode } from "../SnapshotDescription.js";
 import { EngineFixture } from "./EngineFixture.js";
+import { ManifestFixture } from "../../compiler-services/emit/tests/ManifestFixture.js";
 import { RepositoryAgreement, type IAgreementCounts } from "./RepositoryAgreement.js";
 
 /** Compares the graph engine with the TODL Repository on instance membership and is-a. */
@@ -20,6 +21,10 @@ class EngineAgreement
     private static readonly CountsMessage = "{0}: {1} scans, {2} instances, {3} pairs";
     private static readonly CorpusMessage = "{0}: {1} instances, {2} pairs";
     private static readonly DiagnosticFormat = "{0}:{1}";
+    private static readonly LabelledMessage = "{0}: {1}";
+    private static readonly SubjectFormat = "{0}{1}.{2}";
+    public static readonly SuiteTitle = "engine agrees with repository";
+    public static readonly AllFixturesTitle = "engine agrees with repository on every fixture";
     /** Fixtures that declare instances: each must compare at least this many instances, so silent emptiness fails. */
     private static readonly MinimumInstances: ReadonlyMap<string, number> = new Map([
         [EngineAgreement.AspectsFixture, 4],
@@ -29,8 +34,8 @@ class EngineAgreement
 
     public static async Check(repo: Repository, label: string, expectedDiagnostics: readonly string[]): Promise<IAgreementCounts>
     {
-        const described = EngineFixture.Describe(EngineFixture.Graph(repo));
-        assert.deepEqual(described.Diagnostics.map((d) => MessageFormat.Format(EngineAgreement.DiagnosticFormat, String(d.Code), d.Subject)), expectedDiagnostics, `${label}: ${EngineAgreement.DiagnosticsLabel}`);
+        const described = EngineFixture.Describe(ManifestFixture.Graph(repo));
+        assert.deepEqual(described.Diagnostics.map((d) => MessageFormat.Format(EngineAgreement.DiagnosticFormat, String(d.Code), d.Subject)), expectedDiagnostics, MessageFormat.Format(EngineAgreement.LabelledMessage, label, EngineAgreement.DiagnosticsLabel));
         const engine = await EngineFixture.Open(described);
         try
         {
@@ -45,17 +50,17 @@ class EngineAgreement
     /** Checks every fixture alone, then all together, against minimum instance counts. */
     public static async CheckAll(): Promise<void>
     {
-        const names = EngineFixture.FixtureNames();
+        const names = ManifestFixture.FixtureNames();
         assert.ok(names.includes(EngineAgreement.AspectsFixture));
         for (const name of names)
         {
-            const counts = await EngineAgreement.Check(EngineFixture.Repo([name]), name, EngineAgreement.Expected());
+            const counts = await EngineAgreement.Check(ManifestFixture.Repo([name]), name, EngineAgreement.Expected());
             const minimum = EngineAgreement.MinimumInstances.get(name) ?? 0;
             const detail = MessageFormat.Format(EngineAgreement.CountsMessage, name, String(counts.Scans), String(counts.Instances), String(counts.IsAPairs));
             assert.ok(counts.Scans > 0, detail);
             assert.ok(counts.Instances >= minimum && (minimum === 0 || counts.IsAPairs > 0), detail);
         }
-        const corpus = await EngineAgreement.Check(EngineFixture.Repo(names), EngineAgreement.CorpusLabel, EngineAgreement.Expected());
+        const corpus = await EngineAgreement.Check(ManifestFixture.Repo(names), EngineAgreement.CorpusLabel, EngineAgreement.Expected());
         const total = [...EngineAgreement.MinimumInstances.values()].reduce((sum, n) => sum + n, 0);
         assert.ok(corpus.Instances >= total && corpus.IsAPairs > 0, MessageFormat.Format(EngineAgreement.CorpusMessage, EngineAgreement.CorpusLabel, String(corpus.Instances), String(corpus.IsAPairs)));
     }
@@ -69,13 +74,13 @@ class EngineAgreement
     {
         const code = DescribeDiagnosticCode.UnresolvedType;
         const prefix = EngineAgreement.BpmnPrefix;
-        return EngineAgreement.BpmnTypes.flatMap((type) => EngineAgreement.UnresolvedRelationships.map((rel) => MessageFormat.Format(EngineAgreement.DiagnosticFormat, String(code), `${prefix}${type}.${rel}`)));
+        return EngineAgreement.BpmnTypes.flatMap((type) => EngineAgreement.UnresolvedRelationships.map((rel) => MessageFormat.Format(EngineAgreement.DiagnosticFormat, String(code), MessageFormat.Format(EngineAgreement.SubjectFormat, prefix, type, rel))));
     }
 }
 
-describe("engine agrees with repository", () =>
+describe(EngineAgreement.SuiteTitle, () =>
 {
-    test("engine agrees with repository on every fixture", async () =>
+    test(EngineAgreement.AllFixturesTitle, async () =>
     {
         await EngineAgreement.CheckAll();
     });
