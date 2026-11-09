@@ -384,10 +384,18 @@ stages typed instances (fail-fast on dangling refs), and `toTodl()` /
 record it consumes is exactly what codegen's authoring constructors emit.
 `TodlFileStore` is the save/load seam over an injected `FileIO`.
 
+Schema declared in a member's own files (concepts, taxonomies, terms, classes in a
+schema-carrying file) is frozen like a base, and so is each annotation application
+(`annotate x { ... }`, a node hanging off its element by an `Annotated` edge) of a
+frozen element: it is never an own instance and never re-emitted into a model block.
+
 The draft is not a Cypher write target of its own: Cypher writes run on the graph
 engine and reach `.todl` sources through `engine-bridge`'s `TodlFileConnector`
 (below), which edits a draft session per owner model. The former TODL-Cypher
 write seam over a draft (a draft writer plus a draft-to-graph baker) is retired.
+TODL's own Cypher write path (`src/cypher`: `ICypherWriter`, the write operators,
+the write overlay) stays until milestone 2 (ruling T9-b); its tests run over the
+test-only `DraftTestWriter` in `src/authoring/tests/draft-cypher-harness.ts`.
 
 ### engine-bridge — TODL on the graph engine
 

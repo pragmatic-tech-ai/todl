@@ -24,6 +24,7 @@ const INSTANCE_TIER = Tier[Tier.Instance];
 const RELATIONSHIP = EdgeKind[EdgeKind.Relationship];
 const MODEL_TYPEOF = "model";
 const CONTAINS = EdgeKind[EdgeKind.Contains];
+const ANNOTATED = EdgeKind[EdgeKind.Annotated];
 
 /** A plain instance record; Phase 5 codegen emits these, Phase 4 accepts them. */
 export interface InstanceDescriptor
@@ -120,6 +121,13 @@ export class ModelDraft
     const frozen = new Set(declared
       .filter((n) => n.metaKind !== null || (n.isClass === true && layouts.get(result.provenance.get(n.id) ?? "")?.HasSchema === true))
       .map((n) => n.id));
+    // An annotation application (`annotate x { ... }` on a term, class or concept) is a node without a metaKind that
+    // hangs off its element by an Annotated edge: it belongs to that element, so it is frozen with it (else it would
+    // read as an own instance and be re-emitted into a model block).
+    for (const e of compiled.edges)
+    {
+      if (e.kind === ANNOTATED && frozen.has(String(e.from))) frozen.add(String(e.to));
+    }
     const schema: TodlDocument = {
       nodes: declared.filter((n) => frozen.has(n.id)),
       edges: compiled.edges.filter((e) => frozen.has(String(e.from))),

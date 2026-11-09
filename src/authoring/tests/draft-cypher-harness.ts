@@ -45,6 +45,7 @@ export class DraftTestWriter implements ICypherWriter
     {
         if (this.snapshot === undefined) throw new CypherWriteError(DraftTestWriter.NoTransaction);
         this.draft.Restore(this.snapshot);
+        this.snapshot = undefined;
     }
 
     public Stats(): CypherWriteStats
@@ -64,12 +65,14 @@ export class DraftTestWriter implements ICypherWriter
 
     public SetProperty(nodeId: string, name: string, value: Scalar): void
     {
+        if (this.draft.entity(nodeId)?.field(name) === value) return;
         this.draft.setField(nodeId, name, value);
         this.stats.PropertiesSet++;
     }
 
     public RemoveProperty(nodeId: string, name: string): void
     {
+        if (this.draft.entity(nodeId)?.field(name) === undefined) return;
         this.draft.RemoveField(nodeId, name);
         this.stats.PropertiesSet++;
     }

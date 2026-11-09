@@ -1,6 +1,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { check } from "../../compiler-services/api.js";
+import { Severity } from "../../compiler-services/diagnostics/diagnostic.js";
 import type { IdGenerator } from "../../compiler-services/model/id-generator.js";
 import { ModelDraft } from "../model-draft.js";
 import { DraftCypherHarness, DraftTestWriter } from "./draft-cypher-harness.js";
@@ -136,5 +137,46 @@ describe("ModelDraft multi-file round-trip persists deletions", () =>
         assert.deepEqual([...files.keys()].sort(), ["a.todl", "b.todl"]);
         const again = ModelDraft.fromSources([base], [...files].map(([uri, text]) => ({ uri, text })), { namespace: "app" });
         assert.deepEqual(again.ownInstances().map((e) => e.id), ["app.c1"]);
+    });
+});
+
+// An `annotate` block on a co-located term compiles to an annotation application node (no metaKind) hanging off the
+// term by an Annotated edge. It is schema, like the term: never an own instance, never re-emitted into a model block.
+class AnnotatedTermFixture
+{
+    public static readonly Uri = "model.todl";
+    public static readonly Namespace = "acme";
+    public static readonly Application = "acme.Kinds.Big@todl.icon";
+    public static readonly FileSeparator = "\n";
+    public static readonly Source = "namespace acme { concept Widget { label2 : string?; } "
+        + "taxonomy Kinds : represents Widget { term Big { annotate icon { path = \"big.svg\"; } } } "
+        + "model Shop : acme { Widget a1 { label2 = \"a\"; } } }\n";
+
+    public static Open(files: ReadonlyMap<string, string> = new Map([[AnnotatedTermFixture.Uri, AnnotatedTermFixture.Source]])): ModelDraft
+    {
+        return ModelDraft.fromSources([], [...files].map(([uri, text]) => ({ uri, text })), { namespace: AnnotatedTermFixture.Namespace });
+    }
+}
+
+describe("ModelDraft over a member whose co-located term is annotated", () =>
+{
+    test("the annotation application is frozen schema, not an own instance", () =>
+    {
+        const d = AnnotatedTermFixture.Open();
+        assert.deepEqual(d.ownInstances().map((e) => e.id), ["acme.a1"]);
+        assert.equal(d.Owns(AnnotatedTermFixture.Application), false);
+    });
+
+    test("an added instance round-trips without re-emitting the annotation into the model block, and still compiles", () =>
+    {
+        const d = AnnotatedTermFixture.Open();
+        d.add({ concept: "acme.Widget", id: "acme.a2", scalars: new Map([["label2", "b"]]) });
+        const files = d.toTodlByFile();
+        const text = [...files.values()].join(AnnotatedTermFixture.FileSeparator);
+        assert.equal(text.split("annotate icon").length - 1, 1, text);
+        assert.ok(!/icon\s+\w+\s*\{/.test(text.replace(/annotate icon/g, "")), text);
+        const again = AnnotatedTermFixture.Open(files);
+        assert.deepEqual(again.diagnostics.filter((x) => x.severity === Severity.Error), []);
+        assert.deepEqual(again.ownInstances().map((e) => e.id).sort(), ["acme.a1", "acme.a2"]);
     });
 });
