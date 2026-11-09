@@ -253,6 +253,8 @@ class TodlDraftEditor
 class WrittenFile
 {
     public Completed = false;
+    /** The session refused the write (EngineBridgeError Stale) and left the file untouched: nothing to restore. */
+    public Refused = false;
 
     public constructor(
         public readonly Owner: string,
@@ -272,6 +274,10 @@ class WrittenFile
      */
     public async Restore(): Promise<boolean>
     {
+        if (this.Refused)
+        {
+            return true;
+        }
         try
         {
             const current = await this.Session.ReadFile(this.Uri);
@@ -581,7 +587,10 @@ class TodlFileTransaction implements IConnectorTransaction
         return changed;
     }
 
-    /** Writes one file (already recorded, so a torn write is restored too); a failure is PersistFailed, caused by it. */
+    /**
+     * Writes one file (already recorded, so a torn write is restored too); a failure is PersistFailed, caused by it. A
+     * session's Stale refusal stays Stale and marks the file refused: it never reached storage, so it is not restored.
+     */
     private static async Write(file: WrittenFile): Promise<void>
     {
         try
@@ -591,6 +600,11 @@ class TodlFileTransaction implements IConnectorTransaction
         }
         catch (error)
         {
+            if (error instanceof EngineBridgeError && error.Code === EngineBridgeErrorCode.Stale)
+            {
+                file.Refused = true;
+                throw error;
+            }
             throw new EngineBridgeError(EngineBridgeErrorCode.PersistFailed, MessageFormat.Format(TodlFileTransaction.WriteMessage, file.Owner), error);
         }
     }

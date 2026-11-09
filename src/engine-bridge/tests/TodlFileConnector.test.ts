@@ -86,6 +86,10 @@ class ConnectorFx
     /** A model in another package that references a shop node. */
     public static readonly Other = { Model: 'other.p', Namespace: 'other', File: 'other.todl', Pin: 'other.Pin', Node: 'other.p', At: 'at', Text: 'namespace other { concept Pin { relationship at -> shop.Loc?; } model O : other { Pin p { at = shop.l1; } } }' };
     public static readonly DetachLocs = 'MATCH (l:`shop.Loc`) DETACH DELETE l';
+    /** Two models of one namespace declared in one file. */
+    public static readonly Duo = { First: 'duo.p1', Second: 'duo.p2', Namespace: 'duo', File: 'duo.todl', SchemaFile: 'schema.todl', Box: 'duo.Box', A: 'duo.a', B: 'duo.b', Schema: 'namespace duo { concept Box { name : string?; } }', Text: 'namespace duo { model A : duo { Box a { } } model B : duo { Box b { } } }' };
+    public static readonly Unrestored = /could not be restored/;
+    public static readonly OneUnrestored = /; 1 file\(s\) could not be restored/;
 
     public static Workspace(): MemoryModelWorkspace
     {
@@ -474,6 +478,40 @@ describe('TodlFileConnector', () =>
         ConnectorFx.AssertBridge(await ConnectorFx.Rejection(txn.Commit()), EngineBridgeErrorCode.PersistFailed);
         assert.equal(workspace.Files.get(Alpha.File), Alpha.Text);
         assert.equal(workspace.Files.get(Beta.File), Beta.Text);
+    });
+
+    test('a refused write is not counted as unrestored', async () =>
+    {
+        const { Duo } = ConnectorFx;
+        // Both models draft over one shared file: the first writes it, then the second's session refuses its write Stale.
+        const workspace = new MemoryModelWorkspace();
+        workspace.Add(Duo.First, Duo.Namespace, { [Duo.SchemaFile]: Duo.Schema, [Duo.File]: Duo.Text });
+        workspace.Add(Duo.Second, Duo.Namespace, { [Duo.SchemaFile]: Duo.Schema, [Duo.File]: Duo.Text });
+        workspace.Refuse(Duo.Second);
+        const connector = new TodlFileConnector(workspace);
+        const txn = await ConnectorFx.Applied(connector, [
+            ConnectorFx.Set(Duo.A, ConnectorFx.Name, 'A', Duo.Box, Duo.First),
+            ConnectorFx.Set(Duo.B, ConnectorFx.Name, 'B', Duo.Box, Duo.Second),
+        ]);
+        const error = ConnectorFx.AssertBridge(await ConnectorFx.Rejection(txn.Commit()), EngineBridgeErrorCode.Stale);
+        assert.doesNotMatch(error.message, ConnectorFx.Unrestored);
+        assert.equal(workspace.Files.get(Duo.File), Duo.Text, 'the first model' + "'" + 's write was restored');
+    });
+
+    test('a write that cannot be restored is still counted', async () =>
+    {
+        const { Alpha, Beta } = ConnectorFx;
+        const workspace = ConnectorFx.TwoModels(false);
+        const connector = new TodlFileConnector(workspace);
+        const txn = await ConnectorFx.Applied(connector, [
+            ConnectorFx.Set(Alpha.Node, ConnectorFx.Name, 'A', Alpha.Box, Alpha.Model),
+            ConnectorFx.Set(Beta.Node, ConnectorFx.Name, 'B', Beta.Box, Beta.Model),
+        ]);
+        workspace.FailWriteAt = 2;
+        workspace.FailRest = true;
+        const error = ConnectorFx.AssertBridge(await ConnectorFx.Rejection(txn.Commit()), EngineBridgeErrorCode.PersistFailed);
+        assert.match(error.message, ConnectorFx.OneUnrestored);
+        assert.match(workspace.Files.get(Alpha.File)!, /name = "A"/, 'alpha\'s write could not be put back');
     });
 
     test('a commit waits for the in-flight commit of its model, then sees it stale', async () =>

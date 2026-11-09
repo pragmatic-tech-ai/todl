@@ -29,7 +29,12 @@ export interface ITodlDraftSession
     CurrentSourceHash(): Promise<string>;
     /** The file's text, or undefined when it does not exist. */
     ReadFile(uri: string): Promise<string | undefined>;
-    /** Creates or replaces the file; a file written for the model becomes one of its sources (and enters its hash). */
+    /**
+     * Creates or replaces the file; a file written for the model becomes one of its sources (and enters its hash). A
+     * session may refuse by throwing `EngineBridgeError` with code `Stale`, leaving the file untouched (e.g. a
+     * per-file compare-and-swap: the file changed since the session opened); the commit then fails Stale and the
+     * refused write is not restored.
+     */
     WriteFile(uri: string, text: string): Promise<void>;
     /**
      * Deletes the file (used to compensate a file a commit created). A deleted file leaves the model's sources, so it

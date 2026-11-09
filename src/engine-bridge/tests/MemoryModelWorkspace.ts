@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { ModelDraft } from '../../authoring/model-draft.js';
 import type { Repository } from '../../compiler-services/model/model.js';
+import { EngineBridgeError, EngineBridgeErrorCode } from '../EngineBridgeError.js';
 import type { ITodlDraftSession, ITodlModelWorkspace } from '../TodlModelWorkspace.js';
 
 /** One editable model of the memory workspace: its namespace and the uris of its source files. */
@@ -42,6 +43,10 @@ class MemoryDraftSession implements ITodlDraftSession
 
     public WriteFile(uri: string, text: string): Promise<void>
     {
+        if (this.workspace.Refuses(this.model))
+        {
+            return Promise.reject(new EngineBridgeError(EngineBridgeErrorCode.Stale, MemoryModelWorkspace.RefusedMessage));
+        }
         return this.workspace.Write(this.model, uri, text);
     }
 
@@ -57,7 +62,8 @@ class MemoryDraftSession implements ITodlDraftSession
 /**
  * The test seam: models over in-memory files, drafts built with ModelDraft.fromSources. Hooks: OnOpen (after each
  * OpenDraft, with the running count), Gate (the next WriteFile waits on it, once), FailWriteAt (the n-th WriteFile,
- * 1-based, throws; with TornWrite it first stores half its text), and Log (every completed write / delete, in order).
+ * 1-based, throws; with TornWrite it first stores half its text; with FailRest every later write throws too),
+ * Refuse (every write by a model's sessions is refused Stale, storing nothing), and Log (every completed write / delete, in order).
  * A model's drafts are built over its Bases (other packages it references).
  */
 export class MemoryModelWorkspace implements ITodlModelWorkspace
@@ -68,6 +74,7 @@ export class MemoryModelWorkspace implements ITodlModelWorkspace
     private static readonly HexEncoding = 'hex';
     private static readonly Separator = '\u0000';
     public static readonly WriteFailure = 'simulated write failure';
+    public static readonly RefusedMessage = 'simulated stale refusal';
 
     public readonly Files = new Map<string, string>();
     public readonly Log: string[] = [];
@@ -76,8 +83,11 @@ export class MemoryModelWorkspace implements ITodlModelWorkspace
     public FailWriteAt: number | undefined;
     /** With FailWriteAt: the failing write first stores the first half of its text (a torn, non-atomic write). */
     public TornWrite = false;
+    /** With FailWriteAt: every write after the failing one fails too (so restores fail). */
+    public FailRest = false;
 
     private readonly models = new Map<string, MemoryModel>();
+    private readonly refused = new Set<MemoryModel>();
     private opened = 0;
     private writes = 0;
 
@@ -85,6 +95,19 @@ export class MemoryModelWorkspace implements ITodlModelWorkspace
     public FailWrite(n: number): void
     {
         this.FailWriteAt = this.writes + n;
+    }
+
+    /** Makes every write by `model`'s sessions refuse with EngineBridgeError Stale, storing nothing. */
+    public Refuse(model: string): void
+    {
+        const entry = this.models.get(model);
+        if (entry !== undefined) this.refused.add(entry);
+    }
+
+    /** @internal True when the model's writes are refused. */
+    public Refuses(model: MemoryModel): boolean
+    {
+        return this.refused.has(model);
     }
 
     /** Registers `model` with its namespace and source files. */
@@ -142,7 +165,7 @@ export class MemoryModelWorkspace implements ITodlModelWorkspace
             await gate;
         }
         this.writes++;
-        if (this.FailWriteAt === this.writes)
+        if (this.FailWriteAt === this.writes || (this.FailRest && this.FailWriteAt !== undefined && this.writes > this.FailWriteAt))
         {
             if (this.TornWrite)
             {
