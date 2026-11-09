@@ -390,6 +390,13 @@ record it consumes is exactly what codegen's authoring constructors emit.
 `@pragmatic-tech-ai/graph` engine. It is the only folder that imports the engine;
 `EngineFree.test.ts` proves the root barrel never reaches it.
 
+The engine is an **optional peer dependency** of todl (`peerDependencies` +
+`peerDependenciesMeta.optional`, range `^0.1.1`; a devDependency for todl's own
+tests), so consumers that never import `./engine` (Plexus, browsers) do not pull
+in the engine or its native `lmdb` storage. A host that imports
+`@pragmatic-tech-ai/todl/engine` installs `@pragmatic-tech-ai/graph` itself
+(`npm install @pragmatic-tech-ai/graph@^0.1.1`).
+
 - `SnapshotDescriber.Describe(snapshot, options)` turns a `MetadataSnapshot` into an
   engine `ISchemaDescription`: concepts and aspects under the reserved `todl.Element`
   root, taxonomy terms as `todl.Term` nodes, one seed node per instance (Owner = the
@@ -760,8 +767,9 @@ and **`default`** → compiled `./dist/**/*.js`. In-repo tooling and tests run w
 `tsx --conditions=development`, importing TypeScript source directly; published
 consumers get `dist`. The published package ships only `dist` and `README.md`.
 
-**Dependencies:** `@pragmatic-tech-ai/graph` (the graph engine; imported only
-by `src/engine-bridge/`, so the root barrel stays engine-free),
+**Dependencies:** `@pragmatic-tech-ai/graph` (the graph engine, an optional
+peer dependency: imported only by `src/engine-bridge/`, so the root barrel stays
+engine-free; hosts of `./engine` install it themselves, see §7),
 `@pragmatic-tech-ai/mural` (the UI/visual-engine framework —
 `Application`, `HtmlTarget`, Material theme, `Observable`) and
 `@pragmatic-tech-ai/todl-runtime` (the DI + reactive substrate —
