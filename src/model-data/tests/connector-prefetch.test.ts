@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { ServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
-import { DataSourceKind, WriteConcurrency, WriteAtomicity, type ConnectorBinding, type ConnectorSpec, type ModelConnectorPlan, type ResolvedConnection } from "../connector-plan.js";
+import { DataSourceKind, QueryCompareOp, WriteConcurrency, WriteAtomicity, type ConnectorBinding, type ConnectorSpec, type ModelConnectorPlan, type ResolvedConnection } from "../connector-plan.js";
 import { DataSourceAdapterCatalog } from "../data-source-adapter-catalog.js";
 import type { IDataSourceAdapter, IDataSourceAdapterFactory } from "../data-source-adapter.js";
 import { ConnectorPrefetch, type INodeReflector } from "../connector-prefetch.js";
@@ -213,4 +213,28 @@ test("a resolved adapter whose Query rejects propagates the error (not fail-clos
     await assert.rejects(
         ConnectorPrefetch.ForConcepts([Fixture.Concept], Fixture.Plan, catalog, new ServiceProvider(), new StubReflector()),
         /query exploded/);
+});
+
+test("an installed filter provider is pushed into the source query in external field names", async () =>
+{
+    const factory = new RecordingFactory(DataSourceKind.Sql);
+    const catalog = new DataSourceAdapterCatalog().Register(factory);
+    const binding: ConnectorBinding = { ...Fixture.Binding, FieldMap: { id: "pk", label: "name" } };
+    const plan: ModelConnectorPlan = { ...Fixture.Plan, Bindings: [binding] };
+    const filters = { WhereFor: (concept: string) => (concept === Fixture.Concept ? { All: [
+        { Field: "label", Op: QueryCompareOp.Eq, Value: "Alpha" },
+        { Field: "unmapped", Op: QueryCompareOp.Eq, Value: "x" },
+    ] } : undefined) };
+
+    await ConnectorPrefetch.ForConcepts([Fixture.Concept], plan, catalog, new ServiceProvider(), new StubReflector(), filters);
+
+    assert.deepEqual(factory.Adapter.LastRequest!.Where, { All: [{ Field: "name", Op: QueryCompareOp.Eq, Value: "Alpha" }] });
+});
+
+test("without a filter provider the source query carries no Where", async () =>
+{
+    const factory = new RecordingFactory(DataSourceKind.Sql);
+    const catalog = new DataSourceAdapterCatalog().Register(factory);
+    await ConnectorPrefetch.ForConcepts([Fixture.Concept], Fixture.Plan, catalog, new ServiceProvider(), new StubReflector());
+    assert.equal(factory.Adapter.LastRequest!.Where, undefined);
 });

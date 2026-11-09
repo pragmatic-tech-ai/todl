@@ -7,7 +7,8 @@ export { CypherUnparser } from "./unparser.js";
 export { CypherQuery, Pattern, Expr, Return, NodeBuilder, ExprBuilder, Fn, Sort, Hops } from "./fluent.js";
 export type { ExprArg } from "./fluent.js";
 export { CypherValue, ScalarValue, NullValue, NodeValue, NodeRefValue } from "./values.js";
-export type { CypherValueDto, ParameterValue } from "./values.js";
+export type { CypherValueDto, NodeCellDto, ParameterValue } from "./values.js";
+export { CypherCellCodec } from "./cell-codec.js";
 export { ListValue, MapValue, RelValue, PathValue } from "./values-structured.js";
 export type { RelDto } from "./values-structured.js";
 export { GraphQueryAdapter } from "./graph.js";
@@ -17,5 +18,7 @@ export { CypherError, CypherSyntaxError, CypherSemanticError, CypherTimeout, Cyp
 export { Deadline } from "./execution-limits.js";
 export type { ExecutionLimits, ICancellation } from "./execution-limits.js";
 export { ReferencedLabels } from "./referenced-labels.js";
+export { CypherPushDown, CypherQueryFilterProvider, GraphQuerySchema } from "./push-down.js";
+export type { ICypherSchema } from "./push-down.js";
 export { CypherWriteStats } from "./writer.js";
 export type { ICypherWriter, CypherWriteStatsDto } from "./writer.js";

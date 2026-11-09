@@ -17,7 +17,7 @@ const DataPath = "generated/data.ts";
 const OldAppContent = "Application { StackPanel { /* the user's old UI */ } }";
 const NewAppContent = "// hand-edited new app";
 const ModelContent = "export interface Widget { label?: string }";
-const ModelSource = "namespace acme { concept Widget { label : string?; } }";
+const ModelSource = "namespace acme { concept Widget { } }";
 
 class Fixture
 {

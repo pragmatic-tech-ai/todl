@@ -10,7 +10,7 @@ const errs = (ds: { code: DiagnosticCode; severity: string }[]) =>
 test("a bare sibling term reference resolves within the taxonomy", () => {
   const { diagnostics } = check([{ uri: "t.todl", text:
     `namespace n {
-       concept Location { label : string; }
+       concept Location { }
        taxonomy Geo : represents Location {
          Location azure { label = "A"; }
          Location m365  { label = "M"; parent = azure; }
@@ -22,8 +22,8 @@ test("a bare sibling term reference resolves within the taxonomy", () => {
 test("a bare cross-taxonomy reference resolves through `uses`", () => {
   const base = toJSON(check([{ uri: "base.todl", text:
     `namespace ea {
-       concept Category { label : string; }
-       concept Technology { label : string; applicableTo : Categories; }
+       concept Category { }
+       concept Technology { applicableTo : Categories; }
        taxonomy Categories : represents Category { term PlatformApi { label = "API"; } }
      }` }]).model);
   const { diagnostics } = checkAgainst([base], [{ uri: "lib.todl", text:
@@ -39,8 +39,8 @@ test("a bare cross-taxonomy reference resolves through `uses`", () => {
 test("without `uses`, the same cross reference is undefined", () => {
   const base = toJSON(check([{ uri: "base.todl", text:
     `namespace ea {
-       concept Category { label : string; }
-       concept Technology { label : string; applicableTo : Categories; }
+       concept Category { }
+       concept Technology { applicableTo : Categories; }
        taxonomy Categories : represents Category { term PlatformApi { label = "API"; } }
      }` }]).model);
   const { diagnostics } = checkAgainst([base], [{ uri: "lib.todl", text:
@@ -55,7 +55,7 @@ test("without `uses`, the same cross reference is undefined", () => {
 test("a bare name defined by two used taxonomies is ambiguous", () => {
   const { diagnostics } = check([{ uri: "t.todl", text:
     `namespace n {
-       concept C { label : string; ref : A; }
+       concept C { ref : A; }
        taxonomy A : represents C { term Dup { label = "1"; } }
        taxonomy B : represents C { term Dup { label = "2"; } }
        taxonomy User : represents C uses A, B {
@@ -72,7 +72,7 @@ test("a bare term resolves as the value of a taxonomy-typed field, with no `uses
          term AiAgent  { label = "AI Agent"; }
          term Database { label = "Database"; }
        }
-       concept Component { label : string; category : ComponentCategory; }
+       concept Component { category : ComponentCategory; }
        model Acme : acme {
          Component a { label = "A"; category = AiAgent; }
          Component b { label = "B"; category = ComponentCategory.Database; }

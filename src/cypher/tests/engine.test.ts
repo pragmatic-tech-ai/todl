@@ -6,6 +6,7 @@ import { Manifest } from "../../manifest/reflection/reflection.js";
 import { ManifestWriter } from "../../manifest/manifest-writer.js";
 import type { LogicalManifest } from "../../manifest/logical.js";
 import type { ReflectedNode } from "../../manifest/reflection/reflection.js";
+import { CypherCellCodec } from "../cell-codec.js";
 import { CypherEngine } from "../engine.js";
 import { CypherQuery, Pattern, Expr, Return } from "../fluent.js";
 import { NodeValue, ScalarValue, NullValue } from "../values.js";
@@ -81,7 +82,7 @@ describe("CypherEngine (integration)", () =>
     test("returned node projects to a ReflectedEntity through its reader", () =>
     {
         const result = EngineFixture.Engine().Execute("MATCH (a:Service) WHERE a.name = 'checkout' RETURN a");
-        const node = result.Rows[0][0] as NodeValue;
+        const node = result.Rows[0]![0] as NodeValue;
         assert.equal(node.Concept, "Service");
         assert.equal(node.Reader().field("name"), "checkout");
     });
@@ -89,14 +90,14 @@ describe("CypherEngine (integration)", () =>
     test("missing property reads as null in RETURN", () =>
     {
         const result = EngineFixture.Engine().Execute("MATCH (a:Service) WHERE a.name = 'checkout' RETURN a.ghost AS g");
-        assert.ok(result.Rows[0][0] instanceof NullValue);
+        assert.ok(result.Rows[0]![0] instanceof NullValue);
     });
 
-    test("ToDto serializes node cells via the snapshot projector", () =>
+    test("ToDto serializes node cells via the snapshot projector, under the $node discriminator", () =>
     {
         const result = EngineFixture.Engine().Execute("MATCH (a:Service) WHERE a.name = 'checkout' RETURN a");
         const dto = CypherEngine.ToDto(result);
-        const cell = dto.Rows[0][0] as { id: string; concept: string };
+        const cell = CypherCellCodec.AsNode(dto.Rows[0]![0])!;
         assert.equal(cell.id, "a");
         assert.equal(cell.concept, "Service");
     });

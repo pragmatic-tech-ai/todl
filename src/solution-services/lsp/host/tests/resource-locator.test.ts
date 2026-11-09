@@ -40,9 +40,9 @@ describe('ResourceLocator', () =>
         const loc = new ResourceLocator(g.Model, g.OriginOf, new FakeStorage());
         const res = loc.Resources('lib.MS.azure');
         assert.equal(res.length, 1);
-        assert.equal(res[0].path, 'resources/azure.svg');
-        assert.ok(res[0].storage, 'resolved to the member source storage');
-        assert.equal(res[0].storage, msStorage);
+        assert.equal(res[0]!.path, 'resources/azure.svg');
+        assert.ok(res[0]!.storage, 'resolved to the member source storage');
+        assert.equal(res[0]!.storage, msStorage);
     });
 
     test('a resource annotation without a path is skipped (no throw)', async () =>
@@ -69,8 +69,8 @@ describe('ResourceLocator', () =>
         const loc = new ResourceLocator(g.Model, g.OriginOf, new FakeStorage());
         const res = loc.Resources('lib.MS.azure');
         assert.equal(res.length, 1);
-        assert.equal(res[0].annotation, 'ea.thumbnail');
-        assert.equal(res[0].path, 'resources/t.png');
+        assert.equal(res[0]!.annotation, 'ea.thumbnail');
+        assert.equal(res[0]!.path, 'resources/t.png');
         assert.deepEqual(g.Model.supertypesOf('ea.thumbnail').includes('todl.MuralResource'), true);
     });
 });

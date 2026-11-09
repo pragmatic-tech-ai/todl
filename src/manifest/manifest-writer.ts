@@ -260,6 +260,17 @@ export class ManifestWriter
      * `TypeInfo` row, so every coded reference resolves within this manifest.
      * Cross-manifest `Imports`/`TypeRef` lowering is a SPEC-06/Domain concern.
      */
+    private static readonly NamespaceSeparator = ".";
+
+    /** A qualified id split at its last dot into interned (local name, namespace); no dot -> (id, 0 = no namespace).
+     *  So TypeInfo.name is the simple name and fullName (namespace + "." + name) round-trips the id. */
+    private static SplitQualified(w: ManifestWriter, id: string): [number, number]
+    {
+        const dot = id.lastIndexOf(ManifestWriter.NamespaceSeparator);
+        if (dot <= 0 || dot === id.length - 1) return [w.internString(id), 0];
+        return [w.internString(id.slice(dot + 1)), w.internString(id.slice(0, dot))];
+    }
+
     static fromLogical(m: LogicalManifest): ManifestWriter
     {
         const w = new ManifestWriter(m.model, m.version);
@@ -368,9 +379,10 @@ export class ManifestWriter
                 });
             }
             const [cAnnotStart, cAnnotCount] = packAnnotations(c.annotations);
+            const [cname, cns] = ManifestWriter.SplitQualified(w, cid);
             w.addTypeInfo({
-                name: w.internString(cid),
-                ns: 0,
+                name: cname,
+                ns: cns,
                 kind: MetaKind.Concept,
                 extends: c.extends !== null ? coded(c.extends) : 0,
                 fieldStart,
@@ -384,8 +396,9 @@ export class ManifestWriter
         // Synthesized primitive TypeInfo rows (kind Primitive, no members).
         for (const pid of primitiveIds)
         {
+            const [pname, pns] = ManifestWriter.SplitQualified(w, pid);
             w.addTypeInfo({
-                name: w.internString(pid), ns: 0, kind: MetaKind.Primitive,
+                name: pname, ns: pns, kind: MetaKind.Primitive,
                 extends: 0, fieldStart: 0, fieldCount: 0, relStart: 0, relCount: 0,
                 annotStart: 0, annotCount: 0,
             });
@@ -393,8 +406,9 @@ export class ManifestWriter
         // Synthesized annotation-type TypeInfo rows (kind Annotation, no members).
         for (const aid of annotationIds)
         {
+            const [aname, ans] = ManifestWriter.SplitQualified(w, aid);
             w.addTypeInfo({
-                name: w.internString(aid), ns: 0, kind: MetaKind.Annotation,
+                name: aname, ns: ans, kind: MetaKind.Annotation,
                 extends: 0, fieldStart: 0, fieldCount: 0, relStart: 0, relCount: 0,
                 annotStart: 0, annotCount: 0,
             });

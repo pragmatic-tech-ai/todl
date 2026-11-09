@@ -164,9 +164,12 @@ export class ManifestModel
     ancestorsViaExtends(type: string): string[]
     {
         const chain: string[] = [];
+        // Visited set stops a cyclic `extends` chain at the first repeat.
+        const visited = new Set<string>([type]);
         let current = this.data.concepts[type]?.extends ?? null;
-        while (current !== null)
+        while (current !== null && !visited.has(current))
         {
+            visited.add(current);
             chain.push(current);
             current = this.data.concepts[current]?.extends ?? null;
         }

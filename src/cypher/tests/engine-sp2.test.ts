@@ -6,7 +6,7 @@ import { Manifest } from "../../manifest/reflection/reflection.js";
 import { ManifestWriter } from "../../manifest/manifest-writer.js";
 import type { LogicalManifest } from "../../manifest/logical.js";
 import type { ReflectedNode } from "../../manifest/reflection/reflection.js";
-import type { MirrorSnapshot } from "../../graph-api/index.js";
+import { CypherCellCodec } from "../cell-codec.js";
 import { SnapshotReader } from "../../reflection-client/index.js";
 import { CypherEngine } from "../engine.js";
 import { CypherQuery, Pattern, Expr, Return, Sort, Fn } from "../fluent.js";
@@ -284,18 +284,18 @@ describe("CypherEngine SP2 read-plus (end-to-end)", () =>
         assert.deepEqual(row[0], [1, 2]);
         assert.deepEqual(row[1], { k: "v" });
         assert.deepEqual(row[2], [{ from: "s1", type: "calls", to: "s2" }]);
-        const path = row[3] as unknown as { nodes: MirrorSnapshot[]; relationships: unknown[] };
-        assert.deepEqual(path.nodes.map((n) => n.id), ["s1", "s2"]);
+        const path = row[3] as unknown as { nodes: unknown[]; relationships: unknown[] };
+        assert.deepEqual(path.nodes.map((n) => CypherCellCodec.AsNode(n)!.id), ["s1", "s2"]);
         assert.deepEqual(path.relationships, [{ from: "s1", type: "calls", to: "s2" }]);
         assert.ok(r.Rows[0]![3] instanceof PathValue);
     });
 
-    test("node nested in nodes(p) DTO is a MirrorSnapshot that SnapshotReader rehydrates", () =>
+    test("node nested in nodes(p) DTO is a $node cell whose snapshot SnapshotReader rehydrates", () =>
     {
         const r = e.Execute("MATCH p = (a:Service)-[:calls*2..2]->(b) WHERE a.name = 'checkout' RETURN nodes(p) AS ns");
         const dto = CypherEngine.ToDto(r);
-        const list = dto.Rows[0]![0] as unknown as MirrorSnapshot[];
-        const reader = new SnapshotReader(list[1]!);
+        const list = dto.Rows[0]![0] as unknown[];
+        const reader = new SnapshotReader(CypherCellCodec.AsNode(list[1])!);
         assert.equal(reader.id, "s2");
         assert.equal(reader.concept, "Service");
         assert.equal(reader.field("name"), "ledger");
@@ -708,5 +708,66 @@ describe("Execute limits", () =>
         assert.equal(live.Rows.length, plain.Rows.length);
         assert.equal(stub.Rows.length, plain.Rows.length);
         assert.equal(live.Truncated, false);
+    });
+});
+
+describe("CypherEngine projection column names are unique", () =>
+{
+    const e = Sp2Fixture.Engine();
+
+    test("RETURN with two items aliased to the same name is a semantic error (no silent collapse)", () =>
+    {
+        assert.throws(() => e.Execute("MATCH (a:Service) RETURN a.name AS n, a.kind AS n"), CypherSemanticError);
+    });
+
+    test("two implicit columns with the same name are a semantic error", () =>
+    {
+        assert.throws(() => e.Execute("MATCH (a:Service) RETURN a.name, a.name"), CypherSemanticError);
+    });
+
+    test("WITH duplicate names are a semantic error (the downstream variable would be ambiguous)", () =>
+    {
+        assert.throws(() => e.Execute("MATCH (a:Service) WITH a.name AS n, a.kind AS n RETURN n"), CypherSemanticError);
+    });
+
+    test("the same expression under two distinct names is still fine", () =>
+    {
+        const r = e.Execute("MATCH (a:Service {name: 'ledger'}) RETURN a.name AS x, a.name AS y");
+        assert.deepEqual(Sp2Fixture.Pairs(r), [["ledger", "ledger"]]);
+    });
+});
+
+describe("CypherEngine WHERE NOT / IS NULL / bare arrows (end-to-end)", () =>
+{
+    const e = Sp2Fixture.Engine();
+
+    test("WHERE NOT negates the predicate", () =>
+    {
+        const r = e.Execute("MATCH (a:Service) WHERE NOT a.kind = 'core' RETURN a.name AS n ORDER BY n");
+        assert.deepEqual(Sp2Fixture.Col(r, 0), ["audit", "checkout", "lonely"]);
+    });
+
+    test("IS NOT NULL keeps every node with the property; IS NULL keeps none", () =>
+    {
+        assert.deepEqual(Sp2Fixture.Col(e.Execute("MATCH (a:Service) WHERE a.kind IS NOT NULL RETURN count(a) AS c"), 0), [6]);
+        assert.deepEqual(Sp2Fixture.Col(e.Execute("MATCH (a:Service) WHERE a.kind IS NULL RETURN count(a) AS c"), 0), [0]);
+    });
+
+    test("bare --> follows outgoing edges of any type", () =>
+    {
+        const r = e.Execute("MATCH (a:Service {name: 'billing'})-->(b) RETURN b.name AS n ORDER BY n");
+        assert.deepEqual(Sp2Fixture.Col(r, 0), ["audit", "checkout"]);
+    });
+
+    test("bare <-- follows incoming edges of any type", () =>
+    {
+        const r = e.Execute("MATCH (a:Service {name: 'ledger'})<--(b) RETURN b.name AS n ORDER BY n");
+        assert.deepEqual(Sp2Fixture.Col(r, 0), ["checkout", "vault"]);
+    });
+
+    test("bare -- follows edges in both directions", () =>
+    {
+        const r = e.Execute("MATCH (a:Service {name: 'billing'})--(b) RETURN b.name AS n ORDER BY n");
+        assert.deepEqual(Sp2Fixture.Col(r, 0), ["audit", "checkout", "ledger"]);
     });
 });

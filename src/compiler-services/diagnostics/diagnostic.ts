@@ -119,6 +119,23 @@ export enum DiagnosticCode
   // Solution composition phase (SPEC-06): a member/dependency package could not
   // be resolved or loaded into the composed Domain.
   PackageUnresolved = "package.unresolved",
+  // Type-model aspects (R2): base-list ordering and aspect inclusion rules.
+  ConceptBaseNotFirst = "type.concept-base-not-first",
+  MultipleParentConcepts = "type.multiple-parent-concepts",
+  AspectIncludesNonAspect = "type.aspect-includes-non-aspect",
+  DuplicateBase = "type.duplicate-base",
+  // Type-model rules (R4/R5/R7/R11): no overriding, collisions are errors, aspects are not instance types.
+  MemberRedeclared = "type.member-redeclared",
+  MemberCollision = "type.member-collision",
+  AspectNotInstantiable = "type.aspect-not-instantiable",
+  DeriveTargetNotContributed = "type.derive-target-not-contributed",
+  InheritanceCycle = "type.inheritance-cycle",
+  MultipleExtendsEdges = "type.multiple-extends-edges",
+  MalformedDerives = "type.malformed-derives",
+  // Type-model follow-ups (R6/R7): derived members, member-annotation targets, duplicate derives.
+  DerivedMemberAssigned = "type.derived-member-assigned",
+  MemberAnnotationTargetInvalid = "type.member-annotation-target-invalid",
+  DuplicateDerive = "type.duplicate-derive",
 }
 
 export interface Diagnostic

@@ -8,7 +8,7 @@ import { NodeFsStorage } from '@pragmatic-tech-ai/todl-runtime/node'
 import { ProjectNodeKind } from '../../core/project.js'
 import { MetaModelProjectFactory } from '../meta-model-project-factory.js'
 
-const META = 'namespace acme { concept Widget { label : string?; } }'
+const META = 'namespace acme { concept Widget { } }'
 
 async function tempDir(t: TestContext): Promise<NodeFsStorage>
 {

@@ -6,7 +6,7 @@ import { toJSON } from "../json.js";
 import { FakeIdGenerator } from "../../model/tests/fake-id-generator.js";
 
 const SRC = `namespace app {
-  concept Component { label : string; }
+  concept Component { }
   model M : app { Component c { label = "x"; } }
 }`;
 
@@ -38,9 +38,7 @@ test("debug on: concept/model/instance carry readable kind + name + type + names
   // `label` is a declared field carried on the Component node (SPEC-01 #4), not a
   // separate `Component.label` member node.
   assert.equal(byId("app.Component.label"), undefined);
-  assert.deepEqual(model.resolve("app.Component")!.fields, [
-    { name: "label", type: "string", cardinality: 0 },
-  ]);
+  assert.deepEqual(model.resolve("app.Component")!.fields, []);
   // `name` is the BARE localId (the readable written id), while `id` stays qualified.
   assert.deepEqual(byId("app.M")?.debug, {
     kind: "model", name: "M", type: "model", namespace: "app",

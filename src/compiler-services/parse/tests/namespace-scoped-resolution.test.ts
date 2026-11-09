@@ -17,8 +17,8 @@ const errs = (ds: { code: DiagnosticCode; severity: string }[]) =>
 // A base in namespace `ea`: concepts + a taxonomy with a term.
 const base = () => toJSON(check([{ uri: "ea.todl", text:
   `namespace ea {
-     concept Category { label : string; }
-     concept Technology { label : string; applicableTo : Categories; }
+     concept Category { }
+     concept Technology { applicableTo : Categories; }
      taxonomy Categories : represents Category { term PlatformApi { label = "API"; } }
    }` }]).model);
 
@@ -74,7 +74,7 @@ test("prelude symbols (element, string) are reachable everywhere without an impo
   // `concept x { … }` implicitly extends the prelude root `element`, and the
   // field type `string` is a prelude primitive — both must resolve with no import.
   const { diagnostics } = check([{ uri: "n.todl", text:
-    `namespace faraway { concept x { label : string; } }` }]);
+    `namespace faraway { concept x { } }` }]);
   assert.deepEqual(errs(diagnostics), []);
 });
 
@@ -84,7 +84,7 @@ test("a flat dotted term id (taxonomy.term) still resolves as the term, not a na
   // before any namespace-strip is attempted.
   const { diagnostics } = check([{ uri: "n.todl", text:
     `namespace n {
-       concept location { label : string; parent : location?; }
+       concept location { parent : location?; }
        taxonomy geo : represents location {
          location azure { label = "A"; }
          location m365  { label = "M"; parent = geo.azure; }
@@ -98,7 +98,7 @@ test("a prelude annotation applies from any namespace without importing `todl`",
   // namespace must resolve — the prelude is implicitly imported everywhere.
   const { diagnostics } = check([{ uri: "n.todl", text:
     `namespace faraway {
-       concept location { label : string; }
+       concept location { }
        taxonomy geo : represents location {
          location azure { label = "A"; annotate icon { path = "a.svg"; } }
        }
@@ -109,7 +109,7 @@ test("a prelude annotation applies from any namespace without importing `todl`",
 test("every reference site is namespace-gated: qualified resolves, bare cross-ns needs import", () => {
   // A base with a concept in namespace ea.
   const b = toJSON(check([{ uri: "ea.todl", text:
-    `namespace ea { concept thing { label : string?; } }` }]).model);
+    `namespace ea { concept thing { } }` }]).model);
 
   // Qualified names at extends, field type, record concept, and model bindings —
   // all resolve WITHOUT an import (explicit qualifier).

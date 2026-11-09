@@ -151,7 +151,7 @@ describe("VarLengthExpand", () =>
         const incoming = new FakeGraph({ c: ["b"] });
         const rows = VarFixtures.Run(incoming, "c", 1, 1, VarFixtures.PathVar, RelDirection.Incoming);
         assert.equal(rows.length, 1);
-        const rel = (rows[0].Get(VarFixtures.PathVar) as PathValue).Rels[0];
+        const rel = (rows[0]!.Get(VarFixtures.PathVar) as PathValue).Rels[0]!;
         assert.equal(rel.FromId, "b");
         assert.equal(rel.ToId, "c");
     });
@@ -160,11 +160,11 @@ describe("VarLengthExpand", () =>
     {
         const rows = VarFixtures.Run(chain, "a", 2, 2, VarFixtures.PathVar);
         assert.equal(rows.length, 1);
-        const path = rows[0].Get(VarFixtures.PathVar) as PathValue;
+        const path = rows[0]!.Get(VarFixtures.PathVar) as PathValue;
         assert.ok(path instanceof PathValue);
         assert.equal(path.Length(), 2);
         assert.deepEqual(path.Nodes.map(n => n.Id), ["a", "b", "c"]);
-        assert.equal(path.Rels[0].FromId, "a");
-        assert.equal(path.Rels[1].ToId, "c");
+        assert.equal(path.Rels[0]!.FromId, "a");
+        assert.equal(path.Rels[1]!.ToId, "c");
     });
 });

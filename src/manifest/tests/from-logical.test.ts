@@ -18,23 +18,25 @@ function logical(): LogicalManifest
     version: "1.0.0",
     root: "Element",
     concepts: {
-      Element: { extends: null, fields: {}, relationships: {}, invariants: [] },
+      Element: { extends: null, fields: {}, relationships: {}, invariants: [], annotations: [] },
       Component: {
         extends: "Element",
         fields: { name: { type: "string", card: "1" }, color: { type: "string", card: "?" } },
-        relationships: { dependsOn: { targets: ["Component"], card: "*", inverse: "usedBy" } },
+        relationships: { dependsOn: { targets: ["Component"], card: "*", inverse: "usedBy", annotations: [] } },
         invariants: [],
+        annotations: [],
       },
       Surface: {
         extends: "Component",
         fields: { color: { type: "string", card: "1" } },
         relationships: {},
         invariants: [],
+        annotations: [],
       },
     },
     classes: {
       "Components.Surface": {
-        concept: "Surface", taxonomy: "ComponentKinds", narrower: [], fixed: { color: "red" },
+        concept: "Surface", taxonomy: "ComponentKinds", narrower: [], fixed: { color: "red" }, annotations: [],
       },
     },
     taxonomies: {

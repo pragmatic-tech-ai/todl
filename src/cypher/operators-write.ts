@@ -10,6 +10,9 @@ import { Binding, EvalContext } from "./binding.js";
 import { CypherValue, NodeValue, NodeRefValue, ScalarValue, NullValue } from "./values.js";
 import { MapValue } from "./values-structured.js";
 import { CypherSemanticError } from "./errors.js";
+import { CancelProbe, type ICancellation } from "./execution-limits.js";
+import { RelOrientation } from "./operators.js";
+import type { IOptionalPlan } from "./operators-optional.js";
 
 // Shared helpers for the write operators (no module-level free functions).
 class WriteSupport
@@ -22,10 +25,16 @@ class WriteSupport
     public static readonly VarLengthCreate = "variable-length relationships cannot be created";
     public static readonly NotAScalar = "property value must be a scalar, null, or a node";
     public static readonly MergeMapNotMap = "SET n += requires a map";
+    public static readonly ReplaceNotMap = "SET n = requires a map";
+    public static readonly ReplaceCreatedNode = "SET n = {map} cannot replace the properties of a node created earlier in the same query (intra-query read-your-writes is unsupported)";
     public static readonly NullEndpoint = "cannot create a relationship from a null node variable";
     public static readonly MergeNeedsNode = "MERGE requires a node pattern";
     public static readonly MergeBoundNotNode = "MERGE variable is bound to a non-node value";
     public static readonly MergeBoundNull = "MERGE variable is bound to null";
+    public static readonly MergeBoundConstrained = "MERGE cannot add a label or properties to an already-bound variable";
+    public static readonly MergePathVariable = "a path variable is not supported in MERGE";
+    public static readonly BoundMark = "b";
+    public static readonly NewMark = "n";
 
     public static NodeId(value: CypherValue | undefined): string | undefined
     {
@@ -45,22 +54,50 @@ class WriteSupport
     {
         return expr.Evaluate(new EvalContext(row, parameters));
     }
+
+    // A node this query just created: a live mirror when the read graph overlays uncommitted writes (read-your-writes),
+    // else an id-only reference whose fields are not readable until commit.
+    public static Created(graph: ICypherGraph, id: string): CypherValue
+    {
+        const mirror = graph.Reflect(id);
+        return mirror === undefined ? new NodeRefValue(id) : new NodeValue(mirror);
+    }
 }
 
-export class CreateOperator implements IOperator
+// Drains its input completely before yielding a row. Placed around write clauses when the write overlay is active, so
+// every read feeding a write finishes before the write starts (no Halloween re-reads of its own effects) and the write
+// finishes before anything above reads the graph: openCypher's clause-at-a-time semantics (Neo4j's "Eager" operator).
+export class EagerBarrier implements IOperator
 {
-    constructor(
-        private readonly child: IOperator,
-        private readonly clause: CreateClause,
-        private readonly graph: ICypherGraph,
-        private readonly writer: ICypherWriter,
-    )
+    constructor(private readonly child: IOperator, private readonly cancel?: ICancellation)
     {
-        for (const path of clause.Paths) CreateOperator.ValidateRels(path);
+    }
+
+    public *Rows(): Iterable<Binding>
+    {
+        const buffered: Binding[] = [];
+        const probe = new CancelProbe(this.cancel);
+        probe.Begin();
+        for (const row of this.child.Rows())
+        {
+            probe.Tick();
+            buffered.push(row);
+        }
+        yield* buffered;
+    }
+}
+
+// Writes a pattern for one row: reuses its bound nodes, creates the rest (label required), creates every relationship
+// in its direction, and binds every node and relationship variable. Shared by CREATE (always writes) and MERGE (writes
+// when the pattern does not match).
+class PathCreator
+{
+    constructor(private readonly graph: ICypherGraph, private readonly writer: ICypherWriter)
+    {
     }
 
     // Fail fast, before any write: every created relationship needs a type and a direction, and cannot be variable-length.
-    private static ValidateRels(path: PatternPath): void
+    public static ValidateRels(path: PatternPath): void
     {
         for (const rel of path.Rels)
         {
@@ -70,17 +107,7 @@ export class CreateOperator implements IOperator
         }
     }
 
-    public *Rows(): Iterable<Binding>
-    {
-        for (const row of this.child.Rows())
-        {
-            let current = row;
-            for (const path of this.clause.Paths) current = this.createPath(current, path);
-            yield current;
-        }
-    }
-
-    private createPath(row: Binding, path: PatternPath): Binding
+    public Create(row: Binding, path: PatternPath): Binding
     {
         let current = row;
         const ids: string[] = [];
@@ -96,7 +123,7 @@ export class CreateOperator implements IOperator
             }
             const id = this.createNode(node);
             ids.push(id);
-            if (node.Variable !== undefined) current = current.With(node.Variable, new NodeRefValue(id));
+            if (node.Variable !== undefined) current = current.With(node.Variable, WriteSupport.Created(this.graph, id));
         }
         for (let i = 0; i < path.Rels.length; i++)
         {
@@ -105,6 +132,7 @@ export class CreateOperator implements IOperator
             const right = ids[i + 1]!;
             if (rel.Direction === RelDirection.Outgoing) this.writer.CreateRelationship(left, rel.RelType!, right);
             else this.writer.CreateRelationship(right, rel.RelType!, left);
+            if (rel.Variable !== undefined) current = current.With(rel.Variable, RelOrientation.Oriented(rel.Direction, rel.RelType, left, right));
         }
         return current;
     }
@@ -117,102 +145,207 @@ export class CreateOperator implements IOperator
     }
 }
 
+export class CreateOperator implements IOperator
+{
+    private readonly creator: PathCreator;
+
+    constructor(
+        private readonly child: IOperator,
+        private readonly clause: CreateClause,
+        graph: ICypherGraph,
+        writer: ICypherWriter,
+    )
+    {
+        for (const path of clause.Paths) PathCreator.ValidateRels(path);
+        this.creator = new PathCreator(graph, writer);
+    }
+
+    public *Rows(): Iterable<Binding>
+    {
+        for (const row of this.child.Rows())
+        {
+            let current = row;
+            for (const path of this.clause.Paths) current = this.creator.Create(current, path);
+            yield current;
+        }
+    }
+}
+
+// MERGE: match the whole pattern (bound variables fixed), yielding every match with ON MATCH applied; when nothing
+// matches, write the whole pattern (every unbound node and every relationship) and apply ON CREATE. Matching runs the
+// pattern through the read planner, so under the read-your-writes overlay a later row sees what an earlier row merged.
 export class MergeOperator implements IOperator
 {
-    // Nodes this operator already created, keyed by concept + sorted props, so repeated rows create once.
-    private readonly pending = new Map<string, string>();
+    // Patterns this query wrote, keyed by bound ids + created-node identities. Only consulted when the read graph cannot
+    // see this query's own writes (no overlay), so a repeated row reuses its earlier write instead of duplicating it.
+    private readonly pending = new Map<string, readonly (readonly [string, CypherValue])[]>();
+    private readonly creator: PathCreator;
 
     constructor(
         private readonly child: IOperator,
         private readonly clause: MergeClause,
         private readonly graph: ICypherGraph,
-        private readonly writer: ICypherWriter,
+        writer: ICypherWriter,
+        private readonly applier: SetApplier,
+        // The MERGE pattern compiled as a match over one input row (its bound variables fixed).
+        private readonly matcher: IOptionalPlan,
+        bound: ReadonlySet<string>,
     )
     {
-        if (clause.Pattern.Nodes.length === 0) throw new CypherSemanticError(WriteSupport.MergeNeedsNode);
+        MergeOperator.Validate(clause.Pattern, bound);
+        this.creator = new PathCreator(graph, writer);
+    }
+
+    // Everything that would make the write invalid is rejected before the first row writes anything.
+    private static Validate(pattern: PatternPath, bound: ReadonlySet<string>): void
+    {
+        if (pattern.Nodes.length === 0) throw new CypherSemanticError(WriteSupport.MergeNeedsNode);
+        if (pattern.PathVariable !== undefined) throw new CypherSemanticError(WriteSupport.MergePathVariable);
+        PathCreator.ValidateRels(pattern);
+        for (const node of pattern.Nodes)
+        {
+            if (node.Variable !== undefined && bound.has(node.Variable))
+            {
+                if (node.Label !== undefined || node.Properties.size > 0)
+                {
+                    throw new CypherSemanticError(`${WriteSupport.MergeBoundConstrained}: "${node.Variable}"`);
+                }
+            }
+            else if (node.Label === undefined)
+            {
+                throw new CypherSemanticError(WriteSupport.LabelRequired);
+            }
+        }
     }
 
     public *Rows(): Iterable<Binding>
     {
-        const node = this.clause.Pattern.Nodes[0]!;
         for (const row of this.child.Rows())
         {
-            // An already-bound variable keeps its node: no re-match, no create.
-            const bound = node.Variable === undefined ? undefined : row.Get(node.Variable);
-            if (bound instanceof NullValue) throw new CypherSemanticError(`${WriteSupport.MergeBoundNull}: "${node.Variable}"`);
-            if (bound !== undefined)
+            this.checkBound(row);
+            const matches = [...this.matcher.Build(row).Rows()];
+            if (matches.length > 0)
             {
-                if (!(bound instanceof NodeValue || bound instanceof NodeRefValue))
+                for (const match of matches)
                 {
-                    throw new CypherSemanticError(`${WriteSupport.MergeBoundNotNode}: "${node.Variable}"`);
+                    this.applyActions(match, this.clause.OnMatch);
+                    yield match;
                 }
-                yield row;
                 continue;
             }
-            if (node.Label === undefined) throw new CypherSemanticError(WriteSupport.LabelRequired);
-            const concept = this.graph.ResolveConcept(node.Label);
-            const key = MergeOperator.Key(concept, node.Properties);
-            const value = this.findOrCreate(concept, key, node);
-            yield node.Variable === undefined ? row : row.With(node.Variable, value);
+            const key = this.key(row);
+            const known = this.pending.get(key);
+            if (known !== undefined)
+            {
+                let merged = row;
+                for (const [name, value] of known) merged = merged.With(name, value);
+                this.applyActions(merged, this.clause.OnMatch);
+                yield merged;
+                continue;
+            }
+            const created = this.creator.Create(row, this.clause.Pattern);
+            this.pending.set(key, this.newBindings(row, created));
+            this.applyActions(created, this.clause.OnCreate);
+            yield created;
         }
     }
 
-    private findOrCreate(concept: string, key: string, node: NodePattern): CypherValue
+    private checkBound(row: Binding): void
     {
-        const matches = this.graph.NodesByLabel(concept)
-            .filter((m) => [...node.Properties].every(([k, v]) => m.field(k)?.value === v))
-            .sort((a, b) => (a.node.id < b.node.id ? -1 : a.node.id > b.node.id ? 1 : 0));
-        if (matches.length > 0) return new NodeValue(matches[0]!);
-        const known = this.pending.get(key);
-        if (known !== undefined) return new NodeRefValue(known);
-        const id = this.writer.CreateNode(concept, node.Properties);
-        this.pending.set(key, id);
-        return new NodeRefValue(id);
+        for (const node of this.clause.Pattern.Nodes)
+        {
+            const value = node.Variable === undefined ? undefined : row.Get(node.Variable);
+            if (value === undefined) continue;
+            if (value instanceof NullValue) throw new CypherSemanticError(`${WriteSupport.MergeBoundNull}: "${node.Variable}"`);
+            if (!(value instanceof NodeValue || value instanceof NodeRefValue))
+            {
+                throw new CypherSemanticError(`${WriteSupport.MergeBoundNotNode}: "${node.Variable}"`);
+            }
+        }
     }
 
-    private static Key(concept: string, props: ReadonlyMap<string, Scalar>): string
+    private applyActions(row: Binding, items: readonly SetItem[]): void
     {
-        const sorted = [...props].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-        return JSON.stringify([concept, sorted]);
+        for (const item of items) this.applier.Apply(row, item);
+    }
+
+    // Identity of what this row would write: bound endpoints by id, created nodes by concept + sorted properties, and
+    // every relationship's type and direction.
+    private key(row: Binding): string
+    {
+        const nodes = this.clause.Pattern.Nodes.map((node) =>
+        {
+            const value = node.Variable === undefined ? undefined : row.Get(node.Variable);
+            if (value !== undefined) return [WriteSupport.BoundMark, WriteSupport.NodeId(value) ?? null];
+            const props = [...node.Properties].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+            return [WriteSupport.NewMark, this.graph.ResolveConcept(node.Label!), props];
+        });
+        const rels = this.clause.Pattern.Rels.map((rel) => [rel.RelType ?? null, rel.Direction]);
+        return JSON.stringify([nodes, rels]);
+    }
+
+    private newBindings(before: Binding, after: Binding): (readonly [string, CypherValue])[]
+    {
+        const out: (readonly [string, CypherValue])[] = [];
+        const names = [
+            ...this.clause.Pattern.Nodes.map((n) => n.Variable),
+            ...this.clause.Pattern.Rels.map((r) => r.Variable),
+        ];
+        for (const name of names)
+        {
+            if (name === undefined || before.Get(name) !== undefined) continue;
+            const value = after.Get(name);
+            if (value !== undefined) out.push([name, value]);
+        }
+        return out;
     }
 }
 
-export class SetOperator implements IOperator
+// Applies SET items (SET n.p = v / n += {map} / n = {map}) to the bound node. Shared by SET and by MERGE's ON CREATE /
+// ON MATCH actions so both write identically and share one query's relationship bookkeeping.
+export class SetApplier
 {
     constructor(
-        private readonly child: IOperator,
-        private readonly clause: SetClause,
         private readonly graph: ICypherGraph,
         private readonly writer: ICypherWriter,
         private readonly parameters: ReadonlyMap<string, CypherValue>,
-        // Edges created per (node, member), shared across all SetOperators of one query so a later row or clause replacing the same member removes them too.
+        // Edges created per (node, member), shared across every applier of one query so a later row or clause replacing
+        // the same member removes them too.
         private readonly created: Map<string, Set<string>> = new Map<string, Set<string>>(),
     )
     {
     }
 
-    public *Rows(): Iterable<Binding>
-    {
-        for (const row of this.child.Rows())
-        {
-            for (const item of this.clause.Items) this.apply(row, item);
-            yield row;
-        }
-    }
-
-    private apply(row: Binding, item: SetItem): void
+    public Apply(row: Binding, item: SetItem): void
     {
         const id = WriteSupport.RequiredNodeId(row, item.Variable);
         if (id === undefined) return;
         const value = WriteSupport.Eval(item.Value, row, this.parameters);
-        if (item.Mode === SetMode.MergeMap || item.Property === undefined)
+        if (item.Mode === SetMode.Property && item.Property !== undefined)
         {
-            if (value instanceof NullValue) return;
-            if (!(value instanceof MapValue)) throw new CypherSemanticError(WriteSupport.MergeMapNotMap);
-            for (const [name, entry] of value.Entries) this.assign(id, name, entry);
+            this.assign(id, item.Property, value);
             return;
         }
-        this.assign(id, item.Property, value);
+        if (value instanceof NullValue) return;
+        if (!(value instanceof MapValue))
+        {
+            throw new CypherSemanticError(item.Mode === SetMode.Replace ? WriteSupport.ReplaceNotMap : WriteSupport.MergeMapNotMap);
+        }
+        if (item.Mode === SetMode.Replace) this.removeUnlisted(id, value);
+        for (const [name, entry] of value.Entries) this.assign(id, name, entry);
+    }
+
+    // SET n = {map}: every own property not in the map is removed (relationships are untouched, as in openCypher where
+    // properties and relationships are separate). Needs the node's current properties, so a node created earlier in
+    // this query (no committed fields to read yet) is rejected like any other intra-query read of a created node.
+    private removeUnlisted(id: string, map: MapValue): void
+    {
+        const mirror = this.graph.Reflect(id);
+        if (mirror === undefined) throw new CypherSemanticError(WriteSupport.ReplaceCreatedNode);
+        for (const name of Object.keys(mirror.node.attrs ?? {}))
+        {
+            if (!map.Entries.has(name)) this.writer.RemoveProperty(id, name);
+        }
     }
 
     private assign(id: string, name: string, value: CypherValue): void
@@ -248,6 +381,26 @@ export class SetOperator implements IOperator
         for (const old of stale) this.writer.DeleteRelationship(id, member, old);
         this.writer.CreateRelationship(id, member, targetId);
         this.created.set(key, new Set<string>([targetId]));
+    }
+}
+
+export class SetOperator implements IOperator
+{
+    constructor(
+        private readonly child: IOperator,
+        private readonly clause: SetClause,
+        private readonly applier: SetApplier,
+    )
+    {
+    }
+
+    public *Rows(): Iterable<Binding>
+    {
+        for (const row of this.child.Rows())
+        {
+            for (const item of this.clause.Items) this.applier.Apply(row, item);
+            yield row;
+        }
     }
 }
 

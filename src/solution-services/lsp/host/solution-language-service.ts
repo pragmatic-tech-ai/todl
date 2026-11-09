@@ -181,9 +181,16 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     private lastProject: Project | null = null;
     private readonly sentTokenByProject = new Map<string, number>();
 
-    // The warm-cache build kicked off at construction; every feature awaits it so a
-    // request never races the eager resolution.
-    private readonly warmup: Promise<void>;
+    // The warm-cache build kicked off at construction; every feature awaits it (via
+    // Warmed) so a request never races the eager resolution. A failed attempt is not
+    // sticky: the next feature call starts a fresh one (see Warmed).
+    private warmup: Promise<void>;
+    private warmupFailed = false;
+    private lastWarmupFailure = 0;
+    // A direct read's queued warmup retry, shared by concurrent readers until it runs.
+    private retryQueued: Promise<void> | undefined;
+    // Maintenance (keystrokes, watcher events) retries a failing warmup at most this often.
+    private static readonly MaintenanceRetryMs = 1000;
 
     constructor(provider: IServiceProvider)
     {
@@ -193,7 +200,7 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
         const packages = provider.get(SolutionManagerService.PackageSourceKey) ?? new EmptyPackageSource();
         this.session = new SolutionSession(new ResolverPackageSource(this.resolver, packages));
         this.subscriptions.push(this.solutionGraph.Changed.subscribe(() => { this.graphRevision++; }));
-        this.warmup = this.WarmAndSettle(this.switchGeneration);
+        this.warmup = this.StartWarmup();
         this.SubscribeToLifecycle();
         this.SubscribeToResolverStale();
     }
@@ -305,7 +312,7 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     // storage is not one of its members (every valid member shares the identical graph).
     public async ModelView(consumerStorage: IStorage): Promise<{ model: Repository; originOf: ReadonlyMap<string, WikiOrigin>; provenanceOf: ReadonlyMap<string, string> } | undefined>
     {
-        await this.warmup;
+        await this.Warmed();
         const solution = this.Provider.get(SolutionManagerService.Key)?.ActiveSolution;
         if (solution === undefined) return undefined;
         let isMember = false;
@@ -319,7 +326,7 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     // resource lands on its own storage; a published one on the packages backend.
     public async Resources(nodeId: string): Promise<ResolvedResource[]>
     {
-        await this.warmup;
+        await this.Warmed();
         return new ResourceLocator(this.solutionGraph.Model, this.solutionGraph.OriginOf, this.PackagesStorage()).Resources(nodeId);
     }
 
@@ -392,7 +399,7 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     // by the same base-set rule.
     public async WorkspaceSymbols(query: string): Promise<WorkspaceSymbol[]>
     {
-        await this.warmup;
+        await this.Warmed();
         const out: WorkspaceSymbol[] = [];
         for (const project of this.projects.All())
         {
@@ -633,7 +640,7 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
         if (this.disposed) return;
         // Await warmup so an early lifecycle event cannot race (and lose to) the warmup
         // graph build with a stale assembly.
-        await this.warmup;
+        await this.Warmed(true);
         try
         {
             const id = await this.resolver.ConsumerIdOf(storage);
@@ -701,7 +708,7 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     // the URI falls under no project root (the caller returns the empty/null result).
     private async ProjectFor(uri: string): Promise<Project | null>
     {
-        await this.warmup;
+        await this.Warmed();
         return this.projects.ProjectFor(uri);
     }
 
@@ -782,6 +789,50 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
         // Always build the graph — even with no active solution, AssembleMembers yields []
         // and Build([]) leaves (clears) the graph, so Ready/ModelView have a defined state.
         await this.RebuildGraphSafely();
+    }
+
+    // One warm-cache attempt; a rejection marks it failed so the next Warmed() retries.
+    private StartWarmup(): Promise<void>
+    {
+        const attempt = this.WarmAndSettle(this.switchGeneration);
+        attempt.catch(() =>
+        {
+            if (this.warmup !== attempt) return;
+            this.warmupFailed = true;
+            this.lastWarmupFailure = Date.now();
+        });
+        return attempt;
+    }
+
+    // The warmup every feature awaits. After a failed attempt the next caller starts a
+    // fresh one (concurrent callers share it), so ModelView / Resources / InvalidateMember
+    // and the request paths recover instead of rejecting until the service is recreated.
+    private Warmed(fromMaintenance = false): Promise<void>
+    {
+        if (!this.warmupFailed || this.disposed) return this.warmup;
+        if (fromMaintenance)
+        {
+            // A queued job IS the queue head, so it retries inline, but at most once per MaintenanceRetryMs so a burst of
+            // keystrokes against a failing warmup does not rebuild the whole warm cache on every one.
+            if (Date.now() - this.lastWarmupFailure < SolutionLanguageService.MaintenanceRetryMs) return this.warmup;
+            this.warmupFailed = false;
+            this.warmup = this.StartWarmup();
+            return this.warmup;
+        }
+        // A direct read queues its retry so it never interleaves with a switch / invalidate / replace rebuild; queued
+        // jobs never await this promise (they take the inline path), so the queue cannot deadlock on it.
+        this.retryQueued ??= new Promise<void>((resolve) => this.Enqueue(async () =>
+        {
+            this.retryQueued = undefined;
+            if (this.warmupFailed && !this.disposed)
+            {
+                this.warmupFailed = false;
+                this.warmup = this.StartWarmup();
+                await this.warmup.catch(() => undefined);
+            }
+            resolve();
+        }));
+        return this.retryQueued.then(() => this.warmup);
     }
 
     // The warmup, settling the build state for its generation once it completes. A warm
@@ -962,7 +1013,7 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     private async ReplaceOwningFile(uri: string, root: string, generation: number): Promise<void>
     {
         if (this.disposed) return;
-        await this.warmup;
+        await this.Warmed(true);
         // Latest-wins per file: a newer keystroke for this URI already bumped the generation.
         if (this.replaceGeneration.get(uri) !== generation) return;
         const owner = await this.MemberForUri(uri);
@@ -995,7 +1046,7 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     private async ReplaceOwningMember(uri: string, root: string, generation: number): Promise<void>
     {
         if (this.disposed) return;
-        await this.warmup;
+        await this.Warmed(true);
         // Latest-wins: a newer keystroke for the same file has already bumped the
         // generation, so this superseded replace skips its re-read + reload.
         if (this.replaceGeneration.get(uri) !== generation) return;

@@ -75,7 +75,7 @@ class Fixtures
         const manifest: ProjectManifest = { type: ProjectType.MetaModel, name: id, version: 1, id, packageVersion: version }
         return {
             [PROJECT_MANIFEST_FILENAME]: JSON.stringify(manifest),
-            [Fixtures.ModelFileName]: `namespace ${Fixtures.MetaModelNamespace} { concept ${concept} { label : string?; } }`,
+            [Fixtures.ModelFileName]: `namespace ${Fixtures.MetaModelNamespace} { concept ${concept} { } }`,
         }
     }
 

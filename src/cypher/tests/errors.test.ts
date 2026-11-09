@@ -21,7 +21,9 @@ describe("cypher errors + enums", () =>
 
     test("enums expose the SP1 value sets", () =>
     {
-        assert.equal(RelDirection.Undirected !== RelDirection.Outgoing, true);
-        assert.equal(ComparisonOp.Eq !== ComparisonOp.Neq, true);
+        const undirected = RelDirection.Undirected as RelDirection;
+        const eq = ComparisonOp.Eq as ComparisonOp;
+        assert.equal(undirected !== RelDirection.Outgoing, true);
+        assert.equal(eq !== ComparisonOp.Neq, true);
     });
 });

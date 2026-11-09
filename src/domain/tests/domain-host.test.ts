@@ -43,7 +43,7 @@ test("composes a shared meta-model + two libraries; Query sees concepts and inst
     assert.deepEqual(host.Diagnostics, []);
 
     const query = host.Query();
-    assert.ok(query.Concepts().some((t) => t.name === "acme.Widget"), "meta-model concept present");
+    assert.ok(query.Concepts().some((t) => t.fullName === "acme.Widget"), "meta-model concept present");
     const instances = query.InstancesOf("acme.Widget").map((m) => m.node.id).sort();
     assert.deepEqual(instances, ["acme.awsWidget", "acme.msWidget"], "instances from BOTH libraries");
     assert.equal(query.Search("acme.msWidget").length, 1);

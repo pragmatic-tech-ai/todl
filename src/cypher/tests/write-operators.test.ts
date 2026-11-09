@@ -264,7 +264,7 @@ describe("cypher write operators", () =>
     test("MERGE on a variable bound to a non-node value throws", () =>
     {
         assert.throws(
-            () => WriteFixture.Run("UNWIND [1] AS n MERGE (n:shop.Customer {name: 'Zed'})"),
+            () => WriteFixture.Run("UNWIND [1] AS n MERGE (n)"),
             (e: unknown) => e instanceof CypherSemanticError && /non-node/.test(e.message));
     });
 
@@ -281,11 +281,18 @@ describe("cypher write operators", () =>
             CypherSemanticError);
     });
 
-    test("MERGE on an already-bound variable keeps the bound node (no match, no create)", () =>
+    test("MERGE on an already-bound variable keeps the bound node (no create)", () =>
     {
-        const r = WriteFixture.Run("MATCH (n:shop.Customer) MERGE (n:shop.Customer {name: 'Zed'})");
+        const r = WriteFixture.Run("MATCH (n:shop.Customer) MERGE (n)");
         assert.deepEqual(r.Calls, []);
         assert.equal((r.Rows[0]!.Get("n") as NodeValue).Id, "c1");
+    });
+
+    test("MERGE cannot add a label or properties to an already-bound variable (openCypher)", () =>
+    {
+        assert.throws(
+            () => WriteFixture.Run("MATCH (n:shop.Customer) MERGE (n:shop.Customer {name: 'Zed'})"),
+            (e: unknown) => e instanceof CypherSemanticError && /already-bound/.test(e.message));
     });
 
     test("SET ref onto a node created in the same query only creates the relationship", () =>

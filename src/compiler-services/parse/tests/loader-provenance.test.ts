@@ -10,14 +10,14 @@ const SourceA = `namespace demo
   {
     primitive code { }
     annotation badge { path : string; }
-    concept alpha { label : string; relationship links -> beta; annotate badge { path = "a.svg"; } }
+    concept alpha { relationship links -> beta; annotate badge { path = "a.svg"; } }
     taxonomy kinds : represents alpha { term first { label = "x"; term inner { label = "i"; } } term second { label = "y"; } }
     viewpoint vp : frames alpha
   }`;
 
 const SourceB = `namespace demo
   {
-    concept beta { label : string; }
+    concept beta { }
     concept conn { from : beta; to : beta; }
     operator ~> : conn (from, to);
     model m : demo

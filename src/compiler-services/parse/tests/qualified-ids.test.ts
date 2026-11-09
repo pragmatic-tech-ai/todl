@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { check, checkAgainst } from '../../api.js';
 import { toJSON } from '../../emit/json.js';
 
-const META = { uri: 'mm/meta.todl', text: 'namespace ea { concept Location { label : string; } }' };
+const META = { uri: 'mm/meta.todl', text: 'namespace ea { concept Location { } }' };
 
 describe('qualified ids', () =>
 {

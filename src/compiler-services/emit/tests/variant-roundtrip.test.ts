@@ -6,7 +6,7 @@ import { emitModelTodl, deriveBindings } from "../todl.js";
 
 
 const SOURCES = [
-  { uri: "meta.todl", text: `namespace t { concept report { label : string; } }` },
+  { uri: "meta.todl", text: `namespace t { concept report { } }` },
   { uri: "m.todl", text: `namespace m { import t; model clinic : t {
     report monthly { label = "Monthly"; variant "Nobody reads it."; }
     report weekly { label = "Weekly"; }

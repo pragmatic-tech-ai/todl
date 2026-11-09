@@ -33,6 +33,9 @@ export interface IDataSourceAdapter
     /** Classifies a thrown driver error so the reconnecting catalog can retry/reopen. Optional so existing
      *  fakes and the adapter-pack ABI keep compiling; absent -> every error is treated as Permanent. */
     ClassifyFailure?(error: unknown): ConnectionFailureKind;
+    /** True when the SOURCE assigns versions itself (HTTP etag / If-Match, a GraphQL server with a version argument): the
+     *  engine then never computes a next version for it. Optional; absent -> false (the source stores what is written). */
+    readonly SourceManagesVersions?: boolean;
     /** Whether this adapter can serve keyset-paged reads (QueryPage). Optional; absent -> false. */
     readonly CanPage?: boolean;
     /** Keyset page: rows with OrderKey > page.After, sorted by OrderKey asc, at most page.Limit. Optional. */

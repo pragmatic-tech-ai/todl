@@ -6,6 +6,8 @@ import { ConnectorLookup } from "./connector-plan.js";
 import { ConnectorResolutionDiagnosticSinkKey, ConnectorResolutionIssue } from "./connector-resolution-diagnostic-sink.js";
 import type { ReflectedNode, InstanceMirror } from "../manifest/reflection/reflection.js";
 import { ConnectorMirrorMapper } from "./connector-mirror-mapper.js";
+import { QueryFilterTranslator } from "./query-filter-translator.js";
+import type { IConnectorQueryFilterProvider } from "./federated-model-data-connector.js";
 
 /** Turns a minted node into a live reflection handle (the manifest-bound factory). */
 export interface INodeReflector
@@ -13,7 +15,8 @@ export interface INodeReflector
     reflect(node: ReflectedNode): InstanceMirror;
 }
 
-/** Async pre-fetch of connector rows into reflectable mirrors, so the query itself can stay synchronous. */
+/** Async pre-fetch of connector rows into reflectable mirrors, so the query itself can stay synchronous. An optional
+ *  filter provider pushes per-concept filters (model member names) into each source query. */
 export class ConnectorPrefetch
 {
     public static async ForConcepts(
@@ -21,7 +24,8 @@ export class ConnectorPrefetch
         plan: ModelConnectorPlan,
         catalog: DataSourceAdapterCatalog,
         services: IServiceProvider,
-        reflector: INodeReflector): Promise<Map<string, InstanceMirror[]>>
+        reflector: INodeReflector,
+        filters?: IConnectorQueryFilterProvider): Promise<Map<string, InstanceMirror[]>>
     {
         const snapshot = new Map<string, InstanceMirror[]>();
         for (const concept of concepts)
@@ -37,7 +41,7 @@ export class ConnectorPrefetch
             {
                 continue;
             }
-            snapshot.set(concept, await ConnectorPrefetch.Fetch(binding, spec, catalog, services, reflector));
+            snapshot.set(concept, await ConnectorPrefetch.Fetch(binding, spec, catalog, services, reflector, filters));
         }
         return snapshot;
     }
@@ -47,7 +51,8 @@ export class ConnectorPrefetch
         spec: ConnectorSpec,
         catalog: DataSourceAdapterCatalog,
         services: IServiceProvider,
-        reflector: INodeReflector): Promise<InstanceMirror[]>
+        reflector: INodeReflector,
+        filters: IConnectorQueryFilterProvider | undefined): Promise<InstanceMirror[]>
     {
         let adapter: IDataSourceAdapter;
         try
@@ -62,6 +67,9 @@ export class ConnectorPrefetch
             return [];
         }
         const request: QueryRequest = { Source: binding.Source, Fields: [...new Set(Object.values(binding.FieldMap))].sort() };
+        // An optional push-down (a superset of what the caller keeps; its in-memory filter stays authoritative).
+        const where = QueryFilterTranslator.External(binding, filters?.WhereFor(binding.Concept));
+        if (where !== undefined) request.Where = where;
         const records = await adapter.Query(request);   // a resolved-but-failing adapter's error propagates (loud, not silent-empty)
         const mirrors: InstanceMirror[] = [];
         for (const record of records)

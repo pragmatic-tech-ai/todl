@@ -142,9 +142,16 @@ describe("cypher write parse", () =>
         assert.throws(() => P.Parse("CREATE (a)-[:orders {qty: 2}]->(b)"), CypherSyntaxError);
     });
 
-    it("MERGE with a relationship path is rejected", () =>
+    it("MERGE accepts a relationship path", () =>
     {
-        assert.throws(() => P.Parse("MERGE (a)-[:r]->(b)"), CypherSyntaxError);
+        const merge = P.Parse("MERGE (a)-[:r]->(b)").Parts[0]!.Reading[0] as MergeClause;
+        assert.equal(merge.Pattern.Rels.length, 1);
+        assert.equal(merge.Pattern.Nodes.length, 2);
+    });
+
+    it("MERGE relationship properties are still rejected", () =>
+    {
+        assert.throws(() => P.Parse("MERGE (a)-[:r {w: 1}]->(b)"), CypherSyntaxError);
     });
 
     it("a keyword-spelled label parses on the read path", () =>
@@ -176,5 +183,66 @@ describe("cypher write parse", () =>
     {
         assert.deepEqual(ReferencedLabels.Of("CREATE (n:shop.Customer)").labels, ["shop.Customer"]);
         assert.deepEqual(ReferencedLabels.Of("MERGE (n:shop.Order {id: 'x'})").labels, ["shop.Order"]);
+    });
+});
+
+describe("cypher write parse: MERGE ON CREATE / ON MATCH SET", () =>
+{
+    it("ON CREATE SET and ON MATCH SET attach their items to the MERGE clause", () =>
+    {
+        const m = new CypherParser("MERGE (n:Customer {k: 1}) ON CREATE SET n.a = 1, n.b = 2 ON MATCH SET n.c = 3").Parse();
+        const merge = m.Parts[0]!.Reading[0] as MergeClause;
+        assert.ok(merge instanceof MergeClause);
+        assert.deepEqual(merge.OnCreate.map((i) => i.Property), ["a", "b"]);
+        assert.deepEqual(merge.OnMatch.map((i) => i.Property), ["c"]);
+    });
+
+    it("repeated ON actions accumulate in order, in either order, case-insensitively", () =>
+    {
+        const m = new CypherParser("MERGE (n:Customer) on match set n.x = 1 ON CREATE SET n.y = 2 ON MATCH SET n.z = 3").Parse();
+        const merge = m.Parts[0]!.Reading[0] as MergeClause;
+        assert.deepEqual(merge.OnCreate.map((i) => i.Property), ["y"]);
+        assert.deepEqual(merge.OnMatch.map((i) => i.Property), ["x", "z"]);
+    });
+
+    it("ON items accept the += map form", () =>
+    {
+        const m = new CypherParser("MERGE (n:Customer) ON CREATE SET n += {a: 1}").Parse();
+        const merge = m.Parts[0]!.Reading[0] as MergeClause;
+        assert.equal(merge.OnCreate[0]!.Mode, SetMode.MergeMap);
+    });
+
+    it("a plain MERGE has no ON actions", () =>
+    {
+        const merge = new CypherParser("MERGE (n:Customer)").Parse().Parts[0]!.Reading[0] as MergeClause;
+        assert.deepEqual([merge.OnCreate.length, merge.OnMatch.length], [0, 0]);
+    });
+
+    it("ON must be followed by CREATE or MATCH, and then SET", () =>
+    {
+        assert.throws(() => new CypherParser("MERGE (n:Customer) ON DELETE SET n.a = 1").Parse(), CypherSyntaxError);
+        assert.throws(() => new CypherParser("MERGE (n:Customer) ON CREATE n.a = 1").Parse(), CypherSyntaxError);
+    });
+
+    it("a variable named `on` elsewhere is still an ordinary identifier", () =>
+    {
+        assert.doesNotThrow(() => new CypherParser("MATCH (on:Customer) RETURN on").Parse());
+    });
+});
+
+describe("cypher write parse: SET n = {map} (full replace)", () =>
+{
+    it("SET n = map parses as SetMode.Replace with no property", () =>
+    {
+        const set = new CypherParser("MATCH (n) SET n = {a: 1}").Parse().Parts[0]!.Reading[1] as SetClause;
+        assert.equal(set.Items[0]!.Mode, SetMode.Replace);
+        assert.equal(set.Items[0]!.Property, undefined);
+        assert.equal(set.Items[0]!.Variable, "n");
+    });
+
+    it("SET n.p = v is still a property set", () =>
+    {
+        const set = new CypherParser("MATCH (n) SET n.p = 1").Parse().Parts[0]!.Reading[1] as SetClause;
+        assert.equal(set.Items[0]!.Mode, SetMode.Property);
     });
 });

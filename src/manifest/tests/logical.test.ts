@@ -29,22 +29,24 @@ function fixture(): ManifestModel
     version: "1.0.0",
     root: "Element",
     concepts: {
-      Element: { extends: null, fields: {}, relationships: {}, invariants: [] },
+      Element: { extends: null, fields: {}, relationships: {}, invariants: [], annotations: [] },
       Component: {
         extends: "Element",
         fields: { name: { type: "string", card: "1" }, color: { type: "string", card: "?" } },
         relationships: {},
         invariants: [],
+        annotations: [],
       },
       Surface: {
         extends: "Component",
         fields: { color: { type: "string", card: "1" } },
         relationships: {},
         invariants: [],
+        annotations: [],
       },
     },
     classes: {
-      "Components.Surface": { concept: "Surface", narrower: [], fixed: { color: "red" } },
+      "Components.Surface": { concept: "Surface", narrower: [], fixed: { color: "red" }, annotations: [] },
     },
     taxonomies: {},
   };
@@ -92,5 +94,23 @@ describe("ManifestModel.valueOriginOf (SPEC-03 Axis 2 — self vs class)", () =>
   test("a node with no class is always its own origin", () => {
     const node = { class: null, attrs: { color: "red" } };
     assert.equal(fixture().valueOriginOf(node, "color"), "self");
+  });
+});
+
+describe("ancestorsViaExtends cycle safety", () => {
+  test("a cyclic extends chain returns a finite list", () => {
+    const data: LogicalManifest = {
+      format: "todl-manifest/1",
+      model: "loop",
+      version: "1.0.0",
+      root: "Element",
+      concepts: {
+        a: { extends: "b", fields: {}, relationships: {}, invariants: [], annotations: [] },
+        b: { extends: "a", fields: {}, relationships: {}, invariants: [], annotations: [] },
+      },
+      classes: {},
+      taxonomies: {},
+    };
+    assert.deepEqual(ManifestModel.fromJSON(data).ancestorsViaExtends("a"), ["b"]);
   });
 });

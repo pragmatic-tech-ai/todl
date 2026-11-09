@@ -55,7 +55,10 @@ export class ConceptUiGenerationService
         "    {\n" +
         "        merge {ListView}\n" +
         "        merge {FormView}\n\n" +
-        "        ContentPresenter x:root [ Content = $service({AppClass}) ]\n\n" +
+        "        Border x:root [ Fill = @SurfaceBg ]\n" +
+        "        {\n" +
+        "            ContentPresenter [ Content = $service({AppClass}) ]\n" +
+        "        }\n\n" +
         "        DataTemplate [ DataType = {AppClass} ]\n" +
         "        {\n" +
         "            StackPanel [ Orientation = Vertical, Margin = (16,16,16,16) ]\n" +

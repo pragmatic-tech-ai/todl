@@ -92,7 +92,8 @@ export class EmitRemoteDataAction implements IBuildAction<TodlBuildContext>
         `            {\n` +
         `                for (const cell of row)\n` +
         `                {\n` +
-        `                    if (TenantDocumentAssembler.IsNodeCell(cell)) cells.push(cell);\n` +
+        `                    const node = TenantDocumentAssembler.NodeCellOf(cell);\n` +
+        `                    if (node !== undefined) cells.push(node);\n` +
         `                }\n` +
         `            }\n` +
         `        }\n` +

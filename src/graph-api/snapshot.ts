@@ -89,7 +89,7 @@ export class Snapshot
             kind: MetaKind[type.kind],
             fields: type.getFields().map((f) => ({ name: f.name, type: f.fieldType?.fullName ?? "", cardinality: f.cardinality })),
             relationships: type.getRelationships().map((r) => ({ name: r.name, targets: r.targets.map((t) => t.fullName), cardinality: r.cardinality, inverse: r.inverse })),
-            annotations: type.getAnnotations().map((a) => ({ annotation: a.type.name, args: Object.fromEntries(a.args) })),
+            annotations: type.getAnnotations().map((a) => ({ annotation: a.type.fullName, args: Object.fromEntries(a.args) })),
         };
     }
 }

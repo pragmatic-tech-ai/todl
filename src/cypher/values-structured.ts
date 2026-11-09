@@ -1,4 +1,5 @@
 import { CypherValue, NodeValue, type CypherValueDto } from "./values.js";
+import { CypherCellCodec } from "./cell-codec.js";
 
 export type RelDto = { from: string; type: string; to: string };
 
@@ -65,7 +66,7 @@ export class MapValue extends CypherValue
         {
             out[k] = v.ToDto();
         }
-        return out;
+        return CypherCellCodec.EncodeMap(out);
     }
 
     public GroupKey(): string

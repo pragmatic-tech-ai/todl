@@ -17,7 +17,7 @@ class EmptySource implements IPackageSource
     }
 }
 
-const WIDGET_MODEL = "namespace acme { concept Widget { label : string?; } }";
+const WIDGET_MODEL = "namespace acme { concept Widget { } }";
 
 function widgetManifest(): ProjectManifest
 {

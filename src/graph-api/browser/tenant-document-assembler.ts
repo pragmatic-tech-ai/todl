@@ -5,6 +5,7 @@
 // the generated app code.
 
 import type { JsonEdge, JsonNode, TodlDocument } from "../../compiler-services/emit/json.js";
+import { CypherCellCodec } from "../../cypher/cell-codec.js";
 
 export interface TenantFieldCell
 {
@@ -38,12 +39,15 @@ export class TenantDocumentAssembler
         return { nodes, edges: full.edges.filter(e => ids.has(e.from) && ids.has(e.to)) };
     }
 
-    /** True when a cypher result cell is a node cell (has an id and a concept). */
-    public static IsNodeCell(cell: unknown): cell is TenantNodeCell
+    /** The node of a cypher result cell when it is a node cell (the `$node` discriminator, never shape: a query-built map
+     *  can look like a node); undefined for any other cell or a malformed node. */
+    public static NodeCellOf(cell: unknown): TenantNodeCell | undefined
     {
-        if (typeof cell !== "object" || cell === null) return false;
-        const c = cell as Partial<TenantNodeCell>;
-        return typeof c.id === "string" && typeof c.concept === "string" && typeof c.fields === "object" && c.fields !== null;
+        const node = CypherCellCodec.AsNode(cell) as Partial<TenantNodeCell> | undefined;
+        if (node === undefined || node === null || typeof node !== "object") return undefined;
+        const wellFormed = typeof node.id === "string" && typeof node.concept === "string"
+            && typeof node.fields === "object" && node.fields !== null && typeof node.refs === "object" && node.refs !== null;
+        return wellFormed ? node as TenantNodeCell : undefined;
     }
 
     public static Assemble(schema: TodlDocument, cells: readonly TenantNodeCell[]): TodlDocument

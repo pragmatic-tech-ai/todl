@@ -12,7 +12,6 @@ import { Severity } from "../../diagnostics/diagnostic.js";
 // no "annotation may only extend an annotation" cascade.
 const SRC = `namespace mm {
   concept container {
-    label          : string?;
     app_components : identifier[];
   }
   viewpoint V : frames container

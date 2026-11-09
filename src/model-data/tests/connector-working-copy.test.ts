@@ -595,3 +595,24 @@ test("Rebind re-points write-targets", async () =>
     await wc.Flush(fx.Catalog, fx.Services);
     assert.equal(fx.Factory.Batches[0]!.Operations[0]!.Key, "A-2");
 });
+
+test("an optimistic flush bumps the stored version and adopts it, so the next flush from the same copy applies", async () =>
+{
+    const fx = new WorkingCopyFixture(true, true);
+    const connector = fx.Connector();
+    const doc = await connector.Prepare(fx.Services);
+    const node = doc.nodes.find(n => n.storageId === "O-1")!;
+    const wc = connector.WorkingCopy();
+    node.attrs["label"] = "first";
+    wc.MarkDirty(node.id);
+    const first = await wc.Flush(fx.Catalog, fx.Services);
+    assert.equal(first.Results[0]!.Applied, 1);
+    assert.deepEqual(first.Results[0]!.Versions, [{ Key: "O-1", Version: 3 }]);
+    assert.equal(node.attrs["version"], 3);
+    node.attrs["label"] = "second";
+    wc.MarkDirty(node.id);
+    const second = await wc.Flush(fx.Catalog, fx.Services);
+    assert.deepEqual(second.Diagnostics, []);
+    assert.equal(node.attrs["version"], 4);
+    assert.deepEqual((await fx.Rows("order")).map(r => [r["display_name"], r["ver"]]), [["second", 4]]);
+});

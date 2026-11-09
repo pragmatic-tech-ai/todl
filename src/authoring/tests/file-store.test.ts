@@ -11,9 +11,7 @@ function baseClient(): Repository
   const b = repo.builder().setNamespace("acme.ea");
   b.definePrimitive("string");
   b.defineConcept("technology");
-  b.addField("technology", "label", "string");
   b.defineConcept("component");
-  b.addField("component", "label", "string");
   b.addField("component", "implementedBy", "technology", Cardinality.Optional);
   b.assertInstance("technology", "copilot");
   b.setField("copilot", "label", "Copilot");

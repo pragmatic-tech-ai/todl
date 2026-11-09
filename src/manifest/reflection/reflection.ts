@@ -116,15 +116,21 @@ export class Manifest
     }
 
     /** Resolve a type by simple name, then by fullName; undefined if absent. */
+    /** A type by its full name, else by a simple name that is unique in this manifest (ambiguous -> undefined). */
     getType(name: string): TypeInfo | undefined
     {
-        let full: TypeInfo | undefined;
+        let simple: TypeInfo | undefined;
+        let simpleCount = 0;
         for (const t of this.types())
         {
-            if (t.name === name) return t;
-            if (t.fullName === name) full = t;
+            if (t.fullName === name) return t;
+            if (t.name === name)
+            {
+                simple = t;
+                simpleCount++;
+            }
         }
-        return full;
+        return simpleCount === 1 ? simple : undefined;
     }
 
     /** Every taxonomy in this manifest. */
@@ -398,25 +404,43 @@ export class TypeInfo
     getSupertypes(): TypeInfo[]
     {
         const out: TypeInfo[] = [];
+        // Stop a cyclic chain at the first repeat (the type itself counts as visited).
+        const visited: TypeInfo[] = [this];
         let base = this.baseType;
-        while (base !== undefined)
+        while (base !== undefined && !visited.some((v) => v.sameTypeAs(base!)))
         {
+            visited.push(base);
             out.push(base);
             base = base.baseType;
         }
         return out;
     }
 
+    /**
+     * Manifest-qualified type identity. Two TypeInfo denote the SAME type iff
+     * they were declared by the same `model@version` AND share a `fullName`. A
+     * raw `.token` is only a `(table,row)` address stable within ONE Manifest, so
+     * it collides across the several manifests a multi-package Domain composes
+     * (row 1 of package A vs row 1 of package B). This comparison is collision-free
+     * across manifests while, within a single manifest, same type ⟺ same token.
+     */
+    sameTypeAs(other: TypeInfo): boolean
+    {
+        return this.manifest.model === other.manifest.model
+            && this.manifest.version === other.manifest.version
+            && this.fullName === other.fullName;
+    }
+
     /** Strict, transitive: this is a proper subtype of `other` via extends. */
     isSubtypeOf(other: TypeInfo): boolean
     {
-        return this.getSupertypes().some((t) => t.token === other.token);
+        return this.getSupertypes().some((t) => t.sameTypeAs(other));
     }
 
     /** Reflexive: `this` is assignable FROM `other` (other == this or subtype). */
     isAssignableFrom(other: TypeInfo): boolean
     {
-        return other.token === this.token || other.isSubtypeOf(this);
+        return other.sameTypeAs(this) || other.isSubtypeOf(this);
     }
 
     /** Declared invariants — [] in v1 (no invariant table yet; SPEC-03/04 open Q). */

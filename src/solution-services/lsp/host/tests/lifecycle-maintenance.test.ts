@@ -44,7 +44,7 @@ class Fixtures
         const manifest: ProjectManifest = { type: ProjectType.MetaModel, name: id, version: 1, id, packageVersion: version };
         return {
             [PROJECT_MANIFEST_FILENAME]: JSON.stringify(manifest),
-            [Fixtures.ModelFileName]: `namespace ${Fixtures.MetaModelNamespace} { concept ${concept} { label : string?; } }`,
+            [Fixtures.ModelFileName]: `namespace ${Fixtures.MetaModelNamespace} { concept ${concept} { } }`,
         };
     }
 
@@ -301,7 +301,7 @@ test("editing a base member refreshes its dependents' warm bases (dependent re-s
 
     // Edit mm so its compiled document gains a distinctive new concept.
     await world.Member("mm").Storage!.WriteText("model.todl",
-        "namespace acme { concept Widget { label : string?; } concept FreshlyAdded { label : string?; } }");
+        "namespace acme { concept Widget { } concept FreshlyAdded { } }");
     await world.RaiseReferencesChanged("mm");
 
     await world.Service.CompletionsAt(LibUri, Fixtures.Pos);

@@ -45,6 +45,8 @@
 ### Cypher (`src/cypher/`)
 - **`CypherEngine`** (`engine.ts:16`) — parse+plan+bind+execute over `ICypherGraph`; factory `CypherEngine.OverQuery(IGraphQuery)` (:24); `Execute(source, params?, limits?) → CypherResult`.
 - **`GraphQueryAdapter`** (`graph.ts:16`, implements `ICypherGraph`) — adapts graph-api `IGraphQuery` to the Cypher graph contract (incl. simple-name label resolution).
+- **`CypherPushDown`** (`push-down.ts`) — derives a sound per-concept source filter (`CypherQueryFilterProvider`, an `IConnectorQueryFilterProvider`) from a read-only query: Eq-only inline props + top-level `AND` terms, only for a concept scanned by exactly one pattern. Schema facts come from `ICypherSchema` (`GraphQuerySchema` over a schema `IGraphQuery`). Filters name model members; `FederatedModelDataConnector` translates them via `FieldMap`; `ConjunctiveQueryFilterProvider` ANDs it with a policy provider.
+- **`CypherCellCodec`** (`cell-codec.ts`) — result-cell encoding: a node is `{ "$node": MirrorSnapshot }`; a map whose sole key is `$node`/`$map` is escaped as `{ "$map": … }`, so no user map can pass for a node. Decode with `AsNode`/`AsMap`.
 - **`CypherResult`/`CypherResultDto`** (`result.ts:3`); **`Deadline`/`ExecutionLimits`/`ICancellation`** (`execution-limits.ts:8`/`:25`).
 - **Barrel `cypher/index.ts`** exports: `CypherEngine`, `CypherResult`(+Dto), `CypherParser`, fluent builder (`CypherQuery`,`Pattern`,`Expr`,`Return`,`Fn`,`Sort`,`Hops`…), value types, `GraphQueryAdapter`+`ICypherGraph`, enums, error family (`CypherError`/`CypherSyntaxError`/`CypherSemanticError`/`CypherTimeout`), `Deadline`+limits. Root re-export `export * as Cypher` (`src/index.ts:472`).
 
@@ -81,5 +83,5 @@
 
 ## Tests + build
 
-- **Tests:** every test in a `tests/` subfolder next to the code (`CLAUDE.md`); runner `tsx --conditions=development --test "src/**/*.test.ts"`. Extra: `test:corpus`, `test:smoke` (Playwright). Suite ~2180.
+- **Tests:** every test in a `tests/` subfolder next to the code (`CLAUDE.md`); runner `tsx --conditions=development --test "src/**/*.test.ts"`. Extra: `test:smoke` (Playwright). Suite ~2180.
 - **Build** (`package.json`): `gen:prelude` → `gen:scaffold` → `compile:mu` (`scripts/compile-mu.mjs` lowers `*.mu`→`*.mu.js`) → `tsc -p tsconfig.build.json`. `typecheck` = `tsc --noEmit`. `dist/` mirrors `src/` one-to-one (+`.d.ts`/`.js.map`); subpath/bin targets resolve into it. `dist/` gitignored.

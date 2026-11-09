@@ -26,7 +26,7 @@ class JoinFixture
         let b = new Binding();
         for (const key of Object.keys(entries))
         {
-            b = b.With(key, new ScalarValue(entries[key]));
+            b = b.With(key, new ScalarValue(entries[key]!));
         }
         return b;
     }
@@ -53,8 +53,8 @@ describe("CartesianProduct", () =>
         const right = new FixedRows([JoinFixture.Row({ a: 1, b: 9 })]);
         const out = [...new CartesianProduct(left, right).Rows()];
         assert.equal(out.length, 1);
-        assert.equal(JoinFixture.Num(out[0], "a"), 1);
-        assert.equal(JoinFixture.Num(out[0], "b"), 9);
+        assert.equal(JoinFixture.Num(out[0]!, "a"), 1);
+        assert.equal(JoinFixture.Num(out[0]!, "b"), 9);
     });
 
     test("multi-row cross product preserves input bindings on both sides", () =>

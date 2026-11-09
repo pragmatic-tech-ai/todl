@@ -60,7 +60,7 @@ class LocalFixtures
             : { type, name: id, version: 1, id, packageVersion }
         return {
             [PROJECT_MANIFEST_FILENAME]: JSON.stringify(manifest),
-            [LocalFixtures.ModelFileName]: `namespace ${LocalFixtures.Namespace} { concept ${concept} { label : string?; } }`,
+            [LocalFixtures.ModelFileName]: `namespace ${LocalFixtures.Namespace} { concept ${concept} { } }`,
         }
     }
 

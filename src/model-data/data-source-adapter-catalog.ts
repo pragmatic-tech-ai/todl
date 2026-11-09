@@ -9,6 +9,7 @@ import {
     type IDataSourceAdapterProvider,
 } from "./data-source-adapter.js";
 import { ReconnectingAdapter } from "./reconnecting-adapter.js";
+import { VersionBumpingAdapter } from "./version-bumping-adapter.js";
 import { ReconnectObserverKey } from "./connection-reconnect.js";
 import type { ConnectionRetryPolicy } from "./connection-reconnect.js";
 
@@ -71,13 +72,14 @@ export class DataSourceAdapterCatalog
     {
         const inner = await this.OpenCore(spec, services);
         const observer = services.get(ReconnectObserverKey);
-        return new ReconnectingAdapter(
+        // Outermost: optimistic upserts get server-side version bumping regardless of the backend.
+        return new VersionBumpingAdapter(new ReconnectingAdapter(
             spec.Name,
             inner,
             () => this.OpenCore(spec, services),
             DataSourceAdapterCatalog.DefaultRetryPolicy,
             observer,
-        );
+        ));
     }
 
     /** Disposes and drops the memoized adapter for one connector so the next Open re-resolves and re-opens

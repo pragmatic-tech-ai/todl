@@ -42,6 +42,7 @@ export enum EdgeKind
   Frames, // viewpoint -> the concept it frames
   Targets, // relationship-schema node -> a target concept node (one per union member)
   SameAs, // alias instance -> canonical instance (entity-identity resolution)
+  IncludesAspect, // concept | aspect -> an aspect it includes (type model R1/R2)
 }
 
 /** Which way to walk an edge from a node. */
@@ -161,6 +162,7 @@ export interface GraphChangeArgs
 
 export class Graph
 {
+  private static readonly CanonicalIdProperty = "canonicalId";
   private readonly store: GraphStore;
 
   /** The mutation event bus (spec §R2): one event per applied change. */
@@ -248,6 +250,8 @@ export class Graph
     if (node.canonicalId === canonicalId) return;
 
     node.canonicalId = canonicalId;
+    // canonicalId changes which instances are visible; signal even when the SameAs edge already exists.
+    this.changed.emit({ kind: GraphChangeKind.AttrSet, node: aliasId, property: Graph.CanonicalIdProperty, target: canonicalId });
     if (this.related(aliasId, EdgeKind.SameAs, Direction.Out).indexOf(canonicalId) < 0)
     {
       this.addEdge({ kind: EdgeKind.SameAs, via: null, from: aliasId, to: canonicalId });

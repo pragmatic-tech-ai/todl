@@ -1,7 +1,7 @@
 import type { Scalar } from "../manifest/logical.js";
 import type { ICypherGraph } from "./graph.js";
 import type { NodePattern, PatternPath } from "./patterns.js";
-import type { CypherQueryModel, QueryPart, ProjectionClause, ReturnItem } from "./query-model.js";
+import type { CypherQueryModel, QueryPart, ProjectionClause, ReturnItem, SetItem } from "./query-model.js";
 import { MatchClause, UnwindClause, WritingClause, SortItem, CreateClause, MergeClause, SetClause, DeleteClause, RemoveClause } from "./query-model.js";
 import { CypherSemanticError } from "./errors.js";
 import { ComparisonOp } from "./enums.js";
@@ -12,7 +12,7 @@ import { CypherValue, ScalarValue } from "./values.js";
 import { VarLengthExpand } from "./operators-varlength.js";
 import { IOperator, AllNodesScan, LabelScan, Expand, ExpandInto, Filter, LabelFilter, Project, SingleRow, BindingRow } from "./operators.js";
 import { Unwind } from "./operators-unwind.js";
-import { CreateOperator, MergeOperator, SetOperator, DeleteOperator, RemoveOperator } from "./operators-write.js";
+import { CreateOperator, MergeOperator, SetOperator, SetApplier, DeleteOperator, RemoveOperator, EagerBarrier } from "./operators-write.js";
 import type { ICypherWriter } from "./writer.js";
 import { CartesianProduct } from "./operators-join.js";
 import { OptionalApply } from "./operators-optional.js";
@@ -61,6 +61,7 @@ export class LogicalPlanner
     private static readonly VarLengthIntoBoundUnsupported = "variable-length expansion into an already-bound node is not yet supported";
 
     private static readonly StrictScopeReuse = "variable reused after being dropped by an earlier WITH";
+    private static readonly DuplicateColumn = "multiple result columns with the same name are not supported";
 
     private readonly maxVarLength: number;
     private readonly strictWithScope: boolean;
@@ -76,6 +77,8 @@ export class LogicalPlanner
         private readonly ensureOrder: boolean = false,
         // Optional: only write-capable plans (PlanForWrite) supply one; read planning omits it.
         private readonly writer?: ICypherWriter,
+        // Set when the plan reads through the read-your-writes overlay: write clauses are fenced with EagerBarriers.
+        private readonly writeBarriers: boolean = false,
     )
     {
         // Variable-length wiring lands in a later task; the cap is accepted and carried now.
@@ -90,6 +93,7 @@ export class LogicalPlanner
         let op: IOperator | undefined = undefined;
         for (const part of model.Parts)
         {
+            this.ensureUniqueColumns(part);
             if (this.strictWithScope) this.checkStrictScope(part, inScope, everBound);
             op = this.compilePart(part, op, inScope, part === model.Parts[model.Parts.length - 1]);
             for (const v of this.readingVariables(part)) everBound.add(v);
@@ -116,6 +120,7 @@ export class LogicalPlanner
         for (const part of model.Parts)
         {
             const isFinal = part === last;
+            this.ensureUniqueColumns(part);
             if (this.strictWithScope) this.checkStrictScope(part, inScope, everBound);
             op = this.compilePart(part, op, inScope, isFinal, isFinal);
             if (isFinal) projection = part.Projection;
@@ -149,6 +154,21 @@ export class LogicalPlanner
 
     // Strict mode: a MATCH/UNWIND variable bound in a PRIOR segment but not carried into this
     // segment's inScope is a dropped-then-reused name; reject it.
+    // openCypher: projection column names must be unique. A Binding-keyed row would otherwise keep only the last
+    // duplicate silently, and a duplicate WITH name makes the downstream variable ambiguous. Checked during planning,
+    // before any operator runs, so a write query with a bad RETURN is rejected before it mutates anything.
+    private ensureUniqueColumns(part: QueryPart): void
+    {
+        if (part.Projection === undefined) return;
+        const seen = new Set<string>();
+        for (const item of part.Projection.Items)
+        {
+            const name = item.ColumnName();
+            if (seen.has(name)) throw new CypherSemanticError(`${LogicalPlanner.DuplicateColumn}: "${name}"`);
+            seen.add(name);
+        }
+    }
+
     private checkStrictScope(part: QueryPart, inScope: ReadonlySet<string>, everBound: ReadonlySet<string>): void
     {
         for (const v of this.readingVariables(part))
@@ -181,7 +201,12 @@ export class LogicalPlanner
             }
             else if (clause instanceof WritingClause)
             {
-                op = this.compileWrite(op ?? new SingleRow(), clause, pipelineBound);
+                // Under the read-your-writes overlay, reads feeding a write finish before it starts and the write
+                // finishes before anything above reads the graph (see EagerBarrier).
+                let source = op ?? new SingleRow();
+                if (this.writeBarriers && op !== undefined && !(op instanceof EagerBarrier)) source = new EagerBarrier(source, this.cancel);
+                op = this.compileWrite(source, clause, pipelineBound);
+                if (this.writeBarriers) op = new EagerBarrier(op, this.cancel);
             }
         }
         if (op === undefined) op = new SingleRow();
@@ -202,13 +227,24 @@ export class LogicalPlanner
         }
         if (clause instanceof MergeClause)
         {
+            const before = new Set<string>(bound);
+            const matcher = new OptionalMatchPlan(this, new MatchClause([clause.Pattern], undefined, false), before);
             for (const v of clause.DeclaredVariables()) bound.add(v);
-            return new MergeOperator(op, clause, g, writer);
+            return new MergeOperator(op, clause, g, writer, new SetApplier(g, writer, p, this.createdEdges), matcher, before);
         }
-        if (clause instanceof SetClause) return new SetOperator(op, clause, g, writer, p, this.createdEdges);
+        if (clause instanceof SetClause) return new SetOperator(op, clause, new SetApplier(g, writer, p, this.createdEdges));
         if (clause instanceof DeleteClause) return new DeleteOperator(op, clause, writer, p);
         if (clause instanceof RemoveClause) return new RemoveOperator(op, clause, writer);
         throw new CypherSemanticError(LogicalPlanner.WritesNotExecutable);
+    }
+
+    private static CollectSetItems(items: readonly SetItem[], referenced: Set<string>): void
+    {
+        for (const item of items)
+        {
+            referenced.add(item.Variable);
+            item.Value.CollectVariables(referenced);
+        }
     }
 
     private validateScope(part: QueryPart, available: ReadonlySet<string>): void
@@ -218,13 +254,11 @@ export class LogicalPlanner
         {
             if (clause instanceof MatchClause) clause.Where?.Predicate.CollectVariables(referenced);
             else if (clause instanceof UnwindClause) clause.Expr.CollectVariables(referenced);
-            else if (clause instanceof SetClause)
+            else if (clause instanceof SetClause) LogicalPlanner.CollectSetItems(clause.Items, referenced);
+            else if (clause instanceof MergeClause)
             {
-                for (const item of clause.Items)
-                {
-                    referenced.add(item.Variable);
-                    item.Value.CollectVariables(referenced);
-                }
+                LogicalPlanner.CollectSetItems(clause.OnCreate, referenced);
+                LogicalPlanner.CollectSetItems(clause.OnMatch, referenced);
             }
             else if (clause instanceof DeleteClause) for (const t of clause.Targets) t.CollectVariables(referenced);
             else if (clause instanceof RemoveClause) for (const i of clause.Items) referenced.add(i.Variable);

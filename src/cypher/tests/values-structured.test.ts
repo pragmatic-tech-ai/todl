@@ -15,7 +15,7 @@ describe("structured values", () =>
 
     test("MapValue Get + ToDto", () =>
     {
-        const m = new MapValue(new Map([["a", new ScalarValue(1)], ["b", NullValue.Instance]]));
+        const m = new MapValue(new Map<string, ScalarValue | NullValue>([["a", new ScalarValue(1)], ["b", NullValue.Instance]]));
         assert.equal((m.Get("a") as ScalarValue).Value, 1);
         assert.deepEqual(m.ToDto(), { a: 1, b: null });
     });

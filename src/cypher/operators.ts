@@ -116,7 +116,7 @@ export class ExpandInto implements IOperator
             if (!(from instanceof NodeValue) || !(to instanceof NodeValue)) continue;
             for (const target of this.graph.Expand(from.Id, this.relType, this.direction))
             {
-                if (new NodeValue(target).Id === to.Id)
+                if (target.node.id === to.Id)
                 {
                     yield this.relVar === undefined ? row : row.With(this.relVar, RelOrientation.Oriented(this.direction, this.relType, from.Id, to.Id));
                     break;

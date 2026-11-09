@@ -4,8 +4,8 @@ import { check } from "../../api.js";
 import { DiagnosticCode } from "../../diagnostics/diagnostic.js";
 
 const META = `namespace t {
-  concept report { label : string; invariant "Every report is read by someone."; }
-  concept unit { label : string; }
+  concept report { invariant "Every report is read by someone."; }
+  concept unit { }
 }`;
 
 test("variants land on the instance node, in source order, with no diagnostics", () => {

@@ -3,7 +3,7 @@
 // handles. A lazy reverse-ref index backs Referrers (the heap has only forward refs).
 
 import type { FrozenGraph } from "../domain/graph.js";
-import type { TypeInfo, InstanceMirror, TermInfo } from "../manifest/reflection/reflection.js";
+import type { TypeInfo, InstanceMirror, TermInfo, ReflectedNode } from "../manifest/reflection/reflection.js";
 import { MetaKind } from "../manifest/enums.js";
 import { Snapshot } from "./snapshot.js";
 import type { IGraphQuery } from "./graph-query.js";
@@ -25,7 +25,7 @@ export class GraphQuery implements IGraphQuery
         if (owner === undefined) return undefined;
         const type = owner.getType(typeId);
         if (type === undefined) return undefined;
-        const icon = type.getAnnotations().find((a) => a.type.name === GraphQuery.IconAnnotation);
+        const icon = type.getAnnotations().find((a) => a.type.fullName === GraphQuery.IconAnnotation);
         if (icon === undefined) return undefined;
         const path = icon.args.get(GraphQuery.IconPathArg);
         if (typeof path !== "string") return undefined;
@@ -68,6 +68,12 @@ export class GraphQuery implements IGraphQuery
     {
         const node = this.graph.getNode(id);
         if (node === undefined || this.graph.ownerOf(node.type) === undefined) return undefined;
+        return this.graph.reflect(node);
+    }
+
+    public Materialize(node: ReflectedNode): InstanceMirror | undefined
+    {
+        if (this.graph.ownerOf(node.type) === undefined) return undefined;
         return this.graph.reflect(node);
     }
 

@@ -374,3 +374,17 @@ test("dispose detaches the GraphRevision subscription", async () =>
     await world.Service.WhenIdle();
     assert.equal(world.Service.GraphRevision, revision);
 });
+
+test("a rejected warmup is not sticky: the next ModelView / Resources re-warm and recover", async () =>
+{
+    const solution = BuildStateWorld.MetaSolution("S", "mm", "tech-architecture", BuildStateWorld.MetaSource);
+    const world = new BuildStateWorld(solution, true);
+    await assert.rejects(world.Service.Ready(), /warm cache failed/);
+    const storage = [...solution.Members][0]!.Storage!;
+    const view = await world.Service.ModelView(storage);
+    assert.ok(view !== undefined && view.model.has("ea.App"), "ModelView recovered after the failed warmup");
+    assert.deepEqual(await world.Service.Resources("ea.App"), []);
+    await world.Service.Ready();
+    assert.equal(world.Service.BuildState, GraphBuildState.Ready);
+    world.Service.dispose();
+});

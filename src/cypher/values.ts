@@ -4,8 +4,15 @@ import type { EntityReader, EntityHost } from "../reflection-client/index.js";
 import { ReflectedEntity, MirrorReader } from "../reflection-client/index.js";
 import { Snapshot, type MirrorSnapshot } from "../graph-api/index.js";
 import { CypherWriteError } from "./errors.js";
+import { CypherCellCodec } from "./cell-codec.js";
 
-export type CypherValueDto = MirrorSnapshot | Scalar | null | CypherValueDto[] | { [k: string]: CypherValueDto };
+/** A node cell: its snapshot under the reserved `$node` key (see CypherCellCodec). */
+export interface NodeCellDto
+{
+    readonly $node: MirrorSnapshot;
+}
+
+export type CypherValueDto = NodeCellDto | Scalar | null | CypherValueDto[] | { [k: string]: CypherValueDto };
 
 export type ParameterValue = Scalar | null | readonly ParameterValue[] | { readonly [key: string]: ParameterValue };
 
@@ -133,7 +140,7 @@ export class NodeValue extends CypherValue
 
     public ToDto(): CypherValueDto
     {
-        return Snapshot.of(this.mirror);
+        return CypherCellCodec.EncodeNode(Snapshot.of(this.mirror));
     }
 
     public GroupKey(): string

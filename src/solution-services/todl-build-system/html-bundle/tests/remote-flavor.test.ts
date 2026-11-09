@@ -58,7 +58,7 @@ class Fixture
     public static Compiled(): CompiledPackage
     {
         const outcome = compilePackage([], [{ uri: "model.todl", text:
-            `namespace acme { concept App { label : string?; } model M : acme { App a1 { label = "A1"; } } }` }],
+            `namespace acme { concept App { } model M : acme { App a1 { label = "A1"; } } }` }],
             { id: "my-arch", version: "0.1.0" });
         assert.ok(outcome.ok && outcome.package, JSON.stringify(outcome.diagnostics));
         return outcome.package!;
@@ -119,7 +119,10 @@ class Fixture
     }
 
     public static readonly TodlSrc = join(dirname(fileURLToPath(import.meta.url)), "../../../..");
-    public static readonly ProtocolRoot = join(Fixture.TodlSrc, "../../pragmatic-protocol");
+    // pragmatic-protocol is not a todl dependency (nor published), so its typings come from a checkout:
+    // the sibling ../pragmatic-protocol in the local workspace, or wherever CI checked it out and built it.
+    private static readonly ProtocolRootEnv = "PRAGMATIC_PROTOCOL_ROOT";
+    public static readonly ProtocolRoot = process.env[Fixture.ProtocolRootEnv] ?? join(Fixture.TodlSrc, "../../pragmatic-protocol");
 }
 
 class MapPackageSource implements IPackageSource

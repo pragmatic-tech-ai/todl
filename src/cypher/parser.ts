@@ -45,7 +45,9 @@ export class CypherParser
     private static readonly KwDetach = "DETACH";
     private static readonly KwRemove = "REMOVE";
     private static readonly RelPropsNotAllowed = "relationships carry no properties in CREATE/MERGE";
-    private static readonly MergeSingleNodeOnly = "MERGE supports a single node pattern only";
+    private static readonly BothArrowheads = "a relationship cannot point both ways (<-[...]->)";
+    private static readonly WordOn = "ON";
+    private static readonly OnNeedsCreateOrMatch = "expected CREATE or MATCH after ON";
     private static readonly AdditiveOps: ReadonlyMap<TokenKind, ArithmeticOp> = new Map([
         [TokenKind.Plus, ArithmeticOp.Add], [TokenKind.Dash, ArithmeticOp.Sub],
     ]);
@@ -148,8 +150,21 @@ export class CypherParser
     {
         this.expectKeyword(CypherParser.KwMerge);
         const path = this.parseWritePath();
-        if (path.Rels.length > 0) throw this.error(CypherParser.MergeSingleNodeOnly);
-        return new MergeClause(path);
+        const onCreate: SetItem[] = [];
+        const onMatch: SetItem[] = [];
+        // ON is contextual, not a reserved keyword: only here can an identifier "on" follow a pattern, so a variable or
+        // property named `on` elsewhere keeps working. Repeated ON actions accumulate in source order.
+        while (this.peekContextual(CypherParser.WordOn))
+        {
+            this.advance();
+            let target: SetItem[];
+            if (this.acceptKeyword(CypherParser.KwCreate)) target = onCreate;
+            else if (this.acceptKeyword(CypherParser.KwMatch)) target = onMatch;
+            else throw this.error(CypherParser.OnNeedsCreateOrMatch);
+            this.expectKeyword(CypherParser.KwSet);
+            target.push(...this.parseSetItems());
+        }
+        return new MergeClause(path, onCreate, onMatch);
     }
 
     private parseWritePath(): PatternPath
@@ -165,15 +180,21 @@ export class CypherParser
     private parseSet(): SetClause
     {
         this.expectKeyword(CypherParser.KwSet);
+        return new SetClause(this.parseSetItems());
+    }
+
+    private parseSetItems(): SetItem[]
+    {
         const items = [this.parseSetItem()];
         while (this.accept(TokenKind.Comma)) items.push(this.parseSetItem());
-        return new SetClause(items);
+        return items;
     }
 
     private parseSetItem(): SetItem
     {
         const variable = this.expect(TokenKind.Identifier).Text;
         if (this.accept(TokenKind.PlusEq)) return new SetItem(variable, undefined, this.parseExpression(), SetMode.MergeMap);
+        if (this.accept(TokenKind.Eq)) return new SetItem(variable, undefined, this.parseExpression(), SetMode.Replace);
         this.expect(TokenKind.Dot);
         const property = this.expectName();
         this.expect(TokenKind.Eq);
@@ -311,6 +332,8 @@ export class CypherParser
         let outgoing = false;
         if (this.accept(TokenKind.ArrowRight)) outgoing = true;
         else this.expect(TokenKind.Dash);
+        // openCypher: a relationship points one way or neither (<-[]-, -[]->, -[]-), never both.
+        if (incoming && outgoing) throw this.error(CypherParser.BothArrowheads);
 
         const direction = incoming ? RelDirection.Incoming : (outgoing ? RelDirection.Outgoing : RelDirection.Undirected);
         return new RelPattern(variable, relType, direction, props, minHops, maxHops);
@@ -656,6 +679,13 @@ export class CypherParser
             return t.Raw;
         }
         return this.expect(TokenKind.Identifier).Text;
+    }
+
+    // A non-reserved word recognized only in one grammar position (lexed as an Identifier, matched case-insensitively).
+    private peekContextual(word: string): boolean
+    {
+        const t = this.peek();
+        return t.Kind === TokenKind.Identifier && t.Text.toUpperCase() === word;
     }
 
     private peekKeyword(word: string): boolean

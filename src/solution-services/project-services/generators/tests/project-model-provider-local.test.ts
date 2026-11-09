@@ -18,7 +18,7 @@ class EmptySource implements IPackageSource
 
 class LocalFixture
 {
-    public static readonly WidgetModel = "namespace acme { concept Widget { label : string?; } }";
+    public static readonly WidgetModel = "namespace acme { concept Widget { } }";
 
     // A meta-model manifest with an id but NO packageVersion (an unpublished in-solution member).
     public static VersionlessManifest(): ProjectManifest

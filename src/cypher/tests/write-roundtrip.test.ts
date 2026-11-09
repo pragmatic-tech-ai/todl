@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { CypherParser } from "../parser.js";
+import { CypherUnparser } from "../unparser.js";
 import { CypherQuery, Pattern, Expr, Return } from "../fluent.js";
 import { CypherQueryModel } from "../query-model.js";
 import { CypherSemanticError } from "../errors.js";
@@ -136,5 +137,48 @@ describe("cypher write fluent + unparser round-trip", () =>
     it("a WITH-terminated query still needs RETURN", () =>
     {
         assert.throws(() => CypherQuery.Match(Pattern.Node("n")).With(Return.Node("n")).ToModel(), /requires a Return clause/);
+    });
+});
+
+describe("cypher write fluent + unparser round-trip: MERGE ON actions + full-replace SET", () =>
+{
+    it("MERGE ... ON CREATE SET ... ON MATCH SET round-trips", () =>
+    {
+        const q = CypherQuery.Merge(Pattern.Node("n").Label("shop.Customer").Prop("k", 1))
+            .OnCreateSet(Expr.Prop("n", "a"), Expr.Lit(1))
+            .OnCreateSet(Expr.Prop("n", "b"), Expr.Lit(2))
+            .OnMatchSet(Expr.Prop("n", "c"), Expr.Lit(3));
+        RoundTrip.Check(q, "MERGE (n:shop.Customer {k: 1}) ON CREATE SET n.a = 1, n.b = 2 ON MATCH SET n.c = 3");
+    });
+
+    it("an ON action must directly follow a Merge", () =>
+    {
+        assert.throws(() => CypherQuery.Match(Pattern.Node("n")).OnCreateSet(Expr.Prop("n", "a"), Expr.Lit(1)), CypherSemanticError);
+        assert.throws(() => CypherQuery.Merge(Pattern.Node("n").Label("shop.Customer")).OnMatchSet(Expr.Var("n"), Expr.Lit(1)), CypherSemanticError);
+    });
+
+    it("SET n = {map} round-trips", () =>
+    {
+        const q = CypherQuery.Match(Pattern.Node("n").Label("shop.Customer")).SetReplace("n", Expr.Map({ a: Expr.Lit(1) }));
+        RoundTrip.Check(q, "MATCH (n:shop.Customer) SET n = {a: 1}");
+    });
+
+    it("text with += inside an ON action round-trips through the parser", () =>
+    {
+        const text = "MERGE (n:shop.Customer) ON CREATE SET n += {a: 1} ON MATCH SET n = {b: 2}";
+        const once = new CypherUnparser().Text(new CypherParser(text).Parse());
+        assert.equal(once, text);
+        assert.equal(RoundTrip.Shape(new CypherParser(once).Parse()), RoundTrip.Shape(new CypherParser(text).Parse()));
+    });
+});
+
+describe("cypher write fluent + unparser round-trip: path MERGE", () =>
+{
+    it("a MERGE over a relationship path round-trips with its relationship variable and ON action", () =>
+    {
+        const q = CypherQuery.Match(Pattern.Node("c").Label("shop.Customer"))
+            .Merge(Pattern.Node("c").Out("orders", Pattern.Node("o").Label("shop.Order").Prop("total", "1"), undefined, "r"))
+            .OnCreateSet(Expr.Prop("c", "tier"), Expr.Lit("linked"));
+        RoundTrip.Check(q, "MATCH (c:shop.Customer) MERGE (c)-[r:orders]->(o:shop.Order {total: '1'}) ON CREATE SET c.tier = 'linked'");
     });
 });
