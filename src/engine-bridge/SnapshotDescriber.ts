@@ -136,6 +136,35 @@ class CellConverter
 }
 
 /**
+ * The seed's property values for one node: `label` null and `class` defaults first, then each scalar converted by
+ * CellConverter. The one conversion path the instance seed (DescribeNode) and SeedProperties share.
+ */
+class SeedPropertyValues
+{
+    public readonly Values = new Map<string, CellValue>();
+
+    public constructor(cls: string | null)
+    {
+        this.Values.set(TodlNames.Label, null);
+        this.Values.set(TodlNames.Class, cls);
+    }
+
+    /** Converts `raw` to `type` and sets it; the failure code when it does not convert (nothing is set then). */
+    public Set(name: string, type: ValueType | undefined, raw: Scalar): DescribeDiagnosticCode | undefined
+    {
+        const converted = CellConverter.Convert(type, raw);
+        if (converted.Failure !== undefined) return converted.Failure;
+        this.Values.set(name, converted.Value!);
+        return undefined;
+    }
+
+    public ToRecord(): Record<string, CellValue>
+    {
+        return Object.fromEntries(this.Values);
+    }
+}
+
+/**
  * Canonical JSON for the content version: object keys sorted, arrays in order, bigint as a decimal string, engine
  * value classes (DateValue, …) by their fields, undefined members omitted.
  */
@@ -232,24 +261,26 @@ export class SnapshotDescriber
     private constructor(private readonly snapshot: MetadataSnapshot, private readonly options: IDescribeOptions) {}
 
     /**
-     * The engine property values a node with these scalar `attrs` would carry, converted as the seed converts them:
-     * `label` null and `class` = `cls` unless an attr sets them, then every attr naming a property of `members` (the
-     * concept's effective engine members) converted to that property's value type; an attr that names no property, or
-     * does not convert, is left out (the seed skips it with a diagnostic). For a host that asks the engine about a
-     * node it does not hold as an instance (GraphReader.Admits): the server's schema-level class and term nodes.
+     * The engine property values a node with these scalar `attrs` would carry, through the seed's own conversion
+     * (SeedPropertyValues): `label` null and `class` = `cls` unless an attr sets them, then every attr naming a property
+     * of `members` (the concept's effective engine members) converted to that property's value type; an attr that names
+     * no property, or does not convert, is left out (the seed skips it with a diagnostic). For a host that asks the
+     * engine about a node it does not hold as an instance (GraphReader.Admits): the server's schema-level class and
+     * term nodes. It reads `attrs` only, so unlike the instance seed it does not apply the reflected mirror's
+     * class-flattened field values, does not read a single-card taxonomy field's term from refs, and fills every
+     * property member named by an attr (the seed never fills the Reserved `class` / `taxonomy` members from attrs:
+     * pass them in `members` only if an attr may set them).
      */
     public static SeedProperties(members: readonly { readonly Name: string; readonly Kind: MemberKind; readonly Type?: ValueType }[], attrs: ReadonlyMap<string, Scalar>, cls: string | null): Map<string, CellValue>
     {
-        const properties = new Map<string, CellValue>([[TodlNames.Label, null], [TodlNames.Class, cls]]);
+        const values = new SeedPropertyValues(cls);
         for (const member of members)
         {
             if (member.Kind !== MemberKind.Property) continue;
             const raw = attrs.get(member.Name);
-            if (raw === undefined) continue;
-            const converted = CellConverter.Convert(member.Type, raw);
-            if (converted.Failure === undefined) properties.set(member.Name, converted.Value!);
+            if (raw !== undefined) values.Set(member.Name, member.Type, raw);
         }
-        return properties;
+        return values.Values;
     }
 
     public static Describe(snapshot: MetadataSnapshot, options: IDescribeOptions): ISnapshotDescription
@@ -658,7 +689,7 @@ export class SnapshotDescriber
     {
         const plans = this.Effective(node.type);
         const mirror = this.snapshot.reflect(node);
-        const properties: Record<string, CellValue> = { [TodlNames.Label]: null, [TodlNames.Class]: node.class ?? null };
+        const values = new SeedPropertyValues(node.class ?? null);
         for (const [name, plan] of plans)
         {
             let raw: Scalar | undefined;
@@ -677,13 +708,11 @@ export class SnapshotDescriber
                 }
             }
             if (raw === undefined) continue;
-            const converted = CellConverter.Convert(plan.Input.Type, raw);
-            if (converted.Failure !== undefined)
+            const failure = values.Set(name, plan.Input.Type, raw);
+            if (failure !== undefined)
             {
-                this.Report(converted.Failure, this.Subject(node, name), MessageFormat.Format(SnapshotDescriber.MismatchMessage, String(raw), name, ValueType[plan.Input.Type!]));
-                continue;
+                this.Report(failure, this.Subject(node, name), MessageFormat.Format(SnapshotDescriber.MismatchMessage, String(raw), name, ValueType[plan.Input.Type!]));
             }
-            properties[name] = converted.Value!;
         }
         for (const name of Object.keys(node.attrs))
         {
@@ -719,7 +748,7 @@ export class SnapshotDescriber
             PublicId: node.id,
             Concept: node.type,
             Owner: owner,
-            Properties: properties,
+            Properties: values.ToRecord(),
             Links: links,
         };
     }
@@ -738,27 +767,25 @@ export class SnapshotDescriber
                 {
                     if (seen.has(term.id)) continue;
                     seen.add(term.id);
-                    const properties: Record<string, CellValue> = { [TodlNames.Label]: null, [TodlNames.Class]: null, [TodlNames.Taxonomy]: taxonomy.name };
+                    const values = new SeedPropertyValues(null);
+                    values.Values.set(TodlNames.Taxonomy, taxonomy.name);
                     for (const [name, plan] of plans)
                     {
                         if (plan.Source !== MemberSource.Scalar) continue;
                         const raw = SnapshotDescriber.FixedValue(term, name);
                         if (raw === undefined) continue;
-                        const converted = CellConverter.Convert(plan.Input.Type, raw);
-                        if (converted.Failure !== undefined)
+                        if (values.Set(name, plan.Input.Type, raw) !== undefined)
                         {
                             this.Report(DescribeDiagnosticCode.ValueTypeMismatch, `${term.id}${SnapshotDescriber.MemberSeparator}${name}`,
                                 MessageFormat.Format(SnapshotDescriber.TermMismatchMessage, term.id, String(raw), name, ValueType[plan.Input.Type!]));
-                            continue;
                         }
-                        properties[name] = converted.Value!;
                     }
                     const broader = term.broader;
                     out.push({
                         PublicId: term.id,
                         Concept: TodlNames.Term,
                         Owner: manifest.model,
-                        Properties: properties,
+                        Properties: values.ToRecord(),
                         Links: broader === undefined ? [] : [{ Relationship: TodlNames.Broader, To: broader.id }],
                     });
                 }
