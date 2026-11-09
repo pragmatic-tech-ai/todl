@@ -24,6 +24,7 @@ import { TodlNames } from './TodlNames.js';
 class TodlValueConverter
 {
     private static readonly UnsupportedMessage = 'Member "{0}" of "{1}" cannot hold this value in a .todl file';
+    private static readonly NegativeZero = '-0';
 
     /** The scalar to write, or null to remove the field. */
     public static ToScalar(id: string, member: string, value: CellValue): Scalar | null
@@ -32,7 +33,12 @@ class TodlValueConverter
         {
             return value;
         }
-        if ((typeof value === 'number' && Number.isFinite(value)) || typeof value === 'bigint')
+        if (typeof value === 'number' && Number.isFinite(value))
+        {
+            // String(-0) is "0": keep the sign so a Float64 -0 reads back as -0.
+            return Object.is(value, -0) ? TodlValueConverter.NegativeZero : String(value);
+        }
+        if (typeof value === 'bigint')
         {
             return String(value);
         }

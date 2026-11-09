@@ -110,21 +110,36 @@ function literal(v: Scalar): string
 }
 
 /**
- * Field values as `.todl` literals, type-directed: the parser keeps numeric literals as decimal strings, so a string
- * value of an `integer` / `number` field (by its scalar base, through primitive aliases) that is a numeric literal is
- * written bare (`count = 5;`, not `count = "5";`) and a re-emitted file keeps the literal the author wrote. Any other
- * text (`-3`, `1e-7`) has no bare literal and stays quoted.
+ * Field values as `.todl` literals. The lexer reads only one numeric literal: unsigned digits with an optional fraction
+ * (no sign, no exponent). Strings: the parser keeps numeric literals as decimal strings, so a string value of an
+ * `integer` / `number` field (by its scalar base, through primitive aliases) in that form is written bare
+ * (`count = 5;`, not `count = "5";`) and a re-emitted file keeps the literal the author wrote; any other string stays
+ * quoted. JS numbers (ModelDraft.setField accepts them): a finite number whose decimal text is in that form is written
+ * bare, any other finite number (`-3`, `1e-7`, `1e+21`, `-0`) as its quoted decimal text, which re-parses to the same
+ * value; NaN and +/-Infinity have no `.todl` form and throw, so the emitter never writes text that misreads.
  */
 class FieldLiteral
 {
-  /** The only numeric literal the lexer reads: unsigned digits with an optional fraction (no sign, no exponent). */
   private static readonly NumericLiteral = /^\d+(\.\d+)?$/;
   private static readonly Numeric: ReadonlySet<ScalarBase> = new Set([ScalarBase.Integer, ScalarBase.Number]);
+  private static readonly NegativeZero = "-0";
+  private static readonly NotFiniteMessage = "field \"{0}\" of \"{1}\" holds {2}, which no .todl literal can hold";
 
   static Write(node: JsonNode, name: string, value: Scalar, model: Repository | undefined): string
   {
+    if (typeof value === "number") return FieldLiteral.WriteNumber(node, name, value);
     if (typeof value === "string" && FieldLiteral.NumericLiteral.test(value) && FieldLiteral.IsNumeric(node, name, model)) return value;
     return literal(value);
+  }
+
+  private static WriteNumber(node: JsonNode, name: string, value: number): string
+  {
+    if (!Number.isFinite(value))
+    {
+      throw new Error(FieldLiteral.NotFiniteMessage.replace("{0}", name).replace("{1}", node.id).replace("{2}", String(value)));
+    }
+    const text = Object.is(value, -0) ? FieldLiteral.NegativeZero : String(value);
+    return FieldLiteral.NumericLiteral.test(text) ? text : JSON.stringify(text);
   }
 
   private static IsNumeric(node: JsonNode, name: string, model: Repository | undefined): boolean

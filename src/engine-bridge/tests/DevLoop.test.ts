@@ -71,6 +71,14 @@ class DevLoopFx
     public static readonly CreatedLabel = 'Made';
     public static readonly AuthoredCount = /count = 1;/;
     public static readonly Big = 'shop.Kinds.Big';
+    /** Int64 extremes and floats whose decimal text is not a bare TODL literal (or loses its sign as String(-0)). */
+    public static readonly Extremes: readonly [string, string, bigint | number][] = [
+        [DevLoopFx.W0, DevLoopFx.Count, 2n ** 63n - 1n],
+        [DevLoopFx.W1, DevLoopFx.Count, -(2n ** 63n)],
+        [DevLoopFx.W0, DevLoopFx.Weight, 0.1],
+        [DevLoopFx.W1, DevLoopFx.Weight, 1e21],
+        [DevLoopFx.W2, DevLoopFx.Weight, -0],
+    ];
     public static readonly Small = 'shop.Kinds.Small';
     public static readonly MintPrefix = 'o';
     public static readonly AuthoredW0 = 'name = "w0"; count = 1;';
@@ -234,6 +242,7 @@ class MoveFx
     /** A write to the moved node after the upgrade: routed by its new owner, it lands in the app's file. */
     public static readonly Rename = "MATCH (n:shop.Widget {name: 'm'}) SET n.name = 'moved'";
     public static readonly Renamed = /name = "moved";/;
+    public static readonly OnlyOwnerChanged = 'the whole node state but the owner is unchanged';
 
     public static Workspace(): MemoryModelWorkspace
     {
@@ -293,6 +302,39 @@ describe('dev loop end to end', () =>
             assert.equal(upgrade.SeedCommit, undefined, DevLoopFx.NoSeedCommit);
             assert.deepEqual(await DevLoopFx.State(engine), written);
             assert.equal(await DevLoopFx.IsSeeded(engine, DevLoopFx.Created), true);
+        }
+        finally
+        {
+            await engine.dispose();
+        }
+    });
+
+    test('numeric extremes round-trip through the files', async () =>
+    {
+        const workspace = DevLoopFx.Workspace();
+        const connector = new TodlFileConnector(workspace);
+        const engine = await DevLoopFx.Open(connector, await DevLoopFx.Describe(workspace));
+        try
+        {
+            const txn = await engine.Begin(AccessScope.System);
+            try
+            {
+                for (const [id, member, value] of DevLoopFx.Extremes) txn.SetProperty(id, member, value);
+                await txn.Commit();
+            }
+            finally
+            {
+                txn.dispose();
+            }
+            const written = await DevLoopFx.State(engine);
+            await engine.Upgrade((await DevLoopFx.Describe(workspace)).Description);
+            const state = await DevLoopFx.State(engine);
+            assert.deepEqual(state, written);
+            for (const [id, member, value] of DevLoopFx.Extremes)
+            {
+                const back = state.get(id)!.Node.Properties.get(member);
+                assert.ok(Object.is(back, value), `${id}.${member}: ${String(value)} came back as ${String(back)}`);
+            }
         }
         finally
         {
@@ -360,8 +402,8 @@ describe('dev loop end to end', () =>
             const after = await DevLoopFx.State(engine);
             const moved = after.get(MoveFx.Moving)!;
             assert.equal(moved.Node.Owner, MoveFx.App);
-            assert.deepEqual(moved.Node.Properties, before.get(MoveFx.Moving)!.Node.Properties);
-            assert.deepEqual(moved.Out, before.get(MoveFx.Moving)!.Out);
+            const was = before.get(MoveFx.Moving)!;
+            assert.deepEqual({ ...moved, Node: { ...moved.Node, Owner: MoveFx.Lib } }, was, MoveFx.OnlyOwnerChanged);
             assert.equal(after.get(MoveFx.Staying)!.Node.Owner, MoveFx.Lib);
             assert.equal(await DevLoopFx.IsSeeded(engine, MoveFx.Moving), true);
             await DevLoopFx.Write(engine, [MoveFx.Rename]);
@@ -380,7 +422,6 @@ describe('engine subpath export surface', () =>
     test('exports exactly the bridge surface', () =>
     {
         assert.deepEqual(Object.keys(EngineSurface).sort(), [...ExportSurface.Expected].sort());
-        const types: (keyof IExportedTypes)[] = ['Diagnostic', 'Options', 'Description', 'Facts', 'PolicyDiagnostic', 'Workspace', 'Session'];
-        assert.equal(types.length, 7);
+        // The type exports are pinned by IExportedTypes above: typecheck fails when one is dropped.
     });
 });
