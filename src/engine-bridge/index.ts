@@ -4,3 +4,6 @@ export { DescribeDiagnosticCode, type IDescribeDiagnostic, type IDescribeOptions
 export { TodlNames } from './TodlNames.js';
 export { type IPrincipalFacts } from './PrincipalFacts.js';
 export { PolicyScopeCompiler, PolicyDiagnosticCode, type IPolicyDiagnostic } from './PolicyScopeCompiler.js';
+export { type ITodlDraftSession, type ITodlModelWorkspace } from './TodlModelWorkspace.js';
+export { TodlFileConnector } from './TodlFileConnector.js';
+export { TodlNodePlacement } from './TodlNodePlacement.js';
