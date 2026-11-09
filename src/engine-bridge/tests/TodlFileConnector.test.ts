@@ -582,10 +582,14 @@ class RefusalFx
 {
     public static readonly Pinned = 'pinned';
     public static readonly W9 = 'shop.w9';
+    public static readonly BigTerm = 'term Big { }';
+    public static readonly PinningBigTerm = `term Big { name = "${RefusalFx.Pinned}"; }`;
+    public static readonly W1Line = 'Widget w1 { }';
+    public static readonly W1AndClassedW9 = `${RefusalFx.W1Line}\n        Widget w9 instanceof Kinds.Big { }`;
     /** The shop with a term that pins `name`, and w9 classed by it. */
     public static readonly ClassedShop = ConnectorFx.Shop
-        .replace('term Big { }', 'term Big { name = "pinned"; }')
-        .replace('Widget w1 { }', 'Widget w1 { }\n        Widget w9 instanceof Kinds.Big { }');
+        .replace(RefusalFx.BigTerm, RefusalFx.PinningBigTerm)
+        .replace(RefusalFx.W1Line, RefusalFx.W1AndClassedW9);
     public static readonly UnknownOp = 99;
 
     public static ClassedWorkspace(): MemoryModelWorkspace

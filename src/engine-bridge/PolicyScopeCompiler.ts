@@ -37,6 +37,7 @@ import {
     type PolicyPredicate,
     type PolicyRef,
 } from '../compiler-services/policy/policy-predicate.js';
+import { NumericText } from '../compiler-services/emit/numeric-text.js';
 import { MessageFormat } from './MessageFormat.js';
 import type { IPrincipalFacts } from './PrincipalFacts.js';
 
@@ -431,9 +432,12 @@ class TermCompiler
     }
 
     /**
-     * A fact or literal against a member's engine type, mirroring the evaluator's === on raw entity values (ruling
-     * PF-a): TODL holds numeric entity values as decimal text, so a decimal string converts exactly to the member's
-     * number, a JS number never equals one, and any other string fails closed.
+     * A fact or literal against a member's engine type, mirroring the evaluator's === on raw entity values (rulings
+     * PF-a, PF-f): TODL holds numeric entity values as decimal text, so a string in the canonical text of a number
+     * (`2`, `-3`, `2.5`, `1e+21`) converts to that number, a JS number never equals one, and any other string
+     * (`02`, `+2`, `2.0`, `0x10`, `1e1`, `.5`) fails closed, since its text could never equal a canonical entity
+     * value. Residual: the entity side is typed storage, so a non-canonical value seeded from a `.todl` file (`count =
+     * "02"`) is held as its number and matches the canonical claim `"2"`, where the evaluator's raw text would not.
      */
     private static Convert(type: ValueType, raw: unknown): IConversion
     {
@@ -466,7 +470,7 @@ class TermCompiler
         return cell === undefined ? TermCompiler.Outcome(ConversionOutcome.Unconvertible) : TermCompiler.Cell(cell);
     }
 
-    /** Integral decimal text within the signed 64-bit range. */
+    /** The canonical decimal text of an integer within the signed 64-bit range (`String(BigInt(t)) === t`). */
     private static ToInt64(text: string): bigint | undefined
     {
         if (!TermCompiler.IntegerPattern.test(text))
@@ -474,18 +478,14 @@ class TermCompiler
             return undefined;
         }
         const value = BigInt(text);
-        return BigInt.asIntN(TermCompiler.Int64Bits, value) === value ? value : undefined;
+        return String(value) === text && BigInt.asIntN(TermCompiler.Int64Bits, value) === value ? value : undefined;
     }
 
-    /** Untrimmed decimal text of a finite number. */
+    /** The canonical text of a finite number (`NumericText.Of(Number(t)) === t`). */
     private static ToFloat64(text: string): number | undefined
     {
-        if (text.length === 0 || text.trim() !== text)
-        {
-            return undefined;
-        }
         const value = Number(text);
-        return Number.isFinite(value) ? value : undefined;
+        return Number.isFinite(value) && NumericText.Of(value) === text ? value : undefined;
     }
 
     private static Cell(cell: CellValue): IConversion

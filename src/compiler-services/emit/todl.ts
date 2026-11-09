@@ -10,6 +10,7 @@ import { EdgeKind, Direction, type NodeId, type Scalar } from "../model/graph.js
 import { Repository, ScalarBase } from "../model/model.js";
 import { type TodlDocument, type JsonNode } from "./json.js";
 import { NumericText } from "./numeric-text.js";
+import { MessageTemplate } from "../diagnostics/message-template.js";
 
 /** A reified-edge operator, keyed by concept for shorthand emit. */
 export interface EmitOperator { glyph: string; from: string; to: string; }
@@ -143,7 +144,7 @@ class FieldLiteral
   {
     if (!Number.isFinite(value))
     {
-      throw new Error(FieldLiteral.NotFiniteMessage.replace("{0}", name).replace("{1}", node.id).replace("{2}", String(value)));
+      throw new Error(MessageTemplate.Format(FieldLiteral.NotFiniteMessage, name, node.id, String(value)));
     }
     const text = NumericText.Of(value);
     return FieldLiteral.NumericLiteral.test(text) ? text : JSON.stringify(text);

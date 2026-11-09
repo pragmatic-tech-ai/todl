@@ -25,6 +25,7 @@ import { Domain } from '../../domain/domain.js';
 import { MemoryPackageSource } from '../../domain/memory-package-source.js';
 import { SnapshotDescriber } from '../SnapshotDescriber.js';
 import { PolicyDiagnosticCode, PolicyScopeCompiler } from '../PolicyScopeCompiler.js';
+import { MessageFormat } from '../MessageFormat.js';
 import type { IPrincipalFacts } from '../PrincipalFacts.js';
 
 type FactMap = Record<string, Scalar | readonly Scalar[]>;
@@ -247,8 +248,9 @@ describe('PolicyScopeCompiler parity with the identity-engine evaluator (P4-b..P
 });
 
 /**
- * Ruling PF-a: TODL holds numeric entity values as decimal text and the evaluator compares raw values with ===, so a
- * decimal-string fact or literal matches the member's number while a JS number never equals it.
+ * Rulings PF-a / PF-f: TODL holds numeric entity values as decimal text and the evaluator compares raw values with ===,
+ * so a canonical decimal-string fact or literal matches the member's number, a JS number never equals it, and a
+ * non-canonical string (whose text no canonical entity value can equal) fails closed.
  */
 class NumericParityFx
 {
@@ -260,28 +262,69 @@ class NumericParityFx
     public static readonly DenyEq = 'deny read when entity.{0} == {1};';
     public static readonly FactOperand = 'principal.v';
     public static readonly FactName = 'v';
+    public static readonly Level = 'level';
+    public static readonly Score = 'score';
+    public static readonly LevelText = '2';
+    public static readonly LevelValue = 2;
+    public static readonly ScoreText = '2.5';
+    public static readonly ScoreValue = 2.5;
+    /** Texts of level 2 / score 2.5 that are not their canonical form. */
+    public static readonly NonCanonicalLevels: readonly string[] = ['02', '+2', '2.0', '0x2', '2e0', ' 2'];
+    public static readonly NonCanonicalScores: readonly string[] = ['2.50', '+2.5', '02.5', '25e-1', ' 2.5'];
+    public static readonly AllowStringFact = '{0}: allow == string fact';
+    public static readonly AllowNumberFact = '{0}: allow == number fact never matches';
+    public static readonly AllowStringLiteral = '{0}: allow == string literal';
+    public static readonly AllowNumberLiteral = '{0}: allow == number literal never matches';
+    public static readonly DenyStringFact = '{0}: deny == string fact';
+    public static readonly DenyNumberFact = '{0}: deny == number fact never denies';
+    public static readonly DenyStringLiteral = '{0}: deny == string literal';
+    public static readonly DenyNumberLiteral = '{0}: deny == number literal never denies';
+    public static readonly AllowNonCanonical = '{0}: allow == non-canonical fact "{1}" fails closed';
+    public static readonly DenyNonCanonical = '{0}: deny == non-canonical fact "{1}" fails closed (denies everyone)';
 
     /** One field (level 2 / score 2.5 on c2), every operand form, allow and deny. */
     public static Cases(member: string, text: string, value: number): IParityCase[]
     {
-        const literal = (rule: string, operand: string): string => rule.replace('{0}', member).replace('{1}', operand);
-        const fact = (rule: string): string => literal(rule, NumericParityFx.FactOperand);
+        const F = NumericParityFx;
+        const rule = (template: string, operand: string): string => MessageFormat.Format(template, member, operand);
+        const title = (template: string): string => MessageFormat.Format(template, member);
         return [
-            { Name: `${member}: allow == string fact`, Rules: fact(NumericParityFx.AllowEq), Facts: { [NumericParityFx.FactName]: text }, Visible: NumericParityFx.OnlyC2 },
-            { Name: `${member}: allow == number fact never matches`, Rules: fact(NumericParityFx.AllowEq), Facts: { [NumericParityFx.FactName]: value }, Visible: NumericParityFx.Nobody },
-            { Name: `${member}: allow == string literal`, Rules: literal(NumericParityFx.AllowEq, JSON.stringify(text)), Facts: {}, Visible: NumericParityFx.OnlyC2 },
-            { Name: `${member}: allow == number literal never matches`, Rules: literal(NumericParityFx.AllowEq, text), Facts: {}, Visible: NumericParityFx.Nobody },
-            { Name: `${member}: deny == string fact`, Rules: fact(NumericParityFx.DenyEq), Facts: { [NumericParityFx.FactName]: text }, Visible: NumericParityFx.AllButC2 },
-            { Name: `${member}: deny == number fact never denies`, Rules: fact(NumericParityFx.DenyEq), Facts: { [NumericParityFx.FactName]: value }, Visible: NumericParityFx.All },
-            { Name: `${member}: deny == string literal`, Rules: literal(NumericParityFx.DenyEq, JSON.stringify(text)), Facts: {}, Visible: NumericParityFx.AllButC2 },
-            { Name: `${member}: deny == number literal never denies`, Rules: literal(NumericParityFx.DenyEq, text), Facts: {}, Visible: NumericParityFx.All },
+            { Name: title(F.AllowStringFact), Rules: rule(F.AllowEq, F.FactOperand), Facts: { [F.FactName]: text }, Visible: F.OnlyC2 },
+            { Name: title(F.AllowNumberFact), Rules: rule(F.AllowEq, F.FactOperand), Facts: { [F.FactName]: value }, Visible: F.Nobody },
+            { Name: title(F.AllowStringLiteral), Rules: rule(F.AllowEq, JSON.stringify(text)), Facts: {}, Visible: F.OnlyC2 },
+            { Name: title(F.AllowNumberLiteral), Rules: rule(F.AllowEq, text), Facts: {}, Visible: F.Nobody },
+            { Name: title(F.DenyStringFact), Rules: rule(F.DenyEq, F.FactOperand), Facts: { [F.FactName]: text }, Visible: F.AllButC2 },
+            { Name: title(F.DenyNumberFact), Rules: rule(F.DenyEq, F.FactOperand), Facts: { [F.FactName]: value }, Visible: F.All },
+            { Name: title(F.DenyStringLiteral), Rules: rule(F.DenyEq, JSON.stringify(text)), Facts: {}, Visible: F.AllButC2 },
+            { Name: title(F.DenyNumberLiteral), Rules: rule(F.DenyEq, text), Facts: {}, Visible: F.All },
+        ];
+    }
+
+    /** Ruling PF-f: a non-canonical claim fails closed in either position (allow: nobody; deny: everyone denied). */
+    public static NonCanonical(member: string, texts: readonly string[]): IParityCase[]
+    {
+        const F = NumericParityFx;
+        return texts.flatMap((text) => [
+            { Name: MessageFormat.Format(F.AllowNonCanonical, member, text), Rules: MessageFormat.Format(F.AllowEq, member, F.FactOperand), Facts: { [F.FactName]: text }, Visible: F.Nobody },
+            { Name: MessageFormat.Format(F.DenyNonCanonical, member, text), Rules: MessageFormat.Format(F.DenyEq, member, F.FactOperand), Facts: { [F.FactName]: text }, Visible: F.Nobody },
+        ]);
+    }
+
+    public static AllCases(): IParityCase[]
+    {
+        const F = NumericParityFx;
+        return [
+            ...F.Cases(F.Level, F.LevelText, F.LevelValue),
+            ...F.Cases(F.Score, F.ScoreText, F.ScoreValue),
+            ...F.NonCanonical(F.Level, F.NonCanonicalLevels),
+            ...F.NonCanonical(F.Score, F.NonCanonicalScores),
         ];
     }
 }
 
-describe('PolicyScopeCompiler numeric members mirror the evaluator (PF-a)', () =>
+describe('PolicyScopeCompiler numeric members mirror the evaluator (PF-a, PF-f)', () =>
 {
-    for (const c of [...NumericParityFx.Cases('level', '2', 2), ...NumericParityFx.Cases('score', '2.5', 2.5)])
+    for (const c of NumericParityFx.AllCases())
     {
         test(c.Name, async () =>
         {
