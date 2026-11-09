@@ -26,6 +26,14 @@
       },
       "require": "./dist/solution-services/lsp/index.js"
     },
+    "./engine": {
+      "types": "./dist/engine-bridge/index.d.ts",
+      "import": {
+        "development": "./src/engine-bridge/index.ts",
+        "default": "./dist/engine-bridge/index.js"
+      },
+      "require": "./dist/engine-bridge/index.js"
+    },
     "./language-server": {
       "types": "./dist/language-server/index.d.ts",
       "import": {
@@ -131,6 +139,7 @@
   },
   "license": "Apache-2.0",
   "dependencies": {
+    "@pragmatic-tech-ai/graph": "^0.1.0",
     "@pragmatic-tech-ai/mural": "^0.62.6",
     "@pragmatic-tech-ai/todl-runtime": "^0.7.0",
     "typescript": "^5.7.0",
