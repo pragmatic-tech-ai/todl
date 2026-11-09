@@ -250,6 +250,7 @@ function emitBody(node: JsonNode, ctx: EmitCtx, indent: number, inlineChild: boo
     if (MARKER_ATTRS.has(name)) continue;
     lines.push(`${pad}${name} = ${literal(value as Scalar)};`);
   }
+  for (const text of node.variants ?? []) lines.push(`${pad}variant ${literal(text)};`);
   const byMember = new Map<string, string[]>();
   for (const r of ctx.rels.get(node.id) ?? [])
   {

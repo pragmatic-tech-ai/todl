@@ -24,6 +24,8 @@ export class HoverProvider
     private static readonly Bullet = "- ";
     private static readonly FieldTypeSeparator = ": ";
     private static readonly RelationshipArrow = " → ";
+    // An instance's recorded defects (`variant "…"`), listed under this heading.
+    private static readonly VariantsHeading = "**Variants** — where this instance breaks a rule of its concept:";
 
     public HoverAt(a: AnalysisSnapshot, uri: string, pos: Position): Hover | null
     {
@@ -43,6 +45,12 @@ export class HoverProvider
         const node = a.Model.resolve(symbol);
         const description = node?.attrs.get(HoverProvider.DescriptionAttr);
         if (typeof description === "string" && description.length > 0) lines.push("", description);
+        const variants = node?.variants ?? [];
+        if (variants.length > 0)
+        {
+            lines.push("", HoverProvider.VariantsHeading);
+            for (const v of variants) lines.push(`${HoverProvider.Bullet}${v}`);
+        }
 
         return { contents: { kind: MarkupKind.Markdown, value: lines.join(HoverProvider.Newline) } };
     }
