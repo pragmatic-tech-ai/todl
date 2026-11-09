@@ -1144,7 +1144,14 @@ class Parser
     this.expectKeyword("primitive");
     const nameTok = this.expect(TokenKind.Identifier);
     const name = nameTok.value;
-    const base = this.match(TokenKind.Colon) ? this.expectIdentifier() : null;
+    let base: string | null = null;
+    let baseSpan: SourceSpan | undefined;
+    if (this.match(TokenKind.Colon))
+    {
+      const baseTok = this.current();
+      base = this.expectIdentifier();
+      baseSpan = tokenSpan(baseTok, this.uri);
+    }
 
     let description = "";
     let regex: string | null = null;
@@ -1158,6 +1165,7 @@ class Parser
     this.expect(TokenKind.RBrace);
     const decl: PrimitiveDecl = { kind: DeclKind.Primitive, name, base, description, regex, span: this.spanFrom(start) };
     decl.nameSpan = tokenSpan(nameTok, this.uri);
+    if (baseSpan !== undefined) decl.baseSpan = baseSpan;
     return decl;
   }
 

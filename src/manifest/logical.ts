@@ -108,6 +108,11 @@ export interface LogicalManifest
     aspects?: Record<string, AspectDef>;
     classes: Record<string, ClassDef>;
     taxonomies: Record<string, TaxonomyDef>;
+    /**
+     * User primitives a field type reaches, keyed by id: each one's `: base` refinement parent (a builtin or another
+     * primitive id), or null for a base-less (opaque) primitive. Absent (older manifests, or none reached) = none.
+     */
+    primitives?: Record<string, string | null>;
 }
 
 /** A flattened instance node as seen by Axis-2 resolution (SPEC-03 §graph). */

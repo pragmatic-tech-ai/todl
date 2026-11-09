@@ -17,6 +17,7 @@
 import { Repository } from "../model/model.js";
 import { EdgeKind, Direction, Tier, type Cardinality, type Scalar, type NodeId } from "../model/graph.js";
 import { MetaKind } from "../model/kinds.js";
+import { Builder } from "../model/builder.js";
 import {
     CardinalityGlyph,
     type LogicalManifest,
@@ -93,6 +94,8 @@ export class ManifestEmitter
         };
         const aspects = this.emitAspects();
         if (aspects !== undefined) manifest.aspects = aspects;
+        const primitives = this.emitPrimitives(manifest);
+        if (primitives !== undefined) manifest.primitives = primitives;
         return manifest;
     }
 
@@ -154,6 +157,34 @@ export class ManifestEmitter
             };
         }
         return out;
+    }
+
+    /**
+     * Every user primitive a concept or aspect field type reaches, with its `: base` (or null when it has none),
+     * following base chains; `undefined` when none is reached, so a model without user primitives emits the manifest
+     * it always did.
+     */
+    private emitPrimitives(manifest: LogicalManifest): Record<string, string | null> | undefined
+    {
+        const pending: string[] = [];
+        for (const def of [...Object.values(manifest.concepts), ...Object.values(manifest.aspects ?? {})])
+        {
+            for (const field of Object.values(def.fields)) pending.push(field.type);
+        }
+        const out: Record<string, string | null> = {};
+        let any = false;
+        for (let i = 0; i < pending.length; i++)
+        {
+            const id = pending[i]!;
+            if (id in out) continue;
+            const node = this.repo.resolve(id as NodeId);
+            if (node === undefined || node.metaKind !== MetaKind.Primitive) continue;
+            const base = node.attrs.get(Builder.PrimitiveBaseAttr);
+            out[id] = typeof base === "string" ? base : null;
+            any = true;
+            if (typeof base === "string") pending.push(base);
+        }
+        return any ? out : undefined;
     }
 
     /** The aspects `owner` includes directly, in declaration order. */

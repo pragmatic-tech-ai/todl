@@ -264,7 +264,13 @@ export function visitReferences(decl: Declaration, visit: Visit): void
         ownerNode: decl.glyph, memberPath: null, rewrite: (r) => { (decl as { concept: string }).concept = r; } });
       break;
     case DeclKind.Primitive:
-      // A primitive is a leaf type with no members and no references.
+      // A primitive's only reference is its `: base` refinement parent, resolved like a
+      // field type so the stored base is the flat id (a builtin stays as written).
+      if (decl.base !== null)
+      {
+        visit({ name: decl.base, span: decl.baseSpan ?? decl.span, role: RefRole.FieldType,
+          ownerNode: decl.name, memberPath: null, rewrite: (r) => { (decl as { base: string | null }).base = r; } });
+      }
       break;
   }
 }

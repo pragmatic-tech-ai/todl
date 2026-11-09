@@ -284,6 +284,13 @@ export class ManifestWriter
         return [w.internString(id.slice(dot + 1)), w.internString(id.slice(0, dot))];
     }
 
+    /** The coded `extends` of a synthesized primitive row: its recorded base, or 0 when it has none. */
+    private static PrimitiveBase(bases: Record<string, string | null>, id: string, coded: (id: string) => number): number
+    {
+        const base = bases[id];
+        return base === undefined || base === null ? 0 : coded(base);
+    }
+
     static fromLogical(m: LogicalManifest): ManifestWriter
     {
         const w = new ManifestWriter(m.model, m.version);
@@ -312,6 +319,14 @@ export class ManifestWriter
         }
         for (const cls of Object.values(m.classes)) see(cls.concept);
         for (const tax of Object.values(m.taxonomies)) for (const t of tax.represents) see(t);
+        // A referenced user primitive pulls in its base chain, so its `extends` resolves locally.
+        // `primitives` is a late addition to the logical sidecar — older JSON omits it.
+        const primitiveBases = m.primitives ?? {};
+        for (let i = 0; i < referenced.length; i++)
+        {
+            const base = primitiveBases[referenced[i]!];
+            if (base !== undefined && base !== null) see(base);
+        }
         const primitiveIds = referenced.filter((id) => !(id in m.concepts) && !(id in aspectDefs));
 
         // Annotation type ids applied anywhere (concept / rel / class), in
@@ -448,7 +463,7 @@ export class ManifestWriter
             const [pname, pns] = ManifestWriter.SplitQualified(w, pid);
             w.addTypeInfo({
                 name: pname, ns: pns, kind: MetaKind.Primitive,
-                extends: 0, fieldStart: 0, fieldCount: 0, relStart: 0, relCount: 0,
+                extends: ManifestWriter.PrimitiveBase(primitiveBases, pid, coded), fieldStart: 0, fieldCount: 0, relStart: 0, relCount: 0,
                 annotStart: 0, annotCount: 0,
             });
         }

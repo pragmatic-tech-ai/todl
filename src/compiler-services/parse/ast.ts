@@ -634,6 +634,8 @@ export interface PrimitiveDecl
   kind: DeclKind.Primitive;
   name: string;
   base: string | null;
+  /** Span of the `: base` identifier, when a base is written. */
+  baseSpan?: SourceSpan;
   description: string;
   regex: string | null;
   span: SourceSpan;
