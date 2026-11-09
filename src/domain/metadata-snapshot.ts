@@ -36,6 +36,16 @@ export interface DomainToken
     row: number;
 }
 
+/** A node as its home package bound it, kept so evicting a re-binding dependent can restore it. */
+interface HomeSeed
+{
+    Node: ReflectedNode;
+    /** The home package's origin identity (`model@version`). */
+    Origin: string;
+    /** The home package's model id. */
+    Model: string;
+}
+
 /** The one runtime heap: a store of flattened, self-contained data nodes. */
 export class Heap
 {
@@ -80,6 +90,7 @@ export class MetadataSnapshot implements ManifestHost
     private readonly seedOrigin = new Map<string, string>(); // node id → origin identity
     private readonly seedOriginModel = new Map<string, string>(); // node id → origin package model id (last binder)
     private readonly seedHomeModel = new Map<string, string>(); // node id → home package model id (first binder)
+    private readonly homeSeed = new Map<string, HomeSeed>(); // node id → the node as its home package bound it
     private readonly nodes = new Heap();
 
     /** The `model@version` identity used for dedup / attribution. */
@@ -221,7 +232,12 @@ export class MetadataSnapshot implements ManifestHost
             this.nodes.add(node);
             this.seedOrigin.set(node.id, originId);
             this.seedOriginModel.set(node.id, boundTo.model);
-            if (!this.seedHomeModel.has(node.id)) this.seedHomeModel.set(node.id, boundTo.model);
+            const home = this.homeSeed.get(node.id);
+            if (home === undefined || home.Origin === originId)
+            {
+                this.homeSeed.set(node.id, { Node: node, Origin: originId, Model: boundTo.model });
+                this.seedHomeModel.set(node.id, boundTo.model);
+            }
         }
         for (const edge of data.edges ?? [])
         {
@@ -259,17 +275,40 @@ export class MetadataSnapshot implements ManifestHost
         return this.seedHomeModel.get(nodeId);
     }
 
-    /** Remove every heap node attributed to `identity`. */
+    /**
+     * Unbind every heap node attributed to `identity`. A node whose home package is a DIFFERENT, still-bound package (a
+     * dependent re-bound it through full-closure seeding) is not removed: it is re-bound to its home package's own seed
+     * values. A node whose home is `identity` itself but which a later package re-bound loses that home, and the
+     * re-binder — the only package still carrying it — becomes its home.
+     */
     Evict(identity: string): void
     {
         for (const node of this.nodes.allNodes())
         {
+            const home = this.homeSeed.get(node.id);
             if (this.seedOrigin.get(node.id) === identity)
             {
-                this.nodes.remove(node.id);
-                this.seedOrigin.delete(node.id);
-                this.seedOriginModel.delete(node.id);
-                this.seedHomeModel.delete(node.id);
+                if (home !== undefined && home.Origin !== identity)
+                {
+                    this.nodes.add(home.Node);
+                    this.seedOrigin.set(node.id, home.Origin);
+                    this.seedOriginModel.set(node.id, home.Model);
+                }
+                else
+                {
+                    this.nodes.remove(node.id);
+                    this.seedOrigin.delete(node.id);
+                    this.seedOriginModel.delete(node.id);
+                    this.seedHomeModel.delete(node.id);
+                    this.homeSeed.delete(node.id);
+                }
+            }
+            else if (home !== undefined && home.Origin === identity)
+            {
+                const origin = this.seedOrigin.get(node.id)!;
+                const model = this.seedOriginModel.get(node.id)!;
+                this.homeSeed.set(node.id, { Node: node, Origin: origin, Model: model });
+                this.seedHomeModel.set(node.id, model);
             }
         }
     }

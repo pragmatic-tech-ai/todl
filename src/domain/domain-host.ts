@@ -70,7 +70,7 @@ export class DomainHost implements IDomainHost
 
     public Query(): IGraphQuery
     {
-        return new GraphQuery(this.domain.graph);
+        return new GraphQuery(this.domain.Snapshot);
     }
 
     // Resolve a resource uri (`<model>/<version>/<path>`) across contributors, first

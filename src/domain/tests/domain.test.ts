@@ -179,8 +179,8 @@ describe("SPEC-06 t6/t10: bindGraph + seed + reflect", () => {
     src.register("shop", "1.0.0", soloManifest("shop", "Widget"), [], { nodes: [widget] });
     const domain = new Domain(src);
     await domain.load({ model: "shop", version: "1.0.0" });
-    assert.equal(domain.graph.size, 1);
-    const mirror = domain.reflect(domain.graph.getNode("w1")!);
+    assert.equal(domain.Snapshot.size, 1);
+    const mirror = domain.reflect(domain.Snapshot.getNode("w1")!);
     assert.equal(mirror.type.name, "Widget");
     assert.equal(mirror.field("label")!.value, "Hi");
   });
@@ -236,9 +236,9 @@ describe("SPEC-06 t7-8: tryUnload guards + cascade", () => {
     src.register("shop", "1.0.0", soloManifest("shop", "Widget"), [], seed);
     const domain = new Domain(src);
     await domain.load({ model: "shop", version: "1.0.0" });
-    assert.equal(domain.graph.size, 1);
+    assert.equal(domain.Snapshot.size, 1);
     assert.equal(domain.tryUnload({ model: "shop", version: "1.0.0" }), true);
-    assert.equal(domain.graph.size, 0); // own seed evicted
+    assert.equal(domain.Snapshot.size, 0); // own seed evicted
   });
 });
 
@@ -251,8 +251,8 @@ describe("SPEC-06 t13: isolation + ambient", () => {
     await d1.load({ model: "shop", version: "1.0.0" });
     assert.equal(d1.manifests.length, 1);
     assert.equal(d2.manifests.length, 0); // invisible to d2
-    assert.equal(d1.graph.size, 1);
-    assert.equal(d2.graph.size, 0);
+    assert.equal(d1.Snapshot.size, 1);
+    assert.equal(d2.Snapshot.size, 0);
   });
 
   test("Domain.current is not auto-set; it is assignable by the host", async () => {

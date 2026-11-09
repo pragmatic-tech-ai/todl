@@ -8,3 +8,4 @@ export { type ITodlDraftSession, type ITodlModelWorkspace } from './TodlModelWor
 export { TodlFileConnector } from './TodlFileConnector.js';
 export { TodlNodePlacement } from './TodlNodePlacement.js';
 export { EngineCellMapper } from './EngineCellMapper.js';
+export { SavedModelCompiler, type ISavedModel, type ISavedSnapshot } from './SavedModelCompiler.js';

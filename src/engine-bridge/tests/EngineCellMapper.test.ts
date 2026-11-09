@@ -92,7 +92,7 @@ class MapperHarness
         assert.ok(out.ok, JSON.stringify(out.errors));
         const domain = new Domain(new MemoryPackageSource([PackageManifestBridge.toResolved(out.package!)]));
         await domain.load({ model: MapperHarness.ShopModel, version: MapperHarness.ShopVersion });
-        return domain.graph;
+        return domain.Snapshot;
     }
 
     /** pkg.a declares taxonomy K; pkg.b depends on it, so pkg.b's manifest carries K's term too. */
@@ -106,7 +106,7 @@ class MapperHarness
         assert.ok(b.ok, JSON.stringify(b.errors));
         const domain = new Domain(new MemoryPackageSource([PackageManifestBridge.toResolved(a.package!), PackageManifestBridge.toResolved(b.package!)]));
         await domain.load({ model: PackageB.Id, version: ShopVersion });
-        return domain.graph;
+        return domain.Snapshot;
     }
 
     public static async Graph(fixture: string): Promise<MetadataSnapshot>

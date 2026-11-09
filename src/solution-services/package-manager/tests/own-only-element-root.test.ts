@@ -32,7 +32,7 @@ class OwnOnlyFixture
         await storage.WriteText(OwnOnlyFixture.ModelPath, JSON.stringify(OwnOnlyFixture.Compile().document));
         const domain = new Domain(new StoragePackageSource(storage));
         await domain.load({ model: OwnOnlyFixture.Model, version: OwnOnlyFixture.Version });
-        return new GraphQuery(domain.graph);
+        return new GraphQuery(domain.Snapshot);
     }
 }
 

@@ -201,7 +201,7 @@ class ConnectorFx
         }
         const domain = new Domain(store);
         await domain.load({ model: sources[sources.length - 1]!.Model, version: ConnectorFx.Version });
-        const { Description } = SnapshotDescriber.Describe(domain.graph, { DefaultConnector: TodlNames.FileConnector });
+        const { Description } = SnapshotDescriber.Describe(domain.Snapshot, { DefaultConnector: TodlNames.FileConnector });
         return GraphEngine.Open({ Description, Storage: { Kind: StorageKind.Memory }, Connectors: [connector] });
     }
 }

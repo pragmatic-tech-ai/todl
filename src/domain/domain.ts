@@ -72,7 +72,7 @@ export class Domain
     static current: Domain | undefined;
 
     /** The graph substrate this domain composes into and reads through. */
-    readonly graph = new MetadataSnapshot();
+    readonly Snapshot = new MetadataSnapshot();
 
     readonly onManifestLoaded = new Signal<Manifest>();
     readonly onManifestUnloaded = new Signal<Manifest>();
@@ -92,13 +92,13 @@ export class Domain
     /** Every currently loaded manifest, in deps-first load order. */
     get manifests(): readonly Manifest[]
     {
-        return this.graph.manifests;
+        return this.Snapshot.manifests;
     }
 
     /** The loaded manifest for `model` (latest loaded if `version` omitted). */
     getManifest(model: string, version?: string): Manifest | undefined
     {
-        return this.graph.getManifest(model, version);
+        return this.Snapshot.getManifest(model, version);
     }
 
     // ── Hat 1: package / manifest loader ──────────────────────────────────
@@ -107,12 +107,12 @@ export class Domain
     {
         const pinned = await this.pin(ref);
         const id = Domain.identity(pinned);
-        const existing = this.graph.getManifest(pinned.model, pinned.version);
+        const existing = this.Snapshot.getManifest(pinned.model, pinned.version);
         if (existing !== undefined) return existing; // dedup + cycle guard
 
         const resolved = await this.resolvePackage(pinned);
         const manifest = Manifest.load(resolved.manifest);
-        this.graph.PreRegister(manifest); // cycle guard BEFORE recursing (sets host + byIdentity)
+        this.Snapshot.PreRegister(manifest); // cycle guard BEFORE recursing (sets host + byIdentity)
 
         const depIds: string[] = [];
         for (const dep of resolved.dependencies) // deps-first
@@ -123,8 +123,8 @@ export class Domain
             this.importRefcount.set(depId, (this.importRefcount.get(depId) ?? 0) + 1);
         }
         this.depsOf.set(id, depIds);
-        this.graph.Finalize(manifest); // deps-first: appended to `order` after its deps
-        if (resolved.seed !== undefined) this.graph.BindSeed(resolved.seed, pinned);
+        this.Snapshot.Finalize(manifest); // deps-first: appended to `order` after its deps
+        if (resolved.seed !== undefined) this.Snapshot.BindSeed(resolved.seed, pinned);
         this.onManifestLoaded.emit(manifest);
         return manifest;
     }
@@ -138,17 +138,17 @@ export class Domain
         // Guard B — import refcount: a dependency can't be unloaded under a dependent.
         if ((this.importRefcount.get(id) ?? 0) > 0) return false;
         // Guard A — graph refcount: a FOREIGN node binding to this manifest refuses.
-        for (const node of this.graph.heap.allNodes())
+        for (const node of this.Snapshot.heap.allNodes())
         {
-            if (this.nodeBindsTo(node, manifest) && this.graph.originOf(node.id) !== id) return false;
+            if (this.nodeBindsTo(node, manifest) && this.Snapshot.originOf(node.id) !== id) return false;
         }
 
-        this.graph.Evict(id); // evict this manifest's own seed nodes
+        this.Snapshot.Evict(id); // evict this manifest's own seed nodes
         // Decrement each dependency's import refcount (may make them unloadable).
         for (const depId of this.depsOf.get(id) ?? [])
             this.importRefcount.set(depId, Math.max(0, (this.importRefcount.get(depId) ?? 0) - 1));
         this.depsOf.delete(id);
-        this.graph.Deregister(id);
+        this.Snapshot.Deregister(id);
         this.onManifestUnloaded.emit(manifest);
         return true;
     }
@@ -158,7 +158,7 @@ export class Domain
     /** Merge `data` into the heap, attributing each node to `boundTo` for unload. */
     bindGraph(data: SeedGraph, boundTo: PackageRef): void
     {
-        this.graph.BindSeed(data, boundTo);
+        this.Snapshot.BindSeed(data, boundTo);
     }
 
     // ── Hat 3: reflection root (delegated) ────────────────────────────────
@@ -166,19 +166,19 @@ export class Domain
     /** Resolve "model:fullName" (or a bare name) to a TypeInfo across manifests. */
     getType(qualifiedName: string): TypeInfo | undefined
     {
-        return this.graph.getType(qualifiedName);
+        return this.Snapshot.getType(qualifiedName);
     }
 
     /** Dereference a DomainToken to its reflection handle in the owning manifest. */
     resolveToken(token: DomainToken): MemberInfo | TypeInfo | TermInfo | undefined
     {
-        return this.graph.resolveToken(token);
+        return this.Snapshot.resolveToken(token);
     }
 
     /** Reflect a heap node into an InstanceMirror via its owning manifest. */
     reflect(node: ReflectedNode): InstanceMirror
     {
-        return this.graph.reflect(node);
+        return this.Snapshot.reflect(node);
     }
 
     // ── internals ─────────────────────────────────────────────────────────

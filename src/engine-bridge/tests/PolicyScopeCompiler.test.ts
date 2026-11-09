@@ -656,7 +656,7 @@ describe('PolicyScopeCompiler member mapping matches SnapshotDescriber', () =>
         store.Add(PackageManifestBridge.toResolved(out.package!));
         const domain = new Domain(store);
         await domain.load({ model: 'shop.p', version: '1.0.0' });
-        const description = SnapshotDescriber.Describe(domain.graph, { DefaultConnector: BindingTable.EngineStorage }).Description;
+        const description = SnapshotDescriber.Describe(domain.Snapshot, { DefaultConnector: BindingTable.EngineStorage }).Description;
         const members: MemberInput[] = [];
         for (let name: string | null = 'shop.Widget'; name !== null;)
         {
@@ -826,7 +826,7 @@ describe('PolicyScopeCompiler compiled scope passes engine validation on the asp
         store.Add(PackageManifestBridge.toResolved(out.package!));
         const domain = new Domain(store);
         await domain.load({ model: 'shop.p', version: '1.0.0' });
-        const description = SnapshotDescriber.Describe(domain.graph, { DefaultConnector: BindingTable.EngineStorage }).Description;
+        const description = SnapshotDescriber.Describe(domain.Snapshot, { DefaultConnector: BindingTable.EngineStorage }).Description;
         const compiler = PolicyScopeCompiler.FromRepository(model, description);
         const engine = await GraphEngine.Open({ Description: description, Storage: { Kind: StorageKind.Memory } });
         try

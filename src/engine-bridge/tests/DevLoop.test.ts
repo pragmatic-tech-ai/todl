@@ -7,6 +7,8 @@ import type {
     IDescribeOptions,
     IPolicyDiagnostic,
     IPrincipalFacts,
+    ISavedModel,
+    ISavedSnapshot,
     ISnapshotDescription,
     ITodlDraftSession,
     ITodlModelWorkspace,
@@ -45,6 +47,8 @@ interface IExportedTypes
     readonly PolicyDiagnostic: IPolicyDiagnostic;
     readonly Workspace: ITodlModelWorkspace;
     readonly Session: ITodlDraftSession;
+    readonly SavedModel: ISavedModel;
+    readonly SavedSnapshot: ISavedSnapshot;
 }
 
 /** A shop model in a memory workspace, compiled through the package pipeline into an engine over the file connector. */
@@ -144,7 +148,7 @@ class DevLoopFx
         }
         const domain = new Domain(store);
         await domain.load({ model: models[models.length - 1]!, version: DevLoopFx.Version });
-        const described = SnapshotDescriber.Describe(domain.graph, { DefaultConnector: TodlNames.FileConnector });
+        const described = SnapshotDescriber.Describe(domain.Snapshot, { DefaultConnector: TodlNames.FileConnector });
         assert.deepEqual(described.Diagnostics, []);
         return described;
     }
@@ -263,6 +267,7 @@ class ExportSurface
         'EngineCellMapper',
         'PolicyDiagnosticCode',
         'PolicyScopeCompiler',
+        'SavedModelCompiler',
         'SnapshotDescriber',
         'TodlFileConnector',
         // Reserved schema names a host needs: FileConnector for IDescribeOptions.DefaultConnector, Label / Class /

@@ -66,7 +66,7 @@ class DescribeFixture
         {
             await domain.load({ model: source.model, version: DescribeFixture.Version });
         }
-        return domain.graph;
+        return domain.Snapshot;
     }
 
     public static async ShopSnapshot(text: string = DescribeFixture.Shop): Promise<MetadataSnapshot>
@@ -412,7 +412,7 @@ describe('SnapshotDescriber', () =>
         assert.ok(b.ok, JSON.stringify(b.errors));
         const domain = new Domain(new MemoryPackageSource([PackageManifestBridge.toResolved(a.package!), PackageManifestBridge.toResolved(b.package!)]));
         await domain.load({ model: 'pkg.b', version: DescribeFixture.Version });
-        const snapshot = domain.graph;
+        const snapshot = domain.Snapshot;
         assert.deepEqual(snapshot.manifests.map((m) => m.model), ['pkg.a', 'pkg.b']);
         assert.equal(snapshot.ownerOf('a.A')?.model, 'pkg.a');
         const { Description, Diagnostics } = DescribeFixture.Describe(snapshot);

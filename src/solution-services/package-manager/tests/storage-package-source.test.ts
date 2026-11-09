@@ -142,7 +142,7 @@ describe("StoragePackageSource — end-to-end compose through Domain", () => {
     await domain.load({ model: "shop", version: "1.0.0" });
 
     assert.equal(domain.getManifest("shop")?.version, "1.0.0");
-    const hero = domain.graph.getNode("shop.hero");
+    const hero = domain.Snapshot.getNode("shop.hero");
     assert.ok(hero);
     const mirror = domain.reflect(hero!);
     assert.equal(mirror.type.name, "Widget");
