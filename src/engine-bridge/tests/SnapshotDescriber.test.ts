@@ -309,7 +309,7 @@ describe('SnapshotDescriber', () =>
         assert.deepEqual(Diagnostics, []);
         assert.equal(DescribeFixture.Seed(Description, 'a.a1').Owner, 'pkg.a');
         assert.equal(DescribeFixture.Seed(Description, 'b.b1').Owner, 'pkg.b');
-        assert.equal(snapshot.OriginModelOf('b.b1'), 'pkg.b');
+        assert.equal(snapshot.HomeModelOf('b.b1'), 'pkg.b');
         assert.equal(Description.Definitions.filter((d) => d.Name === TodlNames.Element).length, 1);
         await DescribeFixture.Opens(Description);
     });
@@ -381,20 +381,30 @@ describe('SnapshotDescriber', () =>
     {
         const snapshot = await DescribeFixture.ShopSnapshot();
         snapshot.BindSeed({
-            nodes: [{ id: 'shop.big', type: 'shop.Widget', attrs: { count: '99999999999999999999', amount: 1e20, name: 'ok' } }],
+            nodes: [
+                { id: 'shop.big', type: 'shop.Widget', attrs: { count: '99999999999999999999', amount: 1e20, name: 'ok' } },
+                { id: 'shop.unsafe', type: 'shop.Widget', attrs: { count: 2 ** 53 + 2, amount: '1e17' } },
+                { id: 'shop.exact', type: 'shop.Widget', attrs: { count: '9007199254740993', amount: '-9223372036854775808' } },
+            ],
         }, { model: DescribeFixture.Model, version: DescribeFixture.Version });
         const { Description, Diagnostics } = DescribeFixture.Describe(snapshot);
         assert.deepEqual(Diagnostics.map((d) => [d.Code, d.Subject]), [
             [DescribeDiagnosticCode.IntegerOutOfRange, 'shop.big.count'],
             [DescribeDiagnosticCode.IntegerOutOfRange, 'shop.big.amount'],
+            [DescribeDiagnosticCode.IntegerOutOfRange, 'shop.unsafe.count'],
+            [DescribeDiagnosticCode.IntegerOutOfRange, 'shop.unsafe.amount'],
         ]);
         assert.deepEqual(DescribeFixture.Seed(Description, 'shop.big').Properties, { label: null, class: null, name: 'ok' });
+        assert.deepEqual(DescribeFixture.Seed(Description, 'shop.unsafe').Properties, { label: null, class: null });
+        // Decimal digit strings convert exactly, past 2^53 and up to the Int64 bounds.
+        assert.deepEqual(DescribeFixture.Seed(Description, 'shop.exact').Properties,
+            { label: null, class: null, count: 9007199254740993n, amount: -9223372036854775808n });
         await DescribeFixture.Opens(Description);
     });
 
-    test('owner is the binding package, not the declaring one; terms dedupe across manifests', async () =>
+    test('owner is the home package, not a re-binding dependent or the type declarer; terms dedupe across manifests', async () =>
     {
-        const a = compilePackage([], [{ uri: 'a.todl', text: 'namespace a { concept A { } taxonomy K : represents A { term T { } } }' }],
+        const a = compilePackage([], [{ uri: 'a.todl', text: 'namespace a { concept A { } taxonomy K : represents A { term T { } } model MA : a { A a1 { } } }' }],
             { id: 'pkg.a', version: DescribeFixture.Version });
         assert.ok(a.ok, JSON.stringify(a.errors));
         const b = compilePackage([a.package!.document], [{ uri: 'b.todl', text: 'namespace b { import a; model MB : a { a.A b1 { } } }' }],
@@ -408,6 +418,9 @@ describe('SnapshotDescriber', () =>
         const { Description, Diagnostics } = DescribeFixture.Describe(snapshot);
         assert.deepEqual(Diagnostics, []);
         assert.equal(DescribeFixture.Seed(Description, 'b.b1').Owner, 'pkg.b');
+        // a.a1 is declared in pkg.a; pkg.b's full-closure seed re-binds it (last binder), but its home stays pkg.a.
+        assert.equal(snapshot.OriginModelOf('a.a1'), 'pkg.b');
+        assert.equal(DescribeFixture.Seed(Description, 'a.a1').Owner, 'pkg.a');
         const terms = Description.Seed.filter((s) => s.Concept === TodlNames.Term);
         assert.deepEqual(terms.map((t) => [t.PublicId, t.Owner]), [['a.K.T', 'pkg.a']]);
         assert.equal(Description.Definitions.filter((d) => d.Name === 'a.A').length, 1);

@@ -78,7 +78,8 @@ export class MetadataSnapshot implements ManifestHost
     private readonly byIdentity = new Map<string, Manifest>();
     private readonly order: Manifest[] = [];
     private readonly seedOrigin = new Map<string, string>(); // node id → origin identity
-    private readonly seedOriginModel = new Map<string, string>(); // node id → origin package model id
+    private readonly seedOriginModel = new Map<string, string>(); // node id → origin package model id (last binder)
+    private readonly seedHomeModel = new Map<string, string>(); // node id → home package model id (first binder)
     private readonly nodes = new Heap();
 
     /** The `model@version` identity used for dedup / attribution. */
@@ -220,6 +221,7 @@ export class MetadataSnapshot implements ManifestHost
             this.nodes.add(node);
             this.seedOrigin.set(node.id, originId);
             this.seedOriginModel.set(node.id, boundTo.model);
+            if (!this.seedHomeModel.has(node.id)) this.seedHomeModel.set(node.id, boundTo.model);
         }
         for (const edge of data.edges ?? [])
         {
@@ -238,11 +240,23 @@ export class MetadataSnapshot implements ManifestHost
 
     /**
      * The package model id (`PackageRef.model`, e.g. `shop.p` — not the TODL `model` declaration name) of the package
-     * whose BindSeed attributed this heap node: the model part of {@link originOf}, without parsing it.
+     * whose BindSeed LAST attributed this heap node: the model part of {@link originOf}, without parsing it. A
+     * dependent package seeded from its full closure re-binds its dependencies' instances, so this can name a package
+     * that merely re-binds the node; use {@link HomeModelOf} for the package that declares it.
      */
     OriginModelOf(nodeId: string): string | undefined
     {
         return this.seedOriginModel.get(nodeId);
+    }
+
+    /**
+     * The package model id of the node's HOME package: the one whose own sources declare it. That is the FIRST package
+     * to bind the node — the Domain loads dependencies before dependents, so a declaring package binds its instances
+     * before any dependent re-binds them through full-closure seeding, and a later re-bind never changes the home.
+     */
+    HomeModelOf(nodeId: string): string | undefined
+    {
+        return this.seedHomeModel.get(nodeId);
     }
 
     /** Remove every heap node attributed to `identity`. */
@@ -255,6 +269,7 @@ export class MetadataSnapshot implements ManifestHost
                 this.nodes.remove(node.id);
                 this.seedOrigin.delete(node.id);
                 this.seedOriginModel.delete(node.id);
+                this.seedHomeModel.delete(node.id);
             }
         }
     }

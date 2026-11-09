@@ -8,7 +8,7 @@ export interface IDescribeOptions
     /**
      * Connector plans whose bindings route concepts. A plan's `Model` is passed through unchanged as the binding's
      * Model, so it must already be in the seed Owner identifier space: the package model id (`PackageRef.model`, what
-     * `MetadataSnapshot.originOf` / `OriginModelOf` give), not the TODL `model` declaration name.
+     * `MetadataSnapshot.HomeModelOf` gives), not the TODL `model` declaration name.
      */
     readonly ConnectorPlans?: readonly ModelConnectorPlan[];
 }
@@ -36,7 +36,8 @@ export enum DescribeDiagnosticCode
     UnknownConcept,
     /** A redeclared member that disagrees with the inherited one; the inherited member wins. */
     MemberRedeclared,
-    /** An integer value outside the signed 64-bit range; the value is skipped. */
+    /** An integer value outside the signed 64-bit range, or a non-decimal (double-borne) one beyond 2^53 that may have
+     *  lost precision; the value is skipped. */
     IntegerOutOfRange,
     /** A field type or relationship target that does not resolve; the member falls back (opaque String / any element). */
     UnresolvedType,

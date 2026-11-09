@@ -85,16 +85,23 @@ class CellConverter
 
     private static ToInteger(raw: Scalar): IConversion
     {
+        // A decimal digit string converts exactly, whatever its size (then range-checked).
         if (typeof raw === 'string' && CellConverter.IntegerPattern.test(raw.trim()))
         {
             return CellConverter.InRange(BigInt(raw.trim()));
         }
+        // Anything else went through a double (a JS number, or a string like "1e17"): above 2^53 it may already have
+        // lost digits, so a non-safe integer is rejected rather than converted to an imprecise BigInt.
         const value = CellConverter.Numeric(raw);
         if (value === undefined)
         {
             return CellConverter.Fail(DescribeDiagnosticCode.ValueTypeMismatch);
         }
-        return Number.isInteger(value) ? CellConverter.InRange(BigInt(value)) : CellConverter.Fail(DescribeDiagnosticCode.NonIntegralInteger);
+        if (!Number.isInteger(value))
+        {
+            return CellConverter.Fail(DescribeDiagnosticCode.NonIntegralInteger);
+        }
+        return Number.isSafeInteger(value) ? { Value: BigInt(value) } : CellConverter.Fail(DescribeDiagnosticCode.IntegerOutOfRange);
     }
 
     /** An Int64 cell, or IntegerOutOfRange when the value does not fit a signed 64-bit integer. */
@@ -167,9 +174,10 @@ class CanonicalJson
  * the `.todl` connector bindings, and a content-derived version. Problems in the data become diagnostics, never
  * exceptions; only a field type of a kind no member can hold throws (`UnsupportedFieldType`).
  *
- * Seed `Owner` is the package model id (`PackageRef.model`, e.g. `shop.p`) of the package whose BindSeed bound the
- * node (`MetadataSnapshot.OriginModelOf`, the model part of `originOf`), never the type's declaring package; a node
- * with no origin is skipped (`Unattributed`). A term's Owner is the model of the first manifest (deps-first)
+ * Seed `Owner` is the package model id (`PackageRef.model`, e.g. `shop.p`) of the node's home package — the one whose
+ * own sources declare the instance (`MetadataSnapshot.HomeModelOf`, the first binder in deps-first load order) —
+ * never a dependent that re-binds it through full-closure seeding and never the type's declaring package; a node no
+ * package bound is skipped (`Unattributed`). A term's Owner is the model of the first manifest (deps-first)
  * declaring its taxonomy.
  */
 export class SnapshotDescriber
@@ -466,9 +474,9 @@ export class SnapshotDescriber
                 this.Report(DescribeDiagnosticCode.UnknownConcept, node.id, SnapshotDescriber.Format(SnapshotDescriber.UnknownConceptMessage, node.id, node.type));
                 continue;
             }
-            // Owner is only ever the binding package's model: a node no BindSeed attributed has no owner to write
-            // back to, so it is skipped rather than guessed from the type's declaring manifest.
-            const owner = this.snapshot.OriginModelOf(node.id);
+            // Owner is only ever the home package's model (stable across dependents being added): a node no BindSeed
+            // attributed has no owner to write back to, so it is skipped rather than guessed from its type.
+            const owner = this.snapshot.HomeModelOf(node.id);
             if (owner === undefined)
             {
                 this.Report(DescribeDiagnosticCode.Unattributed, node.id, SnapshotDescriber.Format(SnapshotDescriber.UnattributedMessage, node.id));
