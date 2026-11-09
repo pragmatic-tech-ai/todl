@@ -11,16 +11,18 @@ import { TodlNames } from './TodlNames.js';
 
 type EngineCell = Cypher.CypherValueDto;
 
+type EngineNode = Cypher.NodeCellDto['$node'];
+
 /**
  * The members an access scope hides on a concept's nodes, as the engine decides them (a scoped `GraphReader`
- * satisfies it). Only consulted for fields the engine holds as relationships: a node cell cannot tell a hidden
+ * satisfies it; pass a reader opened under the result's own scope, or one under
+ * `AccessScope.System` for an unscoped result). Only consulted for fields the engine holds as relationships: a node cell cannot tell a hidden
  * relationship from an empty one, while a hidden property is simply absent from the cell's properties.
  */
 export interface IHiddenMembers
 {
     HiddenMembers(concept: string): ReadonlySet<string>;
 }
-type EngineNode = Cypher.NodeCellDto['$node'];
 
 /**
  * Maps the graph engine's neutral Cypher result cells onto TODL's wire shape, so endpoints keep their format when
@@ -33,7 +35,7 @@ type EngineNode = Cypher.NodeCellDto['$node'];
  * A member the reader's scope hides is left out of the node's `fields` and `refs` entirely, as the masked mirror did:
  * a property field absent from the engine cell's properties (the engine emits every visible property, null when
  * unset, and omits hidden ones), and a relationship-held field (a concept or aspect typed field, a many-valued
- * taxonomy field) that `hidden` reports. Hidden relationships carry no links, so they have no refs key either.
+ * taxonomy field) that `hidden` reports (required, so a hidden link field can never fail open). Hidden relationships carry no links, so they have no refs key either.
  */
 export class EngineCellMapper
 {
@@ -59,7 +61,8 @@ export class EngineCellMapper
         }
     }
 
-    public MapResult(dto: Cypher.CypherResultDto, hidden?: IHiddenMembers): CypherResultDto
+    /** `hidden` is required: without it a hidden relationship-held field could not be told from an empty one. */
+    public MapResult(dto: Cypher.CypherResultDto, hidden: IHiddenMembers): CypherResultDto
     {
         const mapped: CypherResultDto = {
             Columns: [...dto.Columns],
@@ -74,7 +77,7 @@ export class EngineCellMapper
         return mapped;
     }
 
-    private MapCell(cell: EngineCell, hidden: IHiddenMembers | undefined): CypherValueDto
+    private MapCell(cell: EngineCell, hidden: IHiddenMembers): CypherValueDto
     {
         if (cell === null || typeof cell !== 'object')
         {
@@ -98,7 +101,7 @@ export class EngineCellMapper
         return this.MapEntries(record, hidden);
     }
 
-    private MapEntries(record: Record<string, EngineCell>, hidden: IHiddenMembers | undefined): Record<string, CypherValueDto>
+    private MapEntries(record: Record<string, EngineCell>, hidden: IHiddenMembers): Record<string, CypherValueDto>
     {
         const entries: Record<string, CypherValueDto> = {};
         for (const key of Object.keys(record))
@@ -108,7 +111,7 @@ export class EngineCellMapper
         return entries;
     }
 
-    private MapNode(node: EngineNode, hidden: IHiddenMembers | undefined): MirrorSnapshot
+    private MapNode(node: EngineNode, hidden: IHiddenMembers): MirrorSnapshot
     {
         const type = this.snapshot.getType(node.concept);
         const owner = this.snapshot.ownerOf(node.concept);
@@ -120,7 +123,7 @@ export class EngineCellMapper
         {
             refs[relationship] = [...targets];
         }
-        const withheld = hidden?.HiddenMembers(node.concept);
+        const withheld = hidden.HiddenMembers(node.concept);
         for (const field of type?.getFields() ?? [])
         {
             if (this.Withheld(node, field, withheld)) continue;
@@ -157,9 +160,9 @@ export class EngineCellMapper
     }
 
     /** True when the scope hides the field (see the class comment): it then has no `fields` entry. */
-    private Withheld(node: EngineNode, field: FieldInfo, withheld: ReadonlySet<string> | undefined): boolean
+    private Withheld(node: EngineNode, field: FieldInfo, withheld: ReadonlySet<string>): boolean
     {
-        if (this.IsRelationshipHeld(field)) return withheld?.has(field.name) === true;
+        if (this.IsRelationshipHeld(field)) return withheld.has(field.name);
         return !Object.prototype.hasOwnProperty.call(node.properties, field.name);
     }
 

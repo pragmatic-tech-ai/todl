@@ -44,6 +44,9 @@ class MapperHarness
     /** A property (name), a concept-typed field (home), a many-valued taxonomy field (kinds), a relationship (parts). */
     public static readonly HiddenMembers: readonly string[] = ["name", "home", "kinds", "parts"];
     public static readonly UnsetField = "count";
+    public static readonly ReaderTitle = "relationship-held fields are judged by the reader given, property fields by the cell";
+    public static readonly LinkField = "home";
+    public static readonly PropertyField = "name";
     private static readonly MissingRowMessage = "{0}: {1} missing from the engine rows";
     private static readonly RowMessage = "{0}: {1}";
     private static readonly DuplicateRowsMessage = "{0}: one row per node";
@@ -142,7 +145,16 @@ class MapperHarness
         {
             const result = await new Cypher.CypherEngine(engine).Execute(AccessScope.System, query);
             const raw = Cypher.CypherEngine.ToDto(result);
-            return { graph, mapped: new EngineCellMapper(graph).MapResult(raw), raw };
+            // the result's own scope (System) answers which members are hidden: none
+            const reader = await engine.BeginRead(AccessScope.System);
+            try
+            {
+                return { graph, mapped: new EngineCellMapper(graph).MapResult(raw, reader), raw };
+            }
+            finally
+            {
+                reader.dispose();
+            }
         }
         finally
         {
@@ -150,8 +162,11 @@ class MapperHarness
         }
     }
 
-    /** `WidgetNodes` on the shop graph under a scope hiding `HiddenMembers` on Widget, mapped with the scoped reader. */
-    public static async RunHidden(): Promise<{ graph: MetadataSnapshot; byId: Map<string, MirrorSnapshot> }>
+    /**
+     * `WidgetNodes` on the shop graph under a scope hiding `HiddenMembers` on Widget, mapped with the scoped reader (or,
+     * with `system`, with a System reader that hides nothing: the wrong reader for that result).
+     */
+    public static async RunHidden(system = false): Promise<{ graph: MetadataSnapshot; byId: Map<string, MirrorSnapshot> }>
     {
         const graph = await MapperHarness.ShopGraph();
         const engine = await EngineFixture.Open(EngineFixture.Describe(graph));
@@ -159,7 +174,7 @@ class MapperHarness
         {
             const scope = AccessScope.Build({ Default: AccessDefault.Allow, Hidden: new Map([[MapperHarness.ShopWidget, new Set(MapperHarness.HiddenMembers)]]) });
             const raw = Cypher.CypherEngine.ToDto(await new Cypher.CypherEngine(engine).Execute(scope, MapperHarness.WidgetNodes));
-            const reader = await engine.BeginRead(scope);
+            const reader = await engine.BeginRead(system ? AccessScope.System : scope);
             try
             {
                 const mapped = new EngineCellMapper(graph).MapResult(raw, reader);
@@ -301,6 +316,16 @@ describe("EngineCellMapper", () =>
         const unset = byId.get(MapperHarness.UnsetId)!;
         assert.ok(MapperHarness.UnsetField in unset.fields);
         assert.equal(unset.fields[MapperHarness.UnsetField]!.value, undefined);
+    });
+
+    test(MapperHarness.ReaderTitle, async () =>
+    {
+        const { byId } = await MapperHarness.RunHidden(true);
+        const full = byId.get(MapperHarness.FullId)!;
+        // the cell itself withholds the hidden property; only the reader can say a link field is hidden, so a reader
+        // that hides nothing keeps it (which is why the reader is a required argument)
+        assert.equal(MapperHarness.PropertyField in full.fields, false);
+        assert.equal(MapperHarness.LinkField in full.fields, true);
     });
 
     test(MapperHarness.LabelTitle, async () =>
