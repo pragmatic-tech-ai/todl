@@ -83,3 +83,81 @@ test("restore drops the model of an instance created after the snapshot", () => 
   assert.equal(draft.Owns(ModelIdsFx.C3), false);
   assert.equal(draft.Snapshot().models.has(ModelIdsFx.C3), false);
 });
+
+/** A meta-model with two viewpoints, and files whose two models conform to different ones. */
+class ViewpointsFx
+{
+  static readonly MetaUri = "mm.todl";
+  static readonly Meta = "namespace mm {\n  concept Component {}\n  concept Node {}\n  viewpoint V1 : frames Component\n  viewpoint V2 : frames Node\n}\n";
+  static readonly Namespace = "acme";
+  static readonly Both = { uri: "both.todl", text: "namespace acme {\n  import mm;\n  model M : mm conforms V1 { Component web {} }\n  model N : mm conforms V2 { Node host {} }\n}\n" };
+  static readonly WithSchema = { uri: "schema-and-models.todl", text: "namespace acme {\n  import mm;\n  concept Local {}\n  model M : mm conforms V1 { Component web {} }\n  model N : mm conforms V2 { Node host {} }\n}\n" };
+  static readonly Web = "acme.web";
+  static readonly Host = "acme.host";
+  static readonly Api = "acme.api";
+  static readonly Box = "acme.box";
+  static readonly Component = "mm.Component";
+  static readonly Node = "mm.Node";
+  static readonly Label = "label";
+  static readonly WebLabel = "w";
+  static readonly HostLabel = "h";
+  static readonly Edited = [/label = "w"/, /label = "h"/];
+  static readonly ModelM = "acme.M";
+  static readonly ModelN = "acme.N";
+  static readonly BlockM = /model M : mm[^{]*conforms (mm\.)?V1 \{/;
+  static readonly BlockN = /model N : mm[^{]*conforms (mm\.)?V2 \{/;
+  static readonly LocalConcept = /concept Local \{\}/;
+
+  static Base()
+  {
+    return check([{ uri: ViewpointsFx.MetaUri, text: ViewpointsFx.Meta }]).model;
+  }
+
+  /** The error codes of the emitted files compiled with the meta-model, and where each instance landed. */
+  static Recompile(files: ReadonlyMap<string, string>): { errors: string[]; models: Map<string, string> }
+  {
+    const result = check([{ uri: ViewpointsFx.MetaUri, text: ViewpointsFx.Meta }, ...[...files].map(([uri, text]) => ({ uri, text }))]);
+    const doc = toJSON(result.model);
+    const modelIds = new Set(doc.nodes.filter((n) => n.metaKind === MetaKind.Model).map((n) => n.id));
+    const models = new Map<string, string>();
+    for (const e of doc.edges) if (e.kind === ModelIdsFx.Contains && modelIds.has(String(e.from))) models.set(String(e.to), String(e.from));
+    return { errors: result.diagnostics.filter((d) => d.severity === Severity.Error).map((d) => d.code), models };
+  }
+}
+
+test("two models of one file keep their own conforms viewpoints on re-emit", () => {
+  const draft = ModelDraft.fromSources([ViewpointsFx.Base()], [ViewpointsFx.Both], { namespace: ViewpointsFx.Namespace });
+  draft.setField(ViewpointsFx.Web, ViewpointsFx.Label, ViewpointsFx.WebLabel);
+  draft.setField(ViewpointsFx.Host, ViewpointsFx.Label, ViewpointsFx.HostLabel);
+  draft.create(ViewpointsFx.Component, ViewpointsFx.Api, ViewpointsFx.Both.uri);
+  const state = draft.Snapshot();
+  draft.Restore(state);
+  const files = draft.toTodlByFile();
+  const text = files.get(ViewpointsFx.Both.uri)!;
+  assert.match(text, ViewpointsFx.BlockM);
+  assert.match(text, ViewpointsFx.BlockN);
+  const { errors, models } = ViewpointsFx.Recompile(files);
+  assert.deepEqual(errors, []);
+  assert.equal(models.get(ViewpointsFx.Web), ViewpointsFx.ModelM);
+  assert.equal(models.get(ViewpointsFx.Host), ViewpointsFx.ModelN);
+  assert.equal(models.get(ViewpointsFx.Api), ViewpointsFx.ModelM);
+  for (const edit of ViewpointsFx.Edited) assert.match(text, edit);
+});
+
+test("a file with schema and two model blocks splices each block's body and keeps the schema", () => {
+  const draft = ModelDraft.fromSources([ViewpointsFx.Base()], [ViewpointsFx.WithSchema], { namespace: ViewpointsFx.Namespace, model: ViewpointsFx.ModelN });
+  draft.setField(ViewpointsFx.Web, ViewpointsFx.Label, ViewpointsFx.WebLabel);
+  draft.setField(ViewpointsFx.Host, ViewpointsFx.Label, ViewpointsFx.HostLabel);
+  draft.create(ViewpointsFx.Node, ViewpointsFx.Box);
+  const files = draft.toTodlByFile();
+  const text = files.get(ViewpointsFx.WithSchema.uri)!;
+  assert.match(text, ViewpointsFx.LocalConcept);
+  assert.match(text, ViewpointsFx.BlockM);
+  assert.match(text, ViewpointsFx.BlockN);
+  const { errors, models } = ViewpointsFx.Recompile(files);
+  assert.deepEqual(errors, []);
+  assert.equal(models.get(ViewpointsFx.Web), ViewpointsFx.ModelM);
+  assert.equal(models.get(ViewpointsFx.Host), ViewpointsFx.ModelN);
+  assert.equal(models.get(ViewpointsFx.Box), ViewpointsFx.ModelN);
+  for (const edit of ViewpointsFx.Edited) assert.match(text, edit);
+});

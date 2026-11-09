@@ -213,28 +213,50 @@ class ModelBlockName
     return `${namespace.split(ModelBlockName.Separator).map((s, i) => (i === 0 ? s : s.charAt(0).toUpperCase() + s.slice(1))).join("")}${ModelBlockName.Suffix}`;
   }
 
-  /** The concrete instances grouped by block name, in first-appearance order. An instance with no recorded model
+  /** The concrete instances grouped into model blocks, in first-appearance order. An instance with no recorded model
    *  joins the first declared model of the file (else the synthesized one). */
-  static Group(concrete: readonly JsonNode[], namespace: string, modelOf: ReadonlyMap<string, string> | undefined): Map<string, JsonNode[]>
+  static Group(concrete: readonly JsonNode[], namespace: string, modelOf: ReadonlyMap<string, string> | undefined): ModelBlock[]
   {
     const declared = concrete.map((n) => modelOf?.get(n.id)).find((m) => m !== undefined);
-    const fallback = declared === undefined ? ModelBlockName.Synthesized(namespace) : ModelBlockName.Of(declared, namespace);
-    const groups = new Map<string, JsonNode[]>();
+    const blocks = new Map<string, ModelBlock>();
     for (const n of concrete)
     {
-      const id = modelOf?.get(n.id);
-      const name = id === undefined ? fallback : ModelBlockName.Of(id, namespace);
-      const list = groups.get(name) ?? [];
-      list.push(n);
-      groups.set(name, list);
+      const id = modelOf?.get(n.id) ?? declared;
+      const name = id === undefined ? ModelBlockName.Synthesized(namespace) : ModelBlockName.Of(id, namespace);
+      let block = blocks.get(name);
+      if (block === undefined)
+      {
+        block = new ModelBlock(name, id);
+        blocks.set(name, block);
+      }
+      block.Members.push(n);
     }
-    return groups;
+    return [...blocks.values()];
+  }
+}
+
+/** One emitted model block: its bare name, the declared model id it stands for (none when synthesized), its members. */
+class ModelBlock
+{
+  readonly Members: JsonNode[] = [];
+
+  constructor(readonly Name: string, readonly Id: string | undefined)
+  {
+  }
+
+  /** The block's `conforms`: the declared model's own (from `conformsOf`) when one is known, else the file's. */
+  Conforms(fileConforms: string | undefined, conformsOf: ReadonlyMap<string, string> | undefined): string | undefined
+  {
+    if (this.Id === undefined || conformsOf === undefined) return fileConforms;
+    return conformsOf.get(this.Id);
   }
 }
 
 /** `modelOf` maps an instance id to its declared model id: each model is emitted as its own block under its declared
- *  name (instances without one join the file's first declared model, else `<namespace>Model`). */
-export function emitModelTodl(own: TodlDocument, namespace: string, bindings: ModelBindings, conforms?: string, operators?: Map<string, EmitOperator>, model?: Repository, modelOf?: ReadonlyMap<string, string>): string
+ *  name (instances without one join the file's first declared model, else `<namespace>Model`). `conformsOf` maps a
+ *  declared model id to its block's `conforms` viewpoint; when given, a declared model's block carries exactly its own
+ *  (none when absent), and `conforms` applies only to a synthesized block. */
+export function emitModelTodl(own: TodlDocument, namespace: string, bindings: ModelBindings, conforms?: string, operators?: Map<string, EmitOperator>, model?: Repository, modelOf?: ReadonlyMap<string, string>, conformsOf?: ReadonlyMap<string, string>): string
 {
   const instances = own.nodes;
   const classes = instances.filter(isClassNode);
@@ -271,11 +293,12 @@ export function emitModelTodl(own: TodlDocument, namespace: string, bindings: Mo
   for (const ns of bindings.imports) lines.push(`  import ${ns};`);
   for (const n of classes) lines.push(...emitOne(n, ctx, 1));
   const uses = bindings.uses.length > 0 ? ` uses ${bindings.uses.join(", ")}` : "";
-  const conf = conforms !== undefined ? ` conforms ${conforms}` : "";
-  for (const [modelId, members] of ModelBlockName.Group(concrete, namespace, modelOf))
+  for (const block of ModelBlockName.Group(concrete, namespace, modelOf))
   {
-    lines.push(`  model ${modelId} : ${bindings.metaModel}${uses}${conf} {`);
-    for (const n of members)
+    const viewpoint = block.Conforms(conforms, conformsOf);
+    const conf = viewpoint !== undefined ? ` conforms ${viewpoint}` : "";
+    lines.push(`  model ${block.Name} : ${bindings.metaModel}${uses}${conf} {`);
+    for (const n of block.Members)
     {
       if (ctx.inline.has(n.id)) continue; // emitted inline inside its parent
       for (const l of emitOne(n, ctx, 2)) lines.push(l);

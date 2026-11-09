@@ -71,40 +71,40 @@ export class ModelBlockSplicer
   private static readonly Indent = "  ";
   private static readonly Newline = "\n";
   private static readonly UnparseableOriginal = "cannot splice a model into a file that does not parse";
-  private static readonly SeveralModels = "cannot splice into a file with more than one model block";
   private static readonly UnparseableResult = "refusing to write a spliced model file that does not parse";
 
-  /** `original` with its model body replaced by `emitted`'s (or the emitted model block inserted when `original` has
-   *  none), plus any import / `uses` library the emitted model needs that `original` lacks. Throws rather than return
-   *  text that does not parse. */
+  /** `original` with each model block's body replaced by the body of `emitted`'s block of the same id (an original
+   *  block with none emptied; an emitted block no original declares inserted at the namespace's end), plus any
+   *  import / `uses` library the emitted models need that `original` lacks. A lone original block and a lone emitted
+   *  one pair whatever their ids. Throws rather than return text that does not parse. */
   static Splice(uri: string, original: string, emitted: string): string
   {
     const source = parse(original, uri);
     if (source.diagnostics.some((d) => d.severity === Severity.Error)) throw new Error(ModelBlockSplicer.UnparseableOriginal);
     const models = ModelBlockSplicer.Models(source.namespace.declarations);
-    if (models.length > 1) throw new Error(ModelBlockSplicer.SeveralModels);
     const generated = parse(emitted, uri);
-    const generatedModel = ModelBlockSplicer.Models(generated.namespace.declarations)[0];
+    const generatedModels = ModelBlockSplicer.Models(generated.namespace.declarations);
     const at = new TextOffsets(original);
     const edits: TextEdit[] = [];
 
-    const model = models[0];
-    if (model === undefined)
+    const pairs = ModelBlockSplicer.Pair(models, generatedModels);
+    for (const model of models)
     {
-      if (generatedModel !== undefined)
-      {
-        const close = at.At(source.namespace.span.end) - 1;
-        const block = ModelBlockSplicer.Slice(emitted, generatedModel);
-        edits.push(new TextEdit(close, close, ModelBlockSplicer.Indent + block + ModelBlockSplicer.Newline));
-      }
-    }
-    else
-    {
+      const generatedModel = pairs.get(model);
       const [bodyStart, bodyEnd] = ModelBlockSplicer.BodyRange(original, model, at);
       const body = generatedModel === undefined ? ModelBlockSplicer.Newline + ModelBlockSplicer.Indent : ModelBlockSplicer.Body(emitted, generatedModel);
       edits.push(new TextEdit(bodyStart, bodyEnd, body));
       const missingUses = (generatedModel?.libraries ?? []).filter((l) => !model.libraries.includes(l));
       if (missingUses.length > 0) edits.push(ModelBlockSplicer.UsesEdit(model, missingUses, at));
+    }
+    const paired = new Set(pairs.values());
+    const added = generatedModels.filter((m) => !paired.has(m));
+    if (added.length > 0)
+    {
+      // one edit for every new block, so blocks inserted at the same offset keep their emitted order
+      const close = at.At(source.namespace.span.end) - 1;
+      const blocks = added.map((m) => ModelBlockSplicer.Indent + ModelBlockSplicer.Slice(emitted, m) + ModelBlockSplicer.Newline).join("");
+      edits.push(new TextEdit(close, close, blocks));
     }
 
     const missingImports = generated.namespace.imports.filter((i) => !source.namespace.imports.includes(i));
@@ -119,6 +119,24 @@ export class ModelBlockSplicer
     for (const edit of edits.sort((a, b) => b.Start - a.Start)) text = text.slice(0, edit.Start) + edit.Text + text.slice(edit.End);
     if (parse(text, uri).diagnostics.some((d) => d.severity === Severity.Error)) throw new Error(ModelBlockSplicer.UnparseableResult);
     return text;
+  }
+
+  /** Each original block's emitted counterpart: the emitted block of the same id, else (one block each side) the lone one. */
+  private static Pair(models: readonly ModelDecl[], generated: readonly ModelDecl[]): Map<ModelDecl, ModelDecl>
+  {
+    const pairs = new Map<ModelDecl, ModelDecl>();
+    if (models.length === 1 && generated.length === 1)
+    {
+      pairs.set(models[0]!, generated[0]!);
+      return pairs;
+    }
+    const byId = new Map(generated.map((m) => [m.id, m] as const));
+    for (const model of models)
+    {
+      const match = byId.get(model.id);
+      if (match !== undefined) pairs.set(model, match);
+    }
+    return pairs;
   }
 
   private static Models(declarations: readonly { kind: DeclKind }[]): ModelDecl[]

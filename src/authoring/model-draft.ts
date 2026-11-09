@@ -41,6 +41,8 @@ export interface ModelDraftState
   readonly home: ReadonlyMap<NodeId, string>;
   /** The model container (id) of each own node that has one. */
   readonly models: ReadonlyMap<NodeId, string>;
+  /** Each reopened file's `conforms` per model block: file uri → model id → viewpoint. */
+  readonly conforms: ReadonlyMap<string, ReadonlyMap<string, string>>;
 }
 
 /** Reopen options: the draft's namespace and, optionally, the model (container id) new instances go to. */
@@ -66,6 +68,9 @@ export class ModelDraft
   private readonly modelFile = new Map<string, string>();
   /** The model a `create` without a home joins (ModelDraftOptions.model). */
   private defaultModel: string | undefined = undefined;
+  /** Each reopened file's `conforms` per model block (file uri → model id → viewpoint): a block is per file, and a
+   *  model split across files carries one viewpoint per file. */
+  private blockConforms = new Map<string, Map<string, string>>();
 
   private constructor(
     /** The frozen bases as documents: [prelude, ...bases]. */
@@ -140,6 +145,17 @@ export class ModelDraft
     {
       const uri = result.provenance.get(id);
       if (uri !== undefined && !draft.modelFile.has(id)) draft.modelFile.set(id, uri);
+    }
+    // Every model block of every reopened file, with its own `conforms` (the loader stamps it on the block's entities).
+    for (const n of draft.own.nodes)
+    {
+      const model = draft.modelOf.get(n.id);
+      const uri = draft.home.get(n.id);
+      if (model === undefined || uri === undefined) continue;
+      const blocks = draft.blockConforms.get(uri) ?? new Map<string, string>();
+      draft.blockConforms.set(uri, blocks);
+      const viewpoint = (n.attrs as Record<string, Scalar>).conforms;
+      if (typeof viewpoint === "string" && !blocks.has(model)) blocks.set(model, viewpoint);
     }
     draft.defaultModel = opts.model;
     return draft;
@@ -255,7 +271,7 @@ export class ModelDraft
   /** Deep-copy the mutable state (own delta + home map) for a later Restore. */
   Snapshot(): ModelDraftState
   {
-    return { own: structuredClone(this.own), home: new Map(this.home), models: new Map(this.modelOf) };
+    return { own: structuredClone(this.own), home: new Map(this.home), models: new Map(this.modelOf), conforms: ModelDraft.CopyConforms(this.blockConforms) };
   }
 
   /** Replace the mutable state with a prior Snapshot (the snapshot stays reusable). */
@@ -266,6 +282,7 @@ export class ModelDraft
     for (const [id, uri] of state.home) this.home.set(id, uri);
     this.modelOf.clear();
     for (const [id, model] of state.models) this.modelOf.set(id, model);
+    this.blockConforms = ModelDraft.CopyConforms(state.conforms);
     this.invalidate();
   }
 
@@ -338,7 +355,7 @@ export class ModelDraft
   {
     const own = this.toJSON();
     const bindings = deriveBindings(this.model, this.baseIds, this.namespace, own);
-    const emitted = emitModelTodl(own, this.namespace, bindings, this.conformsOf(own), collectOperators(this.model), this.model, this.modelOf);
+    const emitted = emitModelTodl(own, this.namespace, bindings, this.conformsOf(own), collectOperators(this.model), this.model, this.modelOf, this.ConformsOfAll());
     // Reopened from a single file that carries schema: keep that file's text and replace only its model body.
     if (this.layouts.size !== 1) return emitted;
     const [uri, layout] = [...this.layouts][0]!;
@@ -368,12 +385,27 @@ export class ModelDraft
     for (const [uri, doc] of files)
     {
       const bindings = deriveBindings(this.model, this.baseIds, this.namespace, doc);
-      const emitted = emitModelTodl(doc, this.namespace, bindings, this.conformsOf(doc), collectOperators(this.model), this.model, this.modelOf);
+      const emitted = emitModelTodl(doc, this.namespace, bindings, this.conformsOf(doc), collectOperators(this.model), this.model, this.modelOf, this.blockConforms.get(uri));
       // A file that declares schema beside its model keeps that schema verbatim: only its model body is replaced.
       const layout = this.layouts.get(uri);
       result.set(uri, layout !== undefined && layout.HasSchema ? ModelBlockSplicer.Splice(uri, layout.Text, emitted) : emitted);
     }
     return result;
+  }
+
+  /** Every file's block viewpoints merged (the first file's wins per model): the single-text `toTodl` view. */
+  private ConformsOfAll(): ReadonlyMap<string, string> | undefined
+  {
+    if (this.blockConforms.size === 0) return undefined;
+    const merged = new Map<string, string>();
+    for (const blocks of this.blockConforms.values())
+      for (const [model, viewpoint] of blocks) if (!merged.has(model)) merged.set(model, viewpoint);
+    return merged;
+  }
+
+  private static CopyConforms(source: ReadonlyMap<string, ReadonlyMap<string, string>>): Map<string, Map<string, string>>
+  {
+    return new Map([...source].map(([uri, blocks]) => [uri, new Map(blocks)] as const));
   }
 
   /** The shared `conforms` viewpoint of a file's concrete entities (file↔viewpoint
