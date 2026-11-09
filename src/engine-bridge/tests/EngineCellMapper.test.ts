@@ -17,12 +17,22 @@ class MapperHarness
 {
     public static readonly AllNodes = "MATCH (n) RETURN n";
     public static readonly NodeKey = "$node";
-    public static readonly PassThroughQuery = "RETURN 1 AS a, 'x' AS b, null AS c, [1, 2] AS d, {k: 1} AS e, {`$node`: 1} AS f, 2.5 AS g";
+    public static readonly PassThroughQuery = "RETURN 1 AS a, 'x' AS b, null AS c, [1, 2] AS d, {k: 1} AS e, {`" + MapperHarness.NodeKey + "`: 1} AS f, 2.5 AS g";
+    public static readonly MapKey = "$map";
     public static readonly NestedQuery = "MATCH (n) WITH collect(n) AS ns RETURN ns AS l, {k: ns} AS m";
-    public static readonly AspectsFixture = "aspects.todl";
-    private static readonly Fixtures = [MapperHarness.AspectsFixture, "order-fulfillment.todl", "shop"];
-    private static readonly MinimumNodes = 1;
     public static readonly ShopName = "shop";
+    public static readonly AspectsFixture = "aspects.todl";
+    public static readonly OrderFixture = "order-fulfillment.todl";
+    private static readonly Fixtures = [MapperHarness.AspectsFixture, MapperHarness.OrderFixture, MapperHarness.ShopName];
+    private static readonly ShopUri = "shop.todl";
+    public static readonly ExplicitId = "shop.w3";
+    public static readonly ExplicitLabel = "Explicit";
+    public static readonly NameOnlyId = "shop.w2";
+    public static readonly NameOnlyLabel = "named";
+    public static readonly LabelOnlyId = "shop.w1";
+    public static readonly LabelOnlyLabel = "Second";
+    public static readonly BareId = "shop.l1";
+    private static readonly MinimumNodes = 1;
     private static readonly ShopModel = "shop.p";
     private static readonly ShopVersion = "1.0.0";
     /** Exercises what the fixtures do not: classes, fixing terms, taxonomy fields, numbers, aspects and links. */
@@ -59,7 +69,7 @@ class MapperHarness
 
     public static async ShopGraph(): Promise<MetadataSnapshot>
     {
-        const out = compilePackage([], [{ uri: "shop.todl", text: MapperHarness.Shop }], { id: MapperHarness.ShopModel, version: MapperHarness.ShopVersion });
+        const out = compilePackage([], [{ uri: MapperHarness.ShopUri, text: MapperHarness.Shop }], { id: MapperHarness.ShopModel, version: MapperHarness.ShopVersion });
         assert.ok(out.ok, JSON.stringify(out.errors));
         const domain = new Domain(new MemoryPackageSource([PackageManifestBridge.toResolved(out.package!)]));
         await domain.load({ model: MapperHarness.ShopModel, version: MapperHarness.ShopVersion });
@@ -86,6 +96,32 @@ class MapperHarness
         }
     }
 
+    /** The wire snapshot of every declared term: label is the fixed label else the id; refs hold the broader term. */
+    public static DeclaredTerms(graph: MetadataSnapshot): Map<string, MirrorSnapshot>
+    {
+        const terms = new Map<string, MirrorSnapshot>();
+        for (const manifest of graph.manifests)
+        {
+            for (const taxonomy of manifest.taxonomies())
+            {
+                for (const term of taxonomy.getTerms())
+                {
+                    if (terms.has(term.id)) continue;
+                    const field = term.concept?.getField(TodlNames.Label);
+                    const fixed = field === undefined ? undefined : term.getFixedValue(field);
+                    terms.set(term.id, {
+                        id: term.id,
+                        concept: TodlNames.Term,
+                        label: fixed === undefined ? term.id : String(fixed),
+                        fields: {},
+                        refs: term.broader === undefined ? {} : { [TodlNames.Broader]: [term.broader.id] },
+                    });
+                }
+            }
+        }
+        return terms;
+    }
+
     public static async CheckParity(fixture: string): Promise<number>
     {
         const { graph, mapped, raw } = await MapperHarness.Run(fixture, MapperHarness.AllNodes);
@@ -104,10 +140,14 @@ class MapperHarness
             assert.ok(got !== undefined, `${fixture}: ${node.id} missing from the engine rows`);
             assert.deepEqual(got, Snapshot.of(graph.reflect(node)), `${fixture}: ${node.id}`);
         }
-        // Every engine row is a heap node compared above, or a seeded taxonomy term (not on the heap).
-        for (const snap of byId.values())
+        // Terms are not heap nodes, so Snapshot.of cannot project them; their rows are asserted exactly against the
+        // terms the manifests declare (the engine seeds each declared term once, first declaration winning).
+        const terms = MapperHarness.DeclaredTerms(graph);
+        const termRows = [...byId.values()].filter((snap) => graph.getNode(snap.id) === undefined);
+        assert.deepEqual(termRows.map((snap) => snap.id).sort(), [...terms.keys()].sort(), `${fixture}: term rows`);
+        for (const row of termRows)
         {
-            assert.ok(graph.getNode(snap.id) !== undefined || snap.concept === TodlNames.Term, `${fixture}: unexpected row ${snap.id}`);
+            assert.deepEqual(row, terms.get(row.id), `${fixture}: ${row.id}`);
         }
         assert.ok(nodes.length >= MapperHarness.MinimumNodes, `${fixture}: ${nodes.length} nodes`);
         return nodes.length;
@@ -127,7 +167,7 @@ describe("EngineCellMapper", () =>
     test("non-node cells pass through", async () =>
     {
         const { mapped } = await MapperHarness.Run(MapperHarness.AspectsFixture, MapperHarness.PassThroughQuery);
-        assert.deepEqual(mapped.Rows[0], [1, "x", null, [1, 2], { k: 1 }, { $map: { $node: 1 } }, 2.5]);
+        assert.deepEqual(mapped.Rows[0], [1, "x", null, [1, 2], { k: 1 }, { [MapperHarness.MapKey]: { [MapperHarness.NodeKey]: 1 } }, 2.5]);
     });
 
     test("nested nodes in lists and maps are mapped", async () =>
@@ -156,9 +196,9 @@ describe("EngineCellMapper", () =>
             const snap = (row[0] as unknown as Record<string, MirrorSnapshot>)[MapperHarness.NodeKey]!;
             labels.set(snap.id, snap.label);
         }
-        assert.equal(labels.get("shop.w3"), "Explicit");
-        assert.equal(labels.get("shop.w2"), "named");
-        assert.equal(labels.get("shop.w1"), "Second");
-        assert.equal(labels.get("shop.l1"), "shop.l1");
+        assert.equal(labels.get(MapperHarness.ExplicitId), MapperHarness.ExplicitLabel);
+        assert.equal(labels.get(MapperHarness.NameOnlyId), MapperHarness.NameOnlyLabel);
+        assert.equal(labels.get(MapperHarness.LabelOnlyId), MapperHarness.LabelOnlyLabel);
+        assert.equal(labels.get(MapperHarness.BareId), MapperHarness.BareId);
     });
 });
