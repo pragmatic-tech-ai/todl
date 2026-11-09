@@ -404,6 +404,8 @@ describe('dev loop end to end', () =>
             assert.equal(moved.Node.Owner, MoveFx.App);
             const was = before.get(MoveFx.Moving)!;
             assert.deepEqual({ ...moved, Node: { ...moved.Node, Owner: MoveFx.Lib } }, was, MoveFx.OnlyOwnerChanged);
+            // deepEqual on the Properties Map ignores key order; the read order is compared explicitly.
+            assert.deepEqual(moved.Order, was.Order, MoveFx.OnlyOwnerChanged);
             assert.equal(after.get(MoveFx.Staying)!.Node.Owner, MoveFx.Lib);
             assert.equal(await DevLoopFx.IsSeeded(engine, MoveFx.Moving), true);
             await DevLoopFx.Write(engine, [MoveFx.Rename]);

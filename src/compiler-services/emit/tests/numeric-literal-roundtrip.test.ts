@@ -31,6 +31,34 @@ class NumericFx
     ];
     public static readonly NotFinite = [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY];
     public static readonly NotFiniteError = /no \.todl literal can hold/;
+    public static readonly Instance = "        W w{0} { i = 5; f = 2.5; a = 7; }";
+    public static readonly InstancesSlot = "        W w { i = 5; f = 2.5; a = 7; s = \"9\"; neg = \"-3\"; exp = \"1e-7\"; }";
+    public static readonly Placeholder = "{0}";
+    public static readonly Separator = "\n";
+    public static readonly CountTitle = "the numeric-field lookup computes a concept's effective schema once per emit, not per attr";
+
+    /** The model with `count` W instances, each holding three numeric fields. */
+    public static Many(count: number): string
+    {
+        const lines = Array.from({ length: count }, (_, i) => NumericFx.Instance.replace(NumericFx.Placeholder, String(i)));
+        return NumericFx.Text.replace(NumericFx.InstancesSlot, lines.join(NumericFx.Separator));
+    }
+
+    /** How many effectiveSchema calls one toTodl of `text` makes. */
+    public static SchemaCalls(text: string): number
+    {
+        const draft = NumericFx.Draft(text);
+        const model = draft.model;
+        const original = model.effectiveSchema.bind(model);
+        let calls = 0;
+        model.effectiveSchema = (concept) =>
+        {
+            calls++;
+            return original(concept);
+        };
+        draft.toTodl();
+        return calls;
+    }
 
     public static Draft(text: string): ModelDraft
     {
@@ -67,6 +95,11 @@ describe("numeric field literals", () =>
             assert.equal(typeof Back, "string");
             assert.ok(Object.is(Number(Back), value), `${String(value)} came back as ${String(Back)}`);
         }
+    });
+
+    test(NumericFx.CountTitle, () =>
+    {
+        assert.equal(NumericFx.SchemaCalls(NumericFx.Many(8)), NumericFx.SchemaCalls(NumericFx.Many(1)));
     });
 
     test("NaN and infinities are refused, never written", () =>

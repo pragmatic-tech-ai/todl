@@ -9,6 +9,7 @@ import { MetaKind } from "../model/kinds.js";
 import { EdgeKind, Direction, type NodeId, type Scalar } from "../model/graph.js";
 import { Repository, ScalarBase } from "../model/model.js";
 import { type TodlDocument, type JsonNode } from "./json.js";
+import { NumericText } from "./numeric-text.js";
 
 /** A reified-edge operator, keyed by concept for shorthand emit. */
 export interface EmitOperator { glyph: string; from: string; to: string; }
@@ -122,13 +123,19 @@ class FieldLiteral
 {
   private static readonly NumericLiteral = /^\d+(\.\d+)?$/;
   private static readonly Numeric: ReadonlySet<ScalarBase> = new Set([ScalarBase.Integer, ScalarBase.Number]);
-  private static readonly NegativeZero = "-0";
   private static readonly NotFiniteMessage = "field \"{0}\" of \"{1}\" holds {2}, which no .todl literal can hold";
 
-  static Write(node: JsonNode, name: string, value: Scalar, model: Repository | undefined): string
+  /** Per emit: concept id → its numeric field names (effectiveSchema is computed once per concept, not per attr). */
+  private readonly numericFields = new Map<string, ReadonlySet<string>>();
+
+  constructor(private readonly model: Repository | undefined)
+  {
+  }
+
+  Write(node: JsonNode, name: string, value: Scalar): string
   {
     if (typeof value === "number") return FieldLiteral.WriteNumber(node, name, value);
-    if (typeof value === "string" && FieldLiteral.NumericLiteral.test(value) && FieldLiteral.IsNumeric(node, name, model)) return value;
+    if (typeof value === "string" && FieldLiteral.NumericLiteral.test(value) && this.IsNumeric(node, name)) return value;
     return literal(value);
   }
 
@@ -138,16 +145,27 @@ class FieldLiteral
     {
       throw new Error(FieldLiteral.NotFiniteMessage.replace("{0}", name).replace("{1}", node.id).replace("{2}", String(value)));
     }
-    const text = Object.is(value, -0) ? FieldLiteral.NegativeZero : String(value);
+    const text = NumericText.Of(value);
     return FieldLiteral.NumericLiteral.test(text) ? text : JSON.stringify(text);
   }
 
-  private static IsNumeric(node: JsonNode, name: string, model: Repository | undefined): boolean
+  private IsNumeric(node: JsonNode, name: string): boolean
   {
+    const model = this.model;
     if (model === undefined || node.type === null || !model.has(node.type)) return false;
-    const field = model.effectiveSchema(node.type).fields.find((f) => f.name === name);
-    const base = field === undefined ? undefined : model.scalarConstraintOf(field.type)?.base;
-    return base !== undefined && FieldLiteral.Numeric.has(base);
+    let names = this.numericFields.get(node.type);
+    if (names === undefined)
+    {
+      const numeric = new Set<string>();
+      for (const field of model.effectiveSchema(node.type).fields)
+      {
+        const base = model.scalarConstraintOf(field.type)?.base;
+        if (base !== undefined && FieldLiteral.Numeric.has(base)) numeric.add(field.name);
+      }
+      names = numeric;
+      this.numericFields.set(node.type, names);
+    }
+    return names.has(name);
   }
 }
 
@@ -164,6 +182,8 @@ interface EmitCtx
   /** The emitting file's namespace + the model, to render reference targets. */
   namespace: string;
   model: Repository | undefined;
+  /** Field literals of this emit (caches each concept's numeric fields). */
+  literals: FieldLiteral;
 }
 
 function isClassNode(n: JsonNode): boolean
@@ -202,7 +222,7 @@ export function emitModelTodl(own: TodlDocument, namespace: string, bindings: Mo
   {
     for (const r of list) if (containedBy.get(r.to) === from && byId.has(r.to)) inline.add(r.to);
   }
-  const ctx: EmitCtx = { byId, instanceOf, rels, inline, operators: operators ?? new Map(), namespace, model };
+  const ctx: EmitCtx = { byId, instanceOf, rels, inline, operators: operators ?? new Map(), namespace, model, literals: new FieldLiteral(model) };
 
   const lines: string[] = [`namespace ${namespace}`, "{"];
   for (const ns of bindings.imports) lines.push(`  import ${ns};`);
@@ -290,7 +310,7 @@ function emitBody(node: JsonNode, ctx: EmitCtx, indent: number, inlineChild: boo
   for (const [name, value] of Object.entries(node.attrs))
   {
     if (MARKER_ATTRS.has(name)) continue;
-    lines.push(`${pad}${name} = ${FieldLiteral.Write(node, name, value as Scalar, ctx.model)};`);
+    lines.push(`${pad}${name} = ${ctx.literals.Write(node, name, value as Scalar)};`);
   }
   const byMember = new Map<string, string[]>();
   for (const r of ctx.rels.get(node.id) ?? [])

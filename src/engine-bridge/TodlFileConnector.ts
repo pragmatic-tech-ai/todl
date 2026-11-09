@@ -9,6 +9,7 @@ import {
 import type { IDisposable } from '@pragmatic-tech-ai/todl-runtime';
 import { MetaKind } from '../compiler-services/model/kinds.js';
 import type { Scalar } from '../compiler-services/model/graph.js';
+import { NumericText } from '../compiler-services/emit/numeric-text.js';
 import { Cardinality } from '../manifest/enums.js';
 import { EngineBridgeError, EngineBridgeErrorCode } from './EngineBridgeError.js';
 import { MessageFormat } from './MessageFormat.js';
@@ -24,7 +25,6 @@ import { TodlNames } from './TodlNames.js';
 class TodlValueConverter
 {
     private static readonly UnsupportedMessage = 'Member "{0}" of "{1}" cannot hold this value in a .todl file';
-    private static readonly NegativeZero = '-0';
 
     /** The scalar to write, or null to remove the field. */
     public static ToScalar(id: string, member: string, value: CellValue): Scalar | null
@@ -35,8 +35,8 @@ class TodlValueConverter
         }
         if (typeof value === 'number' && Number.isFinite(value))
         {
-            // String(-0) is "0": keep the sign so a Float64 -0 reads back as -0.
-            return Object.is(value, -0) ? TodlValueConverter.NegativeZero : String(value);
+            // NumericText keeps -0's sign so a Float64 -0 reads back as -0.
+            return NumericText.Of(value);
         }
         if (typeof value === 'bigint')
         {
