@@ -15,6 +15,7 @@ import { Cardinality, MetaKind } from '../manifest/enums.js';
 import type { Scalar } from '../manifest/logical.js';
 import type { FieldInfo, ReflectedNode, RelationshipInfo, TermInfo, TypeInfo } from '../manifest/reflection/reflection.js';
 import { EngineBridgeError, EngineBridgeErrorCode } from './EngineBridgeError.js';
+import { MessageFormat } from './MessageFormat.js';
 import { DescribeDiagnosticCode, type IDescribeDiagnostic, type IDescribeOptions, type ISnapshotDescription } from './SnapshotDescription.js';
 import { TodlNames } from './TodlNames.js';
 
@@ -44,7 +45,8 @@ interface IDefinitionDraft
     readonly IsAspect: boolean;
     Parent: string | null;
     Aspects: string[];
-    readonly Own: readonly IMemberPlan[];
+    /** Own members; a declaration that collides for a carrier is removed (ruling PF-b). */
+    Own: IMemberPlan[];
 }
 
 /** The outcome of converting one TODL scalar to an engine cell: a value, or why it was skipped. */
@@ -194,8 +196,6 @@ export class SnapshotDescriber
     private static readonly UnknownBindingConceptMessage = 'binding of "{0}" to "{1}" names a concept that is not described; skipped';
     private static readonly DuplicateBindingMessage = '"{0}" in model "{1}" is bound to both "{2}" and "{3}"; the first binding is kept';
     private static readonly NoVersion = '';
-    private static readonly MissingArgument = '';
-    private static readonly Placeholder = /\{(\d+)\}/g;
     private static readonly UnsupportedFieldMessage = 'Field "{0}" has type "{1}", which has no engine value type';
     private static readonly RedeclaredMessage = '"{0}" redeclares "{1}" differently from the member it inherits; the inherited member is used';
     private static readonly UnknownConceptMessage = '"{0}" has type "{1}", which is not a described concept';
@@ -204,6 +204,9 @@ export class SnapshotDescriber
     private static readonly UnknownPropertyMessage = '"{0}" is not a property of "{1}"; skipped';
     private static readonly UnknownRelationshipMessage = '"{0}" is not a relationship of "{1}"; its links are dropped';
     private static readonly DanglingMessage = 'link to "{0}" dropped: no such node in the snapshot';
+    private static readonly CollisionMessage = '"{0}" no longer declares "{1}": a carrier gets "{1}" from an earlier source too';
+    private static readonly ParentCycleMessage = '"{0}" extends "{1}", which closes an inheritance cycle; its parent falls back to "{2}"';
+    private static readonly InclusionCycleMessage = '"{0}" includes "{1}", which closes an inclusion cycle; the inclusion is dropped';
     private static readonly Builtins: ReadonlyMap<string, ValueType> = new Map<string, ValueType>([
         ['string', ValueType.String],
         ['number', ValueType.Float64],
@@ -214,6 +217,14 @@ export class SnapshotDescriber
     private readonly drafts = new Map<string, IDefinitionDraft>();
     private readonly effective = new Map<string, Map<string, IMemberPlan>>();
     private readonly members = new Map<string, MemberInput[]>();
+    /** The kept own member plans of each definition (`members`, as plans). */
+    private readonly kept = new Map<string, IMemberPlan[]>();
+    /** The aspects each definition carries (its parent's, then its own inclusion closure). */
+    private readonly carried = new Map<string, Set<string>>();
+    /** Set when a pass dropped a colliding declaration: the effective members must be recomputed. */
+    private collided = false;
+    /** False while collisions are reconciled, so a redeclaration is reported once, by the final pass. */
+    private reporting = false;
     private readonly resolving = new Set<string>();
     private readonly taxonomyNames = new Set<string>();
     private readonly diagnostics: IDescribeDiagnostic[] = [];
@@ -235,6 +246,9 @@ export class SnapshotDescriber
             }
         }
         this.DraftDefinitions();
+        this.BreakParentCycles();
+        this.BreakInclusionCycles();
+        this.ReconcileCollisions();
         const definitions = [...this.drafts.values()].map((draft) => this.Finish(draft));
         const seed = this.DescribeSeed();
         const external = new Set<string>();
@@ -339,11 +353,11 @@ export class SnapshotDescriber
         if (type === undefined)
         {
             // An unresolved type (e.g. a cross-manifest ref with no host): keep the field as an opaque String.
-            this.Report(DescribeDiagnosticCode.UnresolvedType, subject, SnapshotDescriber.Format(SnapshotDescriber.UnresolvedFieldMessage, subject));
+            this.Report(DescribeDiagnosticCode.UnresolvedType, subject, MessageFormat.Format(SnapshotDescriber.UnresolvedFieldMessage, subject));
             return SnapshotDescriber.Property(field.name, ValueType.String, MemberSource.Scalar);
         }
         throw new EngineBridgeError(EngineBridgeErrorCode.UnsupportedFieldType,
-            SnapshotDescriber.Format(SnapshotDescriber.UnsupportedFieldMessage, subject, type.fullName));
+            MessageFormat.Format(SnapshotDescriber.UnsupportedFieldMessage, subject, type.fullName));
     }
 
     /** The builtin a primitive's base chain ends at; an opaque (base-less) primitive or a cyclic chain is a String. */
@@ -375,7 +389,7 @@ export class SnapshotDescriber
         {
             // No describable target (unresolved): any element may be linked rather than refusing to open.
             const subject = `${owner.fullName}${SnapshotDescriber.MemberSeparator}${rel.name}`;
-            this.Report(DescribeDiagnosticCode.UnresolvedType, subject, SnapshotDescriber.Format(SnapshotDescriber.UnresolvedTargetsMessage, subject));
+            this.Report(DescribeDiagnosticCode.UnresolvedType, subject, MessageFormat.Format(SnapshotDescriber.UnresolvedTargetsMessage, subject));
             targets.push(TodlNames.Element);
         }
         return SnapshotDescriber.Relationship(rel.name, targets, SnapshotDescriber.IsMany(rel.cardinality));
@@ -412,9 +426,94 @@ export class SnapshotDescriber
     }
 
     /**
-     * Every member the engine gives `name` (inherited, carried, own), memoized. An own member whose name is already
-     * provided (by the parent chain, a carried aspect or, for an aspect, the root every carrier descends from) is
-     * dropped, since the engine refuses a redeclaration; silently when it agrees, else with MemberRedeclared.
+     * Ruling PF-b: an extends cycle would make the engine refuse the schema. Each parent chain is walked; the edge that
+     * closes a cycle is replaced by the root, with a diagnostic.
+     */
+    private BreakParentCycles(): void
+    {
+        for (const draft of this.drafts.values())
+        {
+            if (draft.IsAspect) continue;
+            const seen = new Set<string>([draft.Name]);
+            let current = draft;
+            while (current.Parent !== null)
+            {
+                if (seen.has(current.Parent))
+                {
+                    this.Report(DescribeDiagnosticCode.InheritanceCycle, current.Name,
+                        MessageFormat.Format(SnapshotDescriber.ParentCycleMessage, current.Name, current.Parent, TodlNames.Element));
+                    current.Parent = TodlNames.Element;
+                    break;
+                }
+                seen.add(current.Parent);
+                current = this.drafts.get(current.Parent)!;
+            }
+        }
+    }
+
+    /** Ruling PF-b: an aspect inclusion that closes a cycle (an aspect carrying itself) is dropped, with a diagnostic. */
+    private BreakInclusionCycles(): void
+    {
+        const done = new Set<string>();
+        for (const draft of this.drafts.values())
+        {
+            if (draft.IsAspect) this.VisitInclusions(draft, new Set<string>(), done);
+        }
+    }
+
+    private VisitInclusions(draft: IDefinitionDraft, path: Set<string>, done: Set<string>): void
+    {
+        if (done.has(draft.Name)) return;
+        path.add(draft.Name);
+        for (const included of [...draft.Aspects])
+        {
+            if (path.has(included))
+            {
+                this.Report(DescribeDiagnosticCode.InheritanceCycle, draft.Name,
+                    MessageFormat.Format(SnapshotDescriber.InclusionCycleMessage, draft.Name, included));
+                draft.Aspects = draft.Aspects.filter((a) => a !== included);
+                continue;
+            }
+            this.VisitInclusions(this.drafts.get(included)!, path, done);
+        }
+        path.delete(draft.Name);
+        done.add(draft.Name);
+    }
+
+    /**
+     * Ruling PF-b: computes every definition's effective members until no pass drops a colliding declaration (a drop
+     * changes what every carrier of that aspect sees), then clears the memo so the final pass reports each
+     * redeclaration once.
+     */
+    private ReconcileCollisions(): void
+    {
+        do
+        {
+            this.ResetEffective();
+            this.collided = false;
+            for (const name of this.drafts.keys()) this.Effective(name);
+        }
+        while (this.collided);
+        this.ResetEffective();
+        this.reporting = true;
+    }
+
+    private ResetEffective(): void
+    {
+        this.effective.clear();
+        this.members.clear();
+        this.kept.clear();
+        this.carried.clear();
+    }
+
+    /**
+     * Every member the engine gives `name`, memoized, merged in the engine's order: the parent's effective members (for
+     * an aspect, the root every carrier descends from), then the members of each aspect it carries that the parent
+     * does not already carry (direct aspects, then what they include), then own members. Two inherited or carried
+     * members of one name collide in the engine: the later source's declaration is removed from its aspect (the first
+     * source wins, as effectiveSchema) and the pass is repeated (ReconcileCollisions). An own member whose name is
+     * already provided is dropped, since the engine refuses a redeclaration; silently when it agrees, else with
+     * MemberRedeclared.
      */
     private Effective(name: string): Map<string, IMemberPlan>
     {
@@ -424,32 +523,77 @@ export class SnapshotDescriber
         if (draft === undefined || this.resolving.has(name)) return new Map();
         this.resolving.add(name);
         const provided = new Map<string, IMemberPlan>();
-        const inherit = (from: string): void =>
+        const carried = new Set<string>();
+        const base = draft.Parent ?? (draft.IsAspect ? TodlNames.Element : null);
+        if (base !== null)
         {
-            for (const [member, plan] of this.Effective(from)) if (!provided.has(member)) provided.set(member, plan);
-        };
-        if (draft.Parent !== null) inherit(draft.Parent);
-        else if (draft.IsAspect) inherit(TodlNames.Element);
-        for (const aspect of draft.Aspects) inherit(aspect);
-        const kept: MemberInput[] = [];
+            for (const [member, plan] of this.Effective(base)) provided.set(member, plan);
+            if (draft.Parent !== null)
+            {
+                for (const aspect of this.carried.get(base) ?? []) carried.add(aspect);
+            }
+        }
+        for (const aspect of this.InclusionClosure(draft))
+        {
+            if (carried.has(aspect)) continue;
+            carried.add(aspect);
+            this.Effective(aspect);
+            this.Carry(aspect, provided);
+        }
+        const kept: IMemberPlan[] = [];
         for (const plan of draft.Own)
         {
             const existing = provided.get(plan.Input.Name);
             if (existing === undefined)
             {
                 provided.set(plan.Input.Name, plan);
-                kept.push(plan.Input);
+                kept.push(plan);
             }
-            else if (!SnapshotDescriber.Agree(existing, plan))
+            else if (this.reporting && !SnapshotDescriber.Agree(existing, plan))
             {
                 this.Report(DescribeDiagnosticCode.MemberRedeclared, `${name}${SnapshotDescriber.MemberSeparator}${plan.Input.Name}`,
-                    SnapshotDescriber.Format(SnapshotDescriber.RedeclaredMessage, name, plan.Input.Name));
+                    MessageFormat.Format(SnapshotDescriber.RedeclaredMessage, name, plan.Input.Name));
             }
         }
         this.resolving.delete(name);
-        this.members.set(name, kept);
+        this.kept.set(name, kept);
+        this.members.set(name, kept.map((p) => p.Input));
+        this.carried.set(name, carried);
         this.effective.set(name, provided);
         return provided;
+    }
+
+    /** Merges a carried aspect's kept own members into `provided`; a name already provided collides (see Effective). */
+    private Carry(aspect: string, provided: Map<string, IMemberPlan>): void
+    {
+        for (const plan of this.kept.get(aspect) ?? [])
+        {
+            if (!provided.has(plan.Input.Name))
+            {
+                provided.set(plan.Input.Name, plan);
+                continue;
+            }
+            const draft = this.drafts.get(aspect)!;
+            draft.Own = draft.Own.filter((p) => p !== plan);
+            this.collided = true;
+            this.Report(DescribeDiagnosticCode.MemberCollision, `${aspect}${SnapshotDescriber.MemberSeparator}${plan.Input.Name}`,
+                MessageFormat.Format(SnapshotDescriber.CollisionMessage, aspect, plan.Input.Name));
+        }
+    }
+
+    /** The aspects `draft` includes, directly then transitively (breadth-first), each once, never itself. */
+    private InclusionClosure(draft: IDefinitionDraft): string[]
+    {
+        const out: string[] = [];
+        const queue = [...draft.Aspects];
+        while (queue.length > 0)
+        {
+            const next = queue.shift()!;
+            if (next === draft.Name || out.includes(next)) continue;
+            out.push(next);
+            queue.push(...(this.drafts.get(next)?.Aspects ?? []));
+        }
+        return out;
     }
 
     private static Agree(a: IMemberPlan, b: IMemberPlan): boolean
@@ -471,7 +615,7 @@ export class SnapshotDescriber
             const draft = this.drafts.get(node.type);
             if (draft === undefined || draft.IsAspect || node.type === TodlNames.Term)
             {
-                this.Report(DescribeDiagnosticCode.UnknownConcept, node.id, SnapshotDescriber.Format(SnapshotDescriber.UnknownConceptMessage, node.id, node.type));
+                this.Report(DescribeDiagnosticCode.UnknownConcept, node.id, MessageFormat.Format(SnapshotDescriber.UnknownConceptMessage, node.id, node.type));
                 continue;
             }
             // Owner is only ever the home package's model (stable across dependents being added): a node no BindSeed
@@ -479,7 +623,7 @@ export class SnapshotDescriber
             const owner = this.snapshot.HomeModelOf(node.id);
             if (owner === undefined)
             {
-                this.Report(DescribeDiagnosticCode.Unattributed, node.id, SnapshotDescriber.Format(SnapshotDescriber.UnattributedMessage, node.id));
+                this.Report(DescribeDiagnosticCode.Unattributed, node.id, MessageFormat.Format(SnapshotDescriber.UnattributedMessage, node.id));
                 continue;
             }
             nodes.push({ Node: node, Owner: owner });
@@ -508,14 +652,14 @@ export class SnapshotDescriber
                 if (terms.length > 1)
                 {
                     this.Report(DescribeDiagnosticCode.ValueTypeMismatch, this.Subject(node, name),
-                        SnapshotDescriber.Format(SnapshotDescriber.ExtraTermsMessage, name, node.id, String(terms.length), terms[0]!));
+                        MessageFormat.Format(SnapshotDescriber.ExtraTermsMessage, name, node.id, String(terms.length), terms[0]!));
                 }
             }
             if (raw === undefined) continue;
             const converted = CellConverter.Convert(plan.Input.Type, raw);
             if (converted.Failure !== undefined)
             {
-                this.Report(converted.Failure, this.Subject(node, name), SnapshotDescriber.Format(SnapshotDescriber.MismatchMessage, String(raw), name, ValueType[plan.Input.Type!]));
+                this.Report(converted.Failure, this.Subject(node, name), MessageFormat.Format(SnapshotDescriber.MismatchMessage, String(raw), name, ValueType[plan.Input.Type!]));
                 continue;
             }
             properties[name] = converted.Value!;
@@ -525,7 +669,7 @@ export class SnapshotDescriber
             const plan = plans.get(name);
             if (plan === undefined || plan.Source === MemberSource.Link || plan.Source === MemberSource.Reserved)
             {
-                this.Report(DescribeDiagnosticCode.UnknownMember, this.Subject(node, name), SnapshotDescriber.Format(SnapshotDescriber.UnknownPropertyMessage, name, node.type));
+                this.Report(DescribeDiagnosticCode.UnknownMember, this.Subject(node, name), MessageFormat.Format(SnapshotDescriber.UnknownPropertyMessage, name, node.type));
             }
         }
         const links: ISeedLink[] = [];
@@ -535,7 +679,7 @@ export class SnapshotDescriber
             if (plan?.Source === MemberSource.TaxonomyTerm) continue;
             if (plan?.Source !== MemberSource.Link)
             {
-                this.Report(DescribeDiagnosticCode.UnknownMember, this.Subject(node, rel), SnapshotDescriber.Format(SnapshotDescriber.UnknownRelationshipMessage, rel, node.type));
+                this.Report(DescribeDiagnosticCode.UnknownMember, this.Subject(node, rel), MessageFormat.Format(SnapshotDescriber.UnknownRelationshipMessage, rel, node.type));
                 continue;
             }
             for (const to of targets)
@@ -546,7 +690,7 @@ export class SnapshotDescriber
                 }
                 else
                 {
-                    this.Report(DescribeDiagnosticCode.DanglingLink, this.Subject(node, rel), SnapshotDescriber.Format(SnapshotDescriber.DanglingMessage, to));
+                    this.Report(DescribeDiagnosticCode.DanglingLink, this.Subject(node, rel), MessageFormat.Format(SnapshotDescriber.DanglingMessage, to));
                 }
             }
         }
@@ -583,7 +727,7 @@ export class SnapshotDescriber
                         if (converted.Failure !== undefined)
                         {
                             this.Report(DescribeDiagnosticCode.ValueTypeMismatch, `${term.id}${SnapshotDescriber.MemberSeparator}${name}`,
-                                SnapshotDescriber.Format(SnapshotDescriber.TermMismatchMessage, term.id, String(raw), name, ValueType[plan.Input.Type!]));
+                                MessageFormat.Format(SnapshotDescriber.TermMismatchMessage, term.id, String(raw), name, ValueType[plan.Input.Type!]));
                             continue;
                         }
                         properties[name] = converted.Value!;
@@ -614,12 +758,6 @@ export class SnapshotDescriber
         return `${node.id}${SnapshotDescriber.MemberSeparator}${member}`;
     }
 
-    /** `template` with each `{n}` replaced by `args[n]`. */
-    private static Format(template: string, ...args: string[]): string
-    {
-        return template.replace(SnapshotDescriber.Placeholder, (_, index: string) => args[Number(index)] ?? SnapshotDescriber.MissingArgument);
-    }
-
     private Report(code: DescribeDiagnosticCode, subject: string, message: string): void
     {
         this.diagnostics.push({ Code: code, Subject: subject, Message: message });
@@ -644,13 +782,13 @@ export class SnapshotDescriber
                 if (plan.Model.length === 0)
                 {
                     this.Report(DescribeDiagnosticCode.InvalidBinding, binding.Concept,
-                        SnapshotDescriber.Format(SnapshotDescriber.EmptyModelMessage, binding.Concept, binding.Connector));
+                        MessageFormat.Format(SnapshotDescriber.EmptyModelMessage, binding.Concept, binding.Connector));
                     continue;
                 }
                 if (draft === undefined || draft.IsAspect)
                 {
                     this.Report(DescribeDiagnosticCode.InvalidBinding, binding.Concept,
-                        SnapshotDescriber.Format(SnapshotDescriber.UnknownBindingConceptMessage, binding.Concept, binding.Connector));
+                        MessageFormat.Format(SnapshotDescriber.UnknownBindingConceptMessage, binding.Concept, binding.Connector));
                     continue;
                 }
                 const key = `${plan.Model}${SnapshotDescriber.BindingKeySeparator}${binding.Concept}`;
@@ -660,7 +798,7 @@ export class SnapshotDescriber
                     if (previous !== binding.Connector)
                     {
                         this.Report(DescribeDiagnosticCode.DuplicateBinding, binding.Concept,
-                            SnapshotDescriber.Format(SnapshotDescriber.DuplicateBindingMessage, binding.Concept, plan.Model, previous, binding.Connector));
+                            MessageFormat.Format(SnapshotDescriber.DuplicateBindingMessage, binding.Concept, plan.Model, previous, binding.Connector));
                     }
                     continue;
                 }

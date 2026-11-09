@@ -47,6 +47,11 @@ export enum DescribeDiagnosticCode
     InvalidBinding,
     /** A (Model, Concept) bound to two different connectors; the first binding is kept. */
     DuplicateBinding,
+    /** Two inherited or carried members of one name (two aspects, or a parent and an aspect); the later source's
+     *  declaration is dropped from its definition (the first source wins, as effectiveSchema). */
+    MemberCollision,
+    /** An extends or aspect-inclusion cycle; the closing edge is dropped (a parent falls back to the root). */
+    InheritanceCycle,
 }
 
 export interface IDescribeDiagnostic

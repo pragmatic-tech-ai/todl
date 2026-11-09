@@ -76,13 +76,14 @@ describe("aspects in the manifest", () =>
         assert.equal(new ManifestValidator(reader).isValid, true);
     });
 
-    test("an aspect inclusion cycle terminates and each aspect is carried once", () =>
+    test("an aspect inclusion cycle terminates, each aspect is carried once and never carries itself", () =>
     {
         const logical = AspectFixtures.Logical();
         logical.aspects!.Asset!.aspects = ["Tracked"];
         const m = Manifest.load(ManifestWriter.fromLogical(logical).toBinary());
         assert.deepEqual(AspectFixtures.Names(m.getType("Server")!.getAspects()), ["Tracked", "Asset"]);
-        assert.deepEqual(AspectFixtures.Names(m.getType("Asset")!.getAspects()), ["Tracked", "Asset"]);
+        assert.deepEqual(AspectFixtures.Names(m.getType("Asset")!.getAspects()), ["Tracked"]);
+        assert.deepEqual(AspectFixtures.Names(m.getType("Tracked")!.getAspects()), ["Asset"]);
         assert.equal(m.getType("Asset")!.isAssignableFrom(m.getType("Laptop")!), true);
     });
 

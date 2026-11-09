@@ -299,7 +299,7 @@ export class Manifest
     /**
      * @internal Every aspect `type` carries, mirroring `Repository.AspectsOf`: for the
      * type then each supertype nearest-first, its direct aspects followed by what they
-     * include transitively (breadth-first); each once, aspects only.
+     * include transitively (breadth-first); each once, aspects only, never the type itself.
      */
     carriedAspectsOf(type: TypeInfo): TypeInfo[]
     {
@@ -307,7 +307,8 @@ export class Manifest
         const cached = this.carriedAspects.get(row);
         if (cached !== undefined) return cached;
         const result: TypeInfo[] = [];
-        const seen = new Set<string>();
+        // Seeded with the type itself: through an inclusion cycle an aspect never carries itself.
+        const seen = new Set<string>([type.identity]);
         for (const owner of [type, ...type.getSupertypes()])
         {
             const direct = owner.getDeclaredAspects();

@@ -69,6 +69,16 @@ test("AspectsOf: own, inherited and transitively included, each once", () =>
   assert.deepEqual(m.AspectsOf("t.unrelated"), []);
 });
 
+test("AspectsOf: through an inclusion cycle an aspect never carries itself", () =>
+{
+  const m = AspectSchemaHarness.Model(`aspect a1 : a2 { x : string; }
+aspect a2 : a1 { y : string; }
+concept c : a1 { }`);
+  assert.deepEqual(m.AspectsOf("t.a1"), ["t.a2"]);
+  assert.deepEqual(m.AspectsOf("t.a2"), ["t.a1"]);
+  assert.deepEqual(AspectSchemaHarness.Sorted(m.AspectsOf("t.c")), ["t.a1", "t.a2"]);
+});
+
 test("concept including placed directly and via cloud_scoped lists `in` once", () =>
 {
   const m = AspectSchemaHarness.Model();

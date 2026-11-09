@@ -610,7 +610,8 @@ export class Repository
   private ComputeAspectsOf(concept: NodeId): NodeId[]
   {
     const result: NodeId[] = [];
-    const seen = new Set<NodeId>();
+    // Seeded with the type itself: through an inclusion cycle an aspect never carries itself.
+    const seen = new Set<NodeId>([concept]);
     for (const owner of [concept, ...this.supertypesOf(concept)])
     {
       const direct = this.graph.related(owner, EdgeKind.IncludesAspect, Direction.Out);

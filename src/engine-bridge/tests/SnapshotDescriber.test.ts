@@ -519,3 +519,93 @@ describe('SnapshotDescriber', () =>
         assert.deepEqual(DescribeFixture.Seed(Description, 'm.K.t').Properties, { label: null, class: null, taxonomy: 'm.K' });
     });
 });
+
+/** Hand-built manifests whose type model is broken the way a compile-diagnosed model can be (ruling PF-b). */
+class BrokenTypeModelFx
+{
+    public static readonly Model = 'm';
+    public static readonly Version = '1.0.0';
+    public static readonly Format = 'todl-manifest/1';
+    public static readonly Str: ConceptDef['fields'][string] = { type: 'string', card: '?' };
+
+    public static Aspect(fields: ConceptDef['fields'], aspects: string[] = []): NonNullable<LogicalManifest['aspects']>[string]
+    {
+        return { fields, relationships: {}, aspects, invariants: [], annotations: [] };
+    }
+
+    public static Carrier(extendsId: string, aspects: string[], fields: ConceptDef['fields'] = {}): ConceptDef
+    {
+        return { ...DescribeFixture.Concept(extendsId, fields), aspects };
+    }
+
+    public static Snapshot(concepts: LogicalManifest['concepts'], aspects: NonNullable<LogicalManifest['aspects']> = {}): MetadataSnapshot
+    {
+        return DescribeFixture.Hand({
+            format: BrokenTypeModelFx.Format, model: BrokenTypeModelFx.Model, version: BrokenTypeModelFx.Version, root: TodlNames.Element,
+            concepts: { [TodlNames.Element]: DescribeFixture.Concept(null, { label: BrokenTypeModelFx.Str }), ...concepts },
+            aspects, classes: {}, taxonomies: {},
+        });
+    }
+
+    public static Codes(description: ISnapshotDescription): [DescribeDiagnosticCode, string][]
+    {
+        return description.Diagnostics.map((d) => [d.Code, d.Subject]);
+    }
+}
+
+describe('SnapshotDescriber type-model collisions and cycles (PF-b)', () =>
+{
+    test('two aspects declaring the same member: the later one drops it, the engine opens', async () =>
+    {
+        const snapshot = BrokenTypeModelFx.Snapshot(
+            { 'm.B': BrokenTypeModelFx.Carrier(TodlNames.Element, ['m.A1', 'm.A2']) },
+            { 'm.A1': BrokenTypeModelFx.Aspect({ x: BrokenTypeModelFx.Str }), 'm.A2': BrokenTypeModelFx.Aspect({ x: BrokenTypeModelFx.Str, z: BrokenTypeModelFx.Str }) });
+        snapshot.BindSeed({ nodes: [{ id: 'b1', type: 'm.B', attrs: { x: 'v', z: 'w' } }] }, { model: BrokenTypeModelFx.Model, version: BrokenTypeModelFx.Version });
+        const described = DescribeFixture.Describe(snapshot);
+        assert.deepEqual(BrokenTypeModelFx.Codes(described), [[DescribeDiagnosticCode.MemberCollision, 'm.A2.x']]);
+        assert.deepEqual(DescribeFixture.Definition(described.Description, 'm.A1').Members.map((m) => m.Name), ['x']);
+        assert.deepEqual(DescribeFixture.Definition(described.Description, 'm.A2').Members.map((m) => m.Name), ['z']);
+        assert.deepEqual(DescribeFixture.Seed(described.Description, 'b1').Properties, { label: null, class: null, x: 'v', z: 'w' });
+        await DescribeFixture.Opens(described.Description);
+    });
+
+    test('a parent and an aspect declaring the same member: the parent wins, the engine opens', async () =>
+    {
+        const snapshot = BrokenTypeModelFx.Snapshot(
+            {
+                'm.P': DescribeFixture.Concept(TodlNames.Element, { y: BrokenTypeModelFx.Str }),
+                'm.C': BrokenTypeModelFx.Carrier('m.P', ['m.A']),
+            },
+            { 'm.A': BrokenTypeModelFx.Aspect({ y: BrokenTypeModelFx.Str }) });
+        const described = DescribeFixture.Describe(snapshot);
+        assert.deepEqual(BrokenTypeModelFx.Codes(described), [[DescribeDiagnosticCode.MemberCollision, 'm.A.y']]);
+        assert.deepEqual(DescribeFixture.Definition(described.Description, 'm.P').Members.map((m) => m.Name), ['y']);
+        assert.deepEqual(DescribeFixture.Definition(described.Description, 'm.A').Members, []);
+        await DescribeFixture.Opens(described.Description);
+    });
+
+    test('an aspect inclusion cycle: the closing inclusion is dropped, the engine opens', async () =>
+    {
+        const snapshot = BrokenTypeModelFx.Snapshot(
+            { 'm.C': BrokenTypeModelFx.Carrier(TodlNames.Element, ['m.A1']) },
+            { 'm.A1': BrokenTypeModelFx.Aspect({ a: BrokenTypeModelFx.Str }, ['m.A2']), 'm.A2': BrokenTypeModelFx.Aspect({ b: BrokenTypeModelFx.Str }, ['m.A1']) });
+        const described = DescribeFixture.Describe(snapshot);
+        assert.deepEqual(BrokenTypeModelFx.Codes(described), [[DescribeDiagnosticCode.InheritanceCycle, 'm.A2']]);
+        assert.deepEqual(DescribeFixture.Definition(described.Description, 'm.A1').Aspects, ['m.A2']);
+        assert.deepEqual(DescribeFixture.Definition(described.Description, 'm.A2').Aspects, []);
+        await DescribeFixture.Opens(described.Description);
+    });
+
+    test('an extends cycle: the closing parent edge falls back to the root, the engine opens', async () =>
+    {
+        const snapshot = BrokenTypeModelFx.Snapshot({
+            'm.X': DescribeFixture.Concept('m.Y', { x: BrokenTypeModelFx.Str }),
+            'm.Y': DescribeFixture.Concept('m.X', { y: BrokenTypeModelFx.Str }),
+        });
+        const described = DescribeFixture.Describe(snapshot);
+        assert.deepEqual(BrokenTypeModelFx.Codes(described).map(([code]) => code), [DescribeDiagnosticCode.InheritanceCycle]);
+        const parents = ['m.X', 'm.Y'].map((name) => DescribeFixture.Definition(described.Description, name).Parent);
+        assert.equal(parents.filter((p) => p === TodlNames.Element).length, 1);
+        await DescribeFixture.Opens(described.Description);
+    });
+});
