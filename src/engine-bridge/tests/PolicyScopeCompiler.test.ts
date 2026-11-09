@@ -6,6 +6,7 @@ import {
     AccessErrorCode,
     AccessScope,
     BindingTable,
+    FalsePredicate,
     GraphEngine,
     MemberKind,
     StorageKind,
@@ -15,7 +16,6 @@ import {
     type MemberInput,
 } from '@pragmatic-tech-ai/graph';
 import type { Repository } from '../../compiler-services/model/model.js';
-import { FalsePredicate } from '@pragmatic-tech-ai/graph';
 import { check } from '../../compiler-services/api.js';
 import { PolicyCompareOp, PolicyNodeKind, PolicyRefRoot } from '../../compiler-services/policy/policy-predicate.js';
 import type { Scalar } from '../../manifest/logical.js';
@@ -211,10 +211,9 @@ describe('PolicyScopeCompiler parity with the identity-engine evaluator (P4-b..P
         { Name: 'deny == literal leaves unset members visible (no Unknown)', Rules: 'deny read when entity.classification == "restricted";', Facts: {}, Visible: ['c2', 'c3', 'c4'] },
         { Name: 'allow != literal includes unset members', Rules: 'allow read when entity.classification != "restricted";', Facts: {}, Visible: ['c2', 'c3', 'c4'] },
         { Name: 'not over == treats unset as not equal', Rules: 'allow read when not entity.region == "eu";', Facts: {}, Visible: ['c2', 'c3'] },
-        { Name: 'integer field takes a whole-number fact as bigint', Rules: 'allow read when entity.level == principal.level;', Facts: { level: 2 }, Visible: ['c2'] },
+        { Name: 'integer field takes a decimal-string fact as bigint; != keeps unset members', Rules: 'allow read when entity.level != principal.level;', Facts: { level: '2' }, Visible: ['c1', 'c3', 'c4'] },
         { Name: 'integer field never equals a fractional fact', Rules: 'allow read when entity.level == principal.level;', Facts: { level: 2.5 }, Visible: [] },
-        { Name: 'integer field never equals a string fact; != always holds', Rules: 'allow read when entity.level != principal.level;', Facts: { level: '2' }, Visible: ['c1', 'c2', 'c3', 'c4'] },
-        { Name: 'number field compares as Float64', Rules: 'allow read when entity.score == principal.score;', Facts: { score: 1.5 }, Visible: ['c1'] },
+        { Name: 'number field compares a decimal-string fact as Float64', Rules: 'allow read when entity.score == principal.score;', Facts: { score: '1.5' }, Visible: ['c1'] },
         { Name: 'boolean literal', Rules: 'allow read when entity.vip == true;', Facts: {}, Visible: ['c1'] },
         { Name: 'entity member in principal list', Rules: 'allow read when entity.region in principal.regions;', Facts: { regions: ['eu', 'zz'] }, Visible: ['c1', 'c4'] },
         { Name: 'missing list fact: membership is False', Rules: 'allow read when entity.region in principal.regions;', Facts: {}, Visible: [] },
@@ -230,7 +229,7 @@ describe('PolicyScopeCompiler parity with the identity-engine evaluator (P4-b..P
         { Name: 'two missing facts are equal (undefined === undefined)', Rules: 'allow read when principal.a == principal.b;', Facts: {}, Visible: ['c1', 'c2', 'c3', 'c4'] },
         { Name: 'array fact == literal is False', Rules: 'allow read when principal.groups == "a";', Facts: { groups: ['a'] }, Visible: [] },
         { Name: 'array fact != literal is True', Rules: 'allow read when principal.groups != "a";', Facts: { groups: ['a'] }, Visible: ['c1', 'c2', 'c3', 'c4'] },
-        { Name: 'allow and deny combine', Rules: 'allow read when entity.region == "eu"; deny read when entity.level == 3;', Facts: {}, Visible: ['c1'] },
+        { Name: 'allow and deny combine', Rules: 'allow read when entity.region == "eu"; deny read when entity.level == "3";', Facts: {}, Visible: ['c1'] },
         { Name: 'deny only: everything except the denied', Rules: 'deny read when entity.region == "eu";', Facts: {}, Visible: ['c2', 'c3'] },
         { Name: 'a deny whose term folds False un-denies', Rules: 'allow read when entity.region == "eu"; deny read when principal.role == "blocked";', Facts: { role: 'user' }, Visible: ['c1', 'c4'] },
         { Name: 'a deny whose term folds True denies all', Rules: 'allow read when entity.region == "eu"; deny read when principal.role == "blocked";', Facts: { role: 'blocked' }, Visible: [] },
@@ -245,6 +244,75 @@ describe('PolicyScopeCompiler parity with the identity-engine evaluator (P4-b..P
             assert.deepEqual(await PolicyFx.Visible(PolicyFx.Policy(c.Rules), c.Facts), [...c.Visible]);
         });
     }
+});
+
+/**
+ * Ruling PF-a: TODL holds numeric entity values as decimal text and the evaluator compares raw values with ===, so a
+ * decimal-string fact or literal matches the member's number while a JS number never equals it.
+ */
+class NumericParityFx
+{
+    public static readonly All: readonly string[] = ['c1', 'c2', 'c3', 'c4'];
+    public static readonly AllButC2: readonly string[] = ['c1', 'c3', 'c4'];
+    public static readonly OnlyC2: readonly string[] = ['c2'];
+    public static readonly Nobody: readonly string[] = [];
+    public static readonly AllowEq = 'allow read when entity.{0} == {1};';
+    public static readonly DenyEq = 'deny read when entity.{0} == {1};';
+    public static readonly FactOperand = 'principal.v';
+    public static readonly FactName = 'v';
+
+    /** One field (level 2 / score 2.5 on c2), every operand form, allow and deny. */
+    public static Cases(member: string, text: string, value: number): IParityCase[]
+    {
+        const literal = (rule: string, operand: string): string => rule.replace('{0}', member).replace('{1}', operand);
+        const fact = (rule: string): string => literal(rule, NumericParityFx.FactOperand);
+        return [
+            { Name: `${member}: allow == string fact`, Rules: fact(NumericParityFx.AllowEq), Facts: { [NumericParityFx.FactName]: text }, Visible: NumericParityFx.OnlyC2 },
+            { Name: `${member}: allow == number fact never matches`, Rules: fact(NumericParityFx.AllowEq), Facts: { [NumericParityFx.FactName]: value }, Visible: NumericParityFx.Nobody },
+            { Name: `${member}: allow == string literal`, Rules: literal(NumericParityFx.AllowEq, JSON.stringify(text)), Facts: {}, Visible: NumericParityFx.OnlyC2 },
+            { Name: `${member}: allow == number literal never matches`, Rules: literal(NumericParityFx.AllowEq, text), Facts: {}, Visible: NumericParityFx.Nobody },
+            { Name: `${member}: deny == string fact`, Rules: fact(NumericParityFx.DenyEq), Facts: { [NumericParityFx.FactName]: text }, Visible: NumericParityFx.AllButC2 },
+            { Name: `${member}: deny == number fact never denies`, Rules: fact(NumericParityFx.DenyEq), Facts: { [NumericParityFx.FactName]: value }, Visible: NumericParityFx.All },
+            { Name: `${member}: deny == string literal`, Rules: literal(NumericParityFx.DenyEq, JSON.stringify(text)), Facts: {}, Visible: NumericParityFx.AllButC2 },
+            { Name: `${member}: deny == number literal never denies`, Rules: literal(NumericParityFx.DenyEq, text), Facts: {}, Visible: NumericParityFx.All },
+        ];
+    }
+}
+
+describe('PolicyScopeCompiler numeric members mirror the evaluator (PF-a)', () =>
+{
+    for (const c of [...NumericParityFx.Cases('level', '2', 2), ...NumericParityFx.Cases('score', '2.5', 2.5)])
+    {
+        test(c.Name, async () =>
+        {
+            assert.deepEqual(await PolicyFx.Visible(PolicyFx.Policy(c.Rules), c.Facts), [...c.Visible]);
+        });
+    }
+
+    test('a number literal on a numeric member is reported as never matching', () =>
+    {
+        const compiler = PolicyFx.Compiler(PolicyFx.Policy('allow read when entity.level == 2; deny read when entity.score != 2.5;'));
+        assert.deepEqual(compiler.Diagnostics.map((d) => [d.Code, d.Concept]), [
+            [PolicyDiagnosticCode.NeverMatches, PolicyFx.Customer],
+            [PolicyDiagnosticCode.NeverMatches, PolicyFx.Customer],
+        ]);
+    });
+
+    test('an unconvertible string fails closed with a diagnostic: allow admits nobody, deny denies everyone', async () =>
+    {
+        assert.deepEqual(await PolicyFx.Visible(PolicyFx.Policy('allow read when entity.level == "2.5";'), {}), []);
+        assert.deepEqual(await PolicyFx.Visible(PolicyFx.Policy('deny read when entity.level == principal.v;'), { v: 'two' }), []);
+        assert.deepEqual(await PolicyFx.Visible(PolicyFx.Policy('allow read when entity.score != principal.v;'), { v: 'x' }), []);
+        const compiler = PolicyFx.Compiler(PolicyFx.Policy('allow read when entity.level == "2.5";'));
+        assert.deepEqual(compiler.Diagnostics.map((d) => d.Code), [PolicyDiagnosticCode.ValueTypeMismatch]);
+    });
+
+    test('membership takes decimal-string elements and never matches number elements', async () =>
+    {
+        assert.deepEqual(await PolicyFx.Visible(PolicyFx.Policy('allow read when entity.level in principal.v;'), { v: ['1', 3] }), ['c1']);
+        assert.deepEqual(await PolicyFx.Visible(PolicyFx.Policy('allow read when entity.score in principal.v;'), { v: [1.5, '2.5'] }), ['c2']);
+        assert.deepEqual(await PolicyFx.Visible(PolicyFx.Policy('allow read when entity.level in principal.v;'), { v: [1, 2] }), []);
+    });
 });
 
 describe('PolicyScopeCompiler scope shape', () =>
@@ -366,7 +434,7 @@ describe('PolicyScopeCompiler relationship membership over hidden targets (P4-h)
 
 describe('PolicyScopeCompiler writes', () =>
 {
-    const policy = PolicyFx.Policy('allow write when entity.region == "eu"; deny write when entity.level == 3;');
+    const policy = PolicyFx.Policy('allow write when entity.region == "eu"; deny write when entity.level == "3";');
     const scope = (): AccessScope => PolicyFx.Compiler(policy).Compile(new TestPrincipal({}), AccessDefault.Allow);
 
     test('update and delete obey the compiled write predicate', async () =>
@@ -614,7 +682,7 @@ class Described
 
 describe('PolicyScopeCompiler against the engine schema (P4-l)', () =>
 {
-    const policies = `${PolicyFx.Policy('allow read when entity.region == "eu"; allow write when entity.level == 1;')} policy Order { allow read when entity.name == "x"; }`;
+    const policies = `${PolicyFx.Policy('allow read when entity.region == "eu"; allow write when entity.level == "1";')} policy Order { allow read when entity.name == "x"; }`;
     const source = PolicyFx.Model.replace('POLICIES', policies);
 
     test('without the schema, a policy over a missing member makes the engine reject the scope', async () =>

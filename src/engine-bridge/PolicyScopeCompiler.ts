@@ -17,6 +17,7 @@ import {
     type AccessDefault,
     MemberKind,
     type CellValue,
+    type IDefinitionDescription,
     type ISchemaDescription,
     type MemberInput,
     type IWriteRules,
@@ -36,6 +37,7 @@ import {
     type PolicyPredicate,
     type PolicyRef,
 } from '../compiler-services/policy/policy-predicate.js';
+import { MessageFormat } from './MessageFormat.js';
 import type { IPrincipalFacts } from './PrincipalFacts.js';
 
 /** Why a policy leaf could not be expressed in engine terms. Append-only: never renumber or reuse a value. */
@@ -53,6 +55,8 @@ export enum PolicyDiagnosticCode
     MalformedPolicy,
     /** A policied concept the engine schema does not define (the describer dropped it); it falls to the scope Default. */
     UnknownConcept,
+    /** A string compared with a numeric member that is not decimal text of the member's type; the leaf fails closed. */
+    ValueTypeMismatch,
 }
 
 /** One leaf (or policy) compiled fail-closed or to a constant because the engine cannot express it. */
@@ -83,6 +87,25 @@ interface IMemberInfo
     readonly Type: ValueType;
 }
 
+/** How a fact or literal meets a member's engine value type. */
+enum ConversionOutcome
+{
+    /** It converts exactly to a cell of the member's type. */
+    Cell = 1,
+    /** It can never equal a member value (another JS type), as the evaluator's === sees it. */
+    Never,
+    /** A JS number against a numeric member: entity values are decimal text, so === never holds (ruling PF-a). */
+    NeverNumber,
+    /** A string that is not decimal text of the member's numeric type: the leaf fails closed (ruling PF-a). */
+    Unconvertible,
+}
+
+interface IConversion
+{
+    readonly Outcome: ConversionOutcome;
+    readonly Cell?: CellValue;
+}
+
 /** A policy operand with its principal side already read: the entity member, or a constant. */
 interface IOperand
 {
@@ -100,7 +123,7 @@ interface IConceptPolicy
 /** The effective members of a concept as the engine computes them: own, then the parent chain, aspects included. */
 class DescriptionMembers
 {
-    private readonly byName: ReadonlyMap<string, IDefinitionLike>;
+    private readonly byName: ReadonlyMap<string, IDefinitionDescription>;
 
     public constructor(description: ISchemaDescription)
     {
@@ -155,14 +178,6 @@ class DescriptionMembers
     }
 }
 
-interface IDefinitionLike
-{
-    readonly IsAspect: boolean;
-    readonly Parent: string | null;
-    readonly Aspects: readonly string[];
-    readonly Members: readonly MemberInput[];
-}
-
 /** Predicate construction that folds constants, so a principal-only term never leaves a needless tree. */
 class Fold
 {
@@ -210,8 +225,10 @@ class TermCompiler
     private static readonly MsgRelationship = 'comparison on relationship "{1}" of "{0}" cannot be expressed in engine terms';
     private static readonly MsgUnknownMember = '"{1}" is not a member of "{0}"';
     private static readonly MsgNever = 'a membership test over an entity member of "{0}" never matches (entity members are scalars)';
-    private static readonly ConceptSlot = '{0}';
-    private static readonly MemberSlot = '{1}';
+    private static readonly MsgNumber = 'a number compared with member "{1}" of "{0}" never matches (entity values are held as decimal text; write the value as a string)';
+    private static readonly MsgUnconvertible = 'a value compared with member "{1}" of "{0}" is not decimal text of its type; the leaf fails closed';
+    private static readonly IntegerPattern = /^[+-]?\d+$/;
+    private static readonly Int64Bits = 64;
 
     public constructor(
         private readonly concept: string,
@@ -278,11 +295,20 @@ class TermCompiler
         {
             return equal ? new IsNull(member) : new Not(new IsNull(member));
         }
-        const cell = TermCompiler.Convert(info.Type, value);
-        if (cell === undefined)
+        const converted = TermCompiler.Convert(info.Type, value);
+        switch (converted.Outcome)
         {
-            return Fold.Bool(!equal);
+            case ConversionOutcome.Unconvertible:
+                return this.Fail(PolicyDiagnosticCode.ValueTypeMismatch, TermCompiler.MsgUnconvertible, failure, member);
+            case ConversionOutcome.NeverNumber:
+                this.Report(PolicyDiagnosticCode.NeverMatches, TermCompiler.MsgNumber, member);
+                return Fold.Bool(!equal);
+            case ConversionOutcome.Never:
+                return Fold.Bool(!equal);
+            case ConversionOutcome.Cell:
+                break;
         }
+        const cell = converted.Cell!;
         return equal
             ? TermCompiler.Present(member, new Compare(member, CompareOp.Eq, cell))
             : new Or([new IsNull(member), new Compare(member, CompareOp.Ne, cell)]);
@@ -332,8 +358,16 @@ class TermCompiler
         const cells: CellValue[] = [];
         for (const v of list)
         {
-            const cell = TermCompiler.Convert(info!.Type, v);
-            if (cell !== undefined) cells.push(cell);
+            const converted = TermCompiler.Convert(info!.Type, v);
+            if (converted.Outcome === ConversionOutcome.Unconvertible)
+            {
+                return this.Fail(PolicyDiagnosticCode.ValueTypeMismatch, TermCompiler.MsgUnconvertible, failure, member);
+            }
+            if (converted.Outcome === ConversionOutcome.NeverNumber)
+            {
+                this.Report(PolicyDiagnosticCode.NeverMatches, TermCompiler.MsgNumber, member);
+            }
+            if (converted.Outcome === ConversionOutcome.Cell) cells.push(converted.Cell!);
         }
         return cells.length === 0 ? FalsePredicate.Instance : TermCompiler.Present(member, new In(member, cells));
     }
@@ -367,9 +401,15 @@ class TermCompiler
 
     private Fail(code: PolicyDiagnosticCode, template: string, failure: Predicate, member?: string): Predicate
     {
-        const message = template.replace(TermCompiler.ConceptSlot, this.concept).replace(TermCompiler.MemberSlot, member ?? '');
-        this.diagnostics.push({ Code: code, Concept: this.concept, Message: message });
+        this.Report(code, template, member);
         return failure;
+    }
+
+    /** `template` takes the concept as {0} and, when given, the member as {1}. */
+    private Report(code: PolicyDiagnosticCode, template: string, member?: string): void
+    {
+        const message = member === undefined ? MessageFormat.Format(template, this.concept) : MessageFormat.Format(template, this.concept, member);
+        this.diagnostics.push({ Code: code, Concept: this.concept, Message: message });
     }
 
     /** `storageId` always names the node's id; `id` does unless the concept declares a member called that. */
@@ -390,32 +430,72 @@ class TermCompiler
         return new And([new Not(new IsNull(member)), leaf]);
     }
 
-    /** A fact or literal as the member's engine cell, or undefined when it can never equal a member value. */
-    private static Convert(type: ValueType, raw: unknown): CellValue | undefined
+    /**
+     * A fact or literal against a member's engine type, mirroring the evaluator's === on raw entity values (ruling
+     * PF-a): TODL holds numeric entity values as decimal text, so a decimal string converts exactly to the member's
+     * number, a JS number never equals one, and any other string fails closed.
+     */
+    private static Convert(type: ValueType, raw: unknown): IConversion
     {
         switch (type)
         {
             case ValueType.String:
-                return typeof raw === 'string' ? raw : undefined;
+                return typeof raw === 'string' ? TermCompiler.Cell(raw) : TermCompiler.Outcome(ConversionOutcome.Never);
             case ValueType.Boolean:
-                return typeof raw === 'boolean' ? raw : undefined;
+                return typeof raw === 'boolean' ? TermCompiler.Cell(raw) : TermCompiler.Outcome(ConversionOutcome.Never);
             case ValueType.Float64:
-                return typeof raw === 'number' && Number.isFinite(raw) ? raw : undefined;
+                return TermCompiler.Numeric(raw, (text) => TermCompiler.ToFloat64(text));
             case ValueType.Int64:
-                return TermCompiler.ToInt64(raw);
+                return TermCompiler.Numeric(raw, (text) => TermCompiler.ToInt64(text));
             default:
-                return undefined;
+                return TermCompiler.Outcome(ConversionOutcome.Never);
         }
     }
 
-    private static ToInt64(raw: unknown): bigint | undefined
+    private static Numeric(raw: unknown, parse: (text: string) => CellValue | undefined): IConversion
     {
-        if (typeof raw !== 'number' || !Number.isInteger(raw))
+        if (typeof raw === 'number')
+        {
+            return TermCompiler.Outcome(ConversionOutcome.NeverNumber);
+        }
+        if (typeof raw !== 'string')
+        {
+            return TermCompiler.Outcome(ConversionOutcome.Never);
+        }
+        const cell = parse(raw);
+        return cell === undefined ? TermCompiler.Outcome(ConversionOutcome.Unconvertible) : TermCompiler.Cell(cell);
+    }
+
+    /** Integral decimal text within the signed 64-bit range. */
+    private static ToInt64(text: string): bigint | undefined
+    {
+        if (!TermCompiler.IntegerPattern.test(text))
         {
             return undefined;
         }
-        const value = BigInt(raw);
-        return BigInt.asIntN(64, value) === value ? value : undefined;
+        const value = BigInt(text);
+        return BigInt.asIntN(TermCompiler.Int64Bits, value) === value ? value : undefined;
+    }
+
+    /** Untrimmed decimal text of a finite number. */
+    private static ToFloat64(text: string): number | undefined
+    {
+        if (text.length === 0 || text.trim() !== text)
+        {
+            return undefined;
+        }
+        const value = Number(text);
+        return Number.isFinite(value) ? value : undefined;
+    }
+
+    private static Cell(cell: CellValue): IConversion
+    {
+        return { Outcome: ConversionOutcome.Cell, Cell: cell };
+    }
+
+    private static Outcome(outcome: ConversionOutcome): IConversion
+    {
+        return { Outcome: outcome };
     }
 }
 
@@ -434,9 +514,6 @@ export class PolicyScopeCompiler
     private static readonly NoCause = 'no concept or rules';
     private static readonly NoConceptCause = 'no concept attribute; the concept is taken from the node id';
     private static readonly UnknownConceptMessage = 'policy concept "{0}" is not defined by the engine schema; its policy is not applied (the scope Default applies)';
-    private static readonly Slot0 = '{0}';
-    private static readonly Slot1 = '{1}';
-    private static readonly Slot2 = '{2}';
     private static readonly Scalars: ReadonlyMap<ScalarBase, ValueType> = new Map<ScalarBase, ValueType>([
         [ScalarBase.String, ValueType.String],
         [ScalarBase.Number, ValueType.Float64],
@@ -477,7 +554,7 @@ export class PolicyScopeCompiler
             const concept = String(conceptAttr ?? id.replace(PolicyScopeCompiler.PolicySuffix, ''));
             if (schema !== undefined && !schema.HasConcept(concept))
             {
-                diagnostics.push({ Code: PolicyDiagnosticCode.UnknownConcept, Concept: concept, Message: PolicyScopeCompiler.UnknownConceptMessage.replace(PolicyScopeCompiler.Slot0, concept) });
+                diagnostics.push({ Code: PolicyDiagnosticCode.UnknownConcept, Concept: concept, Message: MessageFormat.Format(PolicyScopeCompiler.UnknownConceptMessage, concept) });
                 continue;
             }
             const members = schema !== undefined ? schema.Of(concept) : PolicyScopeCompiler.MembersOf(repo, concept);
@@ -497,8 +574,7 @@ export class PolicyScopeCompiler
             }
             if (rules === null)
             {
-                const message = PolicyScopeCompiler.MalformedMessage
-                    .replace(PolicyScopeCompiler.Slot0, id).replace(PolicyScopeCompiler.Slot1, cause).replace(PolicyScopeCompiler.Slot2, concept);
+                const message = MessageFormat.Format(PolicyScopeCompiler.MalformedMessage, id, cause, concept);
                 diagnostics.push({ Code: PolicyDiagnosticCode.MalformedPolicy, Concept: concept, Message: message });
             }
             policies.set(concept, { Rules: rules, Members: members });
