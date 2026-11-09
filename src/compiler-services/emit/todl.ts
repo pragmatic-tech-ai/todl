@@ -7,7 +7,7 @@
 
 import { MetaKind } from "../model/kinds.js";
 import { EdgeKind, Direction, type NodeId, type Scalar } from "../model/graph.js";
-import { Repository } from "../model/model.js";
+import { Repository, ScalarBase } from "../model/model.js";
 import { type TodlDocument, type JsonNode } from "./json.js";
 
 /** A reified-edge operator, keyed by concept for shorthand emit. */
@@ -107,6 +107,33 @@ class ReferenceWriter
 function literal(v: Scalar): string
 {
   return typeof v === "string" ? JSON.stringify(v) : String(v);
+}
+
+/**
+ * Field values as `.todl` literals, type-directed: the parser keeps numeric literals as decimal strings, so a string
+ * value of an `integer` / `number` field (by its scalar base, through primitive aliases) that is a numeric literal is
+ * written bare (`count = 5;`, not `count = "5";`) and a re-emitted file keeps the literal the author wrote. Any other
+ * text (`-3`, `1e-7`) has no bare literal and stays quoted.
+ */
+class FieldLiteral
+{
+  /** The only numeric literal the lexer reads: unsigned digits with an optional fraction (no sign, no exponent). */
+  private static readonly NumericLiteral = /^\d+(\.\d+)?$/;
+  private static readonly Numeric: ReadonlySet<ScalarBase> = new Set([ScalarBase.Integer, ScalarBase.Number]);
+
+  static Write(node: JsonNode, name: string, value: Scalar, model: Repository | undefined): string
+  {
+    if (typeof value === "string" && FieldLiteral.NumericLiteral.test(value) && FieldLiteral.IsNumeric(node, name, model)) return value;
+    return literal(value);
+  }
+
+  private static IsNumeric(node: JsonNode, name: string, model: Repository | undefined): boolean
+  {
+    if (model === undefined || node.type === null || !model.has(node.type)) return false;
+    const field = model.effectiveSchema(node.type).fields.find((f) => f.name === name);
+    const base = field === undefined ? undefined : model.scalarConstraintOf(field.type)?.base;
+    return base !== undefined && FieldLiteral.Numeric.has(base);
+  }
 }
 
 /** Shared emit context: node lookup, instanceof map, relationship edges, and the
@@ -248,7 +275,7 @@ function emitBody(node: JsonNode, ctx: EmitCtx, indent: number, inlineChild: boo
   for (const [name, value] of Object.entries(node.attrs))
   {
     if (MARKER_ATTRS.has(name)) continue;
-    lines.push(`${pad}${name} = ${literal(value as Scalar)};`);
+    lines.push(`${pad}${name} = ${FieldLiteral.Write(node, name, value as Scalar, ctx.model)};`);
   }
   const byMember = new Map<string, string[]>();
   for (const r of ctx.rels.get(node.id) ?? [])

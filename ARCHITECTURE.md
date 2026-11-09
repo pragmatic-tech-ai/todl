@@ -17,6 +17,7 @@
 | --- | --- | --- |
 | `compiler-services/` | language/model compiler: parse→resolve→validate→emit | `compiler-services/api.ts` (`check`/`checkAgainst`); façade `Repository` in `model/model.ts` |
 | `domain/` | runtime graph engine: loads packages, hosts the heap, reflection root | `domain/index.ts` |
+| `engine-bridge/` | TODL on the `@pragmatic-tech-ai/graph` engine: snapshot → schema + seed, policies → access scopes, `.todl` file connector; the ONLY importer of the engine | `engine-bridge/index.ts` (subpath `./engine`) |
 | `graph-api/` | reflection-native query surface over a loaded domain | `graph-api/index.ts` (`GraphQuery`, `IGraphQuery`, `Snapshot`) |
 | `cypher/` | Cypher query engine over graph-api | `cypher/index.ts` |
 | `manifest/` | SPEC-04 binary manifest (codec/reader/writer/validator + reflection) | `manifest/index.ts`; reflection `manifest/reflection/reflection.ts` |
@@ -50,6 +51,12 @@
 - **`CypherResult`/`CypherResultDto`** (`result.ts:3`); **`Deadline`/`ExecutionLimits`/`ICancellation`** (`execution-limits.ts:8`/`:25`).
 - **Barrel `cypher/index.ts`** exports: `CypherEngine`, `CypherResult`(+Dto), `CypherParser`, fluent builder (`CypherQuery`,`Pattern`,`Expr`,`Return`,`Fn`,`Sort`,`Hops`…), value types, `GraphQueryAdapter`+`ICypherGraph`, enums, error family (`CypherError`/`CypherSyntaxError`/`CypherSemanticError`/`CypherTimeout`), `Deadline`+limits. Root re-export `export * as Cypher` (`src/index.ts:472`).
 
+### Engine bridge (`src/engine-bridge/`, subpath `./engine`)
+- **`SnapshotDescriber.Describe(snapshot, options)`** — `MetadataSnapshot` → engine `ISchemaDescription` (definitions under reserved `todl.Element`, terms as `todl.Term`, seed Owner = home package model id, bindings with `DefaultConnector`) + `DescribeDiagnosticCode` diagnostics.
+- **`PolicyScopeCompiler`** — model policies + `IPrincipalFacts` → engine `AccessScope`; inexpressible leaves fail closed with `PolicyDiagnosticCode`.
+- **`TodlFileConnector`** (`todl-file`) — engine connector persisting commits into `.todl` files via `ITodlModelWorkspace`/`ITodlDraftSession`; **`TodlNodePlacement`** mints `${namespace}.${id}` ids for Cypher CREATE. **`EngineCellMapper`** — engine Cypher result cells → TODL wire shape (node cell → `MirrorSnapshot`, as `Snapshot.of`).
+- Dev loop (Cypher write → files → recompile → `GraphEngine.Upgrade` is a data no-op; moved instance re-owned): `engine-bridge/tests/DevLoop.test.ts`.
+
 ### Package manager (`src/solution-services/package-manager/`)
 - **`ProjectManifest`/`parseManifest`/`ProjectType`** (`manifest.ts:28`/`:96`/`:8`) — the project manifest (`ProjectType = MetaModel | Library | Architecture`; **no backend/frontend split**).
 - **`StoragePackageSource`** (`storage-package-source.ts:25`) — disk-backed `PackageSource`. **On-disk layout `<model>/<version>/model.json`** (a `PackageDocument`) from any `IStorage`; rebuilds `Repository` via `fromJSON`, emits logical manifest (`ManifestEmitter`), lowers to SPEC-04 (`ManifestWriter`), carries instance graph as seed; recorded deps flow as domain refs.
@@ -77,7 +84,7 @@
 
 ## Public API surface (`src/index.ts` + subpath exports)
 
-- **Entry:** `main`=`dist/index.js`, `types`=`dist/index.d.ts`; dev condition → `src/index.ts`. **Subpath exports:** `./solution-services/lsp`, `./language-server`, `./package-manager`(+`/connections`), `./build-system-core`, `./todl-build-system`, `./project-system`, `./domain`, `./graph-api`.
+- **Entry:** `main`=`dist/index.js`, `types`=`dist/index.d.ts`; dev condition → `src/index.ts`. **Subpath exports:** `./solution-services/lsp`, `./language-server`, `./package-manager`(+`/connections`), `./build-system-core`, `./todl-build-system`, `./project-system`, `./domain`, `./graph-api`, `./engine` (`SnapshotDescriber`, `PolicyScopeCompiler`, `TodlFileConnector`, `TodlNodePlacement`, `EngineCellMapper`, `EngineBridgeError`(+`Code`), `DescribeDiagnosticCode`, `PolicyDiagnosticCode`, `TodlNames` + interface types; pinned by `engine-bridge/tests/DevLoop.test.ts`).
 - **Root barrel gives consumers (e.g. pragmatic-server):** runtime re-exports (`Signal`, `Ask`); compile model layer (`Graph`/`EdgeKind`, `InMemoryGraphStore`, `CypherGraphStore`, `Builder`, `Repository`, `EntityBase`); reflection-client; the `model-data` connector layer (:68-110); `application` bootstrap + VMs; `codegen`; publish (`compilePackage`/`publish`/`PackageKind`/`PackageDocument`, `BlobPackageStore`/`GraphPackageStore`/`PackageStore`); package-manager (`StoragePackageSource`, `ProjectType`/`parseManifest`/`ProjectManifest`); predicate/validate/diagnostics/parse; the solution/project-system/build-system surface; policy predicates; `export * as Cypher`.
 - **⚠ Notable NON-exports (root barrel):** `ManifestEmitter`, `MetadataSnapshot`, `Manifest`, `ManifestWriter`, `ManifestReader`. `MetadataSnapshot` is internal to `domain/` (not even in `domain/index.ts`). `manifest/*` is reachable only by deep import (kept off root to avoid a `MetaKind`/`Cardinality` enum clash). `GraphQuery`/`IGraphQuery` are only via the `./graph-api` subpath, not root. **⇒ To compose a graph from a `Repository`, go through the public `PackageManifestBridge` + `Domain` + `./graph-api` route — do NOT reach for `MetadataSnapshot`/`ManifestEmitter`.**
 

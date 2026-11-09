@@ -283,7 +283,6 @@ describe('TodlFileConnector', () =>
     {
         const connector = new TodlFileConnector(ConnectorFx.Workspace());
         const values: [string, CellValue][] = [
-            [ConnectorFx.Count, 2n ** 60n],
             [ConnectorFx.Count, new DateValue(3)],
             [ConnectorFx.Count, new DateTimeValue(1_000_000n, 'UTC')],
             [ConnectorFx.Count, new DurationValue(1, 2, 3n)],

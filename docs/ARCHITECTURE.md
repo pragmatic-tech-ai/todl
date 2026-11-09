@@ -115,6 +115,7 @@ are the demo/corpus suite and are **not** published (`files: ["dist", "README.md
 | `src/authoring/` | The write path: `ModelDraft` stages instances over frozen bases and serialises back to `.todl`. |
 | `src/publish/` | Pure compile-and-persist spine: `compilePackage`, `CompiledPackage`, package stores. |
 | `src/domain/` | The multi-manifest runtime host (`Domain`, `MetadataSnapshot`) for versioned, cross-package reflection. |
+| `src/engine-bridge/` | TODL on the `@pragmatic-tech-ai/graph` engine (export `./engine`): describes a compiled snapshot as an engine schema + seed, compiles policies into access scopes, persists engine writes back into `.todl` files. The only folder that imports the engine. |
 | `src/graph-api/` | Read-only query surface (`GraphQuery`, `Snapshot`) and, under `browser/`, the app bootstrap. |
 | `src/solution-services/` | The build systems, package sources/registries, project types, and multi-project solution builder. |
 | `src/application/` | Composition/host layer (`ApplicationBootstrapper`, `MuralHost`); the generic model-browser view here is legacy. |
@@ -382,6 +383,35 @@ stages typed instances (fail-fast on dangling refs), and `toTodl()` /
 `toTodlByFile()` serialise the delta back to source. The `InstanceDescriptor`
 record it consumes is exactly what codegen's authoring constructors emit.
 `TodlFileStore` is the save/load seam over an injected `FileIO`.
+
+### engine-bridge — TODL on the graph engine
+
+`src/engine-bridge/` (export `./engine`) runs a compiled TODL solution on the
+`@pragmatic-tech-ai/graph` engine. It is the only folder that imports the engine;
+`EngineFree.test.ts` proves the root barrel never reaches it.
+
+- `SnapshotDescriber.Describe(snapshot, options)` turns a `MetadataSnapshot` into an
+  engine `ISchemaDescription`: concepts and aspects under the reserved `todl.Element`
+  root, taxonomy terms as `todl.Term` nodes, one seed node per instance (Owner = the
+  package whose own sources declare it), bindings with `DefaultConnector`.
+  Problems become `DescribeDiagnosticCode` diagnostics, never throws.
+- `PolicyScopeCompiler` compiles a model's policies into an engine `AccessScope`
+  for an `IPrincipalFacts`; leaves the engine cannot express compile fail-closed
+  with a `PolicyDiagnosticCode` diagnostic.
+- `TodlFileConnector` (connector name `TodlNames.FileConnector` = `todl-file`) is
+  the engine connector that writes committed changes back into each owning
+  model's `.todl` files through an `ITodlModelWorkspace` / `ITodlDraftSession`
+  (stale-source check, per-model lock, restore on a failed write).
+  `TodlNodePlacement` gives Cypher-created nodes `${namespace}.${id}` ids and the
+  model as owner, so the connector can write them.
+- `EngineCellMapper` maps the engine's Cypher result cells onto TODL's wire
+  shape (a node cell becomes the `MirrorSnapshot` `Snapshot.of` would give), so
+  endpoints keep their format on the engine.
+
+The dev loop: a Cypher write commits through `TodlFileConnector` into the
+files; recompiling them, describing and calling `GraphEngine.Upgrade` is then a
+data no-op (same node values, link order and owners), and an instance that moved
+to another package is re-owned (`DevLoop.test.ts`).
 
 ---
 
@@ -722,14 +752,17 @@ model, model-data, application, codegen, authoring, publish, predicate, validate
 parse, migrate, and the solution-services surface). Beyond the root, the package
 exposes focused subpath exports: `./solution-services/lsp`, `./language-server`,
 `./package-manager` (+ `/connections`), `./build-system-core`,
-`./todl-build-system`, `./project-system`, `./domain`, `./graph-api`.
+`./todl-build-system`, `./project-system`, `./domain`, `./graph-api`, and
+`./engine` (the engine bridge, see §7).
 
 Every subpath's `import` has two conditions: **`development`** → raw `./src/**/*.ts`
 and **`default`** → compiled `./dist/**/*.js`. In-repo tooling and tests run with
 `tsx --conditions=development`, importing TypeScript source directly; published
 consumers get `dist`. The published package ships only `dist` and `README.md`.
 
-**Dependencies:** `@pragmatic-tech-ai/mural` (the UI/visual-engine framework —
+**Dependencies:** `@pragmatic-tech-ai/graph` (the graph engine; imported only
+by `src/engine-bridge/`, so the root barrel stays engine-free),
+`@pragmatic-tech-ai/mural` (the UI/visual-engine framework —
 `Application`, `HtmlTarget`, Material theme, `Observable`) and
 `@pragmatic-tech-ai/todl-runtime` (the DI + reactive substrate —
 `CompositionRoot`, `ServiceProvider`, `Signal`, `Disposable`). The root barrel

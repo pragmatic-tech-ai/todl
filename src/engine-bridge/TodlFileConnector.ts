@@ -15,12 +15,15 @@ import { MessageFormat } from './MessageFormat.js';
 import type { ITodlDraftSession, ITodlModelWorkspace } from './TodlModelWorkspace.js';
 import { TodlNames } from './TodlNames.js';
 
-/** Engine cell → TODL scalar: strings and booleans as is, finite numbers, bigints that are safe integers. */
+/**
+ * Engine cell → TODL scalar: strings and booleans as is; finite numbers and bigints as decimal strings, the form the
+ * parser keeps numeric literals in. The emitter writes a numeric field's plain decimal (`5`, `2.5`) bare and quotes
+ * the rest (`"-3"`, `"1e-7"`): TODL has no negative or exponent literal, and the quoted form re-parses to the same
+ * text, which the describer reads back as the same number.
+ */
 class TodlValueConverter
 {
     private static readonly UnsupportedMessage = 'Member "{0}" of "{1}" cannot hold this value in a .todl file';
-    private static readonly MinSafe = BigInt(Number.MIN_SAFE_INTEGER);
-    private static readonly MaxSafe = BigInt(Number.MAX_SAFE_INTEGER);
 
     /** The scalar to write, or null to remove the field. */
     public static ToScalar(id: string, member: string, value: CellValue): Scalar | null
@@ -29,15 +32,11 @@ class TodlValueConverter
         {
             return value;
         }
-        if (typeof value === 'number' && Number.isFinite(value))
+        if ((typeof value === 'number' && Number.isFinite(value)) || typeof value === 'bigint')
         {
-            return value;
+            return String(value);
         }
-        if (typeof value === 'bigint' && value >= TodlValueConverter.MinSafe && value <= TodlValueConverter.MaxSafe)
-        {
-            return Number(value);
-        }
-        // NaN / Infinity, unsafe bigints, DateValue / DateTimeValue / DurationValue: no .todl literal holds them.
+        // NaN / Infinity, DateValue / DateTimeValue / DurationValue: no .todl literal holds them.
         throw TodlValueConverter.Unsupported(id, member);
     }
 

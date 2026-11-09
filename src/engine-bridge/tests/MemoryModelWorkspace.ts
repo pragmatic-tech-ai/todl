@@ -99,6 +99,13 @@ export class MemoryModelWorkspace implements ITodlModelWorkspace
         this.models.set(model, entry);
     }
 
+    /** The model's source files as they are now, in uri order (what a recompile of the model reads). */
+    public Sources(model: string): { uri: string; text: string }[]
+    {
+        const entry = this.models.get(model);
+        return entry === undefined ? [] : [...entry.Uris].sort().map((uri) => ({ uri, text: this.Files.get(uri)! }));
+    }
+
     public OpenDraft(model: string): Promise<ITodlDraftSession | undefined>
     {
         const entry = this.models.get(model);
@@ -106,7 +113,7 @@ export class MemoryModelWorkspace implements ITodlModelWorkspace
         {
             return Promise.resolve(undefined);
         }
-        const sources = [...entry.Uris].sort().map((uri) => ({ uri, text: this.Files.get(uri)! }));
+        const sources = this.Sources(model);
         const draft = ModelDraft.fromSources(entry.Bases, sources, { namespace: entry.Namespace });
         const session = new MemoryDraftSession(this, entry, draft, this.HashOf(entry));
         this.opened++;
