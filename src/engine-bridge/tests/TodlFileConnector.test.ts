@@ -359,7 +359,7 @@ describe('TodlFileConnector', () =>
         await txn.Commit();
         let again: Promise<void> | undefined;
         assert.doesNotThrow(() => { again = txn.Commit(); });
-        assert.ok(await ConnectorFx.Rejection(again!) instanceof Error);
+        ConnectorFx.AssertBridge(await ConnectorFx.Rejection(again!), EngineBridgeErrorCode.TransactionClosed);
     });
 
     test('revert after commit restores originals', async () =>
@@ -574,5 +574,107 @@ describe('TodlNodePlacement', () =>
         assert.notEqual(a.PublicId, b.PublicId);
         const fixed = new TodlNodePlacement(ConnectorFx.Model, ConnectorFx.Namespace, { next: () => 'o1' });
         assert.deepEqual(fixed.Place(ConnectorFx.Loc, new Map()), { PublicId: 'shop.o1', Owner: ConnectorFx.Model });
+    });
+});
+
+/** Fixtures for the refusal and routing rules added by the final review (PF-d, PF-e, R89 plain delete). */
+class RefusalFx
+{
+    public static readonly Pinned = 'pinned';
+    public static readonly W9 = 'shop.w9';
+    /** The shop with a term that pins `name`, and w9 classed by it. */
+    public static readonly ClassedShop = ConnectorFx.Shop
+        .replace('term Big { }', 'term Big { name = "pinned"; }')
+        .replace('Widget w1 { }', 'Widget w1 { }\n        Widget w9 instanceof Kinds.Big { }');
+    public static readonly UnknownOp = 99;
+
+    public static ClassedWorkspace(): MemoryModelWorkspace
+    {
+        const workspace = new MemoryModelWorkspace();
+        workspace.Add(ConnectorFx.Model, ConnectorFx.Namespace, { [ConnectorFx.MainFile]: RefusalFx.ClassedShop });
+        return workspace;
+    }
+}
+
+describe('TodlFileConnector refusals and routing', () =>
+{
+    test('SET null on a class-fixed field is refused, a value on it and null elsewhere are not (PF-d)', async () =>
+    {
+        const workspace = RefusalFx.ClassedWorkspace();
+        const connector = new TodlFileConnector(workspace);
+        const refused = await connector.Begin();
+        const error = ConnectorFx.AssertBridge(await ConnectorFx.Rejection(refused.Apply(new ConnectorChangeSet([ConnectorFx.Set(RefusalFx.W9, ConnectorFx.Name, null)]))), EngineBridgeErrorCode.UnsupportedValue);
+        assert.ok(error.message.includes(ConnectorFx.Name) && error.message.includes(RefusalFx.W9), error.message);
+        await refused.Revert();
+        const allowed = await ConnectorFx.Applied(connector, [ConnectorFx.Set(RefusalFx.W9, ConnectorFx.Name, ConnectorFx.Changed), ConnectorFx.Set(ConnectorFx.W0, ConnectorFx.Name, null)]);
+        await allowed.Commit();
+        const draft = ConnectorFx.Reparsed(workspace);
+        assert.equal(ConnectorFx.Attrs(draft, RefusalFx.W9)?.name, ConnectorFx.Changed);
+        assert.equal(ConnectorFx.Attrs(draft, ConnectorFx.W0)?.name, undefined);
+    });
+
+    test('an unknown or seed-only op is refused, not skipped', async () =>
+    {
+        const connector = new TodlFileConnector(ConnectorFx.Workspace());
+        const changes = [
+            { Op: WriteOp.SetOwner, PublicId: ConnectorFx.W0, Owner: ConnectorFx.Model, Concept: ConnectorFx.Widget } as ConnectorChange,
+            { ...ConnectorFx.Delete(ConnectorFx.W0, ConnectorFx.Widget), Op: RefusalFx.UnknownOp } as unknown as ConnectorChange,
+        ];
+        for (const change of changes)
+        {
+            const txn = await connector.Begin();
+            ConnectorFx.AssertBridge(await ConnectorFx.Rejection(txn.Apply(new ConnectorChangeSet([change]))), EngineBridgeErrorCode.UnsupportedValue);
+            await txn.Revert();
+        }
+    });
+
+    test('a closed transaction refuses Apply and Commit with TransactionClosed', async () =>
+    {
+        const connector = new TodlFileConnector(ConnectorFx.Workspace());
+        const txn = await ConnectorFx.Applied(connector, [ConnectorFx.Set(ConnectorFx.W1, ConnectorFx.Name, ConnectorFx.Changed)]);
+        await txn.Commit();
+        ConnectorFx.AssertBridge(await ConnectorFx.Rejection(txn.Commit()), EngineBridgeErrorCode.TransactionClosed);
+        ConnectorFx.AssertBridge(await ConnectorFx.Rejection(txn.Apply(new ConnectorChangeSet([]))), EngineBridgeErrorCode.TransactionClosed);
+    });
+
+    test('an Unlink refusal names neither end node (PF-e)', async () =>
+    {
+        const connector = new TodlFileConnector(ConnectorFx.Workspace());
+        for (const from of [ConnectorFx.Missing, ConnectorFx.Big])
+        {
+            const txn = await connector.Begin();
+            const error = ConnectorFx.AssertBridge(await ConnectorFx.Rejection(txn.Apply(new ConnectorChangeSet([ConnectorFx.Unlink(from, ConnectorFx.Parts, ConnectorFx.W1)]))), EngineBridgeErrorCode.NotEditable);
+            assert.ok(!error.message.includes(from) && !error.message.includes(ConnectorFx.W1), error.message);
+            await txn.Revert();
+        }
+    });
+
+    test('a plain DeleteNode removes the reference held in another model\'s file (R89)', async () =>
+    {
+        const { Other } = ConnectorFx;
+        const shopBase = checkAgainst([], [{ uri: ConnectorFx.MainFile, text: ConnectorFx.Shop }]).model;
+        const workspace = ConnectorFx.Workspace();
+        workspace.Add(Other.Model, Other.Namespace, { [Other.File]: Other.Text }, [shopBase]);
+        const connector = new TodlFileConnector(workspace);
+        const engine = await ConnectorFx.Engine(connector, [
+            { Model: ConnectorFx.Model, File: ConnectorFx.MainFile, Text: ConnectorFx.Shop },
+            { Model: Other.Model, File: Other.File, Text: Other.Text },
+        ]);
+        try
+        {
+            const txn = await engine.Begin(AccessScope.System);
+            txn.DeleteNode(ConnectorFx.L1);
+            await txn.Commit();
+            const other = ConnectorFx.Reparsed(workspace, [Other.File], Other.Namespace, [shopBase]);
+            assert.deepEqual(ConnectorFx.Refs(other, Other.Node, Other.At), []);
+            assert.deepEqual(other.diagnostics.filter((d) => d.severity === Severity.Error), []);
+            const shop = ConnectorFx.Reparsed(workspace);
+            assert.equal(ConnectorFx.Attrs(shop, ConnectorFx.L1), undefined);
+            assert.deepEqual(ConnectorFx.Refs(shop, ConnectorFx.W0, ConnectorFx.Home), []);
+        }
+        finally
+        {
+            await engine.dispose();
+        }
     });
 });

@@ -64,6 +64,11 @@ class TodlDraftEditor
     private static readonly EdgeOptionsMessage = 'Link "{0}" of "{1}" carries placement or properties, which .todl references cannot hold';
     private static readonly ClassMessage = 'Member "{0}" of "{1}" is read-only';
     private static readonly NotOwnMessage = 'Node "{0}" is not an instance these sources hold';
+    private static readonly ClassFixedMessage = 'Member "{0}" of "{1}" is fixed by the instance\'s class: clearing it would revert to the class value on recompile';
+    private static readonly UnknownOpMessage = 'Change kind {0} cannot be written to .todl sources';
+    // Ruling PF-e: an Unlink's ends may be hidden from the writer (a delete's incident edge), so these name neither node.
+    private static readonly UnlinkNotOwnMessage = 'A link of "{0}" is not held by these sources';
+    private static readonly UnlinkRejectedMessage = 'The model\'s sources cannot remove a link of "{0}"';
 
     public constructor(private readonly session: ITodlDraftSession)
     {
@@ -87,13 +92,42 @@ class TodlDraftEditor
                 this.Edit(() => this.session.Draft.addRef(change.From, change.Relationship, change.To));
                 break;
             case WriteOp.Unlink:
-                this.RequireOwn(change.From);
-                this.Edit(() => this.session.Draft.removeRef(change.From, change.Relationship, change.To));
+                this.Unlink(change.From, change.Relationship, change.To);
                 break;
             case WriteOp.DeleteNode:
                 this.RequireOwn(change.PublicId);
                 this.Edit(() => this.session.Draft.remove(change.PublicId));
                 break;
+            case WriteOp.SetOwner:
+                // Seed synchronization only; the engine never routes it to a connector.
+                throw TodlDraftEditor.UnknownOp(change.Op);
+            default:
+            {
+                const unknown: never = change;
+                throw TodlDraftEditor.UnknownOp((unknown as ConnectorChange).Op);
+            }
+        }
+    }
+
+    private static UnknownOp(op: WriteOp): EngineBridgeError
+    {
+        return new EngineBridgeError(EngineBridgeErrorCode.UnsupportedValue, MessageFormat.Format(TodlDraftEditor.UnknownOpMessage, String(op)));
+    }
+
+    /** Ruling PF-e: neither refusal names a node, and a draft refusal is not kept as the cause (its text may). */
+    private Unlink(from: string, relationship: string, to: string): void
+    {
+        if (!this.session.Draft.Owns(from))
+        {
+            throw new EngineBridgeError(EngineBridgeErrorCode.NotEditable, MessageFormat.Format(TodlDraftEditor.UnlinkNotOwnMessage, relationship));
+        }
+        try
+        {
+            this.session.Draft.removeRef(from, relationship, to);
+        }
+        catch
+        {
+            throw new EngineBridgeError(EngineBridgeErrorCode.NotEditable, MessageFormat.Format(TodlDraftEditor.UnlinkRejectedMessage, relationship));
         }
     }
 
@@ -142,6 +176,11 @@ class TodlDraftEditor
             });
             return;
         }
+        if (scalar === null && this.IsClassFixed(id, member))
+        {
+            // Ruling PF-d: removing the instance's value would let the class value back in on recompile.
+            throw new EngineBridgeError(EngineBridgeErrorCode.UnsupportedValue, MessageFormat.Format(TodlDraftEditor.ClassFixedMessage, member, id));
+        }
         // `label` is the instance label, held as the `label` attr like any scalar field.
         this.Edit(() =>
         {
@@ -169,6 +208,14 @@ class TodlDraftEditor
         return field !== undefined
             && (field.cardinality === Cardinality.One || field.cardinality === Cardinality.Optional)
             && draft.resolve(field.type)?.metaKind === MetaKind.Taxonomy;
+    }
+
+    /** True when the instance's class, or a term broader than it, pins `member`. */
+    private IsClassFixed(id: string, member: string): boolean
+    {
+        const model = this.session.Draft.model;
+        const cls = model.classOf(id);
+        return cls !== null && [cls, ...model.ancestorsOf(cls)].some((c) => model.resolve(c)?.attrs.has(member) === true);
     }
 
     /** ModelDraft.remove / removeRef are silent for an id the draft does not own; a write to such a node is not editable. */
@@ -398,7 +445,7 @@ class TodlFileTransaction implements IConnectorTransaction
     {
         if (this.state !== TransactionState.Open)
         {
-            return Promise.reject(new Error(TodlFileTransaction.StateMessage));
+            return Promise.reject(TodlFileTransaction.Closed());
         }
         this.state = TransactionState.Committing;
         this.committing = this.CommitAll();
@@ -572,8 +619,13 @@ class TodlFileTransaction implements IConnectorTransaction
     {
         if (this.state !== TransactionState.Open)
         {
-            throw new Error(TodlFileTransaction.StateMessage);
+            throw TodlFileTransaction.Closed();
         }
+    }
+
+    private static Closed(): EngineBridgeError
+    {
+        return new EngineBridgeError(EngineBridgeErrorCode.TransactionClosed, TodlFileTransaction.StateMessage);
     }
 }
 

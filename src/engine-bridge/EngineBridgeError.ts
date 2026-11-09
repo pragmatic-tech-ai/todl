@@ -1,3 +1,4 @@
+/** Why the bridge refused or failed. Append-only: never renumber or reuse a value. */
 export enum EngineBridgeErrorCode
 {
     UnsupportedFieldType = 1,
@@ -6,6 +7,10 @@ export enum EngineBridgeErrorCode
     Stale,
     NotEditable,
     PersistFailed,
+    /** A message template names an argument its caller did not give (a bridge defect). */
+    MessageTemplate,
+    /** A connector transaction was used after it stopped taking changes (committing, committed or reverted). */
+    TransactionClosed,
 }
 
 /** Failure raised by the TODL-on-engine bridge; Code identifies the category. */
