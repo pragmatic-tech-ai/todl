@@ -5,6 +5,7 @@ import {
     AccessError,
     AccessErrorCode,
     AccessScope,
+    BindingTable,
     GraphEngine,
     MemberKind,
     StorageKind,
@@ -16,6 +17,11 @@ import {
 import { check } from '../../compiler-services/api.js';
 import { PolicyCompareOp, PolicyNodeKind, PolicyRefRoot } from '../../compiler-services/policy/policy-predicate.js';
 import type { Scalar } from '../../manifest/logical.js';
+import { compilePackage } from '../../publish/publish.js';
+import { PackageManifestBridge } from '../../solution-services/package-manager/package-manifest-bridge.js';
+import { Domain } from '../../domain/domain.js';
+import { MemoryPackageSource } from '../../domain/memory-package-source.js';
+import { SnapshotDescriber } from '../SnapshotDescriber.js';
 import { PolicyDiagnosticCode, PolicyScopeCompiler } from '../PolicyScopeCompiler.js';
 import type { IPrincipalFacts } from '../PrincipalFacts.js';
 
@@ -211,7 +217,7 @@ describe('PolicyScopeCompiler parity with the identity-engine evaluator (P4-b..P
         { Name: 'entity member in principal list', Rules: 'allow read when entity.region in principal.regions;', Facts: { regions: ['eu', 'zz'] }, Visible: ['c1', 'c4'] },
         { Name: 'missing list fact: membership is False', Rules: 'allow read when entity.region in principal.regions;', Facts: {}, Visible: [] },
         { Name: 'non-array fact: membership is False', Rules: 'allow read when entity.region in principal.regions;', Facts: { regions: 'eu' }, Visible: [] },
-        { Name: 'principal fact in entity property', Rules: 'allow read when principal.region in entity.region;', Facts: { region: 'us' }, Visible: ['c2'] },
+        { Name: 'principal fact in entity property never matches (P4-i: entity members are scalars)', Rules: 'allow read when principal.region in entity.region;', Facts: { region: 'us' }, Visible: [] },
         { Name: 'entity.storageId == fact', Rules: 'allow read when entity.storageId == principal.me;', Facts: { me: 'c2' }, Visible: ['c2'] },
         { Name: 'entity.storageId != fact', Rules: 'allow read when entity.storageId != principal.me;', Facts: { me: 'c2' }, Visible: ['c1', 'c3', 'c4'] },
         { Name: 'entity.storageId in principal list', Rules: 'allow read when entity.storageId in principal.ids;', Facts: { ids: ['c1', 'c3'] }, Visible: ['c1', 'c3'] },
@@ -276,10 +282,16 @@ describe('PolicyScopeCompiler scope shape', () =>
         const rules = [{ effect: 'allow', action: 'read', predicate: { kind: PolicyNodeKind.Compare, op: PolicyCompareOp.Eq, left: { kind: PolicyNodeKind.Ref, root: PolicyRefRoot.Entity, member: 'id' }, right: { kind: PolicyNodeKind.Ref, root: PolicyRefRoot.Principal, member: 'me' } } }];
         model.builder().definePolicy('shop.Customer@policy', 'shop.Customer', JSON.stringify(rules)).commit();
         const engine = await PolicyFx.Open();
-        const scope = PolicyScopeCompiler.FromRepository(model).Compile(new TestPrincipal({ me: 'c3' }), AccessDefault.Allow);
-        assert.deepEqual(await PolicyFx.Scan(engine, scope, PolicyFx.Vip), []);
-        assert.deepEqual((await PolicyFx.Scan(engine, scope, PolicyFx.Customer)).filter((id) => id.startsWith('c')), ['c3']);
-        await engine.dispose();
+        try
+        {
+            const scope = PolicyScopeCompiler.FromRepository(model).Compile(new TestPrincipal({ me: 'c3' }), AccessDefault.Allow);
+            assert.deepEqual(await PolicyFx.Scan(engine, scope, PolicyFx.Vip), []);
+            assert.deepEqual((await PolicyFx.Scan(engine, scope, PolicyFx.Customer)).filter((id) => id.startsWith('c')), ['c3']);
+        }
+        finally
+        {
+            await engine.dispose();
+        }
     });
 
     test('relationship membership: entity relationship in principal list', async () =>
@@ -289,11 +301,64 @@ describe('PolicyScopeCompiler scope shape', () =>
         assert.deepEqual(await PolicyFx.Visible(policies, { owners: [] }, PolicyFx.Order), []);
     });
 
-    test('relationship membership: principal fact in entity relationship', async () =>
+    test('principal fact in entity relationship never matches and is reported (P4-i)', async () =>
     {
         const policies = 'policy Order { allow read when principal.me in entity.owner; }';
-        assert.deepEqual(await PolicyFx.Visible(policies, { me: 'c2' }, PolicyFx.Order), ['o2']);
-        assert.deepEqual(await PolicyFx.Visible(policies, {}, PolicyFx.Order), []);
+        assert.deepEqual(await PolicyFx.Visible(policies, { me: 'c2' }, PolicyFx.Order), []);
+        assert.deepEqual(PolicyFx.Compiler(policies).Diagnostics.map((d) => d.Code), [PolicyDiagnosticCode.NeverMatches]);
+    });
+});
+
+describe('PolicyScopeCompiler relationship membership over hidden targets (P4-h)', () =>
+{
+    // c2 (region us) is invisible to the reader: Customer is allowed by region "eu" only.
+    const eu = PolicyFx.Policy('allow read when entity.region == "eu";');
+
+    test('deny: a hidden blocked owner still denies', async () =>
+    {
+        const policies = `${eu} policy Order { deny read when entity.owner in principal.blocked; }`;
+        assert.deepEqual(await PolicyFx.Visible(policies, { blocked: ['c2'] }, PolicyFx.Order), ['o1', 'o3']);
+    });
+
+    test('deny: still denies when the target concept falls to Default Deny', async () =>
+    {
+        const policies = 'policy Order { deny read when entity.owner in principal.blocked; }';
+        assert.deepEqual(await PolicyFx.Visible(policies, { blocked: ['c2'] }, PolicyFx.Order, AccessDefault.Deny), ['o1', 'o3']);
+    });
+
+    test('allow: a hidden owner does not grant (narrower than the evaluator, never wider)', async () =>
+    {
+        const policies = `${eu} policy Order { allow read when entity.owner in principal.owners; }`;
+        assert.deepEqual(await PolicyFx.Visible(policies, { owners: ['c2'] }, PolicyFx.Order), []);
+        assert.deepEqual(await PolicyFx.Visible(policies, { owners: ['c1'] }, PolicyFx.Order), ['o1']);
+    });
+
+    test('not in an allow flips the position: a hidden blocked owner is still excluded', async () =>
+    {
+        const policies = `${eu} policy Order { allow read when not entity.owner in principal.blocked; }`;
+        assert.deepEqual(await PolicyFx.Visible(policies, { blocked: ['c2'] }, PolicyFx.Order), ['o1', 'o3']);
+    });
+
+    test('deny write: update and delete of an order owned by a hidden blocked customer are denied', async () =>
+    {
+        const policies = `${eu} policy Order { deny write when entity.owner in principal.blocked; }`;
+        const scope = (): AccessScope => PolicyFx.Compiler(policies).Compile(new TestPrincipal({ blocked: ['c2'] }), AccessDefault.Allow);
+        const update = await PolicyFx.Write(scope(), (t) => t.SetProperty('o2', 'name', 'x'));
+        assert.ok(update instanceof AccessError);
+        assert.equal(update.Code, AccessErrorCode.UpdateDenied);
+        const del = await PolicyFx.Write(scope(), (t) => t.DeleteNode('o2'));
+        assert.ok(del instanceof AccessError);
+        assert.equal(del.Code, AccessErrorCode.DeleteDenied);
+        assert.equal(await PolicyFx.Write(scope(), (t) => t.SetProperty('o1', 'name', 'x')), undefined);
+    });
+
+    test('allow write: a hidden owner does not grant update', async () =>
+    {
+        const policies = `${eu} policy Order { allow write when entity.owner in principal.owners; }`;
+        const scope = PolicyFx.Compiler(policies).Compile(new TestPrincipal({ owners: ['c2'] }), AccessDefault.Allow);
+        const update = await PolicyFx.Write(scope, (t) => t.SetProperty('o2', 'name', 'x'));
+        assert.ok(update instanceof AccessError);
+        assert.equal(update.Code, AccessErrorCode.UpdateDenied);
     });
 });
 
@@ -333,6 +398,24 @@ describe('PolicyScopeCompiler writes', () =>
         assert.equal(await PolicyFx.Write(orderScope(), (t) => t.SetProperty('o1', 'name', 'x')), undefined);
         const foreign = await PolicyFx.Write(orderScope(), (t) => t.SetProperty('o2', 'name', 'x'));
         assert.ok(foreign instanceof AccessError);
+        assert.equal(foreign.Code, AccessErrorCode.UpdateDenied);
+    });
+
+    test('a folded-away related term leaves creates decidable', async () =>
+    {
+        const orders = 'policy Order { deny write when entity.owner in principal.blocked; }';
+        const orderScope = (blocked: string[]): AccessScope => PolicyFx.Compiler(orders).Compile(new TestPrincipal({ blocked }), AccessDefault.Allow);
+        assert.equal(await PolicyFx.Write(orderScope([]), (t) => { t.CreateNode('o9', PolicyFx.Order); t.Link('o9', 'owner', 'c1'); }), undefined);
+        const denied = await PolicyFx.Write(orderScope(['c2']), (t) => { t.CreateNode('o9', PolicyFx.Order); t.Link('o9', 'owner', 'c1'); });
+        assert.ok(denied instanceof AccessError);
+        assert.equal(denied.Code, AccessErrorCode.CreateDenied);
+    });
+
+    test('an admin-style principal term folds the related term away', async () =>
+    {
+        const orders = 'policy Order { allow write when principal.role == "admin" or entity.owner in principal.owners; }';
+        const scope = PolicyFx.Compiler(orders).Compile(new TestPrincipal({ role: 'admin', owners: ['c1'] }), AccessDefault.Allow);
+        assert.equal(await PolicyFx.Write(scope, (t) => { t.CreateNode('o9', PolicyFx.Order); t.Link('o9', 'owner', 'c1'); }), undefined);
     });
 });
 
@@ -345,8 +428,14 @@ describe('PolicyScopeCompiler inexpressible leaves (P4-e)', () =>
         assert.deepEqual(compiler.Diagnostics.map((d) => d.Code), [PolicyDiagnosticCode.EntityToEntity]);
         assert.equal(compiler.Diagnostics[0]!.Concept, PolicyFx.Customer);
         const engine = await PolicyFx.Open();
-        assert.deepEqual(await PolicyFx.Scan(engine, scope, PolicyFx.Customer), []);
-        await engine.dispose();
+        try
+        {
+            assert.deepEqual(await PolicyFx.Scan(engine, scope, PolicyFx.Customer), []);
+        }
+        finally
+        {
+            await engine.dispose();
+        }
     });
 
     test('entity vs entity: True in a deny, so everything is denied', async () =>
@@ -369,11 +458,111 @@ describe('PolicyScopeCompiler inexpressible leaves (P4-e)', () =>
         assert.deepEqual(await PolicyFx.Visible('policy Order { allow read when entity.owner == principal.me; }', { me: 'c1' }, PolicyFx.Order), []);
     });
 
-    test('Diagnostics reset on each Compile', () =>
+    test('relationship compare inside a deny is True: every order is denied', async () =>
+    {
+        const policies = 'policy Order { deny read when entity.owner == principal.me; }';
+        assert.deepEqual(await PolicyFx.Visible(policies, { me: 'c1' }, PolicyFx.Order), []);
+        assert.deepEqual(PolicyFx.Compiler(policies).Diagnostics.map((d) => d.Code), [PolicyDiagnosticCode.RelationshipCompare]);
+    });
+
+    test('Diagnostics are structural: known before Compile, stable across principals, and a copy', () =>
     {
         const compiler = PolicyFx.Compiler(PolicyFx.Policy('allow read when entity.region == entity.classification;'));
+        const before = compiler.Diagnostics;
+        assert.equal(before.length, 1);
         compiler.Compile(new TestPrincipal({}), AccessDefault.Allow);
-        compiler.Compile(new TestPrincipal({}), AccessDefault.Allow);
+        compiler.Compile(new TestPrincipal({ region: 'eu' }), AccessDefault.Allow);
         assert.equal(compiler.Diagnostics.length, 1);
+        assert.notEqual(compiler.Diagnostics, before);
+    });
+});
+
+class Malformed
+{
+    public static async Run(rulesJson: string): Promise<{ readonly Compiler: PolicyScopeCompiler; readonly Visible: string[]; readonly Write: unknown }>
+    {
+        const { model } = check([{ uri: 'shop.todl', text: PolicyFx.Model.replace('POLICIES', '') }]);
+        model.builder().definePolicy('shop.Customer@policy', 'shop.Customer', rulesJson).commit();
+        const compiler = PolicyScopeCompiler.FromRepository(model);
+        const scope = compiler.Compile(new TestPrincipal({}), AccessDefault.Allow);
+        const engine = await PolicyFx.Open();
+        try
+        {
+            return { Compiler: compiler, Visible: await PolicyFx.Scan(engine, scope, PolicyFx.Vip), Write: await PolicyFx.Write(scope, (t) => t.SetProperty('c1', 'vip', false)) };
+        }
+        finally
+        {
+            await engine.dispose();
+        }
+    }
+}
+
+describe('PolicyScopeCompiler malformed policy nodes (P4-j)', () =>
+{
+    const bad: ReadonlyArray<readonly [string, string]> = [
+        ['invalid JSON', 'not json'],
+        ['not an array', '{}'],
+        ['unknown effect', '[{"effect":"maybe","action":"read","predicate":{"kind":0}}]'],
+        ['unknown action', '[{"effect":"allow","action":"peek","predicate":{"kind":0}}]'],
+    ];
+    for (const [name, json] of bad)
+    {
+        test(`${name}: reported, reads and writes denied, never throws`, async () =>
+        {
+            const result = await Malformed.Run(json);
+            assert.deepEqual(result.Compiler.Diagnostics.map((d) => d.Code), [PolicyDiagnosticCode.MalformedPolicy]);
+            assert.deepEqual(result.Visible, []);
+            assert.ok(result.Write instanceof AccessError);
+        });
+    }
+});
+
+describe('PolicyScopeCompiler member mapping matches SnapshotDescriber', () =>
+{
+    test('every member of the fixture concept has the describer kind and value type', async () =>
+    {
+        const source = `namespace shop
+{
+    primitive sku : string { }
+    primitive qty : integer { }
+    concept Loc { }
+    concept Widget
+    {
+        name : string?; count : integer?; weight : number?; ok : boolean?;
+        code : sku?; amount : qty?; kind : Kinds?; kinds : Kinds[]; home : Loc?;
+        relationship parts -> Widget[];
+    }
+    taxonomy Kinds : represents Widget { term Big { } term Small { } }
+    policy Widget { allow read when entity.name == "x"; }
+}`;
+        const { model } = check([{ uri: 'shop.todl', text: source }]);
+        const compiler = PolicyScopeCompiler.FromRepository(model);
+        const out = compilePackage([], [{ uri: 'shop.p.todl', text: source }], { id: 'shop.p', version: '1.0.0' });
+        assert.ok(out.ok, JSON.stringify(out.errors));
+        const store = new MemoryPackageSource();
+        store.Add(PackageManifestBridge.toResolved(out.package!));
+        const domain = new Domain(store);
+        await domain.load({ model: 'shop.p', version: '1.0.0' });
+        const description = SnapshotDescriber.Describe(domain.graph, { DefaultConnector: BindingTable.EngineStorage }).Description;
+        const members: MemberInput[] = [];
+        for (let name: string | null = 'shop.Widget'; name !== null;)
+        {
+            const definition = description.Definitions.find((d) => d.Name === name);
+            assert.ok(definition, `definition ${name}`);
+            members.push(...definition.Members);
+            name = definition.Parent;
+        }
+        const mine = compiler.MembersOf('shop.Widget');
+        assert.ok(mine.size >= 10);
+        for (const [name, member] of mine)
+        {
+            const theirs: MemberInput | undefined = members.find((m) => m.Name === name);
+            assert.ok(theirs, `describer has ${name}`);
+            assert.equal(member.IsRelationship, theirs.Kind === MemberKind.Relationship, name);
+            if (!member.IsRelationship)
+            {
+                assert.equal(member.Type, theirs.Type, name);
+            }
+        }
     });
 });

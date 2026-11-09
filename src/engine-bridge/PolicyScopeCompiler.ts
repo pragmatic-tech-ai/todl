@@ -10,6 +10,7 @@ import {
     IsNull,
     Not,
     Or,
+    Reachable,
     Related,
     TruePredicate,
     ValueType,
@@ -22,7 +23,7 @@ import { Builder } from '../compiler-services/model/builder.js';
 import { MetaKind } from '../compiler-services/model/kinds.js';
 import { Cardinality } from '../manifest/enums.js';
 import { ScalarBase, type Repository } from '../compiler-services/model/model.js';
-import { PolicyPredicateCodec } from '../compiler-services/policy/policy-predicate-codec.js';
+import { PolicyAction, PolicyEffect, PolicyRules, type PolicyRule } from '../compiler-services/policy/policy-rules.js';
 import {
     PolicyBoolOp,
     PolicyCompareOp,
@@ -43,9 +44,13 @@ export enum PolicyDiagnosticCode
     RelationshipCompare,
     /** An `entity.<name>` that is not a member of the concept. */
     UnknownMember,
+    /** `x in entity.m` / `entity.m has x`: the evaluator reads entity members as scalars, so it never matches. */
+    NeverMatches,
+    /** A `<concept>@policy` node whose rules cannot be read; the concept is compiled fail-closed. */
+    MalformedPolicy,
 }
 
-/** One leaf compiled fail-closed because the engine cannot express it. */
+/** One leaf (or policy) compiled fail-closed or to a constant because the engine cannot express it. */
 export interface IPolicyDiagnostic
 {
     readonly Code: PolicyDiagnosticCode;
@@ -53,16 +58,12 @@ export interface IPolicyDiagnostic
     readonly Message: string;
 }
 
-enum PolicyEffect
+/** How the engine sees one member of a policied concept (introspection, checked against the describer). */
+export interface IPolicyMember
 {
-    Allow = 1,
-    Deny,
-}
-
-enum PolicyAction
-{
-    Read = 1,
-    Write,
+    readonly IsRelationship: boolean;
+    /** The engine value type of a property (String for a relationship, unused). */
+    readonly Type: ValueType;
 }
 
 enum MemberShape
@@ -71,17 +72,9 @@ enum MemberShape
     Relationship,
 }
 
-interface IPolicyRule
-{
-    readonly Effect: PolicyEffect;
-    readonly Action: PolicyAction;
-    readonly Predicate: PolicyPredicate;
-}
-
 interface IMemberInfo
 {
     readonly Shape: MemberShape;
-    /** The engine value type of a property. */
     readonly Type: ValueType;
 }
 
@@ -92,12 +85,60 @@ interface IOperand
     readonly Value?: unknown;
 }
 
+/** One concept's policy: its rules, or null when the node could not be read. */
+interface IConceptPolicy
+{
+    readonly Rules: readonly PolicyRule[] | null;
+    readonly Members: ReadonlyMap<string, IMemberInfo>;
+}
+
+/** Predicate construction that folds constants, so a principal-only term never leaves a needless tree. */
+class Fold
+{
+    public static And(terms: readonly Predicate[]): Predicate
+    {
+        const kept: Predicate[] = [];
+        for (const term of terms)
+        {
+            if (term === FalsePredicate.Instance) return FalsePredicate.Instance;
+            if (term !== TruePredicate.Instance) kept.push(term);
+        }
+        if (kept.length === 0) return TruePredicate.Instance;
+        return kept.length === 1 ? kept[0]! : new And(kept);
+    }
+
+    public static Or(terms: readonly Predicate[]): Predicate
+    {
+        const kept: Predicate[] = [];
+        for (const term of terms)
+        {
+            if (term === TruePredicate.Instance) return TruePredicate.Instance;
+            if (term !== FalsePredicate.Instance) kept.push(term);
+        }
+        if (kept.length === 0) return FalsePredicate.Instance;
+        return kept.length === 1 ? kept[0]! : new Or(kept);
+    }
+
+    public static Not(term: Predicate): Predicate
+    {
+        if (term === TruePredicate.Instance) return FalsePredicate.Instance;
+        if (term === FalsePredicate.Instance) return TruePredicate.Instance;
+        return new Not(term);
+    }
+
+    public static Bool(value: boolean): Predicate
+    {
+        return value ? TruePredicate.Instance : FalsePredicate.Instance;
+    }
+}
+
 /** Compiles the leaves and combinators of one concept's rules for one principal. */
 class TermCompiler
 {
     private static readonly MsgEntityToEntity = 'comparison of two entity members of "{0}" cannot be expressed in engine terms';
     private static readonly MsgRelationship = 'comparison on relationship "{1}" of "{0}" cannot be expressed in engine terms';
     private static readonly MsgUnknownMember = '"{1}" is not a member of "{0}"';
+    private static readonly MsgNever = 'a membership test over an entity member of "{0}" never matches (entity members are scalars)';
     private static readonly ConceptSlot = '{0}';
     private static readonly MemberSlot = '{1}';
 
@@ -109,7 +150,11 @@ class TermCompiler
     {
     }
 
-    /** `failure` is what an inexpressible leaf compiles to at this position; it flips under Not. */
+    /**
+     * `failure` is what an inexpressible leaf compiles to at this position (False in an allow rule, True in a
+     * deny rule); it flips under Not. Positions whose failure is True are the ones where matching MORE is safe,
+     * which is where a leaf may use a form that sees hidden neighbours.
+     */
     public Compile(node: PolicyPredicate, failure: Predicate): Predicate
     {
         switch (node.kind)
@@ -121,10 +166,10 @@ class TermCompiler
             case PolicyNodeKind.Bool:
             {
                 const terms = [this.Compile(node.left, failure), this.Compile(node.right, failure)];
-                return node.op === PolicyBoolOp.And ? new And(terms) : new Or(terms);
+                return node.op === PolicyBoolOp.And ? Fold.And(terms) : Fold.Or(terms);
             }
             case PolicyNodeKind.Not:
-                return new Not(this.Compile(node.operand, failure === TruePredicate.Instance ? FalsePredicate.Instance : TruePredicate.Instance));
+                return Fold.Not(this.Compile(node.operand, failure === TruePredicate.Instance ? FalsePredicate.Instance : TruePredicate.Instance));
         }
     }
 
@@ -137,7 +182,7 @@ class TermCompiler
         const equal = op === PolicyCompareOp.Eq;
         if (l.Member === undefined && r.Member === undefined)
         {
-            return TermCompiler.Bool((l.Value === r.Value) === equal);
+            return Fold.Bool((l.Value === r.Value) === equal);
         }
         if (l.Member !== undefined && r.Member !== undefined)
         {
@@ -147,7 +192,7 @@ class TermCompiler
         const value = l.Member !== undefined ? r.Value : l.Value;
         if (this.IsId(member))
         {
-            return typeof value === 'string' ? TermCompiler.Id(value, equal) : TermCompiler.Bool(!equal);
+            return typeof value === 'string' ? TermCompiler.Id(value, equal) : Fold.Bool(!equal);
         }
         const info = this.members.get(member);
         if (info === undefined)
@@ -165,7 +210,7 @@ class TermCompiler
         const cell = TermCompiler.Convert(info.Type, value);
         if (cell === undefined)
         {
-            return TermCompiler.Bool(!equal);
+            return Fold.Bool(!equal);
         }
         return equal
             ? TermCompiler.Present(member, new Compare(member, CompareOp.Eq, cell))
@@ -178,77 +223,67 @@ class TermCompiler
     {
         const source = this.Read(collection);
         const element = this.Read(item);
-        if (source.Member === undefined)
+        if (source.Member !== undefined)
         {
-            return this.PrincipalCollection(source.Value, element, failure);
+            // The evaluator reads an entity member as a scalar, so `includes` on it is always false.
+            return this.Fail(PolicyDiagnosticCode.NeverMatches, TermCompiler.MsgNever, FalsePredicate.Instance);
         }
-        if (element.Member !== undefined)
-        {
-            return this.Fail(PolicyDiagnosticCode.EntityToEntity, TermCompiler.MsgEntityToEntity, failure);
-        }
-        return this.EntityCollection(source.Member, element.Value, failure);
+        return this.PrincipalCollection(source.Value, element, failure);
     }
 
     /** `entity.m in principal.list` (or a fully constant membership). */
     private PrincipalCollection(list: unknown, element: IOperand, failure: Predicate): Predicate
     {
+        if (element.Member === undefined)
+        {
+            return Fold.Bool(Array.isArray(list) && list.includes(element.Value));
+        }
+        const member = element.Member;
+        const id = this.IsId(member);
+        const info = this.members.get(member);
+        if (!id && info === undefined)
+        {
+            return this.Fail(PolicyDiagnosticCode.UnknownMember, TermCompiler.MsgUnknownMember, failure, member);
+        }
         if (!Array.isArray(list))
         {
             return FalsePredicate.Instance;
         }
-        if (element.Member === undefined)
-        {
-            return TermCompiler.Bool(list.includes(element.Value));
-        }
-        const member = element.Member;
         const strings = new Set(list.filter((v): v is string => typeof v === 'string'));
-        if (this.IsId(member))
+        if (id)
         {
             return strings.size === 0 ? FalsePredicate.Instance : new IdIn(strings);
         }
-        const info = this.members.get(member);
-        if (info === undefined)
+        if (info!.Shape === MemberShape.Relationship)
         {
-            return this.Fail(PolicyDiagnosticCode.UnknownMember, TermCompiler.MsgUnknownMember, failure, member);
-        }
-        if (info.Shape === MemberShape.Relationship)
-        {
-            return strings.size === 0 ? FalsePredicate.Instance : new Related(member, EdgeDirection.Out, new IdIn(strings));
+            return strings.size === 0 ? FalsePredicate.Instance : TermCompiler.Links(member, strings, failure);
         }
         const cells: CellValue[] = [];
         for (const v of list)
         {
-            const cell = TermCompiler.Convert(info.Type, v);
+            const cell = TermCompiler.Convert(info!.Type, v);
             if (cell !== undefined) cells.push(cell);
         }
         return cells.length === 0 ? FalsePredicate.Instance : TermCompiler.Present(member, new In(member, cells));
     }
 
-    /** `principal.x in entity.m` / `entity.m has literal`. */
-    private EntityCollection(member: string, value: unknown, failure: Predicate): Predicate
-    {
-        if (this.IsId(member))
-        {
-            return FalsePredicate.Instance;
-        }
-        const info = this.members.get(member);
-        if (info === undefined)
-        {
-            return this.Fail(PolicyDiagnosticCode.UnknownMember, TermCompiler.MsgUnknownMember, failure, member);
-        }
-        if (value === undefined || value === null)
-        {
-            return FalsePredicate.Instance;
-        }
-        if (info.Shape === MemberShape.Relationship)
-        {
-            return typeof value === 'string' ? new Related(member, EdgeDirection.Out, new IdIn(new Set([value]))) : FalsePredicate.Instance;
-        }
-        const cell = TermCompiler.Convert(info.Type, value);
-        return cell === undefined ? FalsePredicate.Instance : TermCompiler.Present(member, new Compare(member, CompareOp.Eq, cell));
-    }
-
     // ── helpers ────────────────────────────────────────────────────────────
+
+    /**
+     * "Relationship `member` links to one of `targets`". The evaluator reads raw member values, so the form
+     * must not depend on whether the reader may see the target. Related only counts visible neighbours (narrower
+     * than the evaluator: safe where matching less is safe, i.e. an allow position). Where matching more is safe
+     * (failure True: deny, or an odd number of Nots) Reachable is used: it walks unscoped edges from the targets,
+     * so it also matches the targets themselves, which can only widen a deny.
+     */
+    private static Links(member: string, targets: ReadonlySet<string>, failure: Predicate): Predicate
+    {
+        if (failure === TruePredicate.Instance)
+        {
+            return new Reachable(targets, [{ Relationship: member, Direction: EdgeDirection.In }], 1);
+        }
+        return new Related(member, EdgeDirection.Out, new IdIn(targets));
+    }
 
     private Read(operand: PolicyOperand): IOperand
     {
@@ -278,11 +313,6 @@ class TermCompiler
         return equal ? ids : new Not(ids);
     }
 
-    private static Bool(value: boolean): Predicate
-    {
-        return value ? TruePredicate.Instance : FalsePredicate.Instance;
-    }
-
     /** A leaf that holds only when the member is set (an unset member must not yield Unknown). */
     private static Present(member: string, leaf: Predicate): Predicate
     {
@@ -309,8 +339,12 @@ class TermCompiler
 
     private static ToInt64(raw: unknown): bigint | undefined
     {
-        const value = typeof raw === 'bigint' ? raw : typeof raw === 'number' && Number.isInteger(raw) ? BigInt(raw) : undefined;
-        return value !== undefined && BigInt.asIntN(64, value) === value ? value : undefined;
+        if (typeof raw !== 'number' || !Number.isInteger(raw))
+        {
+            return undefined;
+        }
+        const value = BigInt(raw);
+        return BigInt.asIntN(64, value) === value ? value : undefined;
     }
 }
 
@@ -319,19 +353,17 @@ class TermCompiler
  * `AccessScope` for one principal, so the engine enforces them on every read and write. The compiled
  * scope mirrors the identity engine's evaluator: absent principal facts read as undefined, an unset
  * member never makes a leaf Unknown, and a leaf the engine cannot express compiles fail-closed (False in
- * an allow rule, True in a deny rule) and is reported on `Diagnostics`.
+ * an allow rule, True in a deny rule) and is reported on `Diagnostics`. A policy node that cannot be read
+ * compiles its concept fail-closed (both actions False), also reported.
  */
 export class PolicyScopeCompiler
 {
-    private static readonly AllowToken = 'allow';
-    private static readonly DenyToken = 'deny';
-    private static readonly ReadToken = 'read';
-    private static readonly WriteToken = 'write';
-    private static readonly MissingMessage = 'policy node "{0}" is missing concept or rules';
-    private static readonly EffectMessage = 'policy for "{0}" has unknown effect "{1}"';
-    private static readonly ActionMessage = 'policy for "{0}" has unknown action "{1}"';
+    private static readonly MalformedMessage = 'policy "{0}" cannot be read ({1}); "{2}" is compiled fail-closed';
+    private static readonly PolicySuffix = '@policy';
+    private static readonly NoCause = 'no concept or rules';
     private static readonly Slot0 = '{0}';
     private static readonly Slot1 = '{1}';
+    private static readonly Slot2 = '{2}';
     private static readonly Scalars: ReadonlyMap<ScalarBase, ValueType> = new Map<ScalarBase, ValueType>([
         [ScalarBase.String, ValueType.String],
         [ScalarBase.Number, ValueType.Float64],
@@ -339,96 +371,113 @@ export class PolicyScopeCompiler
         [ScalarBase.Boolean, ValueType.Boolean],
     ]);
 
-    private readonly diagnostics: IPolicyDiagnostic[] = [];
-
     private constructor(
-        private readonly rulesByConcept: ReadonlyMap<string, readonly IPolicyRule[]>,
-        private readonly membersByConcept: ReadonlyMap<string, ReadonlyMap<string, IMemberInfo>>)
+        private readonly policies: ReadonlyMap<string, IConceptPolicy>,
+        private readonly structural: readonly IPolicyDiagnostic[])
     {
     }
 
-    /** Leaves of the last `Compile` that the engine cannot express (each compiled fail-closed). */
+    /**
+     * What the engine cannot express in the policies, and which policy nodes could not be read. Structural: it
+     * depends on the policies and the schema only, never on a principal. A snapshot copy.
+     */
     public get Diagnostics(): readonly IPolicyDiagnostic[]
     {
-        return this.diagnostics;
+        return [...this.structural];
     }
 
     public static FromRepository(repo: Repository): PolicyScopeCompiler
     {
-        const rules = new Map<string, readonly IPolicyRule[]>();
-        const members = new Map<string, ReadonlyMap<string, IMemberInfo>>();
+        const policies = new Map<string, IConceptPolicy>();
+        const diagnostics: IPolicyDiagnostic[] = [];
         for (const id of repo.nodesOfMetaKind(MetaKind.Policy))
         {
             const node = repo.resolve(id);
-            const concept = node?.attrs.get(Builder.PolicyConceptAttr);
+            const concept = String(node?.attrs.get(Builder.PolicyConceptAttr) ?? id.replace(PolicyScopeCompiler.PolicySuffix, ''));
+            const members = PolicyScopeCompiler.MembersOf(repo, concept);
             const raw = node?.attrs.get(Builder.PolicyRulesAttr);
-            if (concept === undefined || raw === undefined)
+            let rules: readonly PolicyRule[] | null = null;
+            let cause = PolicyScopeCompiler.NoCause;
+            if (raw !== undefined)
             {
-                throw new Error(PolicyScopeCompiler.MissingMessage.replace(PolicyScopeCompiler.Slot0, id));
+                try
+                {
+                    rules = PolicyRules.Parse(String(raw));
+                }
+                catch (error)
+                {
+                    cause = (error as Error).message;
+                }
             }
-            const name = String(concept);
-            rules.set(name, PolicyScopeCompiler.ParseRules(String(raw), name));
-            members.set(name, PolicyScopeCompiler.MembersOf(repo, name));
+            if (rules === null)
+            {
+                const message = PolicyScopeCompiler.MalformedMessage
+                    .replace(PolicyScopeCompiler.Slot0, id).replace(PolicyScopeCompiler.Slot1, cause).replace(PolicyScopeCompiler.Slot2, concept);
+                diagnostics.push({ Code: PolicyDiagnosticCode.MalformedPolicy, Concept: concept, Message: message });
+            }
+            policies.set(concept, { Rules: rules, Members: members });
         }
-        return new PolicyScopeCompiler(rules, members);
+        const compiler = new PolicyScopeCompiler(policies, diagnostics);
+        // Leaf diagnostics do not depend on the principal's facts: one pass with no facts collects them all.
+        const noFacts: IPrincipalFacts = { Id: '', Get: () => undefined };
+        compiler.Build(noFacts, diagnostics);
+        return new PolicyScopeCompiler(policies, Object.freeze([...diagnostics]));
     }
 
     public Compile(principal: IPrincipalFacts, defaultAccess: AccessDefault): AccessScope
     {
-        this.diagnostics.length = 0;
+        return this.Build(principal, []).Scope(defaultAccess);
+    }
+
+    /** How the engine sees each member of a policied concept (empty for a concept without a policy). */
+    public MembersOf(concept: string): ReadonlyMap<string, IPolicyMember>
+    {
+        const out = new Map<string, IPolicyMember>();
+        for (const [name, info] of this.policies.get(concept)?.Members ?? [])
+        {
+            out.set(name, { IsRelationship: info.Shape === MemberShape.Relationship, Type: info.Type });
+        }
+        return out;
+    }
+
+    private Build(principal: IPrincipalFacts, sink: IPolicyDiagnostic[]): ScopeParts
+    {
         const rows = new Map<string, Predicate>();
         const writes = new Map<string, IWriteRules>();
-        for (const [concept, rules] of this.rulesByConcept)
+        for (const [concept, policy] of this.policies)
         {
-            const terms = new TermCompiler(concept, this.membersByConcept.get(concept)!, principal, this.diagnostics);
-            rows.set(concept, PolicyScopeCompiler.Combine(rules, PolicyAction.Read, terms));
-            const write = PolicyScopeCompiler.Combine(rules, PolicyAction.Write, terms);
+            if (policy.Rules === null)
+            {
+                rows.set(concept, FalsePredicate.Instance);
+                writes.set(concept, { Create: FalsePredicate.Instance, Update: FalsePredicate.Instance, Delete: FalsePredicate.Instance });
+                continue;
+            }
+            const terms = new TermCompiler(concept, policy.Members, principal, sink);
+            rows.set(concept, PolicyScopeCompiler.Combine(policy.Rules, PolicyAction.Read, terms));
+            const write = PolicyScopeCompiler.Combine(policy.Rules, PolicyAction.Write, terms);
             writes.set(concept, { Create: write, Update: write, Delete: write });
         }
-        return AccessScope.Build({ Default: defaultAccess, Rows: rows, Writes: writes });
+        return new ScopeParts(rows, writes);
     }
 
     /** Or(allows) AND Not(Or(denies)); an action with no rules allows (as the evaluator does). */
-    private static Combine(rules: readonly IPolicyRule[], action: PolicyAction, terms: TermCompiler): Predicate
+    private static Combine(rules: readonly PolicyRule[], action: PolicyAction, terms: TermCompiler): Predicate
     {
         const forAction = rules.filter((r) => r.Action === action);
         const allows = forAction.filter((r) => r.Effect === PolicyEffect.Allow).map((r) => terms.Compile(r.Predicate, FalsePredicate.Instance));
         const denies = forAction.filter((r) => r.Effect === PolicyEffect.Deny).map((r) => terms.Compile(r.Predicate, TruePredicate.Instance));
-        if (denies.length === 0)
-        {
-            return allows.length === 0 ? TruePredicate.Instance : new Or(allows);
-        }
-        return new And([allows.length === 0 ? TruePredicate.Instance : new Or(allows), new Not(new Or(denies))]);
-    }
-
-    private static ParseRules(json: string, concept: string): readonly IPolicyRule[]
-    {
-        const parsed = JSON.parse(json) as { effect: string; action: string; predicate: unknown }[];
-        return parsed.map((entry) => ({
-            Effect: PolicyScopeCompiler.EffectOf(entry.effect, concept),
-            Action: PolicyScopeCompiler.ActionOf(entry.action, concept),
-            Predicate: PolicyPredicateCodec.FromJson(JSON.stringify(entry.predicate)),
-        }));
-    }
-
-    private static EffectOf(token: string, concept: string): PolicyEffect
-    {
-        if (token === PolicyScopeCompiler.AllowToken) return PolicyEffect.Allow;
-        if (token === PolicyScopeCompiler.DenyToken) return PolicyEffect.Deny;
-        throw new Error(PolicyScopeCompiler.EffectMessage.replace(PolicyScopeCompiler.Slot0, concept).replace(PolicyScopeCompiler.Slot1, token));
-    }
-
-    private static ActionOf(token: string, concept: string): PolicyAction
-    {
-        if (token === PolicyScopeCompiler.ReadToken) return PolicyAction.Read;
-        if (token === PolicyScopeCompiler.WriteToken) return PolicyAction.Write;
-        throw new Error(PolicyScopeCompiler.ActionMessage.replace(PolicyScopeCompiler.Slot0, concept).replace(PolicyScopeCompiler.Slot1, token));
+        const allowed = allows.length === 0 ? TruePredicate.Instance : Fold.Or(allows);
+        return denies.length === 0 ? allowed : Fold.And([allowed, Fold.Not(Fold.Or(denies))]);
     }
 
     /** How the engine sees each member of the concept, mirroring SnapshotDescriber's field mapping. */
     private static MembersOf(repo: Repository, concept: string): ReadonlyMap<string, IMemberInfo>
     {
         const out = new Map<string, IMemberInfo>();
+        if (repo.resolve(concept) === undefined)
+        {
+            return out;
+        }
         const schema = repo.effectiveSchema(concept);
         for (const field of schema.fields)
         {
@@ -453,5 +502,18 @@ export class PolicyScopeCompiler
             out.set(relationship.name, { Shape: MemberShape.Relationship, Type: ValueType.String });
         }
         return out;
+    }
+}
+
+/** The per-concept Rows and Writes of one compile, before they become an AccessScope. */
+class ScopeParts
+{
+    public constructor(private readonly rows: ReadonlyMap<string, Predicate>, private readonly writes: ReadonlyMap<string, IWriteRules>)
+    {
+    }
+
+    public Scope(defaultAccess: AccessDefault): AccessScope
+    {
+        return AccessScope.Build({ Default: defaultAccess, Rows: this.rows, Writes: this.writes });
     }
 }
