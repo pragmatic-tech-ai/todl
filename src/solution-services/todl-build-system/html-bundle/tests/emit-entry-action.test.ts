@@ -65,8 +65,10 @@ describe("EmitEntryAction", () =>
 
     test("derives the VM class name from manifest id, not name", async () =>
     {
-        const ctx = Fixture.ContextWith();
-        ctx.Manifest = { type: ProjectType.Architecture, name: "my_proj", id: "real_id", version: 1 };
+        const ctx: TodlBuildContext = {
+            ...Fixture.ContextWith(),
+            Manifest: { type: ProjectType.Architecture, name: "my_proj", id: "real_id", version: 1 },
+        };
 
         await new EmitEntryAction().Execute(ctx);
 

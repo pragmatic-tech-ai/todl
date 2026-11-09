@@ -15,7 +15,7 @@ describe("todl-build-system composition", () =>
         const registry = new TodlBuildSystemRegistry();
         const system = registry.Get("npm-package");
         assert.ok(system !== undefined);
-        assert.equal(system!.Flavors()[0].OutputName, "npm-package");
+        assert.equal(system!.Flavors()[0]!.OutputName, "npm-package");
     });
 
     test("the npm-package system applies to meta-model, library, and architecture targets", () =>
@@ -38,7 +38,7 @@ describe("todl-build-system composition", () =>
     {
         const provider = new ServiceProvider();
         TodlBuildSystemEngine.RegisterServices(provider);
-        const registry = provider.getRequired(ServiceProvider.tokenFor(TodlBuildSystemRegistry));
+        const registry = provider.getRequired(ServiceProvider.tokenFor(TodlBuildSystemRegistry)) as TodlBuildSystemRegistry;
         assert.ok(registry.Get("npm-package") !== undefined);
     });
 
@@ -53,8 +53,8 @@ describe("todl-build-system composition", () =>
         const provider = new ServiceProvider();
         provider.registerInstance(TypeCheckerKey, sentinel);
         TodlBuildSystemEngine.RegisterServices(provider);
-        const registry = provider.getRequired(ServiceProvider.tokenFor(TodlBuildSystemRegistry));
-        const action = registry.Get("html-bundle")!.Flavors()[0].Actions().find((a) => a.Name === "type-check")!;
+        const registry = provider.getRequired(ServiceProvider.tokenFor(TodlBuildSystemRegistry)) as TodlBuildSystemRegistry;
+        const action = registry.Get("html-bundle")!.Flavors()[0]!.Actions().find((a) => a.Name === "type-check")!;
         const diagnostics: unknown[] = [];
         const ctx = { Project: new FakeStorage(), Sandbox: new FakeStorage(), Diagnostics: { Report: (d: unknown) => diagnostics.push(d) } } as never;
         await action.Execute(ctx);

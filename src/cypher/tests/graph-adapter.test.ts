@@ -92,7 +92,7 @@ describe("GraphQueryAdapter", () =>
         const a = new GraphQueryAdapter(ServiceGraphFixture.Build());
         assert.equal(a.HasRelationshipType("calls"), true);
         assert.equal(a.HasRelationshipType("ghost"), false);
-        const b = a.NodesByLabel("CoreService")[0];
+        const b = a.NodesByLabel("CoreService")[0]!;
         assert.equal(a.IsInstanceOf(b, "Service"), true);
         assert.equal(a.IsInstanceOf(b, "CoreService"), true);
     });

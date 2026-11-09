@@ -126,7 +126,7 @@ describe("NpmPackageBuildSystem", () =>
     test("wires the fixed action pipeline: resolve -> compile -> mural -> stamp -> bake -> emit bundle -> emit layout", () =>
     {
         const system = new NpmPackageBuildSystem(new FakePresentationBaker());
-        const flavor = system.Flavors()[0];
+        const flavor = system.Flavors()[0]!;
         assert.deepEqual(flavor.Actions().map((a) => a.Name), [
             "resolve-bases", "compile-model", "compile-mural",
             "stamp-resource-keys", "bake-resources", "emit-bundle", "emit-package-layout",

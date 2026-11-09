@@ -9,7 +9,7 @@ import {
     type IServiceProvider,
     type IPropertyBagStore,
     type IPropertyBag,
-    type Disposable,
+    Disposable,
 } from '@pragmatic-tech-ai/todl-runtime';
 import { SolutionManagerService } from '../solution-manager-service.js';
 import { type IStorageProviderRegistry, type IProjectFactoryRegistry } from '../host-services.js';
@@ -35,11 +35,9 @@ class FakeSessionStore implements IPropertyBagStore
                 this.saveScheduled++;
             }),
         );
-        return {
-            dispose: () => {
-                for (const s of subs) s.dispose();
-            },
-        };
+        return new Disposable(() => {
+            for (const s of subs) s.dispose();
+        });
     }
     async Restore(): Promise<void> {}
     async Save(): Promise<void>

@@ -75,6 +75,8 @@ test("ProjectGeneratorRegistry", async (t) =>
 
         // Simulate RegisterDefinition by resolving from provider
         const mockProvider: IServiceProvider = {
+            get: () => undefined,
+            has: () => false,
             getRequired: <T>(_token: ServiceKey<T>): T =>
             {
                 return MakeFakeGenerator("shared-gen") as T;
@@ -102,6 +104,8 @@ test("ProjectGeneratorRegistry", async (t) =>
         registry.Register("architecture", gen1);
 
         const mockProvider: IServiceProvider = {
+            get: () => undefined,
+            has: () => false,
             getRequired: <T>(_token: ServiceKey<T>): T =>
             {
                 return gen2 as T;

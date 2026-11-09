@@ -29,22 +29,24 @@ function fixture(): ManifestModel
     version: "1.0.0",
     root: "Element",
     concepts: {
-      Element: { extends: null, fields: {}, relationships: {}, invariants: [] },
+      Element: { extends: null, fields: {}, relationships: {}, invariants: [], annotations: [] },
       Component: {
         extends: "Element",
         fields: { name: { type: "string", card: "1" }, color: { type: "string", card: "?" } },
         relationships: {},
         invariants: [],
+        annotations: [],
       },
       Surface: {
         extends: "Component",
         fields: { color: { type: "string", card: "1" } },
         relationships: {},
         invariants: [],
+        annotations: [],
       },
     },
     classes: {
-      "Components.Surface": { concept: "Surface", narrower: [], fixed: { color: "red" } },
+      "Components.Surface": { concept: "Surface", narrower: [], fixed: { color: "red" }, annotations: [] },
     },
     taxonomies: {},
   };
@@ -103,8 +105,8 @@ describe("ancestorsViaExtends cycle safety", () => {
       version: "1.0.0",
       root: "Element",
       concepts: {
-        a: { extends: "b", fields: {}, relationships: {}, invariants: [] },
-        b: { extends: "a", fields: {}, relationships: {}, invariants: [] },
+        a: { extends: "b", fields: {}, relationships: {}, invariants: [], annotations: [] },
+        b: { extends: "a", fields: {}, relationships: {}, invariants: [], annotations: [] },
       },
       classes: {},
       taxonomies: {},

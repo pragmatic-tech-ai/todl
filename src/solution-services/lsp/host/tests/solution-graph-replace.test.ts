@@ -75,8 +75,8 @@ describe('SolutionGraph.ReplaceMember', () =>
         g.Changed.subscribe(c => { emits.push(c); });
         g.ReplaceMember('microsoft', [LIB_EDITED]);
         assert.equal(emits.length, 1, 'emitted exactly once');
-        assert.deepEqual([...emits[0].memberIds].sort(), ['arch', 'microsoft']);
-        const fired = [...emits[0].memberIds];
+        assert.deepEqual([...emits[0]!.memberIds].sort(), ['arch', 'microsoft']);
+        const fired = [...emits[0]!.memberIds];
         assert.ok(g.Model.has('app.p'), 'dependent node reloaded');
         const targets = g.Model.outEdges('app.p' as never).map(e => String(e.to));
         assert.ok(targets.includes('lib.MS.azure'), 'arch->lib reference resolves');

@@ -55,7 +55,7 @@ test("pushed provider returns the open documents under the project root", () =>
         TextDocument.create("todl://other/b.todl", "todl", 1, "namespace x { }"),
     );
     const provider = new PushedSourceProvider();
-    assert.deepEqual(provider.InitialRoots(), []);
+    assert.deepEqual(provider.InitialRoots([]), []);
     const sources = provider.SourcesFor(p, docs);
     assert.deepEqual(sources.map((s) => s.uri), ["todl://p/a.todl"]);
     assert.equal(sources[0]!.text, "namespace demo { }");

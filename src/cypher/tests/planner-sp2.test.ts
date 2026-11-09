@@ -147,7 +147,7 @@ describe("cypher planner SP2 (segment pipeline)", () =>
     {
         const result = Sp2Fixture.Engine().Execute("MATCH (a:Service) RETURN a AS a ORDER BY a.name");
         assert.equal(result.Rows.length, 3);
-        const names = result.Rows.map((r) => (r[0] as { Field(k: string): unknown }).Field("name"));
+        const names = result.Rows.map((r) => (r[0] as unknown as { Field(k: string): unknown }).Field("name"));
         assert.deepEqual(names, ["audit", "checkout", "ledger"]);
     });
 

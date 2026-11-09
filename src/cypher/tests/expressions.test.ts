@@ -10,7 +10,7 @@ class ExpressionTestHelper
 {
     public static Ctx(params: [string, string | number | boolean][] = []): EvalContext
     {
-        return new EvalContext(new Binding(), new Map(params));
+        return new EvalContext(new Binding(), new Map(params.map(([k, v]) => [k, new ScalarValue(v)] as [string, ScalarValue])));
     }
 
     public static Bool(v: unknown): unknown
