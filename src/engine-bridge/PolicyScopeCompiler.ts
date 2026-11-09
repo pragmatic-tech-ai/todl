@@ -15,7 +15,10 @@ import {
     TruePredicate,
     ValueType,
     type AccessDefault,
+    MemberKind,
     type CellValue,
+    type ISchemaDescription,
+    type MemberInput,
     type IWriteRules,
     type Predicate,
 } from '@pragmatic-tech-ai/graph';
@@ -48,6 +51,8 @@ export enum PolicyDiagnosticCode
     NeverMatches,
     /** A `<concept>@policy` node whose rules cannot be read; the concept is compiled fail-closed. */
     MalformedPolicy,
+    /** A policied concept the engine schema does not define (the describer dropped it); it falls to the scope Default. */
+    UnknownConcept,
 }
 
 /** One leaf (or policy) compiled fail-closed or to a constant because the engine cannot express it. */
@@ -90,6 +95,72 @@ interface IConceptPolicy
 {
     readonly Rules: readonly PolicyRule[] | null;
     readonly Members: ReadonlyMap<string, IMemberInfo>;
+}
+
+/** The effective members of a concept as the engine computes them: own, then the parent chain, aspects included. */
+class DescriptionMembers
+{
+    private readonly byName: ReadonlyMap<string, IDefinitionLike>;
+
+    public constructor(description: ISchemaDescription)
+    {
+        this.byName = new Map(description.Definitions.map((d) => [d.Name, d]));
+    }
+
+    /** True iff the schema defines `concept` as a concept (not an aspect). */
+    public HasConcept(concept: string): boolean
+    {
+        const definition = this.byName.get(concept);
+        return definition !== undefined && !definition.IsAspect;
+    }
+
+    /** Effective members of `concept`; the first declaration of a name wins. */
+    public Of(concept: string): ReadonlyMap<string, IMemberInfo>
+    {
+        const out = new Map<string, IMemberInfo>();
+        this.Collect(concept, out, new Set<string>());
+        return out;
+    }
+
+    private Collect(name: string, out: Map<string, IMemberInfo>, seen: Set<string>): void
+    {
+        const definition = this.byName.get(name);
+        if (definition === undefined || seen.has(name))
+        {
+            return;
+        }
+        seen.add(name);
+        for (const member of definition.Members)
+        {
+            if (!out.has(member.Name))
+            {
+                out.set(member.Name, DescriptionMembers.InfoOf(member));
+            }
+        }
+        for (const aspect of definition.Aspects)
+        {
+            this.Collect(aspect, out, seen);
+        }
+        if (definition.Parent !== null)
+        {
+            this.Collect(definition.Parent, out, seen);
+        }
+    }
+
+    private static InfoOf(member: MemberInput): IMemberInfo
+    {
+        return member.Kind === MemberKind.Relationship
+            ? { Shape: MemberShape.Relationship, Type: ValueType.String }
+            : { Shape: MemberShape.Property, Type: member.Type ?? ValueType.String };
+    }
+}
+
+interface IDefinitionLike
+{
+    readonly IsAspect: boolean;
+    readonly Parent: string | null;
+    readonly Aspects: readonly string[];
+    readonly Members: readonly MemberInput[];
 }
 
 /** Predicate construction that folds constants, so a principal-only term never leaves a needless tree. */
@@ -361,6 +432,8 @@ export class PolicyScopeCompiler
     private static readonly MalformedMessage = 'policy "{0}" cannot be read ({1}); "{2}" is compiled fail-closed';
     private static readonly PolicySuffix = '@policy';
     private static readonly NoCause = 'no concept or rules';
+    private static readonly NoConceptCause = 'no concept attribute; the concept is taken from the node id';
+    private static readonly UnknownConceptMessage = 'policy concept "{0}" is not defined by the engine schema; its policy is not applied (the scope Default applies)';
     private static readonly Slot0 = '{0}';
     private static readonly Slot1 = '{1}';
     private static readonly Slot2 = '{2}';
@@ -386,19 +459,32 @@ export class PolicyScopeCompiler
         return [...this.structural];
     }
 
-    public static FromRepository(repo: Repository): PolicyScopeCompiler
+    /**
+     * Reads every policy of `repo`. With `description` (the engine schema the scope will run under) each policied
+     * concept and every member a rule reads is checked against it, as the engine's scope validation would:
+     * a concept the schema lacks is reported and left to the scope Default, and a member the schema lacks (or has
+     * as the other kind) makes its leaf fail-closed, so a compiled scope never makes the engine reject a read.
+     */
+    public static FromRepository(repo: Repository, description?: ISchemaDescription): PolicyScopeCompiler
     {
         const policies = new Map<string, IConceptPolicy>();
         const diagnostics: IPolicyDiagnostic[] = [];
+        const schema = description === undefined ? undefined : new DescriptionMembers(description);
         for (const id of repo.nodesOfMetaKind(MetaKind.Policy))
         {
             const node = repo.resolve(id);
-            const concept = String(node?.attrs.get(Builder.PolicyConceptAttr) ?? id.replace(PolicyScopeCompiler.PolicySuffix, ''));
-            const members = PolicyScopeCompiler.MembersOf(repo, concept);
+            const conceptAttr = node?.attrs.get(Builder.PolicyConceptAttr);
+            const concept = String(conceptAttr ?? id.replace(PolicyScopeCompiler.PolicySuffix, ''));
+            if (schema !== undefined && !schema.HasConcept(concept))
+            {
+                diagnostics.push({ Code: PolicyDiagnosticCode.UnknownConcept, Concept: concept, Message: PolicyScopeCompiler.UnknownConceptMessage.replace(PolicyScopeCompiler.Slot0, concept) });
+                continue;
+            }
+            const members = schema !== undefined ? schema.Of(concept) : PolicyScopeCompiler.MembersOf(repo, concept);
             const raw = node?.attrs.get(Builder.PolicyRulesAttr);
             let rules: readonly PolicyRule[] | null = null;
-            let cause = PolicyScopeCompiler.NoCause;
-            if (raw !== undefined)
+            let cause = conceptAttr === undefined ? PolicyScopeCompiler.NoConceptCause : PolicyScopeCompiler.NoCause;
+            if (conceptAttr !== undefined && raw !== undefined)
             {
                 try
                 {

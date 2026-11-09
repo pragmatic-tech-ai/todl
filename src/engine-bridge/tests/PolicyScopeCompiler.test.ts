@@ -14,6 +14,8 @@ import {
     type ISchemaDescription,
     type MemberInput,
 } from '@pragmatic-tech-ai/graph';
+import type { Repository } from '../../compiler-services/model/model.js';
+import { FalsePredicate } from '@pragmatic-tech-ai/graph';
 import { check } from '../../compiler-services/api.js';
 import { PolicyCompareOp, PolicyNodeKind, PolicyRefRoot } from '../../compiler-services/policy/policy-predicate.js';
 import type { Scalar } from '../../manifest/logical.js';
@@ -563,6 +565,177 @@ describe('PolicyScopeCompiler member mapping matches SnapshotDescriber', () =>
             {
                 assert.equal(member.Type, theirs.Type, name);
             }
+        }
+    });
+});
+
+class Described
+{
+    /** The fixture description with Customer.region and the Order concept removed (as a lossy describer could). */
+    public static Lossy(): ISchemaDescription
+    {
+        const full = PolicyFx.Description();
+        return {
+            ...full,
+            Definitions: full.Definitions
+                .filter((d) => d.Name !== PolicyFx.Order)
+                .map((d) => d.Name === PolicyFx.Customer ? { ...d, Members: d.Members.filter((m) => m.Name !== 'region') } : d),
+        };
+    }
+
+    public static async Run(description: ISchemaDescription, scopeOf: (d: ISchemaDescription) => AccessScope): Promise<string[]>
+    {
+        const engine = await GraphEngine.Open({ Description: description, Storage: { Kind: StorageKind.Memory } });
+        try
+        {
+            const seed = await engine.Begin(AccessScope.System);
+            seed.CreateNode('c1', PolicyFx.Customer);
+            seed.SetProperty('c1', 'level', 1n);
+            await seed.Commit();
+            const scope = scopeOf(description);
+            const txn = await engine.Begin(scope);
+            txn.SetProperty('c1', 'level', 2n);
+            try
+            {
+                await txn.Commit();
+            }
+            catch (error)
+            {
+                assert.ok(error instanceof AccessError, 'a denied write, not a scope rejection');
+            }
+            return await PolicyFx.Scan(engine, scope, PolicyFx.Customer);
+        }
+        finally
+        {
+            await engine.dispose();
+        }
+    }
+}
+
+describe('PolicyScopeCompiler against the engine schema (P4-l)', () =>
+{
+    const policies = `${PolicyFx.Policy('allow read when entity.region == "eu"; allow write when entity.level == 1;')} policy Order { allow read when entity.name == "x"; }`;
+    const source = PolicyFx.Model.replace('POLICIES', policies);
+
+    test('without the schema, a policy over a missing member makes the engine reject the scope', async () =>
+    {
+        const { model } = check([{ uri: 'shop.todl', text: source }]);
+        await assert.rejects(Described.Run(Described.Lossy(), () => PolicyScopeCompiler.FromRepository(model).Compile(new TestPrincipal({}), AccessDefault.Allow)));
+    });
+
+    test('with the schema, a missing member fails closed and a missing concept is omitted: no rejection', async () =>
+    {
+        const { model } = check([{ uri: 'shop.todl', text: source }]);
+        let compiler: PolicyScopeCompiler | undefined;
+        const visible = await Described.Run(Described.Lossy(), (d) =>
+        {
+            compiler = PolicyScopeCompiler.FromRepository(model, d);
+            return compiler.Compile(new TestPrincipal({}), AccessDefault.Allow);
+        });
+        assert.deepEqual(visible, []);
+        const codes = compiler!.Diagnostics.map((d) => d.Code).sort();
+        assert.deepEqual(codes, [PolicyDiagnosticCode.UnknownMember, PolicyDiagnosticCode.UnknownConcept].sort());
+    });
+
+    test('a policied concept the schema lacks falls to the scope Default', () =>
+    {
+        const { model } = check([{ uri: 'shop.todl', text: source }]);
+        const scope = PolicyScopeCompiler.FromRepository(model, Described.Lossy()).Compile(new TestPrincipal({}), AccessDefault.Allow);
+        assert.deepEqual([...scope.Rows.keys()], [PolicyFx.Customer]);
+    });
+
+    test('a member the schema has as the other kind fails closed', async () =>
+    {
+        const full = PolicyFx.Description();
+        const flipped: ISchemaDescription = {
+            ...full,
+            Definitions: full.Definitions.map((d) => d.Name === PolicyFx.Customer
+                ? { ...d, Members: d.Members.map((m) => m.Name === 'region' ? ({ Name: 'region', Kind: MemberKind.Relationship, Targets: [PolicyFx.Customer], Many: false, Ordered: false } as MemberInput) : m) }
+                : d),
+        };
+        const { model } = check([{ uri: 'shop.todl', text: source }]);
+        const compiler = PolicyScopeCompiler.FromRepository(model, flipped);
+        assert.ok(compiler.Diagnostics.some((d) => d.Code === PolicyDiagnosticCode.RelationshipCompare));
+        const engine = await GraphEngine.Open({ Description: flipped, Storage: { Kind: StorageKind.Memory } });
+        try
+        {
+            assert.deepEqual(await PolicyFx.Scan(engine, compiler.Compile(new TestPrincipal({}), AccessDefault.Allow), PolicyFx.Customer), []);
+        }
+        finally
+        {
+            await engine.dispose();
+        }
+    });
+
+    test('a policy node without a concept attribute is malformed and fails closed under the id-derived name', () =>
+    {
+        class StubNode
+        {
+            public readonly attrs = new Map<string, string>([['rules', '[]']]);
+        }
+        const stub = {
+            nodesOfMetaKind: () => ['shop.Customer@policy'],
+            resolve: (id: string) => id.endsWith('@policy') ? new StubNode() : undefined,
+        } as unknown as Repository;
+        const compiler = PolicyScopeCompiler.FromRepository(stub);
+        assert.deepEqual(compiler.Diagnostics.map((d) => d.Code), [PolicyDiagnosticCode.MalformedPolicy]);
+        assert.equal(compiler.Diagnostics[0]!.Concept, PolicyFx.Customer);
+        const scope = compiler.Compile(new TestPrincipal({}), AccessDefault.Allow);
+        assert.equal(scope.Rows.get(PolicyFx.Customer), FalsePredicate.Instance);
+    });
+});
+
+describe('PolicyScopeCompiler compiled scope passes engine validation on the aspects fixture', () =>
+{
+    test('Begin and scan succeed for arbitrary principals', async () =>
+    {
+        const source = `namespace shop
+{
+    concept Loc { }
+    aspect Placed { relationship at -> Loc?; tag : string?; }
+    concept Widget : Placed
+    {
+        name : string?; count : integer?; weight : number?; ok : boolean?;
+        kind : Kinds?; kinds : Kinds[]; home : Loc?;
+        relationship parts -> Widget[];
+    }
+    taxonomy Kinds : represents Widget { term Big { } term Small { } }
+    policy Widget
+    {
+        allow read when entity.tag == "t" or entity.name in principal.names or entity.home in principal.homes;
+        deny read when entity.home in principal.blocked or entity.kinds in principal.blocked or entity.count != principal.count;
+        allow write when entity.ok == true or entity.home in principal.homes;
+        deny write when entity.weight == principal.weight and entity.kind == "Big";
+    }
+}`;
+        const { model } = check([{ uri: 'shop.todl', text: source }]);
+        const out = compilePackage([], [{ uri: 'shop.p.todl', text: source }], { id: 'shop.p', version: '1.0.0' });
+        assert.ok(out.ok, JSON.stringify(out.errors));
+        const store = new MemoryPackageSource();
+        store.Add(PackageManifestBridge.toResolved(out.package!));
+        const domain = new Domain(store);
+        await domain.load({ model: 'shop.p', version: '1.0.0' });
+        const description = SnapshotDescriber.Describe(domain.graph, { DefaultConnector: BindingTable.EngineStorage }).Description;
+        const compiler = PolicyScopeCompiler.FromRepository(model, description);
+        const engine = await GraphEngine.Open({ Description: description, Storage: { Kind: StorageKind.Memory } });
+        try
+        {
+            const principals: FactMap[] = [{}, { names: ['a'], homes: ['l1'], blocked: ['l1'], count: 3, weight: 1.5 }, { names: [], homes: [], blocked: [] }];
+            for (const facts of principals)
+            {
+                const scope = compiler.Compile(new TestPrincipal(facts), AccessDefault.Allow);
+                const reader = await engine.BeginRead(scope);
+                const ids: string[] = [];
+                for await (const id of reader.ScanNodes('shop.Widget')) ids.push(id);
+                reader.dispose();
+                const txn = await engine.Begin(scope);
+                txn.CreateNode('w', 'shop.Widget');
+                await txn.Commit().catch((error: unknown) => assert.ok(error instanceof AccessError));
+            }
+        }
+        finally
+        {
+            await engine.dispose();
         }
     });
 });
