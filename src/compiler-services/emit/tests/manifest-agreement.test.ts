@@ -18,6 +18,7 @@ class AgreementHarness
     private static readonly Model = "agree";
     private static readonly Version = "1.0.0";
     private static readonly FixtureExtension = ".todl";
+    static readonly ExpectedUnbindable = ["demo.orderFulfillment.orderToValidate", "demo.orderFulfillment.sales"];
     /** The metamodel fixtures the instance fixtures import; loaded with every fixture so its types resolve. */
     private static readonly Dependencies = ["primitives.todl", "enums.todl", "concepts.todl"];
 
@@ -40,6 +41,14 @@ class AgreementHarness
         return load(all.map((n) => AgreementHarness.Source(n))).model;
     }
 
+    /** Ids of the data nodes whose type the metamodel never declares, so they cannot bind. */
+    public static Unbindable(repo: Repository): string[]
+    {
+        const { manifest, graph } = new ManifestEmitter(repo, AgreementHarness.Model, AgreementHarness.Version).emit();
+        const known = new Set(Object.keys(manifest.concepts));
+        return graph.nodes.filter((n) => !known.has(n.type)).map((n) => n.id).sort();
+    }
+
     public static Graph(repo: Repository): FrozenGraph
     {
         const { manifest, graph } = new ManifestEmitter(repo, AgreementHarness.Model, AgreementHarness.Version).emit();
@@ -47,9 +56,8 @@ class AgreementHarness
         const frozen = new FrozenGraph();
         frozen.PreRegister(reflected);
         frozen.Finalize(reflected);
-        // order-fulfillment.todl uses a concept (Lane) its metamodel never declares; such nodes cannot bind.
-        const known = new Set(Object.keys(manifest.concepts));
-        const nodes = graph.nodes.filter((n) => known.has(n.type));
+        const unbindable = new Set(AgreementHarness.Unbindable(repo));
+        const nodes = graph.nodes.filter((n) => !unbindable.has(n.id));
         const ids = new Set(nodes.map((n) => n.id));
         const edges = graph.edges.filter((e) => ids.has(e.from) && ids.has(e.to));
         frozen.BindSeed({ ...graph, nodes, edges }, graph.manifestRef);
@@ -73,14 +81,15 @@ class AgreementHarness
                 repo.AspectsOf(typeId),
                 `${label}: aspects of ${typeId}`,
             );
+            const schema = repo.effectiveSchema(typeId);
             assert.deepEqual(
-                type.getFields().map((f) => f.name),
-                repo.effectiveSchema(typeId).fields.map((f) => f.name),
+                type.getFields().map((f) => [f.name, f.declaringType.fullName, f.cardinality, f.fieldType?.fullName]),
+                schema.fields.map((f) => [f.name, f.declaredBy, f.cardinality, f.type]),
                 `${label}: fields of ${typeId}`,
             );
             assert.deepEqual(
-                type.getRelationships().map((r) => r.name),
-                repo.effectiveSchema(typeId).relationships.map((r) => r.name),
+                type.getRelationships().map((r) => [r.name, r.declaringType.fullName]),
+                schema.relationships.map((r) => [r.name, r.declaredBy]),
                 `${label}: relationships of ${typeId}`,
             );
             for (const otherId of types)
@@ -110,11 +119,54 @@ describe("manifest agrees with repository", () =>
     {
         const names = AgreementHarness.FixtureNames();
         assert.ok(names.includes("aspects.todl"));
+        assert.ok(names.includes("aspects-order.todl"));
         for (const name of names)
         {
             AgreementHarness.Check(AgreementHarness.Repo([name]), name);
         }
         assert.ok(AgreementHarness.Check(AgreementHarness.Repo(names), "corpus") > 0);
+    });
+
+    test("exactly the known-undeclared nodes are excluded from binding", () =>
+    {
+        // order-fulfillment.todl uses concepts (Lane, SequenceFlow) its metamodel never declares.
+        const dropped = new Map<string, string[]>();
+        for (const name of AgreementHarness.FixtureNames())
+            dropped.set(name, AgreementHarness.Unbindable(AgreementHarness.Repo([name])));
+        for (const [name, ids] of dropped)
+        {
+            const expected = name === "order-fulfillment.todl" ? AgreementHarness.ExpectedUnbindable : [];
+            assert.deepEqual(ids, expected, `${name}: unbindable nodes`);
+        }
+    });
+
+    test("aspect ordering: own, then inherited, then aspects; diamond carried once; wide closure order", () =>
+    {
+        const repo = AgreementHarness.Repo(["aspects-order.todl"]);
+        const manifest = AgreementHarness.Graph(repo).manifests[0]!;
+        const ns = "demo.aspectOrder.";
+        const names = (type: string) => manifest.getType(ns + type)!.getFields().map((f) => f.name);
+        assert.deepEqual(names("Phone"), [
+            "phoneOwn", "gadgetOwn", "baseOwn", "wide", "mid1", "mid2", "leaf1", "leaf2",
+        ]);
+        assert.deepEqual(names("Device"), ["deviceOwn", "baseOwn", "location", "auditor", "tag"]);
+        assert.deepEqual(
+            manifest.getType(ns + "Device")!.getAspects().map((a) => a.name),
+            ["Tracked", "Audited", "Asset"],
+        );
+        assert.deepEqual(
+            manifest.getType(ns + "Phone")!.getAspects().map((a) => a.name),
+            ["Wide", "Mid1", "Mid2", "Leaf1", "Leaf2"],
+        );
+    });
+
+    test("a concept member shadows a same-named aspect member (first name wins)", () =>
+    {
+        const repo = AgreementHarness.Repo(["aspects-order.todl"]);
+        const manifest = AgreementHarness.Graph(repo).manifests[0]!;
+        const tag = manifest.getType("demo.aspectOrder.Clash")!.getFields().filter((f) => f.name === "tag");
+        assert.equal(tag.length, 1);
+        assert.equal(tag[0]!.declaringType.fullName, "demo.aspectOrder.Clash");
     });
 
     test("the aspects fixture's carriers are found through the aspect", () =>

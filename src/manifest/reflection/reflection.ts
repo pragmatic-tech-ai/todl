@@ -457,7 +457,7 @@ export class TypeInfo
     /** Where effective members come from, in precedence order: self, supertypes nearest-first, then carried aspects. */
     private memberSources(): TypeInfo[]
     {
-        return [this as TypeInfo, ...this.getSupertypes(), ...this.getAspects()];
+        return [this as TypeInfo, ...this.getSupertypes(), ...this.manifest.carriedAspectsOf(this)];
     }
 
     /** Effective fields: own + inherited via baseType + carried aspects; the first declarer of a name wins. */
@@ -546,7 +546,7 @@ export class TypeInfo
     isAssignableFrom(other: TypeInfo): boolean
     {
         if (other.sameTypeAs(this) || other.isSubtypeOf(this)) return true;
-        return this.isAspect && other.getAspects().some((a) => a.sameTypeAs(this));
+        return this.isAspect && other.manifest.carriedAspectsOf(other).some((a) => a.sameTypeAs(this));
     }
 
     /** Declared invariants — [] in v1 (no invariant table yet; SPEC-03/04 open Q). */

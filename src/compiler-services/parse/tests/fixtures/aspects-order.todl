@@ -1,0 +1,60 @@
+namespace demo.aspectOrder
+{
+    aspect Asset
+    {
+        tag : string;
+    }
+
+    aspect Tracked : Asset
+    {
+        location : string?;
+    }
+
+    aspect Audited : Asset
+    {
+        auditor : string?;
+    }
+
+    aspect Leaf1 { leaf1 : string?; }
+
+    aspect Leaf2 { leaf2 : string?; }
+
+    aspect Mid1 : Leaf1 { mid1 : string?; }
+
+    aspect Mid2 : Leaf2 { mid2 : string?; }
+
+    aspect Wide : Mid1, Mid2 { wide : string?; }
+
+    concept Base
+    {
+        baseOwn : string?;
+    }
+
+    concept Device : Base, Tracked, Audited
+    {
+        deviceOwn : string?;
+    }
+
+    concept Gadget : Base, Wide
+    {
+        gadgetOwn : string?;
+    }
+
+    concept Phone : Gadget
+    {
+        phoneOwn : string?;
+    }
+
+    concept Clash : Asset
+    {
+        tag : string?;
+    }
+
+    model Shop : demo.aspectOrder
+    {
+        Device d1 { tag = "d"; }
+        Gadget g1 { }
+        Phone p1 { }
+        Clash c1 { tag = "x"; }
+    }
+}
