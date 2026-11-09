@@ -2,11 +2,9 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { check } from "../../compiler-services/api.js";
 import { FakeIdGenerator } from "../../compiler-services/model/tests/fake-id-generator.js";
-import { CypherEngine } from "../../cypher/engine.js";
 import type { CypherValue } from "../../cypher/values.js";
 import { ModelDraft } from "../model-draft.js";
-import { ModelDraftBaker } from "../model-draft-baker.js";
-import { ModelDraftWriter } from "../model-draft-writer.js";
+import { DraftCypherHarness, DraftTestWriter } from "./draft-cypher-harness.js";
 
 class ReadYourWritesFixture
 {
@@ -28,18 +26,18 @@ class ReadYourWritesFixture
     }`;
 
     public readonly Draft: ModelDraft;
-    public readonly Writer: ModelDraftWriter;
+    public readonly Writer: DraftTestWriter;
 
     constructor()
     {
         const base = check([ReadYourWritesFixture.Meta]).model;
         this.Draft = ModelDraft.fromSource([base], ReadYourWritesFixture.Model, { namespace: "app" });
-        this.Writer = new ModelDraftWriter(this.Draft, new FakeIdGenerator(), (d) => ModelDraftBaker.Bake(d));
+        this.Writer = new DraftTestWriter(this.Draft, new FakeIdGenerator());
     }
 
     public Run(cypher: string): unknown[][]
     {
-        const engine = new CypherEngine(ModelDraftBaker.Bake(this.Draft), undefined, this.Writer);
+        const engine = DraftCypherHarness.Engine(this.Draft, this.Writer);
         return engine.Execute(cypher).Rows.map((row) => row.map((v: CypherValue) => v.ToDto()));
     }
 

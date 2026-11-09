@@ -2,10 +2,8 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { check } from "../../compiler-services/api.js";
 import type { IdGenerator } from "../../compiler-services/model/id-generator.js";
-import { CypherEngine } from "../../cypher/engine.js";
 import { ModelDraft } from "../model-draft.js";
-import { ModelDraftBaker } from "../model-draft-baker.js";
-import { ModelDraftWriter } from "../model-draft-writer.js";
+import { DraftCypherHarness, DraftTestWriter } from "./draft-cypher-harness.js";
 
 // Mints C-like ids (as production Snowflake ids are), so a created instance re-parses after the round-trip.
 class CLikeIdGenerator implements IdGenerator
@@ -106,11 +104,10 @@ describe("ModelDraft over a member with co-located schema", () =>
         assert.ok(again.model.resolve("acme.Widget") !== undefined);
     });
 
-    test("a Cypher CREATE through ModelDraftWriter persists without corrupting the schema", () =>
+    test("a Cypher CREATE applied to the draft persists without corrupting the schema", () =>
     {
         const d = CoLocatedFixture.Open();
-        const writer = new ModelDraftWriter(d, new CLikeIdGenerator(), (x) => ModelDraftBaker.Bake(x));
-        new CypherEngine(ModelDraftBaker.Bake(d), undefined, writer).Execute("CREATE (:acme.Widget {label: 'zeta'})");
+        DraftCypherHarness.Engine(d, new DraftTestWriter(d, new CLikeIdGenerator())).Execute("CREATE (:acme.Widget {label: 'zeta'})");
         const files = d.toTodlByFile();
         assert.ok(files.get(CoLocatedFixture.Uri)!.includes(CoLocatedFixture.ConceptLine));
         const labels = CoLocatedFixture.Reopen(files).ownInstances().map((e) => e.field("label")).sort();

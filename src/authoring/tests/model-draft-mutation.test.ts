@@ -66,3 +66,37 @@ test("referenceMembers returns concept-typed fields a target can fill", () => {
   d.create("technology", "t1");
   assert.deepEqual(d.referenceMembers("gw", "t1").map((f) => f.name), ["impl"]); // "label" (string) excluded
 });
+
+// Ported from the retired draft Cypher-writer suite: the draft primitives its SET/REMOVE and DETACH DELETE relied on.
+test("RemoveField clears a set field", () => {
+  const d = ModelDraft.on([base()], { namespace: "app" });
+  d.create("component", "gw");
+  d.setField("gw", "label", "Gateway");
+  d.RemoveField("gw", "label");
+  assert.equal(d.entity("gw")!.field("label"), undefined);
+});
+
+test("IncidentEdgeCount counts both edge ends and drops to zero once the target is removed", () => {
+  const d = ModelDraft.on([base()], { namespace: "app" });
+  d.create("technology", "t1");
+  d.create("component", "gw");
+  d.addRef("gw", "impl", "t1");
+  assert.equal(d.IncidentEdgeCount("t1"), 1);
+  assert.equal(d.IncidentEdgeCount("gw"), 1);
+  d.remove("t1");
+  assert.deepEqual(d.entity("gw")!.refs("impl"), []);
+  assert.equal(d.IncidentEdgeCount("gw"), 0);
+});
+
+test("Restore of a Snapshot reverts field, ref and instance edits", () => {
+  const d = ModelDraft.on([base()], { namespace: "app" });
+  d.create("technology", "t1");
+  d.create("component", "gw");
+  const before = structuredClone(d.toJSON());
+  const state = d.Snapshot();
+  d.setField("gw", "label", "Gateway");
+  d.addRef("gw", "impl", "t1");
+  d.create("technology", "t2");
+  d.Restore(state);
+  assert.deepEqual(d.toJSON(), before);
+});

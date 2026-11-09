@@ -644,7 +644,7 @@ class TodlFileTransaction implements IConnectorTransaction
 }
 
 /**
- * The engine connector that keeps nodes in `.todl` source files (spec §6, today's DevModelWriter stage / swap /
+ * The engine connector that keeps nodes in `.todl` source files (spec §6: a stage / swap /
  * restore as a write-through). Apply opens one draft session per owner model and edits it. Commit, holding every
  * owner model's lock, emits and reads each model's files, checks every model's sources are unchanged since its
  * session opened (else Stale, nothing written), then writes every changed file, model by model in owner-name order;

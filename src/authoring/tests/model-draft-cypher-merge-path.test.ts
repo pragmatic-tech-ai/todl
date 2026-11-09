@@ -2,12 +2,10 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { check } from "../../compiler-services/api.js";
 import { FakeIdGenerator } from "../../compiler-services/model/tests/fake-id-generator.js";
-import { CypherEngine } from "../../cypher/engine.js";
 import { CypherSemanticError } from "../../cypher/errors.js";
 import type { CypherResult } from "../../cypher/result.js";
 import { ModelDraft } from "../model-draft.js";
-import { ModelDraftBaker } from "../model-draft-baker.js";
-import { ModelDraftWriter } from "../model-draft-writer.js";
+import { DraftCypherHarness, DraftTestWriter } from "./draft-cypher-harness.js";
 
 class MergePathFixture
 {
@@ -29,18 +27,18 @@ class MergePathFixture
     }`;
 
     public readonly Draft: ModelDraft;
-    public readonly Writer: ModelDraftWriter;
+    public readonly Writer: DraftTestWriter;
 
     constructor()
     {
         const base = check([MergePathFixture.Meta]).model;
         this.Draft = ModelDraft.fromSource([base], MergePathFixture.Model, { namespace: "app" });
-        this.Writer = new ModelDraftWriter(this.Draft, new FakeIdGenerator(), (d) => ModelDraftBaker.Bake(d));
+        this.Writer = new DraftTestWriter(this.Draft, new FakeIdGenerator());
     }
 
     public Exec(cypher: string): CypherResult
     {
-        return new CypherEngine(ModelDraftBaker.Bake(this.Draft), undefined, this.Writer).Execute(cypher);
+        return DraftCypherHarness.Engine(this.Draft, this.Writer).Execute(cypher);
     }
 
     public Rows(cypher: string): unknown[][]

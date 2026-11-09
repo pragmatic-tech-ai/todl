@@ -384,6 +384,11 @@ stages typed instances (fail-fast on dangling refs), and `toTodl()` /
 record it consumes is exactly what codegen's authoring constructors emit.
 `TodlFileStore` is the save/load seam over an injected `FileIO`.
 
+The draft is not a Cypher write target of its own: Cypher writes run on the graph
+engine and reach `.todl` sources through `engine-bridge`'s `TodlFileConnector`
+(below), which edits a draft session per owner model. The former TODL-Cypher
+write seam over a draft (a draft writer plus a draft-to-graph baker) is retired.
+
 ### engine-bridge — TODL on the graph engine
 
 `src/engine-bridge/` (export `./engine`) runs a compiled TODL solution on the
@@ -391,11 +396,11 @@ record it consumes is exactly what codegen's authoring constructors emit.
 `EngineFree.test.ts` proves the root barrel never reaches it.
 
 The engine is an **optional peer dependency** of todl (`peerDependencies` +
-`peerDependenciesMeta.optional`, range `^0.1.1`; a devDependency for todl's own
+`peerDependenciesMeta.optional`, range `^0.1.2`; a devDependency for todl's own
 tests), so consumers that never import `./engine` (Plexus, browsers) do not pull
 in the engine or its native `lmdb` storage. A host that imports
 `@pragmatic-tech-ai/todl/engine` installs `@pragmatic-tech-ai/graph` itself
-(`npm install @pragmatic-tech-ai/graph@^0.1.1`).
+(`npm install @pragmatic-tech-ai/graph@^0.1.2`).
 
 - `SnapshotDescriber.Describe(snapshot, options)` turns a `MetadataSnapshot` into an
   engine `ISchemaDescription`: concepts and aspects under the reserved `todl.Element`

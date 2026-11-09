@@ -4,7 +4,7 @@ import { check } from "../../compiler-services/api.js";
 import { CypherEngine } from "../../cypher/engine.js";
 import { CypherSemanticError } from "../../cypher/errors.js";
 import { ModelDraft } from "../model-draft.js";
-import { ModelDraftBaker } from "../model-draft-baker.js";
+import { DraftCypherHarness } from "./draft-cypher-harness.js";
 
 // A field typed by a concept is a reference (an edge) in TODL — type-directed references — so Cypher must traverse it
 // like a declared relationship.
@@ -30,7 +30,7 @@ class ReferenceFieldFixture
     {
         const base = check([ReferenceFieldFixture.Meta]).model;
         const draft = ModelDraft.fromSource([base], ReferenceFieldFixture.Model, { namespace: "app" });
-        return new CypherEngine(ModelDraftBaker.Bake(draft));
+        return new CypherEngine(DraftCypherHarness.Bake(draft));
     }
 
     public static Column(cypher: string): unknown[]

@@ -28,7 +28,7 @@
 | `codegen/` | emit typed read-clients / npm packages from a compiled model | `codegen/read-client.ts`, `model-package.ts`, `application-model-data.ts` |
 | `reflection-client/` | read-only client over a published snapshot | `reflection-client/index.ts` (`ReflectedRepository`/`ReflectedEntity`) |
 | `runtime/` | public surface for consuming a compiled model | `runtime/index.ts` (`TODL`, `Graph`, `Model`/`Instance`) |
-| `authoring/` | authoring-time helpers | `authoring/model-draft.ts`, `file-store.ts` |
+| `authoring/` | authoring-time helpers: `ModelDraft` (staged edits over frozen bases, serialised back to `.todl`) and `TodlFileStore`. Cypher writes reach a draft only through `engine-bridge`'s `TodlFileConnector`; there is no draft-level Cypher writer/baker any more | `authoring/model-draft.ts`, `file-store.ts` |
 | `migrate/` | source rewriter/recase tooling | `migrate/rewriter.ts` |
 | `language-server/` | out-of-process LSP binary | `language-server/main.ts` (bin `todl-language-server`) |
 | `syntax-checker/` | standalone checker binary | `syntax-checker/main.ts` (bin `todl-syntax-checker`) |
