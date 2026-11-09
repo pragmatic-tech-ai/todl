@@ -4,12 +4,22 @@ import type { CypherValueDto } from '../cypher/values.js';
 import type { MetadataSnapshot } from '../domain/metadata-snapshot.js';
 import { GraphQuery } from '../graph-api/graph-query-engine.js';
 import type { FieldSnapshot, MirrorSnapshot } from '../graph-api/snapshot.js';
-import { MetaKind } from '../manifest/enums.js';
+import { Cardinality, MetaKind } from '../manifest/enums.js';
 import type { Scalar } from '../manifest/logical.js';
 import type { FieldInfo, TermInfo, TypeInfo } from '../manifest/reflection/reflection.js';
 import { TodlNames } from './TodlNames.js';
 
 type EngineCell = Cypher.CypherValueDto;
+
+/**
+ * The members an access scope hides on a concept's nodes, as the engine decides them (a scoped `GraphReader`
+ * satisfies it). Only consulted for fields the engine holds as relationships: a node cell cannot tell a hidden
+ * relationship from an empty one, while a hidden property is simply absent from the cell's properties.
+ */
+export interface IHiddenMembers
+{
+    HiddenMembers(concept: string): ReadonlySet<string>;
+}
 type EngineNode = Cypher.NodeCellDto['$node'];
 
 /**
@@ -19,6 +29,11 @@ type EngineNode = Cypher.NodeCellDto['$node'];
  * carry the definition and value origins, and refs come from the node's links (plus a single-card taxonomy field's
  * term, which the engine holds as a String property but TODL holds as a ref). Every other cell passes through,
  * recursing into lists and maps so nested nodes are mapped too.
+ *
+ * A member the reader's scope hides is left out of the node's `fields` and `refs` entirely, as the masked mirror did:
+ * a property field absent from the engine cell's properties (the engine emits every visible property, null when
+ * unset, and omits hidden ones), and a relationship-held field (a concept or aspect typed field, a many-valued
+ * taxonomy field) that `hidden` reports. Hidden relationships carry no links, so they have no refs key either.
  */
 export class EngineCellMapper
 {
@@ -44,11 +59,11 @@ export class EngineCellMapper
         }
     }
 
-    public MapResult(dto: Cypher.CypherResultDto): CypherResultDto
+    public MapResult(dto: Cypher.CypherResultDto, hidden?: IHiddenMembers): CypherResultDto
     {
         const mapped: CypherResultDto = {
             Columns: [...dto.Columns],
-            Rows: dto.Rows.map((row) => row.map((cell) => this.MapCell(cell))),
+            Rows: dto.Rows.map((row) => row.map((cell) => this.MapCell(cell, hidden))),
             Truncated: dto.Truncated,
             HasMore: dto.HasMore,
         };
@@ -59,7 +74,7 @@ export class EngineCellMapper
         return mapped;
     }
 
-    private MapCell(cell: EngineCell): CypherValueDto
+    private MapCell(cell: EngineCell, hidden: IHiddenMembers | undefined): CypherValueDto
     {
         if (cell === null || typeof cell !== 'object')
         {
@@ -67,33 +82,33 @@ export class EngineCellMapper
         }
         if (Array.isArray(cell))
         {
-            return cell.map((item) => this.MapCell(item));
+            return cell.map((item) => this.MapCell(item, hidden));
         }
         const record = cell as Record<string, EngineCell>;
         const keys = Object.keys(record);
         if (keys.length === 1 && keys[0] === EngineCellMapper.NodeKey)
         {
-            return { $node: this.MapNode(record[EngineCellMapper.NodeKey] as unknown as EngineNode) };
+            return { $node: this.MapNode(record[EngineCellMapper.NodeKey] as unknown as EngineNode, hidden) };
         }
         if (keys.length === 1 && keys[0] === EngineCellMapper.MapKey)
         {
             // An escaped map: its entries are data (a key spelled `$node` is not a node cell), only its values recurse.
-            return { [EngineCellMapper.MapKey]: this.MapEntries(record[EngineCellMapper.MapKey] as unknown as Record<string, EngineCell>) };
+            return { [EngineCellMapper.MapKey]: this.MapEntries(record[EngineCellMapper.MapKey] as unknown as Record<string, EngineCell>, hidden) };
         }
-        return this.MapEntries(record);
+        return this.MapEntries(record, hidden);
     }
 
-    private MapEntries(record: Record<string, EngineCell>): Record<string, CypherValueDto>
+    private MapEntries(record: Record<string, EngineCell>, hidden: IHiddenMembers | undefined): Record<string, CypherValueDto>
     {
         const entries: Record<string, CypherValueDto> = {};
         for (const key of Object.keys(record))
         {
-            entries[key] = this.MapCell(record[key]!);
+            entries[key] = this.MapCell(record[key]!, hidden);
         }
         return entries;
     }
 
-    private MapNode(node: EngineNode): MirrorSnapshot
+    private MapNode(node: EngineNode, hidden: IHiddenMembers | undefined): MirrorSnapshot
     {
         const type = this.snapshot.getType(node.concept);
         const owner = this.snapshot.ownerOf(node.concept);
@@ -105,8 +120,10 @@ export class EngineCellMapper
         {
             refs[relationship] = [...targets];
         }
+        const withheld = hidden?.HiddenMembers(node.concept);
         for (const field of type?.getFields() ?? [])
         {
+            if (this.Withheld(node, field, withheld)) continue;
             const cell = node.properties[field.name];
             const taxonomy = this.IsTaxonomy(field);
             const value = taxonomy ? undefined : this.FieldValue(field, cell);
@@ -137,6 +154,21 @@ export class EngineCellMapper
             snapshot.iconKey = iconKey;
         }
         return snapshot;
+    }
+
+    /** True when the scope hides the field (see the class comment): it then has no `fields` entry. */
+    private Withheld(node: EngineNode, field: FieldInfo, withheld: ReadonlySet<string> | undefined): boolean
+    {
+        if (this.IsRelationshipHeld(field)) return withheld?.has(field.name) === true;
+        return !Object.prototype.hasOwnProperty.call(node.properties, field.name);
+    }
+
+    /** The engine holds the field as a relationship (SnapshotDescriber's rule): a concept or aspect type, or many terms. */
+    private IsRelationshipHeld(field: FieldInfo): boolean
+    {
+        const kind = field.fieldType?.kind;
+        if (kind === MetaKind.Concept || kind === MetaKind.Aspect) return true;
+        return this.IsTaxonomy(field) && (field.cardinality === Cardinality.Many || field.cardinality === Cardinality.OneOrMore);
     }
 
     /** Display label: the declared `label` field, else `name`, else the id (Snapshot.LabelOf's rule). */

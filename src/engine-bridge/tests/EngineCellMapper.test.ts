@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { AccessScope, Cypher } from "@pragmatic-tech-ai/graph";
+import { AccessDefault, AccessScope, Cypher } from "@pragmatic-tech-ai/graph";
 import { Snapshot, type MirrorSnapshot } from "../../graph-api/index.js";
 import { compilePackage, PackageKind } from "../../publish/publish.js";
 import { PackageManifestBridge } from "../../solution-services/package-manager/package-manifest-bridge.js";
@@ -36,6 +36,14 @@ class MapperHarness
     public static readonly LabelTitle = "label precedence: explicit label, then name, then id";
     public static readonly DedupTitle = "a term declared by two manifests maps once, first declaration winning";
     public static readonly SharedTerm = "a.K.T";
+    public static readonly HiddenTitle = "a member the scope hides has no fields or refs entry; visible unset fields stay";
+    public static readonly ShopWidget = "shop.Widget";
+    public static readonly WidgetNodes = "MATCH (w:Widget) RETURN w";
+    public static readonly FullId = "shop.w0";
+    public static readonly UnsetId = "shop.w1";
+    /** A property (name), a concept-typed field (home), a many-valued taxonomy field (kinds), a relationship (parts). */
+    public static readonly HiddenMembers: readonly string[] = ["name", "home", "kinds", "parts"];
+    public static readonly UnsetField = "count";
     private static readonly MissingRowMessage = "{0}: {1} missing from the engine rows";
     private static readonly RowMessage = "{0}: {1}";
     private static readonly DuplicateRowsMessage = "{0}: one row per node";
@@ -142,6 +150,38 @@ class MapperHarness
         }
     }
 
+    /** `WidgetNodes` on the shop graph under a scope hiding `HiddenMembers` on Widget, mapped with the scoped reader. */
+    public static async RunHidden(): Promise<{ graph: MetadataSnapshot; byId: Map<string, MirrorSnapshot> }>
+    {
+        const graph = await MapperHarness.ShopGraph();
+        const engine = await EngineFixture.Open(EngineFixture.Describe(graph));
+        try
+        {
+            const scope = AccessScope.Build({ Default: AccessDefault.Allow, Hidden: new Map([[MapperHarness.ShopWidget, new Set(MapperHarness.HiddenMembers)]]) });
+            const raw = Cypher.CypherEngine.ToDto(await new Cypher.CypherEngine(engine).Execute(scope, MapperHarness.WidgetNodes));
+            const reader = await engine.BeginRead(scope);
+            try
+            {
+                const mapped = new EngineCellMapper(graph).MapResult(raw, reader);
+                const byId = new Map<string, MirrorSnapshot>();
+                for (const row of mapped.Rows)
+                {
+                    const snap = (row[0] as unknown as Record<string, MirrorSnapshot>)[MapperHarness.NodeKey]!;
+                    byId.set(snap.id, snap);
+                }
+                return { graph, byId };
+            }
+            finally
+            {
+                reader.dispose();
+            }
+        }
+        finally
+        {
+            await engine.dispose();
+        }
+    }
+
     /** The wire snapshot of every declared term: label is the fixed label else the id; refs hold the broader term. */
     public static DeclaredTerms(graph: MetadataSnapshot): Map<string, MirrorSnapshot>
     {
@@ -241,6 +281,26 @@ describe("EngineCellMapper", () =>
         assert.equal(declaring.length, 2);
         assert.deepEqual([...MapperHarness.DeclaredTerms(graph).keys()], [MapperHarness.SharedTerm]);
         await MapperHarness.CheckParity(MapperHarness.TwoPackagesName);
+    });
+
+    test(MapperHarness.HiddenTitle, async () =>
+    {
+        const { graph, byId } = await MapperHarness.RunHidden();
+        const full = byId.get(MapperHarness.FullId)!;
+        const expected = Snapshot.of(graph.reflect(graph.getNode(MapperHarness.FullId)!));
+        for (const member of MapperHarness.HiddenMembers)
+        {
+            assert.ok(member in expected.fields || member in expected.refs, member);
+            assert.equal(member in full.fields, false, member);
+            assert.equal(member in full.refs, false, member);
+            delete expected.fields[member];
+            delete expected.refs[member];
+        }
+        // the hidden name no longer labels the node; everything else is exactly Snapshot.of
+        assert.deepEqual({ ...full, label: expected.label }, expected);
+        const unset = byId.get(MapperHarness.UnsetId)!;
+        assert.ok(MapperHarness.UnsetField in unset.fields);
+        assert.equal(unset.fields[MapperHarness.UnsetField]!.value, undefined);
     });
 
     test(MapperHarness.LabelTitle, async () =>
