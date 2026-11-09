@@ -16,13 +16,20 @@ import type { ISnapshotDescription } from "../SnapshotDescription.js";
  */
 export class EngineFixture
 {
-    private static readonly FixtureDir = new URL("../../compiler-services/parse/tests/fixtures/", import.meta.url);
+    private static readonly FixtureDirPath = "../../compiler-services/parse/tests/fixtures/";
+    private static readonly Utf8 = "utf8";
+    private static readonly FixtureDir = new URL(EngineFixture.FixtureDirPath, import.meta.url);
     private static readonly Model = "agree";
     private static readonly Version = "1.0.0";
     private static readonly FixtureExtension = ".todl";
-    public static readonly ExpectedUnbindable = ["demo.orderFulfillment.orderToValidate", "demo.orderFulfillment.sales"];
+    public static readonly OrderToValidate = "demo.orderFulfillment.orderToValidate";
+    public static readonly Sales = "demo.orderFulfillment.sales";
+    public static readonly ExpectedUnbindable = [EngineFixture.OrderToValidate, EngineFixture.Sales];
     /** The metamodel fixtures the instance fixtures import; loaded with every fixture so its types resolve. */
-    private static readonly Dependencies = ["primitives.todl", "enums.todl", "concepts.todl"];
+    private static readonly PrimitivesFile = "primitives.todl";
+    private static readonly EnumsFile = "enums.todl";
+    private static readonly ConceptsFile = "concepts.todl";
+    private static readonly Dependencies = [EngineFixture.PrimitivesFile, EngineFixture.EnumsFile, EngineFixture.ConceptsFile];
 
     public static FixtureNames(): string[]
     {
@@ -33,7 +40,7 @@ export class EngineFixture
 
     public static Source(name: string): { uri: string; text: string }
     {
-        const text = readFileSync(fileURLToPath(new URL(name, EngineFixture.FixtureDir)), "utf8");
+        const text = readFileSync(fileURLToPath(new URL(name, EngineFixture.FixtureDir)), EngineFixture.Utf8);
         return { uri: name, text };
     }
 
