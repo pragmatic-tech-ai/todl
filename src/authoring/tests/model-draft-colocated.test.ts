@@ -4,6 +4,7 @@ import { check } from "../../compiler-services/api.js";
 import { Severity } from "../../compiler-services/diagnostics/diagnostic.js";
 import type { IdGenerator } from "../../compiler-services/model/id-generator.js";
 import { ModelDraft } from "../model-draft.js";
+import { AnnotationFreezer } from "../annotation-freezer.js";
 import { DraftCypherHarness, DraftTestWriter } from "./draft-cypher-harness.js";
 
 // Mints C-like ids (as production Snowflake ids are), so a created instance re-parses after the round-trip.
@@ -205,7 +206,7 @@ describe("ModelDraft over a member whose co-located term is annotated", () =>
             { kind: AnnotatedTermFixture.AnnotatedKind, via: null, from: AnnotatedTermFixture.Term, to: AnnotatedTermFixture.Application },
         ];
         const frozen = new Set<string>([AnnotatedTermFixture.Term]);
-        ModelDraft.FreezeAnnotations(edges, frozen);
+        AnnotationFreezer.Freeze(edges, frozen);
         assert.deepEqual([...frozen].sort(), [AnnotatedTermFixture.Term, AnnotatedTermFixture.Application, AnnotatedTermFixture.NestedApplication].sort());
     });
 });
