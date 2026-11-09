@@ -36,7 +36,7 @@
 
 ### Domain / graph — how a graph is built & queried
 - **`Domain`** (`src/domain/domain.ts:69`) — three hats: package/manifest loader over an injected `PackageSource`, host of the one heap, cross-manifest reflection root. `async load(ref)` (:106) → `resolvePackage` (:198) composes into a `MetadataSnapshot`.
-- **`MetadataSnapshot`** (`src/domain/graph.ts:76`, implements `ManifestHost`) — owns the `Heap`, the manifest registry keyed by `model@version`, the reflection surface. Domain composes INTO it.
+- **`MetadataSnapshot`** (`src/domain/metadata-snapshot.ts:76`, implements `ManifestHost`) — owns the `Heap`, the manifest registry keyed by `model@version`, the reflection surface. Domain composes INTO it.
 - **`MemoryPackageSource`** (`src/domain/memory-package-source.ts:6`) — in-memory `PackageSource` for seeding/tests; `CompositePackageSource` chains sources.
 - **`GraphQuery` / `IGraphQuery`** (`src/graph-api/graph-query-engine.ts:13` / `graph-api/graph-query.ts:7`) — reflection-native query over a `MetadataSnapshot`; returns reflection handles; lazy reverse-ref index backs `Referrers`.
 - **`TypeInfo`** (`src/manifest/reflection/reflection.ts:293`) — the reflected type handle. ⚠ **Known wart:** `ManifestWriter` folds a concept's namespace into `TypeInfo.name` (so `acme.Service` has `name="acme.Service"`, empty `namespace`). The Cypher adapter works around this with simple-name resolution (`src/cypher/graph.ts`); a proper fix is filed as a Feature.

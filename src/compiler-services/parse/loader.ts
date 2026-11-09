@@ -139,6 +139,8 @@ interface RefSite
    * (already flat-normalized) `uses` list, for sibling / cross-taxonomy bare
    * resolution. */
   scope?: { taxonomy: string; uses: readonly string[] };
+  /** Tolerated-absence reference (see ReferenceVisit.lenient): unresolved → warning + `clear`. */
+  lenient?: { clear: () => void };
 }
 
 // A parsed-but-not-yet-registered invariant: its predicate AST + the concept it
@@ -273,7 +275,7 @@ export function loadInto(
     // declaration together with a `rewrite` callback that mutates the exact AST slot
     // it came from — so resolving `ns.x` → `x` here updates the value Pass 1 reads.
     visitReferences(decl, (v) => {
-      sites.push({ id: v.name, span: v.span ?? null, node: v.ownerNode, path: v.memberPath, home, rewrite: v.rewrite, ...(v.scope ? { scope: v.scope } : {}) });
+      sites.push({ id: v.name, span: v.span ?? null, node: v.ownerNode, path: v.memberPath, home, rewrite: v.rewrite, ...(v.scope ? { scope: v.scope } : {}), ...(v.lenient ? { lenient: v.lenient } : {}) });
     });
   }
 
@@ -497,6 +499,18 @@ export function loadInto(
           if (exists(term) && reachable(term, site.home)) { site.rewrite?.(term); continue; }
         }
       }
+    }
+    if (site.lenient !== undefined)
+    {
+      // A tolerated absence (a primitive base): warn and degrade instead of failing the compile.
+      site.lenient.clear();
+      diagnostics.push({
+        code: r.kind === "unreachable" ? DiagnosticCode.ReferenceUnreachable : DiagnosticCode.ReferenceUndefined,
+        severity: Severity.Warning,
+        message: `reference to undefined symbol "${site.id}"; treated as having no base`,
+        span: site.span, node: site.node, path: site.path,
+      });
+      continue;
     }
     undefinedIds.add(site.id);
     diagnostics.push(r.kind === "unreachable"

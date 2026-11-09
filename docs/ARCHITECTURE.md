@@ -114,7 +114,7 @@ are the demo/corpus suite and are **not** published (`files: ["dist", "README.md
 | `src/codegen/` | Generates typed TypeScript clients (DTO package + per-concept entity classes) from a compiled model. |
 | `src/authoring/` | The write path: `ModelDraft` stages instances over frozen bases and serialises back to `.todl`. |
 | `src/publish/` | Pure compile-and-persist spine: `compilePackage`, `CompiledPackage`, package stores. |
-| `src/domain/` | The multi-manifest runtime host (`Domain`, `FrozenGraph`) for versioned, cross-package reflection. |
+| `src/domain/` | The multi-manifest runtime host (`Domain`, `MetadataSnapshot`) for versioned, cross-package reflection. |
 | `src/graph-api/` | Read-only query surface (`GraphQuery`, `Snapshot`) and, under `browser/`, the app bootstrap. |
 | `src/solution-services/` | The build systems, package sources/registries, project types, and multi-project solution builder. |
 | `src/application/` | Composition/host layer (`ApplicationBootstrapper`, `MuralHost`); the generic model-browser view here is legacy. |
@@ -331,7 +331,7 @@ emitter: `Repository` is the live authoring/compile graph; `Manifest`/`TypeInfo`
 are the packed, read-only runtime view. Parity between them is asserted in
 `manifest/reflection/tests/repository-parity.test.ts`.
 
-For versioned, cross-package scenarios, `src/domain/` (`Domain`, `FrozenGraph`,
+For versioned, cross-package scenarios, `src/domain/` (`Domain`, `MetadataSnapshot`,
 `Heap`) hosts many manifests at once and resolves cross-manifest type references.
 
 ---

@@ -13,6 +13,6 @@ export class TodlNames
     public static readonly Taxonomy = 'taxonomy';
     /** `todl.Term` relationship: the term's broader term. */
     public static readonly Broader = 'broader';
-    /** The connector that stores nodes in `.todl` source files (TodlFileConnector.ConnectorName). */
+    /** The name of the connector that stores nodes in `.todl` source files; the file connector takes this name. */
     public static readonly FileConnector = 'todl-file';
 }

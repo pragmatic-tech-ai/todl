@@ -8,6 +8,7 @@ import type { LogicalManifest } from "../logical.js";
 import type { ManifestJson } from "../records.js";
 import { compilePackage } from "../../publish/publish.js";
 import { PackageManifestBridge } from "../../solution-services/package-manager/package-manifest-bridge.js";
+import { DiagnosticCode, Severity } from "../../compiler-services/diagnostics/diagnostic.js";
 
 class PrimitiveFixtures
 {
@@ -72,11 +73,27 @@ describe("primitive bases in the manifest", () =>
         assert.equal(new ManifestValidator(ManifestReader.fromBinary(writer.toBinary())).isValid, true);
     });
 
-    test("an undefined primitive base is a reference error", () =>
+    test("an undefined primitive base compiles with a warning and the primitive is opaque", () =>
     {
-        const out = compilePackage([], [{ uri: "a.todl", text: "namespace a { primitive bad : nope { } }" }], { id: "a", version: "1.0.0" });
-        assert.equal(out.ok, false);
-        assert.ok(out.errors.some((e) => e.message.includes("\"nope\"")), JSON.stringify(out.errors));
+        const out = compilePackage([], [{ uri: "a.todl", text: "namespace a { primitive bad : nope { } concept W { b : bad?; } model M : a { W w { b = \"x\"; } } }" }], { id: "a", version: "1.0.0" });
+        assert.ok(out.ok, JSON.stringify(out.errors));
+        const warning = out.diagnostics.find((d) => d.message.includes("\"nope\""));
+        assert.equal(warning?.severity, Severity.Warning);
+        const logical = PackageManifestBridge.toLogical(PackageManifestBridge.repositoryOf(out.package!.fullDocument), "a", "1.0.0");
+        assert.deepEqual(logical.primitives, { "a.bad": null });
+    });
+
+    test("a chained-alias regex violation is a warning, a direct alias's stays an error", () =>
+    {
+        const source = (value: string, type: string): string =>
+            `namespace a { primitive code : string { regex = "^[A-Z]+$"; } primitive code2 : code { } concept W { c : ${type}?; } model M : a { W w { c = "${value}"; } } }`;
+        const chained = compilePackage([], [{ uri: "a.todl", text: source("abc", "code2") }], { id: "a", version: "1.0.0" });
+        assert.ok(chained.ok, JSON.stringify(chained.errors));
+        const mismatch = chained.diagnostics.find((d) => d.code === DiagnosticCode.RegexMismatch);
+        assert.equal(mismatch?.severity, Severity.Warning);
+        const direct = compilePackage([], [{ uri: "a.todl", text: source("abc", "code") }], { id: "a", version: "1.0.0" });
+        assert.equal(direct.ok, false);
+        assert.ok(direct.errors.some((d) => d.code === DiagnosticCode.RegexMismatch && d.severity === Severity.Error));
     });
 
     test("a logical manifest without primitives lowers with base-less primitive rows", () =>

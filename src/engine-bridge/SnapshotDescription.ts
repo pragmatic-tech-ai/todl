@@ -36,6 +36,16 @@ export enum DescribeDiagnosticCode
     UnknownConcept,
     /** A redeclared member that disagrees with the inherited one; the inherited member wins. */
     MemberRedeclared,
+    /** An integer value outside the signed 64-bit range; the value is skipped. */
+    IntegerOutOfRange,
+    /** A field type or relationship target that does not resolve; the member falls back (opaque String / any element). */
+    UnresolvedType,
+    /** A heap node no package bound (no origin model to own it); the node is skipped. */
+    Unattributed,
+    /** A plan binding with an empty Model or an undescribed concept; the binding is skipped. */
+    InvalidBinding,
+    /** A (Model, Concept) bound to two different connectors; the first binding is kept. */
+    DuplicateBinding,
 }
 
 export interface IDescribeDiagnostic

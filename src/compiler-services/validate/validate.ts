@@ -487,19 +487,22 @@ function checkScalarValue(
 
   const path = `${node.type}.${field.name}`;
   const span = spanFor(model, node.id, field.name);
+  // A chained alias (`a : b`, `b : string`) is checked only since primitive bases resolve as references; its
+  // findings are warnings so a model that compiled before still compiles.
+  const severity = constraint.chained ? Severity.Warning : Severity.Error;
   if (constraint.base === ScalarBase.Boolean)
   {
     if (typeof v !== "boolean")
     {
-      out.push(error(DiagnosticCode.BooleanValueInvalid, node.id, path,
-        `"${path}" expects a boolean (true or false) but got "${String(v)}"`, span));
+      out.push({ ...error(DiagnosticCode.BooleanValueInvalid, node.id, path,
+        `"${path}" expects a boolean (true or false) but got "${String(v)}"`, span), severity });
     }
     return;
   }
   if (!scalarLiteralMatchesBase(constraint.base, v))
   {
-    out.push(error(DiagnosticCode.ScalarValueInvalid, node.id, path,
-      `"${path}" expects ${constraint.base} but got "${String(v)}"`, span));
+    out.push({ ...error(DiagnosticCode.ScalarValueInvalid, node.id, path,
+      `"${path}" expects ${constraint.base} but got "${String(v)}"`, span), severity });
     return; // a type mismatch subsumes any regex mismatch
   }
   for (const regex of constraint.regexes)
@@ -509,8 +512,8 @@ function checkScalarValue(
     catch { continue; } // a malformed primitive regex is not the instance's fault
     if (!re.test(String(v)))
     {
-      out.push(error(DiagnosticCode.RegexMismatch, node.id, path,
-        `"${path}" value "${String(v)}" does not match the regex of ${field.type} (/${regex}/)`, span));
+      out.push({ ...error(DiagnosticCode.RegexMismatch, node.id, path,
+        `"${path}" value "${String(v)}" does not match the regex of ${field.type} (/${regex}/)`, span), severity });
       break;
     }
   }

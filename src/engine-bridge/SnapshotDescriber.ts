@@ -58,6 +58,7 @@ interface IConversion
 class CellConverter
 {
     private static readonly IntegerPattern = /^[+-]?\d+$/;
+    private static readonly Int64Bits = 64;
 
     public static Convert(type: ValueType | undefined, raw: Scalar): IConversion
     {
@@ -86,14 +87,22 @@ class CellConverter
     {
         if (typeof raw === 'string' && CellConverter.IntegerPattern.test(raw.trim()))
         {
-            return { Value: BigInt(raw.trim()) };
+            return CellConverter.InRange(BigInt(raw.trim()));
         }
         const value = CellConverter.Numeric(raw);
         if (value === undefined)
         {
             return CellConverter.Fail(DescribeDiagnosticCode.ValueTypeMismatch);
         }
-        return Number.isInteger(value) ? { Value: BigInt(value) } : CellConverter.Fail(DescribeDiagnosticCode.NonIntegralInteger);
+        return Number.isInteger(value) ? CellConverter.InRange(BigInt(value)) : CellConverter.Fail(DescribeDiagnosticCode.NonIntegralInteger);
+    }
+
+    /** An Int64 cell, or IntegerOutOfRange when the value does not fit a signed 64-bit integer. */
+    private static InRange(value: bigint): IConversion
+    {
+        return BigInt.asIntN(CellConverter.Int64Bits, value) === value
+            ? { Value: value }
+            : CellConverter.Fail(DescribeDiagnosticCode.IntegerOutOfRange);
     }
 
     /** A finite number from a JS number or a numeric string; undefined otherwise. */
@@ -156,19 +165,26 @@ class CanonicalJson
  * Turns a compiled TODL metadata snapshot into the graph engine's schema description: one definition per concept and
  * aspect under the reserved `todl.Element` root, `todl.Term` for taxonomy terms, a seed node per heap node and term,
  * the `.todl` connector bindings, and a content-derived version. Problems in the data become diagnostics, never
- * exceptions; only a field type with no engine value type throws (`UnsupportedFieldType`).
+ * exceptions; only a field type of a kind no member can hold throws (`UnsupportedFieldType`).
  *
  * Seed `Owner` is the package model id (`PackageRef.model`, e.g. `shop.p`) of the package whose BindSeed bound the
- * node (`MetadataSnapshot.OriginModelOf`, the model part of `originOf`); a term's Owner is the model of the first
- * manifest (deps-first) declaring its taxonomy.
+ * node (`MetadataSnapshot.OriginModelOf`, the model part of `originOf`), never the type's declaring package; a node
+ * with no origin is skipped (`Unattributed`). A term's Owner is the model of the first manifest (deps-first)
+ * declaring its taxonomy.
  */
 export class SnapshotDescriber
 {
     private static readonly HashAlgorithm = 'sha256';
     private static readonly HexEncoding = 'hex';
     private static readonly MemberSeparator = '.';
-    private static readonly UnresolvedType = '<unresolved>';
-    private static readonly NoOwner = '';
+    private static readonly BindingKeySeparator = '\u0000';
+    private static readonly UnresolvedFieldMessage = 'Field "{0}" has an unresolved type; it is described as an opaque String';
+    private static readonly UnresolvedTargetsMessage = 'Relationship "{0}" has no resolvable target; it may link any element';
+    private static readonly UnattributedMessage = '"{0}" was not bound by any package (no origin model); skipped';
+    private static readonly TermMismatchMessage = 'term "{0}" pins "{1}" for "{2}" ({3}), which does not fit; skipped';
+    private static readonly EmptyModelMessage = 'binding of "{0}" to "{1}" has no model; skipped';
+    private static readonly UnknownBindingConceptMessage = 'binding of "{0}" to "{1}" names a concept that is not described; skipped';
+    private static readonly DuplicateBindingMessage = '"{0}" in model "{1}" is bound to both "{2}" and "{3}"; the first binding is kept';
     private static readonly NoVersion = '';
     private static readonly MissingArgument = '';
     private static readonly Placeholder = /\{(\d+)\}/g;
@@ -286,7 +302,7 @@ export class SnapshotDescriber
     {
         return [
             ...type.getDeclaredFields().map((f) => this.FieldMember(type, f)),
-            ...type.getDeclaredRelationships().map((r) => this.RelationshipMember(r)),
+            ...type.getDeclaredRelationships().map((r) => this.RelationshipMember(type, r)),
         ];
     }
 
@@ -311,9 +327,15 @@ export class SnapshotDescriber
                 return SnapshotDescriber.Property(field.name, SnapshotDescriber.ScalarTypeOf(type), MemberSource.Scalar);
             }
         }
-        const typeName = type?.fullName ?? SnapshotDescriber.UnresolvedType;
+        const subject = `${owner.fullName}${SnapshotDescriber.MemberSeparator}${field.name}`;
+        if (type === undefined)
+        {
+            // An unresolved type (e.g. a cross-manifest ref with no host): keep the field as an opaque String.
+            this.Report(DescribeDiagnosticCode.UnresolvedType, subject, SnapshotDescriber.Format(SnapshotDescriber.UnresolvedFieldMessage, subject));
+            return SnapshotDescriber.Property(field.name, ValueType.String, MemberSource.Scalar);
+        }
         throw new EngineBridgeError(EngineBridgeErrorCode.UnsupportedFieldType,
-            SnapshotDescriber.Format(SnapshotDescriber.UnsupportedFieldMessage, `${owner.fullName}${SnapshotDescriber.MemberSeparator}${field.name}`, typeName));
+            SnapshotDescriber.Format(SnapshotDescriber.UnsupportedFieldMessage, subject, type.fullName));
     }
 
     /** The builtin a primitive's base chain ends at; an opaque (base-less) primitive or a cyclic chain is a String. */
@@ -331,7 +353,7 @@ export class SnapshotDescriber
         return ValueType.String;
     }
 
-    private RelationshipMember(rel: RelationshipInfo): IMemberPlan
+    private RelationshipMember(owner: TypeInfo, rel: RelationshipInfo): IMemberPlan
     {
         const targets: string[] = [];
         for (const target of rel.targets)
@@ -341,8 +363,14 @@ export class SnapshotDescriber
                 : this.taxonomyNames.has(target.fullName) || target.kind === MetaKind.Taxonomy ? TodlNames.Term : undefined;
             if (name !== undefined && !targets.includes(name)) targets.push(name);
         }
-        // No describable target (unresolved): any element may be linked rather than refusing to open.
-        return SnapshotDescriber.Relationship(rel.name, targets.length > 0 ? targets : [TodlNames.Element], SnapshotDescriber.IsMany(rel.cardinality));
+        if (targets.length === 0)
+        {
+            // No describable target (unresolved): any element may be linked rather than refusing to open.
+            const subject = `${owner.fullName}${SnapshotDescriber.MemberSeparator}${rel.name}`;
+            this.Report(DescribeDiagnosticCode.UnresolvedType, subject, SnapshotDescriber.Format(SnapshotDescriber.UnresolvedTargetsMessage, subject));
+            targets.push(TodlNames.Element);
+        }
+        return SnapshotDescriber.Relationship(rel.name, targets, SnapshotDescriber.IsMany(rel.cardinality));
     }
 
     private static IsMany(card: Cardinality): boolean
@@ -429,7 +457,7 @@ export class SnapshotDescriber
 
     private DescribeSeed(): ISeedNode[]
     {
-        const nodes: ReflectedNode[] = [];
+        const nodes: { readonly Node: ReflectedNode; readonly Owner: string }[] = [];
         for (const node of this.snapshot.allNodes())
         {
             const draft = this.drafts.get(node.type);
@@ -438,14 +466,22 @@ export class SnapshotDescriber
                 this.Report(DescribeDiagnosticCode.UnknownConcept, node.id, SnapshotDescriber.Format(SnapshotDescriber.UnknownConceptMessage, node.id, node.type));
                 continue;
             }
-            nodes.push(node);
+            // Owner is only ever the binding package's model: a node no BindSeed attributed has no owner to write
+            // back to, so it is skipped rather than guessed from the type's declaring manifest.
+            const owner = this.snapshot.OriginModelOf(node.id);
+            if (owner === undefined)
+            {
+                this.Report(DescribeDiagnosticCode.Unattributed, node.id, SnapshotDescriber.Format(SnapshotDescriber.UnattributedMessage, node.id));
+                continue;
+            }
+            nodes.push({ Node: node, Owner: owner });
         }
         const terms = this.DescribeTerms();
-        const seeded = new Set<string>([...nodes.map((n) => n.id), ...terms.map((t) => t.PublicId)]);
-        return [...nodes.map((node) => this.DescribeNode(node, seeded)), ...terms];
+        const seeded = new Set<string>([...nodes.map((n) => n.Node.id), ...terms.map((t) => t.PublicId)]);
+        return [...nodes.map((n) => this.DescribeNode(n.Node, n.Owner, seeded)), ...terms];
     }
 
-    private DescribeNode(node: ReflectedNode, seeded: ReadonlySet<string>): ISeedNode
+    private DescribeNode(node: ReflectedNode, owner: string, seeded: ReadonlySet<string>): ISeedNode
     {
         const plans = this.Effective(node.type);
         const mirror = this.snapshot.reflect(node);
@@ -509,7 +545,7 @@ export class SnapshotDescriber
         return {
             PublicId: node.id,
             Concept: node.type,
-            Owner: this.snapshot.OriginModelOf(node.id) ?? this.snapshot.ownerOf(node.type)?.model ?? SnapshotDescriber.NoOwner,
+            Owner: owner,
             Properties: properties,
             Links: links,
         };
@@ -534,8 +570,15 @@ export class SnapshotDescriber
                     {
                         if (plan.Source !== MemberSource.Scalar) continue;
                         const raw = SnapshotDescriber.FixedValue(term, name);
-                        const converted = raw === undefined ? undefined : CellConverter.Convert(plan.Input.Type, raw);
-                        if (converted?.Value !== undefined) properties[name] = converted.Value;
+                        if (raw === undefined) continue;
+                        const converted = CellConverter.Convert(plan.Input.Type, raw);
+                        if (converted.Failure !== undefined)
+                        {
+                            this.Report(DescribeDiagnosticCode.ValueTypeMismatch, `${term.id}${SnapshotDescriber.MemberSeparator}${name}`,
+                                SnapshotDescriber.Format(SnapshotDescriber.TermMismatchMessage, term.id, String(raw), name, ValueType[plan.Input.Type!]));
+                            continue;
+                        }
+                        properties[name] = converted.Value!;
                     }
                     const broader = term.broader;
                     out.push({
@@ -576,13 +619,44 @@ export class SnapshotDescriber
 
     // ── bindings ───────────────────────────────────────────────────────────
 
+    /**
+     * Plan bindings: `.todl` connector ones become engine bindings, others put their concept in `External`. Each
+     * (Model, Concept) is bound once (the engine refuses duplicates); an empty Model or an undescribed concept is
+     * skipped. Problems become diagnostics; an identical repeat is collapsed silently.
+     */
     private DescribeBindings(external: Set<string>): IBindingDescription[]
     {
         const out: IBindingDescription[] = [];
+        const bound = new Map<string, string>();
         for (const plan of this.options.ConnectorPlans ?? [])
         {
             for (const binding of plan.Bindings)
             {
+                const draft = this.drafts.get(binding.Concept);
+                if (plan.Model.length === 0)
+                {
+                    this.Report(DescribeDiagnosticCode.InvalidBinding, binding.Concept,
+                        SnapshotDescriber.Format(SnapshotDescriber.EmptyModelMessage, binding.Concept, binding.Connector));
+                    continue;
+                }
+                if (draft === undefined || draft.IsAspect)
+                {
+                    this.Report(DescribeDiagnosticCode.InvalidBinding, binding.Concept,
+                        SnapshotDescriber.Format(SnapshotDescriber.UnknownBindingConceptMessage, binding.Concept, binding.Connector));
+                    continue;
+                }
+                const key = `${plan.Model}${SnapshotDescriber.BindingKeySeparator}${binding.Concept}`;
+                const previous = bound.get(key);
+                if (previous !== undefined)
+                {
+                    if (previous !== binding.Connector)
+                    {
+                        this.Report(DescribeDiagnosticCode.DuplicateBinding, binding.Concept,
+                            SnapshotDescriber.Format(SnapshotDescriber.DuplicateBindingMessage, binding.Concept, plan.Model, previous, binding.Connector));
+                    }
+                    continue;
+                }
+                bound.set(key, binding.Connector);
                 if (binding.Connector === TodlNames.FileConnector)
                 {
                     out.push({ Model: plan.Model, Concept: binding.Concept, Connector: binding.Connector });

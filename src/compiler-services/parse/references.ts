@@ -92,6 +92,9 @@ export interface ReferenceVisit
   /** Set for a reference inside a taxonomy term body: the enclosing taxonomy +
    * its `uses` list, for sibling / cross-taxonomy bare resolution. */
   scope?: { taxonomy: string; uses: readonly string[] };
+  /** Set for a reference whose absence is tolerated (a primitive's `: base`): an unresolved name is a warning, not
+   * an error, and `clear` empties the slot so the declaration degrades (the primitive becomes opaque). */
+  lenient?: { clear: () => void };
 }
 
 /** Transparent file-wrapper "concepts" that are not real concept references. A
@@ -269,7 +272,8 @@ export function visitReferences(decl: Declaration, visit: Visit): void
       if (decl.base !== null)
       {
         visit({ name: decl.base, span: decl.baseSpan ?? decl.span, role: RefRole.FieldType,
-          ownerNode: decl.name, memberPath: null, rewrite: (r) => { (decl as { base: string | null }).base = r; } });
+          ownerNode: decl.name, memberPath: null, rewrite: (r) => { (decl as { base: string | null }).base = r; },
+          lenient: { clear: () => { (decl as { base: string | null }).base = null; } } });
       }
       break;
   }

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { BindingTable, GraphEngine, MemberKind, StorageKind, ValueType, type IDefinitionDescription, type ISchemaDescription, type ISeedNode, type MemberInput } from '@pragmatic-tech-ai/graph';
-import { compilePackage } from '../../publish/publish.js';
+import { compilePackage, PackageKind } from '../../publish/publish.js';
 import { PackageManifestBridge } from '../../solution-services/package-manager/package-manifest-bridge.js';
 import { Domain } from '../../domain/domain.js';
 import { MemoryPackageSource } from '../../domain/memory-package-source.js';
@@ -375,5 +375,134 @@ describe('SnapshotDescriber', () =>
         assert.throws(() => DescribeFixture.Describe(snapshot), (error: unknown) =>
             error instanceof EngineBridgeError && error.Code === EngineBridgeErrorCode.UnsupportedFieldType
             && error.message.includes('m.W.odd') && error.message.includes('m.Weird'));
+    });
+
+    test('integers outside the Int64 range are skipped with a diagnostic', async () =>
+    {
+        const snapshot = await DescribeFixture.ShopSnapshot();
+        snapshot.BindSeed({
+            nodes: [{ id: 'shop.big', type: 'shop.Widget', attrs: { count: '99999999999999999999', amount: 1e20, name: 'ok' } }],
+        }, { model: DescribeFixture.Model, version: DescribeFixture.Version });
+        const { Description, Diagnostics } = DescribeFixture.Describe(snapshot);
+        assert.deepEqual(Diagnostics.map((d) => [d.Code, d.Subject]), [
+            [DescribeDiagnosticCode.IntegerOutOfRange, 'shop.big.count'],
+            [DescribeDiagnosticCode.IntegerOutOfRange, 'shop.big.amount'],
+        ]);
+        assert.deepEqual(DescribeFixture.Seed(Description, 'shop.big').Properties, { label: null, class: null, name: 'ok' });
+        await DescribeFixture.Opens(Description);
+    });
+
+    test('owner is the binding package, not the declaring one; terms dedupe across manifests', async () =>
+    {
+        const a = compilePackage([], [{ uri: 'a.todl', text: 'namespace a { concept A { } taxonomy K : represents A { term T { } } }' }],
+            { id: 'pkg.a', version: DescribeFixture.Version });
+        assert.ok(a.ok, JSON.stringify(a.errors));
+        const b = compilePackage([a.package!.document], [{ uri: 'b.todl', text: 'namespace b { import a; model MB : a { a.A b1 { } } }' }],
+            { id: 'pkg.b', version: DescribeFixture.Version }, [{ kind: PackageKind.Library, id: 'pkg.a', version: DescribeFixture.Version }]);
+        assert.ok(b.ok, JSON.stringify(b.errors));
+        const domain = new Domain(new MemoryPackageSource([PackageManifestBridge.toResolved(a.package!), PackageManifestBridge.toResolved(b.package!)]));
+        await domain.load({ model: 'pkg.b', version: DescribeFixture.Version });
+        const snapshot = domain.graph;
+        assert.deepEqual(snapshot.manifests.map((m) => m.model), ['pkg.a', 'pkg.b']);
+        assert.equal(snapshot.ownerOf('a.A')?.model, 'pkg.a');
+        const { Description, Diagnostics } = DescribeFixture.Describe(snapshot);
+        assert.deepEqual(Diagnostics, []);
+        assert.equal(DescribeFixture.Seed(Description, 'b.b1').Owner, 'pkg.b');
+        const terms = Description.Seed.filter((s) => s.Concept === TodlNames.Term);
+        assert.deepEqual(terms.map((t) => [t.PublicId, t.Owner]), [['a.K.T', 'pkg.a']]);
+        assert.equal(Description.Definitions.filter((d) => d.Name === 'a.A').length, 1);
+        await DescribeFixture.Opens(Description);
+    });
+
+    test('a node no package bound is skipped as unattributed', async () =>
+    {
+        const snapshot = await DescribeFixture.ShopSnapshot();
+        snapshot.heap.add({ id: 'shop.stray', type: 'shop.Loc', attrs: {} });
+        const { Description, Diagnostics } = DescribeFixture.Describe(snapshot);
+        assert.deepEqual(Diagnostics.map((d) => [d.Code, d.Subject]), [[DescribeDiagnosticCode.Unattributed, 'shop.stray']]);
+        assert.equal(Description.Seed.some((s) => s.PublicId === 'shop.stray'), false);
+    });
+
+    test('a single-card taxonomy field naming several terms keeps the first with a diagnostic', async () =>
+    {
+        const snapshot = await DescribeFixture.ShopSnapshot();
+        snapshot.BindSeed({
+            nodes: [{ id: 'shop.two', type: 'shop.Widget', attrs: {} }],
+            edges: [{ from: 'shop.two', rel: 'kind', to: 'shop.Kinds.Big' }, { from: 'shop.two', rel: 'kind', to: 'shop.Kinds.Small' }],
+        }, { model: DescribeFixture.Model, version: DescribeFixture.Version });
+        const { Description, Diagnostics } = DescribeFixture.Describe(snapshot);
+        assert.deepEqual(Diagnostics.map((d) => [d.Code, d.Subject]), [[DescribeDiagnosticCode.ValueTypeMismatch, 'shop.two.kind']]);
+        assert.equal(DescribeFixture.Seed(Description, 'shop.two').Properties['kind'], 'shop.Kinds.Big');
+    });
+
+    test('plan bindings are deduplicated and validated', async () =>
+    {
+        const plans: ModelConnectorPlan[] = [
+            {
+                Model: DescribeFixture.Model, Version: DescribeFixture.Version, Connectors: [],
+                Bindings: [
+                    DescribeFixture.Binding('shop.Widget', TodlNames.FileConnector),
+                    DescribeFixture.Binding('shop.Widget', TodlNames.FileConnector),
+                    DescribeFixture.Binding('shop.Widget', 'crm'),
+                    DescribeFixture.Binding('shop.Nothing', TodlNames.FileConnector),
+                    DescribeFixture.Binding('shop.Placed', 'crm'),
+                ],
+            },
+            { Model: '', Version: DescribeFixture.Version, Connectors: [], Bindings: [DescribeFixture.Binding('shop.Loc', TodlNames.FileConnector)] },
+        ];
+        const { Description, External, Diagnostics } = DescribeFixture.Describe(await DescribeFixture.ShopSnapshot(), plans);
+        assert.deepEqual(Description.Bindings, [{ Model: DescribeFixture.Model, Concept: 'shop.Widget', Connector: TodlNames.FileConnector }]);
+        assert.deepEqual([...External], []);
+        assert.deepEqual(Diagnostics.map((d) => [d.Code, d.Subject]), [
+            [DescribeDiagnosticCode.DuplicateBinding, 'shop.Widget'],
+            [DescribeDiagnosticCode.InvalidBinding, 'shop.Nothing'],
+            [DescribeDiagnosticCode.InvalidBinding, 'shop.Placed'],
+            [DescribeDiagnosticCode.InvalidBinding, 'shop.Loc'],
+        ]);
+    });
+
+    test('unresolved field types and targets fall back with diagnostics', async () =>
+    {
+        const logical: LogicalManifest = {
+            format: 'todl-manifest/1', model: 'm', version: '1.0.0', root: TodlNames.Element,
+            concepts: {
+                'm.W': {
+                    ...DescribeFixture.Concept(null, { lost: { type: 'm.Gone', card: '?' } }),
+                    relationships: { nowhere: { targets: [], card: '*', annotations: [] } },
+                },
+            },
+            classes: {}, taxonomies: {},
+        };
+        // Clear the field's coded type so it resolves to nothing, as an unresolved cross-manifest ref does.
+        const snapshot = DescribeFixture.Hand(logical, (json) =>
+        {
+            json.tables.Field[0]![1] = 0;
+        });
+        snapshot.BindSeed({ nodes: [{ id: 'w1', type: 'm.W', attrs: { lost: 'kept' } }] }, { model: 'm', version: '1.0.0' });
+        const { Description, Diagnostics } = DescribeFixture.Describe(snapshot);
+        assert.deepEqual(Diagnostics.map((d) => [d.Code, d.Subject]), [
+            [DescribeDiagnosticCode.UnresolvedType, 'm.W.lost'],
+            [DescribeDiagnosticCode.UnresolvedType, 'm.W.nowhere'],
+        ]);
+        assert.deepEqual(DescribeFixture.Member(Description, 'm.W', 'lost'), { Name: 'lost', Kind: MemberKind.Property, Type: ValueType.String, Nullable: true });
+        assert.deepEqual(DescribeFixture.Member(Description, 'm.W', 'nowhere').Targets, [TodlNames.Element]);
+        assert.equal(DescribeFixture.Seed(Description, 'w1').Properties['lost'], 'kept');
+        await DescribeFixture.Opens(Description);
+    });
+
+    test('a term value that does not fit is skipped with a diagnostic', async () =>
+    {
+        const logical: LogicalManifest = {
+            format: 'todl-manifest/1', model: 'm', version: '1.0.0', root: TodlNames.Element,
+            concepts: {
+                [TodlNames.Element]: DescribeFixture.Concept(null, { label: { type: 'string', card: '?' } }),
+                'm.W': DescribeFixture.Concept(TodlNames.Element, {}),
+            },
+            classes: { 'm.K.t': { concept: 'm.W', taxonomy: 'm.K', narrower: [], fixed: { label: 5 }, annotations: [] } },
+            taxonomies: { 'm.K': { represents: ['m.W'], roots: ['m.K.t'] } },
+        };
+        const { Description, Diagnostics } = DescribeFixture.Describe(DescribeFixture.Hand(logical));
+        assert.deepEqual(Diagnostics.map((d) => [d.Code, d.Subject]), [[DescribeDiagnosticCode.ValueTypeMismatch, 'm.K.t.label']]);
+        assert.deepEqual(DescribeFixture.Seed(Description, 'm.K.t').Properties, { label: null, class: null, taxonomy: 'm.K' });
     });
 });

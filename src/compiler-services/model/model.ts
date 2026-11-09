@@ -47,6 +47,9 @@ export interface ScalarConstraint
 {
   base: ScalarBase;
   regexes: string[];
+  /** True when the chain passes through more than one user primitive (`a : b`, `b : string`). Such chains only
+   *  resolve since primitive bases became references, so their checks are reported as warnings, not errors. */
+  chained: boolean;
 }
 
 export interface FieldSchema
@@ -464,7 +467,7 @@ export class Repository
     for (;;)
     {
       const builtin = Repository.scalarBaseFor(current);
-      if (builtin !== null) return { base: builtin, regexes };
+      if (builtin !== null) return { base: builtin, regexes, chained: seen.size > 1 };
       if (seen.has(current)) return null; // cyclic primitive chain
       seen.add(current);
       const node = this.resolve(current);
