@@ -317,6 +317,26 @@ test("DidChange for a file not yet in the graph falls back to the member-granula
     assert.equal(view?.model.attr("app2.c", "note"), "p", "the new file is loaded via the member fallback");
 });
 
+test("DidDelete drops the file's live buffer and re-loads its member from storage", async () =>
+{
+    const world = new World();
+    await world.Arch.WriteText(SiblingFiles.BFile, SiblingFiles.IndependentB);
+    await world.Service.Ready();
+    world.Service.DidChange(SiblingFiles.BUri, SiblingFiles.EditedB);
+    await world.Service.Flush();
+    assert.equal((await world.Service.ModelView(world.Arch))?.model.attr("app2.c", "note"), "q");
+
+    await world.Arch.Delete(SiblingFiles.BFile);
+    world.Service.DidDelete(SiblingFiles.BUri);
+    await world.Service.Flush();
+
+    const buffers = (world.Service as unknown as { liveDocuments: { all(): { uri: string }[] } }).liveDocuments.all();
+    assert.ok(!buffers.some((d) => d.uri === SiblingFiles.BUri), "no phantom buffer outlives the deleted file");
+    const view = await world.Service.ModelView(world.Arch);
+    assert.equal(view?.model.has("app2.c"), false, "the deleted file's nodes leave the member");
+    assert.equal(view?.model.attr("app.a", "note"), "x", "the member's other file stays loaded");
+});
+
 test("removing a referenced file dangles its referrer; re-adding clears it (member-granular add/remove)", async () =>
 {
     const world = new World();

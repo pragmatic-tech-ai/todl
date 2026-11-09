@@ -54,6 +54,11 @@ class LiveBufferDocuments implements OpenDocuments
         this.buffers.set(uri, text);
     }
 
+    public Delete(uri: string): void
+    {
+        this.buffers.delete(uri);
+    }
+
     public all(): TextDocument[]
     {
         const docs: TextDocument[] = [];
@@ -278,6 +283,20 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
         const generation = (this.replaceGeneration.get(uri) ?? 0) + 1;
         this.replaceGeneration.set(uri, generation);
         this.Enqueue(() => this.ReplaceOwningFile(uri, root, generation));
+    }
+
+    // A file removed from storage (e.g. a writer's compensating delete): drop its live
+    // buffer, so no phantom text outlives the file, and re-load the owning member from
+    // what its storage now holds (member-granular: the file leaves the member's source
+    // set). Coalesces with DidChange through the same per-URI generation.
+    public DidDelete(uri: string): void
+    {
+        this.liveDocuments.Delete(uri);
+        const root = this.MemberRootForUri(uri);
+        if (root === undefined) return;
+        const generation = (this.replaceGeneration.get(uri) ?? 0) + 1;
+        this.replaceGeneration.set(uri, generation);
+        this.Enqueue(() => this.ReplaceOwningMember(uri, root, generation));
     }
 
     // The shared graph's Changed signal, re-exposed: it fires with the affected member
