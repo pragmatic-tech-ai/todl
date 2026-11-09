@@ -7,7 +7,6 @@ import {
 import { type ResourceSource } from "../../domain/resource-source.js";
 import { type ResourceContent } from "../../domain/contributor.js";
 import { MimeTypes } from "../../domain/mime-types.js";
-import { fromJSON } from "../../compiler-services/emit/json.js";
 import { ManifestEmitter } from "../../compiler-services/emit/manifest.js";
 import { ManifestWriter } from "../../manifest/manifest-writer.js";
 import { PackageManifestBridge } from "./package-manifest-bridge.js";
@@ -17,7 +16,7 @@ import { type PackageDocument } from "../../publish/publish.js";
 // comment deferred. It reads the BlobPackageStore on-disk layout
 // (`<model>/<version>/model.json`, a PackageDocument) from any IStorage and, on
 // resolve, bridges that graph JSON to what Domain.load consumes: it rebuilds a
-// Repository (fromJSON), emits the LOGICAL manifest + flattened data graph
+// Repository over the prelude (PackageManifestBridge.repositoryOf), emits the LOGICAL manifest + flattened data graph
 // (ManifestEmitter), lowers the logical manifest to the SPEC-04 ManifestJson
 // (ManifestWriter), and carries the instance graph as the package seed. Because
 // publish persists own-only documents that record their base deps, the recorded
@@ -35,7 +34,7 @@ export class StoragePackageSource implements PackageSource, ResourceSource
         if (!(await this.storage.Exists(path))) throw new Error(`package "${ref.model}@${version}" not found in storage`);
 
         const doc = JSON.parse(await this.storage.ReadText(path)) as PackageDocument;
-        const { manifest: logical, graph } = new ManifestEmitter(fromJSON(doc), ref.model, version).emit();
+        const { manifest: logical, graph } = new ManifestEmitter(PackageManifestBridge.repositoryOf(doc), ref.model, version).emit();
         const manifest = ManifestWriter.fromLogical(logical).toJSON();
         const dependencies = (doc.dependencies ?? []).map((d) => ({ model: d.id, version: d.version }));
 

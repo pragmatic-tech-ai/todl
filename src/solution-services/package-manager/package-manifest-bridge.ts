@@ -1,5 +1,6 @@
 import { Repository } from "../../compiler-services/model/model.js";
-import { graphFromJSON } from "../../compiler-services/emit/json.js";
+import { mergeBases } from "../../compiler-services/api.js";
+import { preludeDocument } from "../../compiler-services/stdlib/prelude.js";
 import { ManifestEmitter, type DataGraph } from "../../compiler-services/emit/manifest.js";
 import { ManifestWriter } from "../../manifest/manifest-writer.js";
 import { type LogicalManifest } from "../../manifest/logical.js";
@@ -16,6 +17,15 @@ import type { ResolvedPackage, PackageRef as DomainPackageRef, SeedGraph, Domain
 // target refs always resolve within one manifest.
 export class PackageManifestBridge
 {
+  // The repository a manifest is emitted from: the document over the prelude. A published (own-only) document
+  // carries no prelude, which is every package's implicit base; without it the virtual root Element and its
+  // members (label, description) vanish and parent-less concepts get no base. A full closure already holds the
+  // prelude, and mergeBases keeps the first copy of each node, so its repository is unchanged.
+  static repositoryOf(doc: TodlDocument): Repository
+  {
+    return new Repository(mergeBases([preludeDocument(), doc]));
+  }
+
   // The logical manifest for a compiled Repository (schema tier only).
   static toLogical(repo: Repository, model: string, version: string): LogicalManifest
   {
@@ -53,7 +63,7 @@ export class PackageManifestBridge
     dependencies: DomainPackageRef[],
   ): ResolvedPackage
   {
-    const repo = new Repository(graphFromJSON(doc));
+    const repo = PackageManifestBridge.repositoryOf(doc);
     const { manifest, graph } = new ManifestEmitter(repo, model, version).emit();
     const resolved: ResolvedPackage = {
       ref: { model, version },
@@ -77,7 +87,7 @@ export class PackageManifestBridge
     dependencies: DomainPackageRef[],
   ): ResolvedPackage
   {
-    const repo = new Repository(graphFromJSON(doc));
+    const repo = PackageManifestBridge.repositoryOf(doc);
     const { manifest, graph } = new ManifestEmitter(repo, model, version).emit();
     const resolved: ResolvedPackage = {
       ref: { model, version },
