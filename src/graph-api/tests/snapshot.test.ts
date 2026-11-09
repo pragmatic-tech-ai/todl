@@ -1,7 +1,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { Snapshot } from "../snapshot.js";
-import { FrozenGraph } from "../../domain/graph.js";
+import { MetadataSnapshot } from "../../domain/metadata-snapshot.js";
 import { Manifest } from "../../manifest/reflection/reflection.js";
 import { ManifestWriter } from "../../manifest/manifest-writer.js";
 import type { LogicalManifest } from "../../manifest/logical.js";
@@ -27,9 +27,9 @@ function widgetManifest(): ManifestJson
     return ManifestWriter.fromLogical(logical).toJSON();
 }
 
-function graph(nodes: ReflectedNode[], edges: { from: string; rel: string; to: string }[] = []): FrozenGraph
+function graph(nodes: ReflectedNode[], edges: { from: string; rel: string; to: string }[] = []): MetadataSnapshot
 {
-    const g = new FrozenGraph();
+    const g = new MetadataSnapshot();
     const m = Manifest.load(widgetManifest());
     g.PreRegister(m); g.Finalize(m);
     g.BindSeed({ nodes, edges }, { model: "shop", version: "1.0.0" });

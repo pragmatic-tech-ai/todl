@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { ServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
 import { check } from "../../compiler-services/api.js";
 import { toJSON, type TodlDocument } from "../../compiler-services/emit/json.js";
-import { FrozenGraph } from "../../domain/graph.js";
+import { MetadataSnapshot } from "../../domain/metadata-snapshot.js";
 import { GraphQuery } from "../../graph-api/graph-query-engine.js";
 import { Manifest } from "../../manifest/reflection/reflection.js";
 import { PackageManifestBridge } from "../../solution-services/package-manager/package-manifest-bridge.js";
@@ -64,7 +64,7 @@ class PushDownHarness
     {
         const resolved = PackageManifestBridge.toResolvedJsonDocument(doc, PushDownHarness.Model, PushDownHarness.Version, []);
         const manifest = Manifest.load(resolved.manifest);
-        const graph = new FrozenGraph();
+        const graph = new MetadataSnapshot();
         graph.PreRegister(manifest);
         graph.Finalize(manifest);
         if (resolved.seed !== undefined) graph.BindSeed(resolved.seed, { model: PushDownHarness.Model, version: PushDownHarness.Version });

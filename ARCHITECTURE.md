@@ -35,10 +35,10 @@
 ## Key subsystems
 
 ### Domain / graph — how a graph is built & queried
-- **`Domain`** (`src/domain/domain.ts:69`) — three hats: package/manifest loader over an injected `PackageSource`, host of the one heap, cross-manifest reflection root. `async load(ref)` (:106) → `resolvePackage` (:198) composes into a `FrozenGraph`.
-- **`FrozenGraph`** (`src/domain/graph.ts:76`, implements `ManifestHost`) — owns the `Heap`, the manifest registry keyed by `model@version`, the reflection surface. Domain composes INTO it.
+- **`Domain`** (`src/domain/domain.ts:69`) — three hats: package/manifest loader over an injected `PackageSource`, host of the one heap, cross-manifest reflection root. `async load(ref)` (:106) → `resolvePackage` (:198) composes into a `MetadataSnapshot`.
+- **`MetadataSnapshot`** (`src/domain/graph.ts:76`, implements `ManifestHost`) — owns the `Heap`, the manifest registry keyed by `model@version`, the reflection surface. Domain composes INTO it.
 - **`MemoryPackageSource`** (`src/domain/memory-package-source.ts:6`) — in-memory `PackageSource` for seeding/tests; `CompositePackageSource` chains sources.
-- **`GraphQuery` / `IGraphQuery`** (`src/graph-api/graph-query-engine.ts:13` / `graph-api/graph-query.ts:7`) — reflection-native query over a `FrozenGraph`; returns reflection handles; lazy reverse-ref index backs `Referrers`.
+- **`GraphQuery` / `IGraphQuery`** (`src/graph-api/graph-query-engine.ts:13` / `graph-api/graph-query.ts:7`) — reflection-native query over a `MetadataSnapshot`; returns reflection handles; lazy reverse-ref index backs `Referrers`.
 - **`TypeInfo`** (`src/manifest/reflection/reflection.ts:293`) — the reflected type handle. ⚠ **Known wart:** `ManifestWriter` folds a concept's namespace into `TypeInfo.name` (so `acme.Service` has `name="acme.Service"`, empty `namespace`). The Cypher adapter works around this with simple-name resolution (`src/cypher/graph.ts`); a proper fix is filed as a Feature.
 - **`Repository`** (`src/compiler-services/model/model.ts:75`) — the COMPILE-side runtime façade over `Graph` (resolve/instancesOf/related/closure + `Builder` staging + `ReactiveNode`). Distinct from the domain/graph-api read path. This is the type the server's `ModelView` hands back.
 
@@ -53,7 +53,7 @@
 ### Package manager (`src/solution-services/package-manager/`)
 - **`ProjectManifest`/`parseManifest`/`ProjectType`** (`manifest.ts:28`/`:96`/`:8`) — the project manifest (`ProjectType = MetaModel | Library | Architecture`; **no backend/frontend split**).
 - **`StoragePackageSource`** (`storage-package-source.ts:25`) — disk-backed `PackageSource`. **On-disk layout `<model>/<version>/model.json`** (a `PackageDocument`) from any `IStorage`; rebuilds `Repository` via `fromJSON`, emits logical manifest (`ManifestEmitter`), lowers to SPEC-04 (`ManifestWriter`), carries instance graph as seed; recorded deps flow as domain refs.
-- **`PackageManifestBridge`** (`package-manifest-bridge.ts:17`) — static bridge from a `CompiledPackage`/`Repository` to Domain-consumable artifacts (`toLogical`/`toResolved`/`seedOf`). **This is the PUBLIC route the server uses to compose a graph** (ManifestEmitter/FrozenGraph are NOT exported — see Public API).
+- **`PackageManifestBridge`** (`package-manifest-bridge.ts:17`) — static bridge from a `CompiledPackage`/`Repository` to Domain-consumable artifacts (`toLogical`/`toResolved`/`seedOf`). **This is the PUBLIC route the server uses to compose a graph** (ManifestEmitter/MetadataSnapshot are NOT exported — see Public API).
 
 ### Publish / build system
 - **`publish/publish.ts`**: `PackageKind` (:22 MetaModel/Library/Architecture), `PackageDocument` (:47, own-only `model.json` + deps), `CompiledPackage` (:59), `compilePackage(...)` pure (:90), `async publish(...)` compile+persist (:136).
@@ -79,7 +79,7 @@
 
 - **Entry:** `main`=`dist/index.js`, `types`=`dist/index.d.ts`; dev condition → `src/index.ts`. **Subpath exports:** `./solution-services/lsp`, `./language-server`, `./package-manager`(+`/connections`), `./build-system-core`, `./todl-build-system`, `./project-system`, `./domain`, `./graph-api`.
 - **Root barrel gives consumers (e.g. pragmatic-server):** runtime re-exports (`Signal`, `Ask`); compile model layer (`Graph`/`EdgeKind`, `InMemoryGraphStore`, `CypherGraphStore`, `Builder`, `Repository`, `EntityBase`); reflection-client; the `model-data` connector layer (:68-110); `application` bootstrap + VMs; `codegen`; publish (`compilePackage`/`publish`/`PackageKind`/`PackageDocument`, `BlobPackageStore`/`GraphPackageStore`/`PackageStore`); package-manager (`StoragePackageSource`, `ProjectType`/`parseManifest`/`ProjectManifest`); predicate/validate/diagnostics/parse; the solution/project-system/build-system surface; policy predicates; `export * as Cypher`.
-- **⚠ Notable NON-exports (root barrel):** `ManifestEmitter`, `FrozenGraph`, `Manifest`, `ManifestWriter`, `ManifestReader`. `FrozenGraph` is internal to `domain/` (not even in `domain/index.ts`). `manifest/*` is reachable only by deep import (kept off root to avoid a `MetaKind`/`Cardinality` enum clash). `GraphQuery`/`IGraphQuery` are only via the `./graph-api` subpath, not root. **⇒ To compose a graph from a `Repository`, go through the public `PackageManifestBridge` + `Domain` + `./graph-api` route — do NOT reach for `FrozenGraph`/`ManifestEmitter`.**
+- **⚠ Notable NON-exports (root barrel):** `ManifestEmitter`, `MetadataSnapshot`, `Manifest`, `ManifestWriter`, `ManifestReader`. `MetadataSnapshot` is internal to `domain/` (not even in `domain/index.ts`). `manifest/*` is reachable only by deep import (kept off root to avoid a `MetaKind`/`Cardinality` enum clash). `GraphQuery`/`IGraphQuery` are only via the `./graph-api` subpath, not root. **⇒ To compose a graph from a `Repository`, go through the public `PackageManifestBridge` + `Domain` + `./graph-api` route — do NOT reach for `MetadataSnapshot`/`ManifestEmitter`.**
 
 ## Tests + build
 

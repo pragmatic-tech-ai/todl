@@ -9,7 +9,7 @@
 import type { IServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
 import { Signal } from "@pragmatic-tech-ai/todl-runtime";
 import type { TodlDocument } from "../compiler-services/emit/json.js";
-import { FrozenGraph } from "../domain/graph.js";
+import { MetadataSnapshot } from "../domain/metadata-snapshot.js";
 import { GraphQuery } from "../graph-api/graph-query-engine.js";
 import type { TypeInfo } from "../manifest/reflection/reflection.js";
 import { Manifest, type TaxonomyInfo } from "../manifest/reflection/reflection.js";
@@ -32,7 +32,7 @@ export abstract class ModelDataSource implements EntityHost
 
     private prepared = false;
     private preparedServices: IServiceProvider | undefined;
-    private graph: FrozenGraph | undefined;
+    private graph: MetadataSnapshot | undefined;
     private query: GraphQuery | undefined;
     private readonly entities = new Map<string, ReflectedEntity>();
     private readonly dataChanged = new Signal<void>();
@@ -105,7 +105,7 @@ export abstract class ModelDataSource implements EntityHost
     {
         const resolved = PackageManifestBridge.toResolvedJsonDocument(doc, this.modelName, this.modelVersion, []);
         const manifest = Manifest.load(resolved.manifest);
-        const graph = new FrozenGraph();
+        const graph = new MetadataSnapshot();
         graph.PreRegister(manifest);
         graph.Finalize(manifest);
         if (resolved.seed !== undefined) graph.BindSeed(resolved.seed, { model: this.modelName, version: this.modelVersion });

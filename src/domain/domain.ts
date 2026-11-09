@@ -21,7 +21,7 @@ import {
     type InstanceMirror,
 } from "../manifest/reflection/reflection.js";
 import type { ManifestJson } from "../manifest/records.js";
-import { FrozenGraph, Heap, type SeedGraph, type DomainEdge, type DomainToken } from "./graph.js";
+import { MetadataSnapshot, Heap, type SeedGraph, type DomainEdge, type DomainToken } from "./metadata-snapshot.js";
 
 // Re-export the substrate types so existing `from "./domain.js"` imports keep working.
 export { Heap };
@@ -72,7 +72,7 @@ export class Domain
     static current: Domain | undefined;
 
     /** The graph substrate this domain composes into and reads through. */
-    readonly graph = new FrozenGraph();
+    readonly graph = new MetadataSnapshot();
 
     readonly onManifestLoaded = new Signal<Manifest>();
     readonly onManifestUnloaded = new Signal<Manifest>();
@@ -86,7 +86,7 @@ export class Domain
     /** The `model@version` identity used for dedup / refcount. */
     static identity(ref: Required<PackageRef>): string
     {
-        return FrozenGraph.Identity(ref);
+        return MetadataSnapshot.Identity(ref);
     }
 
     /** Every currently loaded manifest, in deps-first load order. */

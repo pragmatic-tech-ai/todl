@@ -68,12 +68,12 @@ export class Heap
 }
 
 /**
- * The frozen (compose-once) graph substrate. Owns the manifest registry, the
+ * The compiled metadata snapshot (compose-once graph substrate). Owns the manifest registry, the
  * heap, seed-origin attribution, and the multi-manifest reflection engine; it
  * is the ManifestHost that hops cross-manifest TypeRefs. Reactive/extensible
  * variants layer change-handling on this base later in the arc.
  */
-export class FrozenGraph implements ManifestHost
+export class MetadataSnapshot implements ManifestHost
 {
     private readonly byIdentity = new Map<string, Manifest>();
     private readonly order: Manifest[] = [];
@@ -122,7 +122,7 @@ export class FrozenGraph implements ManifestHost
     PreRegister(manifest: Manifest): void
     {
         manifest.setHost(this);
-        this.byIdentity.set(FrozenGraph.Identity({ model: manifest.model, version: manifest.version }), manifest);
+        this.byIdentity.set(MetadataSnapshot.Identity({ model: manifest.model, version: manifest.version }), manifest);
     }
 
     /** Finalize registration: append to the deps-first `order` (after deps loaded). */
@@ -144,7 +144,7 @@ export class FrozenGraph implements ManifestHost
 
     getManifest(model: string, version?: string): Manifest | undefined
     {
-        if (version !== undefined) return this.byIdentity.get(FrozenGraph.Identity({ model, version }));
+        if (version !== undefined) return this.byIdentity.get(MetadataSnapshot.Identity({ model, version }));
         let found: Manifest | undefined;
         for (const m of this.order) if (m.model === model) found = m;
         return found;

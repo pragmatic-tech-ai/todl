@@ -1,8 +1,8 @@
 // The reflection-native query engine (arc 1b-i): answers the graph query surface from
-// the FrozenGraph substrate (loaded manifests + flattened heap), returning reflection
+// the MetadataSnapshot substrate (loaded manifests + flattened heap), returning reflection
 // handles. A lazy reverse-ref index backs Referrers (the heap has only forward refs).
 
-import type { FrozenGraph } from "../domain/graph.js";
+import type { MetadataSnapshot } from "../domain/metadata-snapshot.js";
 import type { TypeInfo, InstanceMirror, TermInfo, ReflectedNode } from "../manifest/reflection/reflection.js";
 import { MetaKind } from "../manifest/enums.js";
 import { Snapshot } from "./snapshot.js";
@@ -17,7 +17,7 @@ export class GraphQuery implements IGraphQuery
 
     private reverse?: Map<string, ReverseRef[]>;
 
-    constructor(private readonly graph: FrozenGraph) {}
+    constructor(private readonly graph: MetadataSnapshot) {}
 
     public IconKey(typeId: string): string | undefined
     {

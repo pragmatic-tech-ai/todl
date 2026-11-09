@@ -8,7 +8,7 @@ import { MetaKind } from "../../model/kinds.js";
 import { ManifestEmitter } from "../manifest.js";
 import { ManifestWriter } from "../../../manifest/manifest-writer.js";
 import { Manifest } from "../../../manifest/reflection/reflection.js";
-import { FrozenGraph } from "../../../domain/graph.js";
+import { MetadataSnapshot } from "../../../domain/metadata-snapshot.js";
 import { GraphQuery } from "../../../graph-api/graph-query-engine.js";
 
 /** Builds the repository and manifest-side view of fixtures so the two can be compared. */
@@ -49,11 +49,11 @@ class AgreementHarness
         return graph.nodes.filter((n) => !known.has(n.type)).map((n) => n.id).sort();
     }
 
-    public static Graph(repo: Repository): FrozenGraph
+    public static Graph(repo: Repository): MetadataSnapshot
     {
         const { manifest, graph } = new ManifestEmitter(repo, AgreementHarness.Model, AgreementHarness.Version).emit();
         const reflected = Manifest.load(ManifestWriter.fromLogical(manifest).toBinary());
-        const frozen = new FrozenGraph();
+        const frozen = new MetadataSnapshot();
         frozen.PreRegister(reflected);
         frozen.Finalize(reflected);
         const unbindable = new Set(AgreementHarness.Unbindable(repo));

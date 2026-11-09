@@ -9,7 +9,7 @@ import { Manifest } from "../reflection/reflection.js";
 import { MetaKind } from "../enums.js";
 import type { LogicalManifest, ConceptDef, AspectDef } from "../logical.js";
 import type { ManifestJson } from "../records.js";
-import { FrozenGraph } from "../../domain/graph.js";
+import { MetadataSnapshot } from "../../domain/metadata-snapshot.js";
 import { GraphQuery } from "../../graph-api/graph-query-engine.js";
 import { ReflectionSummary } from "./reflection-summary.js";
 
@@ -119,7 +119,7 @@ describe("aspects in the manifest", () =>
 
     test("InstancesOf aspect returns carriers", () =>
     {
-        const g = new FrozenGraph();
+        const g = new MetadataSnapshot();
         const m = Manifest.load(ManifestWriter.fromLogical(AspectFixtures.Logical()).toBinary());
         g.PreRegister(m);
         g.Finalize(m);

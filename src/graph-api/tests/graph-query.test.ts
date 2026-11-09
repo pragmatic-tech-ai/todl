@@ -1,14 +1,14 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { GraphQuery } from "../graph-query-engine.js";
-import { FrozenGraph } from "../../domain/graph.js";
+import { MetadataSnapshot } from "../../domain/metadata-snapshot.js";
 import { Manifest } from "../../manifest/reflection/reflection.js";
 import { ManifestWriter } from "../../manifest/manifest-writer.js";
 import type { LogicalManifest } from "../../manifest/logical.js";
 import type { ManifestJson } from "../../manifest/records.js";
 import type { ReflectedNode } from "../../manifest/reflection/reflection.js";
 
-function register(g: FrozenGraph, m: Manifest): void { g.PreRegister(m); g.Finalize(m); }
+function register(g: MetadataSnapshot, m: Manifest): void { g.PreRegister(m); g.Finalize(m); }
 
 // Element -> Widget(label?, links:[Widget]) -> SuperWidget.
 function widgetManifest(model: string): ManifestJson
@@ -48,9 +48,9 @@ function taxonomyManifest(): ManifestJson
     return ManifestWriter.fromLogical(logical).toJSON();
 }
 
-function widgetGraph(nodes: ReflectedNode[], edges: { from: string; rel: string; to: string }[] = []): FrozenGraph
+function widgetGraph(nodes: ReflectedNode[], edges: { from: string; rel: string; to: string }[] = []): MetadataSnapshot
 {
-    const g = new FrozenGraph();
+    const g = new MetadataSnapshot();
     register(g, Manifest.load(widgetManifest("shop")));
     g.BindSeed({ nodes, edges }, { model: "shop", version: "1.0.0" });
     return g;
@@ -60,7 +60,7 @@ describe("GraphQuery: concepts + instances", () =>
 {
     test("Concepts lists concept types across manifests, deduped by fullName", () =>
     {
-        const g = new FrozenGraph();
+        const g = new MetadataSnapshot();
         register(g, Manifest.load(widgetManifest("shop")));
         register(g, Manifest.load(taxonomyManifest()));
         // TypeInfo.fullName is manifest-local (no model qualifier); dedup is by that name.
@@ -120,7 +120,7 @@ describe("GraphQuery: taxonomy", () =>
 {
     test("Narrower/Broader/Descendants/Ancestors walk the taxonomy", () =>
     {
-        const g = new FrozenGraph();
+        const g = new MetadataSnapshot();
         register(g, Manifest.load(taxonomyManifest()));
         const q = new GraphQuery(g);
         assert.equal(q.Term("Comp.Surface")?.id, "Comp.Surface");

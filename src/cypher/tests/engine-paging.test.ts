@@ -1,7 +1,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { GraphQuery } from "../../graph-api/graph-query-engine.js";
-import { FrozenGraph } from "../../domain/graph.js";
+import { MetadataSnapshot } from "../../domain/metadata-snapshot.js";
 import { Manifest } from "../../manifest/reflection/reflection.js";
 import { ManifestWriter } from "../../manifest/manifest-writer.js";
 import type { LogicalManifest } from "../../manifest/logical.js";
@@ -44,7 +44,7 @@ class PagingFixture
             },
             classes: {}, taxonomies: {},
         };
-        const g = new FrozenGraph();
+        const g = new MetadataSnapshot();
         const m = Manifest.load(ManifestWriter.fromLogical(logical).toJSON());
         g.PreRegister(m);
         g.Finalize(m);
@@ -122,7 +122,7 @@ class TieFixture
             },
             classes: {}, taxonomies: {},
         };
-        const g = new FrozenGraph();
+        const g = new MetadataSnapshot();
         const m = Manifest.load(ManifestWriter.fromLogical(logical).toJSON());
         g.PreRegister(m);
         g.Finalize(m);

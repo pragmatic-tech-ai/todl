@@ -1,7 +1,7 @@
 // Per-model document transform: given a package TodlDocument and a model id,
 // produce the sub-document of shared ontology + only that model's Contains-
 // closure of instances. The model container node (type: null) and all Contains
-// edges are stripped — including them would make FrozenGraph.BindSeed throw.
+// edges are stripped — including them would make MetadataSnapshot.BindSeed throw.
 // A ModelDataSource materialized from a shard is therefore scoped to that model.
 
 import { MetaKind } from "../compiler-services/model/kinds.js";

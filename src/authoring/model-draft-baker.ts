@@ -1,5 +1,5 @@
 import { toJSON } from "../compiler-services/emit/json.js";
-import { FrozenGraph } from "../domain/graph.js";
+import { MetadataSnapshot } from "../domain/metadata-snapshot.js";
 import { GraphQuery } from "../graph-api/graph-query-engine.js";
 import type { IGraphQuery } from "../graph-api/index.js";
 import { Manifest } from "../manifest/reflection/reflection.js";
@@ -34,7 +34,7 @@ export class ModelDraftBaker
         const version = opts?.version ?? ModelDraftBaker.DefaultVersion;
         const resolved = PackageManifestBridge.toResolvedJsonDocument(toJSON(draft.model), model, version, []);
         const manifest = Manifest.load(resolved.manifest);
-        const graph = new FrozenGraph();
+        const graph = new MetadataSnapshot();
         graph.PreRegister(manifest);
         graph.Finalize(manifest);
         if (resolved.seed !== undefined) graph.BindSeed(resolved.seed, { model, version });

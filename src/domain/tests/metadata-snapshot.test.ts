@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { FrozenGraph, type SeedGraph } from "../graph.js";
+import { MetadataSnapshot, type SeedGraph } from "../metadata-snapshot.js";
 import { Manifest } from "../../manifest/reflection/reflection.js";
 import { ManifestWriter } from "../../manifest/manifest-writer.js";
 import type { LogicalManifest } from "../../manifest/logical.js";
@@ -8,7 +8,7 @@ import type { ManifestJson } from "../../manifest/records.js";
 import type { ReflectedNode } from "../../manifest/reflection/reflection.js";
 
 // A manifest appears in `manifests` only once both PreRegister + Finalize have run.
-function register(g: FrozenGraph, m: Manifest): void { g.PreRegister(m); g.Finalize(m); }
+function register(g: MetadataSnapshot, m: Manifest): void { g.PreRegister(m); g.Finalize(m); }
 
 function soloManifest(model: string, concept: string): ManifestJson
 {
@@ -23,11 +23,11 @@ function soloManifest(model: string, concept: string): ManifestJson
     return ManifestWriter.fromLogical(logical).toJSON();
 }
 
-describe("FrozenGraph: registry + reflection + heap", () =>
+describe("MetadataSnapshot: registry + reflection + heap", () =>
 {
     test("Register exposes the manifest via manifests/getManifest/getType", () =>
     {
-        const g = new FrozenGraph();
+        const g = new MetadataSnapshot();
         register(g, Manifest.load(soloManifest("shop", "Widget")));
         assert.deepEqual(g.manifests.map((m) => m.model), ["shop"]);
         assert.equal(g.getManifest("shop")?.model, "shop");
@@ -36,7 +36,7 @@ describe("FrozenGraph: registry + reflection + heap", () =>
 
     test("BindSeed merges nodes and reflect() resolves via the owning manifest", () =>
     {
-        const g = new FrozenGraph();
+        const g = new MetadataSnapshot();
         register(g, Manifest.load(soloManifest("shop", "Widget")));
         const widget: ReflectedNode = { id: "w1", type: "Widget", namespace: "shop", attrs: { label: "Hi" } };
         g.BindSeed({ nodes: [widget] }, { model: "shop", version: "1.0.0" });
@@ -48,7 +48,7 @@ describe("FrozenGraph: registry + reflection + heap", () =>
 
     test("BindSeed throws when a node's type is unknown", () =>
     {
-        const g = new FrozenGraph();
+        const g = new MetadataSnapshot();
         register(g, Manifest.load(soloManifest("shop", "Widget")));
         const bad: SeedGraph = { nodes: [{ id: "x", type: "Nope", attrs: {} }] };
         assert.throws(() => g.BindSeed(bad, { model: "shop", version: "1.0.0" }));
@@ -56,7 +56,7 @@ describe("FrozenGraph: registry + reflection + heap", () =>
 
     test("Evict removes only the nodes attributed to the given identity", () =>
     {
-        const g = new FrozenGraph();
+        const g = new MetadataSnapshot();
         register(g, Manifest.load(soloManifest("shop", "Widget")));
         g.BindSeed({ nodes: [{ id: "w1", type: "Widget", attrs: {} }] }, { model: "shop", version: "1.0.0" });
         g.BindSeed({ nodes: [{ id: "w2", type: "Widget", attrs: {} }] }, { model: "app", version: "9.9.9" });
@@ -69,7 +69,7 @@ describe("FrozenGraph: registry + reflection + heap", () =>
 
 test("a bare simple name shared by two manifests is ambiguous domain-wide; full names and unique names still resolve", () =>
 {
-    const g = new FrozenGraph();
+    const g = new MetadataSnapshot();
     register(g, Manifest.load(soloManifest("a", "a.Widget")));
     register(g, Manifest.load(soloManifest("b", "b.Widget")));
     assert.equal(g.getType("Widget"), undefined);
