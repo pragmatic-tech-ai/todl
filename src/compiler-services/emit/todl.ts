@@ -192,7 +192,49 @@ function isClassNode(n: JsonNode): boolean
   return n.isClass === true;
 }
 
-export function emitModelTodl(own: TodlDocument, namespace: string, bindings: ModelBindings, conforms?: string, operators?: Map<string, EmitOperator>, model?: Repository): string
+/** The bare model name a model block is emitted under: the declared id's local part (its namespace stripped). */
+class ModelBlockName
+{
+  private static readonly Separator = ".";
+  private static readonly Suffix = "Model";
+
+  /** `shop.M` in namespace `shop` → `M`; an id outside the namespace keeps its last segment. */
+  static Of(modelId: string, namespace: string): string
+  {
+    const prefix = namespace + ModelBlockName.Separator;
+    if (modelId.startsWith(prefix) && !modelId.slice(prefix.length).includes(ModelBlockName.Separator)) return modelId.slice(prefix.length);
+    return modelId.slice(modelId.lastIndexOf(ModelBlockName.Separator) + 1);
+  }
+
+  /** The synthesized name for instances with no declared model: a dotted namespace is flattened to camelCase so
+   *  `acme.app` → `acmeAppModel` (a model id must be a bare C-like identifier). */
+  static Synthesized(namespace: string): string
+  {
+    return `${namespace.split(ModelBlockName.Separator).map((s, i) => (i === 0 ? s : s.charAt(0).toUpperCase() + s.slice(1))).join("")}${ModelBlockName.Suffix}`;
+  }
+
+  /** The concrete instances grouped by block name, in first-appearance order. An instance with no recorded model
+   *  joins the first declared model of the file (else the synthesized one). */
+  static Group(concrete: readonly JsonNode[], namespace: string, modelOf: ReadonlyMap<string, string> | undefined): Map<string, JsonNode[]>
+  {
+    const declared = concrete.map((n) => modelOf?.get(n.id)).find((m) => m !== undefined);
+    const fallback = declared === undefined ? ModelBlockName.Synthesized(namespace) : ModelBlockName.Of(declared, namespace);
+    const groups = new Map<string, JsonNode[]>();
+    for (const n of concrete)
+    {
+      const id = modelOf?.get(n.id);
+      const name = id === undefined ? fallback : ModelBlockName.Of(id, namespace);
+      const list = groups.get(name) ?? [];
+      list.push(n);
+      groups.set(name, list);
+    }
+    return groups;
+  }
+}
+
+/** `modelOf` maps an instance id to its declared model id: each model is emitted as its own block under its declared
+ *  name (instances without one join the file's first declared model, else `<namespace>Model`). */
+export function emitModelTodl(own: TodlDocument, namespace: string, bindings: ModelBindings, conforms?: string, operators?: Map<string, EmitOperator>, model?: Repository, modelOf?: ReadonlyMap<string, string>): string
 {
   const instances = own.nodes;
   const classes = instances.filter(isClassNode);
@@ -228,15 +270,12 @@ export function emitModelTodl(own: TodlDocument, namespace: string, bindings: Mo
   const lines: string[] = [`namespace ${namespace}`, "{"];
   for (const ns of bindings.imports) lines.push(`  import ${ns};`);
   for (const n of classes) lines.push(...emitOne(n, ctx, 1));
-  if (concrete.length > 0)
+  const uses = bindings.uses.length > 0 ? ` uses ${bindings.uses.join(", ")}` : "";
+  const conf = conforms !== undefined ? ` conforms ${conforms}` : "";
+  for (const [modelId, members] of ModelBlockName.Group(concrete, namespace, modelOf))
   {
-    const uses = bindings.uses.length > 0 ? ` uses ${bindings.uses.join(", ")}` : "";
-    // The model id must be a bare C-like identifier (no dots); a dotted namespace
-    // is flattened to camelCase so `acme.app` → `acmeAppModel`.
-    const modelId = `${namespace.split(".").map((s, i) => (i === 0 ? s : s.charAt(0).toUpperCase() + s.slice(1))).join("")}Model`;
-    const conf = conforms !== undefined ? ` conforms ${conforms}` : "";
     lines.push(`  model ${modelId} : ${bindings.metaModel}${uses}${conf} {`);
-    for (const n of concrete)
+    for (const n of members)
     {
       if (ctx.inline.has(n.id)) continue; // emitted inline inside its parent
       for (const l of emitOne(n, ctx, 2)) lines.push(l);

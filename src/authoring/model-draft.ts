@@ -23,6 +23,7 @@ import { ModelBlockSplicer, SourceLayout } from "./source-layout.js";
 const INSTANCE_TIER = Tier[Tier.Instance];
 const RELATIONSHIP = EdgeKind[EdgeKind.Relationship];
 const MODEL_TYPEOF = "model";
+const CONTAINS = EdgeKind[EdgeKind.Contains];
 
 /** A plain instance record; Phase 5 codegen emits these, Phase 4 accepts them. */
 export interface InstanceDescriptor
@@ -38,6 +39,16 @@ export interface ModelDraftState
 {
   readonly own: TodlDocument;
   readonly home: ReadonlyMap<NodeId, string>;
+  /** The model container (id) of each own node that has one. */
+  readonly models: ReadonlyMap<NodeId, string>;
+}
+
+/** Reopen options: the draft's namespace and, optionally, the model (container id) new instances go to. */
+export interface ModelDraftOptions
+{
+  namespace: string;
+  /** The model id (e.g. `shop.M`) a `create` without a home joins; its home defaults to the file declaring it. */
+  model?: string;
 }
 
 export class ModelDraft
@@ -49,6 +60,12 @@ export class ModelDraft
   private readonly home = new Map<NodeId, string>();
   /** The files this draft was reopened from (fromSources), by uri: their original text and role (see SourceLayout). */
   private readonly layouts = new Map<string, SourceLayout>();
+  /** The declared model container (id) of each own node, so a re-emit keeps the model a node was declared in. */
+  private readonly modelOf = new Map<NodeId, string>();
+  /** The file that declares each reopened model (the first, when several do). */
+  private readonly modelFile = new Map<string, string>();
+  /** The model a `create` without a home joins (ModelDraftOptions.model). */
+  private defaultModel: string | undefined = undefined;
 
   private constructor(
     /** The frozen bases as documents: [prelude, ...bases]. */
@@ -80,7 +97,7 @@ export class ModelDraft
   static fromSources(
     bases: readonly Repository[],
     sources: readonly { uri: string; text: string }[],
-    opts: { namespace: string },
+    opts: ModelDraftOptions,
   ): ModelDraft
   {
     const baseDocs = [preludeDocument(), ...bases.map((b) => toJSON(b))];
@@ -113,6 +130,18 @@ export class ModelDraft
     // container id is skipped since it is not an own node.
     const ownIds = new Set(draft.own.nodes.map((n) => n.id));
     for (const [id, uri] of result.provenance) if (ownIds.has(id)) draft.home.set(id, uri);
+    // Keep each own node's declared model (its container's id) and where each model is declared, so the re-emit
+    // writes `model <declared name>` rather than a synthesized one.
+    for (const e of compiled.edges)
+    {
+      if (e.kind === CONTAINS && modelIds.has(String(e.from)) && ownIds.has(String(e.to))) draft.modelOf.set(String(e.to), String(e.from));
+    }
+    for (const id of modelIds)
+    {
+      const uri = result.provenance.get(id);
+      if (uri !== undefined && !draft.modelFile.has(id)) draft.modelFile.set(id, uri);
+    }
+    draft.defaultModel = opts.model;
     return draft;
   }
 
@@ -172,6 +201,10 @@ export class ModelDraft
    *  handle. `home` records the file it round-trips to (see toTodlByFile). */
   create(concept: string, id: NodeId, home?: string): Entity
   {
+    // Without a home a new instance joins the draft's model, in the file that declares it.
+    const model = this.defaultModel;
+    home ??= model === undefined ? undefined : this.modelFile.get(model);
+    if (model !== undefined) this.modelOf.set(id, model);
     this.own.nodes.push({
       id,
       tier: INSTANCE_TIER,
@@ -222,7 +255,7 @@ export class ModelDraft
   /** Deep-copy the mutable state (own delta + home map) for a later Restore. */
   Snapshot(): ModelDraftState
   {
-    return { own: structuredClone(this.own), home: new Map(this.home) };
+    return { own: structuredClone(this.own), home: new Map(this.home), models: new Map(this.modelOf) };
   }
 
   /** Replace the mutable state with a prior Snapshot (the snapshot stays reusable). */
@@ -231,6 +264,8 @@ export class ModelDraft
     this.own = structuredClone(state.own);
     this.home.clear();
     for (const [id, uri] of state.home) this.home.set(id, uri);
+    this.modelOf.clear();
+    for (const [id, model] of state.models) this.modelOf.set(id, model);
     this.invalidate();
   }
 
@@ -303,7 +338,7 @@ export class ModelDraft
   {
     const own = this.toJSON();
     const bindings = deriveBindings(this.model, this.baseIds, this.namespace, own);
-    const emitted = emitModelTodl(own, this.namespace, bindings, this.conformsOf(own), collectOperators(this.model), this.model);
+    const emitted = emitModelTodl(own, this.namespace, bindings, this.conformsOf(own), collectOperators(this.model), this.model, this.modelOf);
     // Reopened from a single file that carries schema: keep that file's text and replace only its model body.
     if (this.layouts.size !== 1) return emitted;
     const [uri, layout] = [...this.layouts][0]!;
@@ -333,7 +368,7 @@ export class ModelDraft
     for (const [uri, doc] of files)
     {
       const bindings = deriveBindings(this.model, this.baseIds, this.namespace, doc);
-      const emitted = emitModelTodl(doc, this.namespace, bindings, this.conformsOf(doc), collectOperators(this.model), this.model);
+      const emitted = emitModelTodl(doc, this.namespace, bindings, this.conformsOf(doc), collectOperators(this.model), this.model, this.modelOf);
       // A file that declares schema beside its model keeps that schema verbatim: only its model body is replaced.
       const layout = this.layouts.get(uri);
       result.set(uri, layout !== undefined && layout.HasSchema ? ModelBlockSplicer.Splice(uri, layout.Text, emitted) : emitted);
