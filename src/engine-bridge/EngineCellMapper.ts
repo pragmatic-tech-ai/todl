@@ -54,7 +54,7 @@ export class EngineCellMapper
         };
         if (dto.Stats !== undefined)
         {
-            mapped.Stats = dto.Stats as unknown as NonNullable<CypherResultDto['Stats']>;
+            mapped.Stats = dto.Stats;
         }
         return mapped;
     }
@@ -160,7 +160,9 @@ export class EngineCellMapper
 
     /**
      * The field's TODL value. TODL keeps numeric literals as decimal strings, while the engine holds Int64/Float64
-     * numbers, so a numeric field's engine number is rendered back as its decimal string.
+     * numbers, so a numeric field's engine number is rendered back as its decimal string. The rendering is lossy:
+     * the engine keeps no literal text, so a non-canonical literal such as "2.0" or "1.50" comes back as "2" or
+     * "1.5", and a very large or small Float64 as JS formats it (exponent forms such as "1e+21").
      */
     private FieldValue(field: FieldInfo, cell: EngineCell | undefined): Scalar | undefined
     {

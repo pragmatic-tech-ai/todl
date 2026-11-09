@@ -8,15 +8,19 @@ import { Domain } from "../../domain/domain.js";
 import { MemoryPackageSource } from "../../domain/memory-package-source.js";
 import type { CypherResultDto } from "../../cypher/index.js";
 import type { MetadataSnapshot } from "../../domain/metadata-snapshot.js";
+import { TodlNames } from "../TodlNames.js";
 import { EngineCellMapper } from "../EngineCellMapper.js";
 import { EngineFixture } from "./EngineFixture.js";
 
 /** Runs queries on a fixture's engine and maps the result cells. */
 class MapperHarness
 {
-    private static readonly AllNodes = "MATCH (n) RETURN n";
-    private static readonly NodeKey = "$node";
-    private static readonly Fixtures = ["aspects.todl", "order-fulfillment.todl", "shop"];
+    public static readonly AllNodes = "MATCH (n) RETURN n";
+    public static readonly NodeKey = "$node";
+    public static readonly PassThroughQuery = "RETURN 1 AS a, 'x' AS b, null AS c, [1, 2] AS d, {k: 1} AS e, {`$node`: 1} AS f, 2.5 AS g";
+    public static readonly NestedQuery = "MATCH (n) WITH collect(n) AS ns RETURN ns AS l, {k: ns} AS m";
+    public static readonly AspectsFixture = "aspects.todl";
+    private static readonly Fixtures = [MapperHarness.AspectsFixture, "order-fulfillment.todl", "shop"];
     private static readonly MinimumNodes = 1;
     public static readonly ShopName = "shop";
     private static readonly ShopModel = "shop.p";
@@ -43,6 +47,7 @@ class MapperHarness
             kind = Small; kinds = [Big, Huge]; home = l1; parts = [w1]; at = l1;
         }
         Widget w1 { label = "Second"; }
+        Widget w3 { label = "Explicit"; name = "Named"; }
         Widget w2 instanceof Kinds.Small { name = "named"; }
     }
 }`;
@@ -92,16 +97,20 @@ class MapperHarness
             const snap = (row[0] as unknown as Record<string, MirrorSnapshot>)[MapperHarness.NodeKey]!;
             byId.set(snap.id, snap);
         }
-        let compared = 0;
-        for (const node of graph.allNodes())
+        const nodes = graph.allNodes();
+        for (const node of nodes)
         {
             const got = byId.get(node.id);
-            if (got === undefined) continue;
+            assert.ok(got !== undefined, `${fixture}: ${node.id} missing from the engine rows`);
             assert.deepEqual(got, Snapshot.of(graph.reflect(node)), `${fixture}: ${node.id}`);
-            compared++;
         }
-        assert.ok(compared >= MapperHarness.MinimumNodes, `${fixture}: compared ${compared}`);
-        return compared;
+        // Every engine row is a heap node compared above, or a seeded taxonomy term (not on the heap).
+        for (const snap of byId.values())
+        {
+            assert.ok(graph.getNode(snap.id) !== undefined || snap.concept === TodlNames.Term, `${fixture}: unexpected row ${snap.id}`);
+        }
+        assert.ok(nodes.length >= MapperHarness.MinimumNodes, `${fixture}: ${nodes.length} nodes`);
+        return nodes.length;
     }
 }
 
@@ -117,18 +126,18 @@ describe("EngineCellMapper", () =>
 
     test("non-node cells pass through", async () =>
     {
-        const { mapped } = await MapperHarness.Run("aspects.todl", "RETURN 1 AS a, 'x' AS b, null AS c, [1, 2] AS d, {k: 1} AS e, {`$node`: 1} AS f, 2.5 AS g");
+        const { mapped } = await MapperHarness.Run(MapperHarness.AspectsFixture, MapperHarness.PassThroughQuery);
         assert.deepEqual(mapped.Rows[0], [1, "x", null, [1, 2], { k: 1 }, { $map: { $node: 1 } }, 2.5]);
     });
 
     test("nested nodes in lists and maps are mapped", async () =>
     {
-        const { mapped, graph } = await MapperHarness.Run("aspects.todl", "MATCH (n) WITH collect(n) AS ns RETURN ns AS l, {k: ns} AS m");
+        const { mapped, graph } = await MapperHarness.Run(MapperHarness.AspectsFixture, MapperHarness.NestedQuery);
         const [list, map] = mapped.Rows[0] as [unknown[], Record<string, unknown>];
         let compared = 0;
         for (const item of list)
         {
-            const snap = (item as Record<string, MirrorSnapshot>)["$node"]!;
+            const snap = (item as Record<string, MirrorSnapshot>)[MapperHarness.NodeKey]!;
             const node = graph.getNode(snap.id);
             if (node === undefined) continue;
             assert.deepEqual(snap, Snapshot.of(graph.reflect(node)));
@@ -136,5 +145,20 @@ describe("EngineCellMapper", () =>
         }
         assert.ok(compared > 0);
         assert.deepEqual(map["k"], list);
+    });
+
+    test("label precedence: explicit label, then name, then id", async () =>
+    {
+        const { mapped } = await MapperHarness.RunOn(await MapperHarness.ShopGraph(), MapperHarness.AllNodes);
+        const labels = new Map<string, string>();
+        for (const row of mapped.Rows)
+        {
+            const snap = (row[0] as unknown as Record<string, MirrorSnapshot>)[MapperHarness.NodeKey]!;
+            labels.set(snap.id, snap.label);
+        }
+        assert.equal(labels.get("shop.w3"), "Explicit");
+        assert.equal(labels.get("shop.w2"), "named");
+        assert.equal(labels.get("shop.w1"), "Second");
+        assert.equal(labels.get("shop.l1"), "shop.l1");
     });
 });
