@@ -449,19 +449,22 @@ class TermCompiler
     }
 
     /**
-     * A fact or literal against a member's engine type, mirroring the evaluator's === on raw entity values (rulings
-     * PF-a, PF-f): TODL holds numeric entity values as decimal text, so a string in the canonical text of a number
-     * (`2`, `-3`, `2.5`, `1e+21`) converts to that number, a JS number never equals one, and any other string
-     * (`02`, `+2`, `2.0`, `0x10`, `1e1`, `.5`) fails closed, since its text could never equal a canonical entity
-     * value. Residual: the entity side is typed storage, so a non-canonical value seeded from a `.todl` file (`count =
-     * "02"`) is held as its number and matches the canonical claim `"2"`, where the evaluator's raw text would not.
+     * A fact or literal against a member's engine type. Strings and booleans convert only from their own JS type
+     * under both semantics. Numeric members depend on the semantics.
+     *
+     * SourceText mirrors the evaluator's === on raw entity values (rulings PF-a, PF-f): TODL holds numeric entity
+     * values as decimal text, so a string in the canonical text of a number (`2`, `-3`, `2.5`, `1e+21`) converts to
+     * that number, a JS number never equals one, and any other string (`02`, `+2`, `2.0`, `0x10`, `1e1`, `.5`) fails
+     * closed, since its text could never equal a canonical entity value. Residual: the entity side is typed storage,
+     * so a non-canonical value seeded from a `.todl` file (`count = "02"`) is held as its number and matches the
+     * canonical claim `"2"`, where the evaluator's raw text would not.
+     *
+     * Typed mirrors === on typed runtime values: a JS number converts (Int64: an integral safe number becomes a
+     * bigint, a fractional or unsafe one never matches; Float64: a finite number), and a string against a numeric
+     * member never matches, with no diagnostic.
      */
     private Convert(type: ValueType, raw: unknown): IConversion
     {
-        if (this.semantics === PolicyValueSemantics.Typed)
-        {
-            return TermCompiler.ConvertTyped(type, raw);
-        }
         switch (type)
         {
             case ValueType.String:
@@ -469,30 +472,22 @@ class TermCompiler
             case ValueType.Boolean:
                 return typeof raw === 'boolean' ? TermCompiler.Cell(raw) : TermCompiler.Outcome(ConversionOutcome.Never);
             case ValueType.Float64:
-                return TermCompiler.Numeric(raw, (text) => TermCompiler.ToFloat64(text));
+                return this.semantics === PolicyValueSemantics.Typed
+                    ? TermCompiler.TypedNumber(raw, Number.isFinite, (n) => n)
+                    : TermCompiler.Numeric(raw, (text) => TermCompiler.ToFloat64(text));
             case ValueType.Int64:
-                return TermCompiler.Numeric(raw, (text) => TermCompiler.ToInt64(text));
+                return this.semantics === PolicyValueSemantics.Typed
+                    ? TermCompiler.TypedNumber(raw, Number.isSafeInteger, (n) => BigInt(n))
+                    : TermCompiler.Numeric(raw, (text) => TermCompiler.ToInt64(text));
             default:
                 return TermCompiler.Outcome(ConversionOutcome.Never);
         }
     }
 
-    /** Typed entity values: a JS number against a numeric member converts, a string never matches (no diagnostic). */
-    private static ConvertTyped(type: ValueType, raw: unknown): IConversion
+    /** Typed numeric member: a JS number that `accepts` converts through `toCell`; anything else never matches. */
+    private static TypedNumber(raw: unknown, accepts: (n: number) => boolean, toCell: (n: number) => CellValue): IConversion
     {
-        switch (type)
-        {
-            case ValueType.String:
-                return typeof raw === 'string' ? TermCompiler.Cell(raw) : TermCompiler.Outcome(ConversionOutcome.Never);
-            case ValueType.Boolean:
-                return typeof raw === 'boolean' ? TermCompiler.Cell(raw) : TermCompiler.Outcome(ConversionOutcome.Never);
-            case ValueType.Float64:
-                return typeof raw === 'number' && Number.isFinite(raw) ? TermCompiler.Cell(raw) : TermCompiler.Outcome(ConversionOutcome.Never);
-            case ValueType.Int64:
-                return typeof raw === 'number' && Number.isSafeInteger(raw) ? TermCompiler.Cell(BigInt(raw)) : TermCompiler.Outcome(ConversionOutcome.Never);
-            default:
-                return TermCompiler.Outcome(ConversionOutcome.Never);
-        }
+        return typeof raw === 'number' && accepts(raw) ? TermCompiler.Cell(toCell(raw)) : TermCompiler.Outcome(ConversionOutcome.Never);
     }
 
     private static Numeric(raw: unknown, parse: (text: string) => CellValue | undefined): IConversion
@@ -594,30 +589,14 @@ export class PolicyScopeCompiler
             const concept = String(conceptAttr ?? id.replace(PolicyScopeCompiler.PolicySuffix, ''));
             if (schema !== undefined && !schema.HasConcept(concept))
             {
-                diagnostics.push({ Code: PolicyDiagnosticCode.UnknownConcept, Concept: concept, Message: MessageFormat.Format(PolicyScopeCompiler.UnknownConceptMessage, concept) });
+                PolicyScopeCompiler.ReportUnknownConcept(concept, diagnostics);
                 continue;
             }
             const members = schema !== undefined ? schema.Of(concept) : PolicyScopeCompiler.MembersOf(repo, concept);
             const raw = node?.attrs.get(Builder.PolicyRulesAttr);
-            let rules: readonly PolicyRule[] | null = null;
-            let cause = conceptAttr === undefined ? PolicyScopeCompiler.NoConceptCause : PolicyScopeCompiler.NoCause;
-            if (conceptAttr !== undefined && raw !== undefined)
-            {
-                try
-                {
-                    rules = PolicyRules.Parse(String(raw));
-                }
-                catch (error)
-                {
-                    cause = (error as Error).message;
-                }
-            }
-            if (rules === null)
-            {
-                const message = MessageFormat.Format(PolicyScopeCompiler.MalformedMessage, id, cause, concept);
-                diagnostics.push({ Code: PolicyDiagnosticCode.MalformedPolicy, Concept: concept, Message: message });
-            }
-            policies.set(concept, { Rules: rules, Members: members });
+            const json = conceptAttr !== undefined && raw !== undefined ? String(raw) : undefined;
+            const absent = conceptAttr === undefined ? PolicyScopeCompiler.NoConceptCause : PolicyScopeCompiler.NoCause;
+            policies.set(concept, { Rules: PolicyScopeCompiler.ReadRules(id, concept, json, absent, diagnostics), Members: members });
         }
         return PolicyScopeCompiler.Finish(policies, diagnostics, PolicyValueSemantics.SourceText);
     }
@@ -643,22 +622,40 @@ export class PolicyScopeCompiler
         {
             if (!schema.HasConcept(concept))
             {
-                diagnostics.push({ Code: PolicyDiagnosticCode.UnknownConcept, Concept: concept, Message: MessageFormat.Format(PolicyScopeCompiler.UnknownConceptMessage, concept) });
+                PolicyScopeCompiler.ReportUnknownConcept(concept, diagnostics);
                 continue;
             }
-            let parsed: readonly PolicyRule[] | null = null;
+            policies.set(concept, { Rules: PolicyScopeCompiler.ReadRules(concept, concept, json, PolicyScopeCompiler.NoCause, diagnostics), Members: schema.Of(concept) });
+        }
+        return PolicyScopeCompiler.Finish(policies, diagnostics, PolicyValueSemantics.Typed);
+    }
+
+    private static ReportUnknownConcept(concept: string, diagnostics: IPolicyDiagnostic[]): void
+    {
+        diagnostics.push({ Code: PolicyDiagnosticCode.UnknownConcept, Concept: concept, Message: MessageFormat.Format(PolicyScopeCompiler.UnknownConceptMessage, concept) });
+    }
+
+    /**
+     * The rules in `json`, or null (reported as `MalformedPolicy`, naming `label`) when there is no JSON (`absentCause`
+     * says why) or it cannot be parsed.
+     */
+    private static ReadRules(label: string, concept: string, json: string | undefined, absentCause: string, diagnostics: IPolicyDiagnostic[]): readonly PolicyRule[] | null
+    {
+        let cause = absentCause;
+        if (json !== undefined)
+        {
             try
             {
-                parsed = PolicyRules.Parse(json);
+                return PolicyRules.Parse(json);
             }
             catch (error)
             {
-                const message = MessageFormat.Format(PolicyScopeCompiler.MalformedMessage, concept, (error as Error).message, concept);
-                diagnostics.push({ Code: PolicyDiagnosticCode.MalformedPolicy, Concept: concept, Message: message });
+                cause = (error as Error).message;
             }
-            policies.set(concept, { Rules: parsed, Members: schema.Of(concept) });
         }
-        return PolicyScopeCompiler.Finish(policies, diagnostics, PolicyValueSemantics.Typed);
+        const message = MessageFormat.Format(PolicyScopeCompiler.MalformedMessage, label, cause, concept);
+        diagnostics.push({ Code: PolicyDiagnosticCode.MalformedPolicy, Concept: concept, Message: message });
+        return null;
     }
 
     private static Finish(policies: ReadonlyMap<string, IConceptPolicy>, diagnostics: IPolicyDiagnostic[], semantics: PolicyValueSemantics): PolicyScopeCompiler

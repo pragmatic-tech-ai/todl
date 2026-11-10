@@ -75,6 +75,11 @@ class Rules
         return { kind: PolicyNodeKind.Compare, op: PolicyCompareOp.Eq, left, right };
     }
 
+    public static Ne(left: PolicyOperand, right: PolicyOperand): PolicyPredicate
+    {
+        return { kind: PolicyNodeKind.Compare, op: PolicyCompareOp.Neq, left, right };
+    }
+
     public static In(collection: PolicyRef, item: PolicyOperand): PolicyPredicate
     {
         return { kind: PolicyNodeKind.Membership, collection, item };
@@ -148,10 +153,11 @@ class Fx
     public static readonly Priority = 'priority';
     public static readonly Region = 'region';
     public static readonly Locked = 'locked';
+    public static readonly Score = 'score';
 
     public static readonly Rows: readonly IRow[] = [
-        { Id: 'a1', Concept: Fx.A, Entity: { priority: 5, region: 'eu', locked: false } },
-        { Id: 'a2', Concept: Fx.A, Entity: { priority: 6, region: 'eu', locked: true } },
+        { Id: 'a1', Concept: Fx.A, Entity: { priority: 5, region: 'eu', locked: false, score: 1.5 } },
+        { Id: 'a2', Concept: Fx.A, Entity: { priority: 6, region: 'eu', locked: true, score: 2.5 } },
         { Id: 'a3', Concept: Fx.A, Entity: { priority: 5, region: 'us', locked: false } },
         { Id: 'a4', Concept: Fx.A, Entity: {} },
         { Id: 'b1', Concept: Fx.B, Entity: { region: 'eu' } },
@@ -172,6 +178,7 @@ class Fx
                         Fx.Prop(Fx.Priority, ValueType.Int64),
                         Fx.Prop(Fx.Region, ValueType.String),
                         Fx.Prop(Fx.Locked, ValueType.Boolean),
+                        Fx.Prop(Fx.Score, ValueType.Float64),
                         Fx.Prop('owners', ValueType.String),
                     ],
                 },
@@ -280,6 +287,52 @@ describe('PolicyScopeCompiler.FromRules', () =>
         const visible = await Fx.Visible([{ concept: Fx.A, rulesJson }], Fx.A);
         assert.deepEqual(visible, ['a1', 'a3']);
         assert.deepEqual(visible, Fx.OracleVisible(rulesJson, Fx.A));
+    });
+
+    test('Float64 typed member matches a number literal', async () =>
+    {
+        const eq = Rules.Json(['allow', 'read', Rules.Eq(Rules.Entity(Fx.Score), Rules.Lit(1.5))]);
+        const ne = Rules.Json(['allow', 'read', Rules.Ne(Rules.Entity(Fx.Score), Rules.Lit(1.5))]);
+        const asText = Rules.Json(['allow', 'read', Rules.Eq(Rules.Entity(Fx.Score), Rules.Lit('1.5'))]);
+        const compiler = PolicyScopeCompiler.FromRules([{ concept: Fx.A, rulesJson: eq }], Fx.Description());
+        assert.equal(Fx.Json(compiler.Compile(new Facts({}), AccessDefault.Allow).Rows.get(Fx.A)), Fx.Json(new And([new Not(new IsNull(Fx.Score)), new Compare(Fx.Score, CompareOp.Eq, 1.5)])));
+        assert.deepEqual(compiler.Diagnostics, []);
+        assert.deepEqual(await Fx.Visible([{ concept: Fx.A, rulesJson: eq }], Fx.A), ['a1']);
+        assert.deepEqual(await Fx.Visible([{ concept: Fx.A, rulesJson: ne }], Fx.A), ['a2', 'a3', 'a4']);
+        for (const rulesJson of [eq, ne, asText])
+        {
+            assert.deepEqual(await Fx.Visible([{ concept: Fx.A, rulesJson }], Fx.A), Fx.OracleVisible(rulesJson, Fx.A));
+        }
+        assert.deepEqual(PolicyScopeCompiler.FromRules([{ concept: Fx.A, rulesJson: asText }], Fx.Description()).Diagnostics, []);
+    });
+
+    test('fractional and unsafe numbers never match an Int64 member', async () =>
+    {
+        for (const literal of [5.5, 2 ** 60, Number.MAX_SAFE_INTEGER + 2])
+        {
+            const rulesJson = Rules.Json(['allow', 'read', Rules.Eq(Rules.Entity(Fx.Priority), Rules.Lit(literal))]);
+            const compiler = PolicyScopeCompiler.FromRules([{ concept: Fx.A, rulesJson }], Fx.Description());
+            assert.equal(compiler.Compile(new Facts({}), AccessDefault.Allow).Rows.get(Fx.A), FalsePredicate.Instance);
+            assert.deepEqual(compiler.Diagnostics, []);
+            assert.deepEqual(await Fx.Visible([{ concept: Fx.A, rulesJson }], Fx.A), []);
+            assert.deepEqual(Fx.OracleVisible(rulesJson, Fx.A), []);
+        }
+    });
+
+    test('number != and in-list use typed values', async () =>
+    {
+        const ne = Rules.Json(['allow', 'read', Rules.Ne(Rules.Entity(Fx.Priority), Rules.Lit(5))]);
+        const neFractional = Rules.Json(['allow', 'read', Rules.Ne(Rules.Entity(Fx.Priority), Rules.Lit(5.5))]);
+        const inList = Rules.Json(['allow', 'read', Rules.In(Rules.Principal('nums'), Rules.Entity(Fx.Priority))]);
+        const facts = { nums: [5, 7, 5.5] };
+        assert.deepEqual(await Fx.Visible([{ concept: Fx.A, rulesJson: ne }], Fx.A), ['a2', 'a4']);
+        assert.deepEqual(await Fx.Visible([{ concept: Fx.A, rulesJson: inList }], Fx.A, facts), ['a1', 'a3']);
+        assert.deepEqual(await Fx.Visible([{ concept: Fx.A, rulesJson: neFractional }], Fx.A), ['a1', 'a2', 'a3', 'a4']);
+        for (const rulesJson of [ne, neFractional, inList])
+        {
+            assert.deepEqual(await Fx.Visible([{ concept: Fx.A, rulesJson }], Fx.A, facts), Fx.OracleVisible(rulesJson, Fx.A, facts));
+        }
+        assert.deepEqual(PolicyScopeCompiler.FromRules([{ concept: Fx.A, rulesJson: inList }], Fx.Description()).Diagnostics, []);
     });
 
     test('string literal against numeric member never matches', async () =>
