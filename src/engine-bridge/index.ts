@@ -13,3 +13,8 @@ export { CellConverter, type IConversion } from './CellConversion.js';
 export type { IExternalBinding, IExternalConnectorPlan, IParsedExternalId } from './external/ExternalBinding.js';
 export { ExternalIdentity } from './external/ExternalIdentity.js';
 export { ExternalValues } from './external/ExternalValues.js';
+export { SystemPackage } from './system/SystemPackage.js';
+export { SystemNames, ShareRight, ShareSubject } from './system/SystemNames.js';
+export { ShareGrants } from './system/ShareGrants.js';
+export { ShareGrantScope, type IShareSubjects } from './system/ShareGrantScope.js';
+export type { IPackageDocumentSource } from '../domain/domain.js';

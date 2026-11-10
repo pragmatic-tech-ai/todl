@@ -5,10 +5,12 @@ import * as EngineSurface from '@pragmatic-tech-ai/todl/engine';
 import type {
     IDescribeDiagnostic,
     IDescribeOptions,
+    IPackageDocumentSource,
     IPolicyDiagnostic,
     IPrincipalFacts,
     ISavedModel,
     ISavedSnapshot,
+    IShareSubjects,
     ISnapshotDescription,
     ITodlDraftSession,
     ITodlModelWorkspace,
@@ -49,6 +51,8 @@ interface IExportedTypes
     readonly Session: ITodlDraftSession;
     readonly SavedModel: ISavedModel;
     readonly SavedSnapshot: ISavedSnapshot;
+    readonly ShareSubjects: IShareSubjects;
+    readonly DocumentSource: IPackageDocumentSource;
 }
 
 /** A shop model in a memory workspace, compiled through the package pipeline into an engine over the file connector. */
@@ -271,7 +275,14 @@ class ExportSurface
         'PolicyDiagnosticCode',
         'PolicyScopeCompiler',
         'SavedModelCompiler',
+        // The todl.system package (ruling T10): its source, names and share-grant predicates.
+        'ShareGrantScope',
+        'ShareGrants',
+        'ShareRight',
+        'ShareSubject',
         'SnapshotDescriber',
+        'SystemNames',
+        'SystemPackage',
         'TodlFileConnector',
         // Reserved schema names a host needs: FileConnector for IDescribeOptions.DefaultConnector, Label / Class /
         // Term / Element for Cypher over the described schema.

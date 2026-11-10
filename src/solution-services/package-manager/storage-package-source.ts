@@ -1,5 +1,6 @@
 import { type IStorage } from "@pragmatic-tech-ai/todl-runtime";
 import {
+    type IPackageDocumentSource,
     type PackageSource,
     type PackageRef,
     type ResolvedPackage,
@@ -11,6 +12,7 @@ import { ManifestEmitter } from "../../compiler-services/emit/manifest.js";
 import { ManifestWriter } from "../../manifest/manifest-writer.js";
 import { PackageManifestBridge } from "./package-manifest-bridge.js";
 import { type PackageDocument } from "../../publish/publish.js";
+import { MessageTemplate } from "../../compiler-services/diagnostics/message-template.js";
 
 // The disk-backed PackageSource — the SPEC-06 `RegistryPackageSource` the Domain
 // comment deferred. It reads the BlobPackageStore on-disk layout
@@ -21,8 +23,10 @@ import { type PackageDocument } from "../../publish/publish.js";
 // (ManifestWriter), and carries the instance graph as the package seed. Because
 // publish persists own-only documents that record their base deps, the recorded
 // dependencies flow through as domain-tier refs for transitive composition.
-export class StoragePackageSource implements PackageSource, ResourceSource
+export class StoragePackageSource implements PackageSource, IPackageDocumentSource, ResourceSource
 {
+    private static readonly NotFoundMessage = 'package "{0}@{1}" not found in storage';
+
     constructor(private readonly storage: IStorage) {}
 
     public async resolve(ref: PackageRef): Promise<ResolvedPackage>
@@ -30,10 +34,7 @@ export class StoragePackageSource implements PackageSource, ResourceSource
         const version = ref.version ?? (await this.latest(ref.model));
         if (version === undefined) throw new Error(`no versions of package "${ref.model}" in storage`);
 
-        const path = StoragePackageSource.modelPath(ref.model, version);
-        if (!(await this.storage.Exists(path))) throw new Error(`package "${ref.model}@${version}" not found in storage`);
-
-        const doc = JSON.parse(await this.storage.ReadText(path)) as PackageDocument;
+        const doc = await this.Document({ model: ref.model, version });
         const { manifest: logical, graph } = new ManifestEmitter(PackageManifestBridge.repositoryOf(doc), ref.model, version).emit();
         const manifest = ManifestWriter.fromLogical(logical).toJSON();
         const dependencies = (doc.dependencies ?? []).map((d) => ({ model: d.id, version: d.version }));
@@ -42,6 +43,14 @@ export class StoragePackageSource implements PackageSource, ResourceSource
         const seed = PackageManifestBridge.seedOf(graph);
         if (seed.nodes.length > 0) resolved.seed = seed;
         return resolved;
+    }
+
+    // The pinned package's persisted own-only document (`<model>/<version>/model.json`); rejects when absent.
+    public async Document(ref: Required<PackageRef>): Promise<PackageDocument>
+    {
+        const path = StoragePackageSource.modelPath(ref.model, ref.version);
+        if (!(await this.storage.Exists(path))) throw new Error(MessageTemplate.Format(StoragePackageSource.NotFoundMessage, ref.model, ref.version));
+        return JSON.parse(await this.storage.ReadText(path)) as PackageDocument;
     }
 
     // Read a package resource's bytes straight from the blob layout. `uri` is the
