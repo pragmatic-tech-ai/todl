@@ -9,3 +9,7 @@ export { TodlFileConnector } from './TodlFileConnector.js';
 export { TodlNodePlacement } from './TodlNodePlacement.js';
 export { EngineCellMapper, type IHiddenMembers } from './EngineCellMapper.js';
 export { SavedModelCompiler, type ISavedModel, type ISavedSnapshot } from './SavedModelCompiler.js';
+export { CellConverter, type IConversion } from './CellConversion.js';
+export type { IExternalBinding, IExternalConnectorPlan, IParsedExternalId } from './external/ExternalBinding.js';
+export { ExternalIdentity } from './external/ExternalIdentity.js';
+export { ExternalValues } from './external/ExternalValues.js';

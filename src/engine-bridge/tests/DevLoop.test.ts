@@ -261,10 +261,13 @@ class MoveFx
 class ExportSurface
 {
     public static readonly Expected = [
+        'CellConverter',
         'DescribeDiagnosticCode',
         'EngineBridgeError',
         'EngineBridgeErrorCode',
         'EngineCellMapper',
+        'ExternalIdentity',
+        'ExternalValues',
         'PolicyDiagnosticCode',
         'PolicyScopeCompiler',
         'SavedModelCompiler',
