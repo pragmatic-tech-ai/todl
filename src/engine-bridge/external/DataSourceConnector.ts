@@ -31,6 +31,44 @@ interface IBindingShape
 }
 
 /**
+ * A Set that refuses every change once constructed (add, delete and clear throw TypeError), so a value shared by every
+ * connector cannot be altered through a cast.
+ */
+class ImmutableSet<T> extends Set<T>
+{
+    private static readonly ErrImmutable = 'This set is immutable';
+
+    private readonly sealed: boolean;
+
+    public constructor(values: Iterable<T>)
+    {
+        // Set's constructor fills itself through add, before `sealed` is assigned.
+        super(values);
+        this.sealed = true;
+        Object.freeze(this);
+    }
+
+    public override add(value: T): this
+    {
+        if (this.sealed === true)
+        {
+            throw new TypeError(ImmutableSet.ErrImmutable);
+        }
+        return super.add(value);
+    }
+
+    public override delete(_value: T): boolean
+    {
+        throw new TypeError(ImmutableSet.ErrImmutable);
+    }
+
+    public override clear(): void
+    {
+        throw new TypeError(ImmutableSet.ErrImmutable);
+    }
+}
+
+/**
  * An engine External connector over one TODL data-source connector (rulings T5, T7, T8, P10). Residency is External:
  * the source is the truth, and the engine fetches rows on demand and stores no property data. The connector serves the
  * bindings of its plan, each exactly for its (Model, Concept); a subtype of a bound concept reads as an empty page,
@@ -53,7 +91,7 @@ export class DataSourceConnector implements IExternalConnector
     private static readonly ErrNoWrites = 'External writes are not available on connector ';
     private static readonly ErrUnpagedResume = 'A resume token was given to a connector whose source does not page: ';
     private static readonly Empty: IFetchPage = Object.freeze({ Rows: Object.freeze([]) });
-    private static readonly PushDown: ReadonlySet<PredicateKind> = new Set([
+    private static readonly PushDown: ReadonlySet<PredicateKind> = new ImmutableSet([
         PredicateKind.True, PredicateKind.Compare, PredicateKind.In, PredicateKind.IsNull, PredicateKind.Not, PredicateKind.And, PredicateKind.IdIn,
     ]);
     private static readonly ReadCapabilities: IConnectorCapabilities = Object.freeze({

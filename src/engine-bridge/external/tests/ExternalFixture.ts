@@ -5,6 +5,7 @@ import {
     WriteConcurrency,
     type ConnectorBinding,
     type ConnectorSpec,
+    type ExternalFieldValue,
     type ExternalRecord,
     type QueryRequest,
     type ResolvedConnection,
@@ -110,7 +111,7 @@ export class RecordingAdapterFactory implements IDataSourceAdapterFactory
 }
 
 /**
- * crm.Customer { id: Int64, name: String, team -> crm.Team } bound to connector `crm` (source `customers`, key
+ * crm.Customer { id: Int64, name: String, active: Boolean, team -> crm.Team } bound to connector `crm` (source `customers`, key
  * `cust_id`), its subtype crm.VipCustomer, and crm.Team { id: String } held by the engine.
  */
 export class ExternalFixture
@@ -124,9 +125,11 @@ export class ExternalFixture
     public static readonly Id = 'id';
     public static readonly Name = 'name';
     public static readonly TeamRel = 'team';
+    public static readonly Active = 'active';
     public static readonly IdKey = 'cust_id';
     public static readonly NameField = 'nm';
     public static readonly TeamField = 'team_fk';
+    public static readonly ActiveField = 'act';
     public static readonly Acme = 'Acme';
     public static readonly TeamA = 'a';
     private static readonly Version = 'ext-v1';
@@ -142,6 +145,7 @@ export class ExternalFixture
                 ExternalFixture.Def(ExternalFixture.Customer, [
                     ExternalFixture.Prop(ExternalFixture.Id, ValueType.Int64),
                     ExternalFixture.Prop(ExternalFixture.Name, ValueType.String),
+                    ExternalFixture.Prop(ExternalFixture.Active, ValueType.Boolean),
                     { Name: ExternalFixture.TeamRel, Kind: MemberKind.Relationship, Targets: [ExternalFixture.Team] },
                 ]),
                 ExternalFixture.Def(ExternalFixture.Vip, [], ExternalFixture.Customer),
@@ -154,7 +158,9 @@ export class ExternalFixture
     {
         const binding: ConnectorBinding = {
             Concept: ExternalFixture.Customer, Connector: ExternalFixture.Connector, Source: ExternalFixture.Source, IdKey: ExternalFixture.IdKey,
-            FieldMap: { [ExternalFixture.Id]: ExternalFixture.IdKey, [ExternalFixture.Name]: ExternalFixture.NameField, [ExternalFixture.TeamRel]: ExternalFixture.TeamField },
+            FieldMap: { [ExternalFixture.Id]: ExternalFixture.IdKey, [ExternalFixture.Name]: ExternalFixture.NameField, [ExternalFixture.TeamRel]: ExternalFixture.TeamField,
+                [ExternalFixture.Active]: ExternalFixture.ActiveField,
+            },
             Writable: true, Concurrency: WriteConcurrency.LastWriteWins, Atomicity: WriteAtomicity.Sequential,
         };
         return { Model: ExternalFixture.Model, Connector: ExternalFixture.Connector, Binding: binding };
@@ -173,6 +179,14 @@ export class ExternalFixture
     public static Identity(plan: IExternalConnectorPlan): ExternalIdentity
     {
         return new ExternalIdentity(ExternalFixture.Description(), plan.Bindings);
+    }
+
+    /** A customers source record in its external field names. */
+    public static Record(id: ExternalFieldValue, name: ExternalFieldValue, team: ExternalFieldValue, active: ExternalFieldValue = null): ExternalRecord
+    {
+        return {
+            [ExternalFixture.IdKey]: id, [ExternalFixture.NameField]: name, [ExternalFixture.TeamField]: team, [ExternalFixture.ActiveField]: active,
+        };
     }
 
     /** An adapter seeded with `records` in the customers source. */
