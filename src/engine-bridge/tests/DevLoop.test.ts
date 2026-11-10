@@ -266,6 +266,7 @@ class ExportSurface
 {
     public static readonly Expected = [
         'CellConverter',
+        'DataSourceConnector',
         'DescribeDiagnosticCode',
         'EngineBridgeError',
         'EngineBridgeErrorCode',
@@ -273,8 +274,10 @@ class ExportSurface
         'EnvironmentNodePlacement',
         'ExternalIdentity',
         'ExternalValues',
+        'FetchTranslator',
         'PolicyDiagnosticCode',
         'PolicyScopeCompiler',
+        'ResumeToken',
         'SavedModelCompiler',
         // The todl.system package (ruling T10): its source, names and share-grant predicates.
         'ShareGrantScope',
