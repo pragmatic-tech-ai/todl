@@ -25,3 +25,8 @@ export { SystemNames, ShareRight, ShareSubject } from './system/SystemNames.js';
 export { ShareGrants } from './system/ShareGrants.js';
 export { ShareGrantScope, type IShareSubjects } from './system/ShareGrantScope.js';
 export type { IPackageDocumentSource } from '../domain/domain.js';
+export { EnvironmentCatalogComposer, type IComposeInput, type IEnvironmentCatalog } from './environment/EnvironmentCatalogComposer.js';
+export { DeliveryChannel, type IPackageDelivery } from './environment/PackageDelivery.js';
+export { EnvironmentCatalogError, EnvironmentCatalogErrorCode } from './environment/EnvironmentCatalogError.js';
+export { PackageVersionUnifier, type IUnifiedPackages } from './environment/PackageVersionUnifier.js';
+export { UnifiedPackageSource } from './environment/UnifiedPackageSource.js';

@@ -3,8 +3,11 @@ import assert from 'node:assert/strict';
 import { AccessScope, Cypher, EdgeDirection, GraphEngine, StorageKind, type ILinkView, type INodeView } from '@pragmatic-tech-ai/graph';
 import * as EngineSurface from '@pragmatic-tech-ai/todl/engine';
 import type {
+    IComposeInput,
     IDescribeDiagnostic,
     IDescribeOptions,
+    IEnvironmentCatalog,
+    IPackageDelivery,
     IPackageDocumentSource,
     IPolicyDiagnostic,
     IPrincipalFacts,
@@ -14,6 +17,7 @@ import type {
     ISnapshotDescription,
     ITodlDraftSession,
     ITodlModelWorkspace,
+    IUnifiedPackages,
 } from '@pragmatic-tech-ai/todl/engine';
 import { checkAgainst } from '../../compiler-services/api.js';
 import type { Repository } from '../../compiler-services/model/model.js';
@@ -53,6 +57,10 @@ interface IExportedTypes
     readonly SavedSnapshot: ISavedSnapshot;
     readonly ShareSubjects: IShareSubjects;
     readonly DocumentSource: IPackageDocumentSource;
+    readonly ComposeInput: IComposeInput;
+    readonly Catalog: IEnvironmentCatalog;
+    readonly Delivery: IPackageDelivery;
+    readonly Unified: IUnifiedPackages;
 }
 
 /** A shop model in a memory workspace, compiled through the package pipeline into an engine over the file connector. */
@@ -269,6 +277,13 @@ class ExportSurface
         'ChangeBatcher',
         'DataSourceConnector',
         'DataSourceTransaction',
+        // The environment catalog composer (rulings T2, T3, T4, T11, T12).
+        'DeliveryChannel',
+        'EnvironmentCatalogComposer',
+        'EnvironmentCatalogError',
+        'EnvironmentCatalogErrorCode',
+        'PackageVersionUnifier',
+        'UnifiedPackageSource',
         'DescribeDiagnosticCode',
         'EngineBridgeError',
         'EngineBridgeErrorCode',

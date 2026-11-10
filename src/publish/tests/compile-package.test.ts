@@ -117,3 +117,30 @@ describe("compilePackage", () => {
     assert.equal(out.package!.resources, undefined);
   });
 });
+
+/** A library's datasource and an app over it that redeclares the datasource identically (ruling P16). */
+class RedeclaredDatasourceFx
+{
+    public static readonly Library: SourceFile = { uri: "lib.todl", text: 'namespace crm { concept Customer { } datasource crm { kind = sql; connection = "crm-db"; } }' };
+    public static readonly App: SourceFile = { uri: "app.todl", text: 'namespace crm { datasource crm { connection = "crm-db"; kind = sql; } model App : crm { } }' };
+    public static readonly AppWithout: SourceFile = { uri: "app.todl", text: "namespace crm { model App : crm { } }" };
+    public static readonly ConnectorId = "crm@connector:crm";
+    public static readonly LibraryId = { id: "crm.lib", version: "1.0.0" };
+    public static readonly AppId = { id: "crm.app", version: "1.0.0" };
+
+    public static OwnConnectors(app: SourceFile): string[]
+    {
+        const library = compilePackage([], [RedeclaredDatasourceFx.Library], RedeclaredDatasourceFx.LibraryId);
+        assert.ok(library.ok && library.package);
+        const out = compilePackage([library.package!.document], [app], RedeclaredDatasourceFx.AppId);
+        assert.ok(out.ok && out.package, JSON.stringify(out.errors));
+        assert.equal(out.package!.fullDocument.nodes.filter((n) => n.id === RedeclaredDatasourceFx.ConnectorId).length, 1);
+        return out.package!.document.nodes.filter((n) => n.id === RedeclaredDatasourceFx.ConnectorId).map((n) => n.id);
+    }
+}
+
+test("a package redeclaring a base datasource identically keeps it in its own-only document (P16)", () =>
+{
+    assert.deepEqual(RedeclaredDatasourceFx.OwnConnectors(RedeclaredDatasourceFx.App), [RedeclaredDatasourceFx.ConnectorId]);
+    assert.deepEqual(RedeclaredDatasourceFx.OwnConnectors(RedeclaredDatasourceFx.AppWithout), []);
+});
