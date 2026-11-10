@@ -7,6 +7,7 @@ export { PolicyScopeCompiler, PolicyDiagnosticCode, type IPolicyDiagnostic, type
 export { type ITodlDraftSession, type ITodlModelWorkspace } from './TodlModelWorkspace.js';
 export { TodlFileConnector } from './TodlFileConnector.js';
 export { TodlNodePlacement } from './TodlNodePlacement.js';
+export { EnvironmentNodePlacement } from './environment/EnvironmentNodePlacement.js';
 export { EngineCellMapper, type IHiddenMembers } from './EngineCellMapper.js';
 export { SavedModelCompiler, type ISavedModel, type ISavedSnapshot } from './SavedModelCompiler.js';
 export { CellConverter, type IConversion } from './CellConversion.js';
@@ -16,3 +17,8 @@ export { ExternalValues } from './external/ExternalValues.js';
 export { DataSourceConnector } from './external/DataSourceConnector.js';
 export { FetchTranslator } from './external/FetchTranslator.js';
 export { ResumeToken } from './external/ResumeToken.js';
+export { SystemPackage } from './system/SystemPackage.js';
+export { SystemNames, ShareRight, ShareSubject } from './system/SystemNames.js';
+export { ShareGrants } from './system/ShareGrants.js';
+export { ShareGrantScope, type IShareSubjects } from './system/ShareGrantScope.js';
+export type { IPackageDocumentSource } from '../domain/domain.js';

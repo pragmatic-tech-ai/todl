@@ -1,0 +1,18 @@
+// todl.system@1.0.0: the concepts the runtime itself stores (ruling T10). Compiled at build time into
+// system-package.generated.ts by scripts/gen-system-package.mts; runtime compiles nothing.
+namespace todl.system
+{
+    // One share of one record with one subject (a principal or a team). The id is deterministic
+    // (ShareGrants.PublicId), so re-sharing updates the grant. An unset right grants nothing.
+    concept ShareGrant
+    {
+        record      : todl.Element;
+        subjectKind : string;
+        subjectId   : string;
+        read        : boolean?;
+        update      : boolean?;
+        delete      : boolean?;
+        assign      : boolean?;
+        share       : boolean?;
+    }
+}

@@ -371,7 +371,7 @@ describe('DataSourceConnector read side', () =>
         const plan = Fx.Plan();
         const catalog = new DataSourceAdapterCatalog().Register(new RecordingAdapterFactory(adapter));
         const connector = await DataSourceConnector.Open(plan, catalog, new ServiceProvider(), Fx.Identity(plan), Fx.Description());
-        const engine = await EngineFixture.Open({ Description: Fx.Description(), External: new Set(), Diagnostics: [] }, [connector]);
+        const engine = await EngineFixture.Open({ Description: Fx.Description(), External: new Set(), Diagnostics: [] }, { Connectors: [connector] });
         try
         {
             const cypher = new Cypher.CypherEngine(engine);

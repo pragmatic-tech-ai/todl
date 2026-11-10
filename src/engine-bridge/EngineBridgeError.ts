@@ -28,6 +28,8 @@ export enum EngineBridgeErrorCode
     UnsupportedExternalChange,
     /** More than one external binding fits a concept, so none can be chosen. */
     AmbiguousExternalBinding,
+    /** A concept has no home model in the environment, so an engine node of it has no owner. */
+    NoHomeModel,
 }
 
 /** Failure raised by the TODL-on-engine bridge; Code identifies the category. */

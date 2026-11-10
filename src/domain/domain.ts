@@ -22,6 +22,7 @@ import {
 } from "../manifest/reflection/reflection.js";
 import type { ManifestJson } from "../manifest/records.js";
 import { MetadataSnapshot, Heap, type SeedGraph, type DomainEdge, type DomainToken } from "./metadata-snapshot.js";
+import type { PackageDocument } from "../publish/publish.js";
 
 // Re-export the substrate types so existing `from "./domain.js"` imports keep working.
 export { Heap };
@@ -56,6 +57,15 @@ export interface PackageSource
     resolve(ref: PackageRef): Promise<ResolvedPackage>;
     /** Optional: enumerate concrete versions for a model (latest pinning). */
     versions?(model: string): Promise<readonly string[]>;
+}
+
+/**
+ * A source of packages as their compiled (own-only) documents rather than manifests: what a host needs to describe a
+ * package to the engine or to recompile against it. Rejects when the source does not hold `ref`.
+ */
+export interface IPackageDocumentSource
+{
+    Document(ref: Required<PackageRef>): Promise<PackageDocument>;
 }
 
 /** The payload of `onResolveManifest`: the unresolved ref + a reply slot. */
