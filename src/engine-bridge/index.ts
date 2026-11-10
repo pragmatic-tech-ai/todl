@@ -9,3 +9,8 @@ export { TodlFileConnector } from './TodlFileConnector.js';
 export { TodlNodePlacement } from './TodlNodePlacement.js';
 export { EngineCellMapper, type IHiddenMembers } from './EngineCellMapper.js';
 export { SavedModelCompiler, type ISavedModel, type ISavedSnapshot } from './SavedModelCompiler.js';
+export { SystemPackage } from './system/SystemPackage.js';
+export { SystemNames, ShareRight, ShareSubject } from './system/SystemNames.js';
+export { ShareGrants } from './system/ShareGrants.js';
+export { ShareGrantScope, type IShareSubjects } from './system/ShareGrantScope.js';
+export type { IPackageDocumentSource } from '../domain/domain.js';
