@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { MemberKind, ValueType, type IDefinitionDescription, type ISchemaDescription, type MemberInput } from '@pragmatic-tech-ai/graph';
+import { DateValue, MemberKind, ValueType, type IDefinitionDescription, type ISchemaDescription, type MemberInput } from '@pragmatic-tech-ai/graph';
 import { WriteAtomicity, WriteConcurrency, type ConnectorBinding } from '../../../model-data/connector-plan.js';
 import { EngineBridgeError, EngineBridgeErrorCode } from '../../EngineBridgeError.js';
 import type { IExternalBinding } from '../ExternalBinding.js';
@@ -66,6 +66,15 @@ describe('ExternalIdentity', () =>
         assert.deepEqual(identity.Parse(identity.Mint(customers, 'a#b')), { Binding: customers, StorageId: 'a#b' });
     });
 
+    test('parse picks the longest prefix among overlapping bindings', () =>
+    {
+        const short = IdentityFixture.Binding('crm.Customer', 'a', 'id');
+        const long = IdentityFixture.Binding('crm.Customer', 'a.b', 'id');
+        const identity = new ExternalIdentity(description, [short, long]);
+        assert.equal(identity.Parse('crm.Customer#crm.a.b#1')?.Binding, long);
+        assert.equal(identity.Parse('crm.Customer#crm.a#1')?.Binding, short);
+    });
+
     test('foreign prefix does not parse', () =>
     {
         const identity = new ExternalIdentity(description, [customers]);
@@ -80,11 +89,36 @@ describe('ExternalIdentity', () =>
         assert.equal(identity.StorageKey(customers, 'abc'), 'abc');
     });
 
+    test('storage key keeps only canonical numeric text as a number', () =>
+    {
+        const floats = IdentityFixture.Binding('crm.Measure', 'm', 'v');
+        const defs = [...description.Definitions, IdentityFixture.Def('crm.Measure', [IdentityFixture.Prop('v', ValueType.Float64)])];
+        const identity = new ExternalIdentity({ ...description, Definitions: defs }, [customers, floats]);
+        assert.equal(identity.StorageKey(floats, '1.5'), 1.5);
+        assert.equal(identity.StorageKey(floats, '1.50'), '1.50');
+        assert.equal(identity.StorageKey(floats, '1e+21'), 1e21);
+        assert.equal(identity.StorageKey(floats, '1e-7'), 1e-7);
+        assert.equal(identity.StorageKey(floats, '1e21'), '1e21');
+        assert.equal(identity.StorageKey(customers, '1e+21'), '1e+21');
+        assert.equal(identity.StorageKey(floats, '0.12345678901234567890'), '0.12345678901234567890');
+        assert.equal(identity.StorageKey(customers, '9007199254740993'), '9007199254740993');
+        assert.equal(identity.StorageKey(customers, '007'), '007');
+        assert.equal(identity.StorageKey(customers, '1.0'), '1.0');
+        assert.equal(identity.StorageKey(customers, '-5'), -5);
+    });
+
     test('link target mints through the unique external binding', () =>
     {
         const identity = new ExternalIdentity(description, [customers, orders]);
         assert.equal(identity.LinkTarget(orders, 'customer', 7), 'crm.Customer#crm.customers#7');
         assert.equal(identity.LinkTarget(orders, 'customer', null), undefined);
+    });
+
+    test('a subtype-only binding is the unique link target candidate', () =>
+    {
+        const vip = IdentityFixture.Binding('crm.VipCustomer', 'vips', 'id', 'crm', 'vip');
+        const identity = new ExternalIdentity(description, [vip, orders]);
+        assert.equal(identity.LinkTarget(orders, 'customer', 3), 'crm.VipCustomer#vip.vips#3');
     });
 
     test('link target is an engine id when the target is engine-bound', () =>
@@ -120,6 +154,7 @@ describe('ExternalIdentity', () =>
         const identity = new ExternalIdentity(description, [customers, twin]);
         assert.throws(() => identity.CreateTarget('crm.Customer'),
             (e: unknown) => e instanceof EngineBridgeError && e.Code === EngineBridgeErrorCode.AmbiguousExternalBinding);
+        assert.throws(() => identity.CreateTarget('crm.Customer'), (e: unknown) => e instanceof Error && e.message.includes('crm (model crm), twin (model crm2)'));
         assert.equal(new ExternalIdentity(description, [customers]).CreateTarget('crm.Customer'), customers);
         assert.equal(new ExternalIdentity(description, [customers]).CreateTarget('crm.Tag'), undefined);
     });
@@ -140,6 +175,22 @@ describe('ExternalValues', () =>
         assert.equal(ExternalValues.ToCell(ValueType.Int64, null, 'c.n'), null);
         assert.throws(() => ExternalValues.ToCell(ValueType.Int64, '5x', 'c.n'),
             (e: unknown) => e instanceof EngineBridgeError && e.Code === EngineBridgeErrorCode.ExternalRowInvalid && e.message.includes('c.n'));
+    });
+
+    test('ToCell rejects out-of-range and unrepresentable values', () =>
+    {
+        assert.throws(() => ExternalValues.ToCell(ValueType.Int64, '9223372036854775808', 'c.n'),
+            (e: unknown) => e instanceof EngineBridgeError && e.Code === EngineBridgeErrorCode.ExternalRowInvalid && e.message.includes('IntegerOutOfRange'));
+        assert.throws(() => ExternalValues.ToCell(ValueType.Int64, 1.5, 'c.n'),
+            (e: unknown) => e instanceof EngineBridgeError && e.Code === EngineBridgeErrorCode.ExternalRowInvalid);
+        assert.throws(() => ExternalValues.ToCell(ValueType.String, 5, 'c.n'),
+            (e: unknown) => e instanceof EngineBridgeError && e.Code === EngineBridgeErrorCode.ExternalRowInvalid);
+    });
+
+    test('ToExternal rejects temporal values', () =>
+    {
+        assert.throws(() => ExternalValues.ToExternal(new DateValue(1), 'c.d'),
+            (e: unknown) => e instanceof EngineBridgeError && e.Code === EngineBridgeErrorCode.UnsupportedExternalChange);
     });
 
     test('ToExternal', () =>

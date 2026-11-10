@@ -1,5 +1,5 @@
-import type { CypherWriteStats, CypherWriteStatsDto } from "./writer.js";
-import type { CypherValue, CypherValueDto } from "./values.js";
+import type { CypherWriteStats } from "./writer.js";
+import type { CypherValue } from "./values.js";
 
 export class CypherResult
 {
@@ -8,11 +8,4 @@ export class CypherResult
     }
 }
 
-export interface CypherResultDto
-{
-    Columns: string[];
-    Rows: CypherValueDto[][];
-    Truncated: boolean;
-    HasMore: boolean;
-    Stats?: CypherWriteStatsDto;
-}
+export type { CypherResultDto } from "../graph-api/wire/index.js";

@@ -2,13 +2,14 @@ import { DateTimeValue, DateValue, DurationValue, type CellValue, type ValueType
 import type { ExternalFieldValue } from '../../model-data/connector-plan.js';
 import { CellConverter } from '../CellConversion.js';
 import { EngineBridgeError, EngineBridgeErrorCode } from '../EngineBridgeError.js';
+import { DescribeDiagnosticCode } from '../SnapshotDescription.js';
 
 /** Conversion between external field values and engine cells (rulings T5, T7). */
 export class ExternalValues
 {
     private static readonly ErrRowInvalid = 'External value does not fit the member type: ';
     private static readonly ErrTemporal = 'A temporal value cannot be written to an external source: ';
-    private static readonly ReasonStart = ' (diagnostic ';
+    private static readonly ReasonStart = ' (';
     private static readonly ReasonEnd = ')';
 
     /** The engine cell for an external value; null stays null. Throws ExternalRowInvalid naming `subject`. */
@@ -23,7 +24,7 @@ export class ExternalValues
         {
             throw new EngineBridgeError(
                 EngineBridgeErrorCode.ExternalRowInvalid,
-                ExternalValues.ErrRowInvalid + subject + ExternalValues.ReasonStart + String(converted.Failure) + ExternalValues.ReasonEnd);
+                ExternalValues.ErrRowInvalid + subject + ExternalValues.ReasonStart + DescribeDiagnosticCode[converted.Failure] + ExternalValues.ReasonEnd);
         }
         return converted.Value ?? null;
     }

@@ -1,14 +1,15 @@
 export { CypherEngine } from "./engine.js";
 export type { PlannerOptions } from "./planner.js";
 export { CypherResult } from "./result.js";
-export type { CypherResultDto } from "./result.js";
+export type { CypherResultDto } from "../graph-api/wire/index.js";
 export { CypherParser } from "./parser.js";
 export { CypherUnparser } from "./unparser.js";
 export { CypherQuery, Pattern, Expr, Return, NodeBuilder, ExprBuilder, Fn, Sort, Hops } from "./fluent.js";
 export type { ExprArg } from "./fluent.js";
 export { CypherValue, ScalarValue, NullValue, NodeValue, NodeRefValue } from "./values.js";
-export type { CypherValueDto, NodeCellDto, ParameterValue } from "./values.js";
-export { CypherCellCodec } from "./cell-codec.js";
+export type { CypherValueDto, NodeCellDto } from "../graph-api/wire/index.js";
+export type { ParameterValue } from "./values.js";
+export { CypherCellCodec } from "../graph-api/wire/index.js";
 export { ListValue, MapValue, RelValue, PathValue } from "./values-structured.js";
 export type { RelDto } from "./values-structured.js";
 export { GraphQueryAdapter } from "./graph.js";
