@@ -193,6 +193,10 @@ export function load(sources: SourceFile[], idGenerator: IdGenerator = new Snowf
 // a prior compile — see checkAgainst). Same 3-pass pipeline as a fresh load. A
 // reference that resolves to a node already in `model` is not reported undefined.
 // Returns the accumulated diagnostics; the caller owns the model.
+// Invariant: `provenance` maps a node id to the file that CREATED the node in this load, and nothing else. A
+// node that already existed (a base node a source merely redeclares identically) is never recorded there, since
+// the solution graph strips a file's provenance-owned nodes when the file is edited. Identical datasource
+// redeclarations are reported through `redeclaredConnectors` instead (ruling P16).
 export function loadInto(
   model: Repository,
   sources: SourceFile[],
@@ -200,6 +204,7 @@ export function loadInto(
   idGenerator: IdGenerator = new SnowflakeIdGenerator(),
   provenance?: Map<string, string>,
   policy: ConnectionPolicy = ConnectionPolicies.Default,
+  redeclaredConnectors?: Set<string>,
 ): Diagnostic[]
 {
   const diagnostics: Diagnostic[] = [];
@@ -1038,11 +1043,11 @@ export function loadInto(
           span: declaration.nameSpan ?? declaration.span, node: connectorId, path: null,
         });
       }
-      else
+      else if (baseConnector !== undefined && !stagedConnectors.has(connectorId))
       {
-        // Ruling P16: an identical redeclaration is homed in this compile's sources, so the package's own-only
-        // document keeps it and a later, different dependency declaration surfaces as a conflict at compose.
-        recordHome(rec, connectorId);
+        // Ruling P16: an identical redeclaration of a base datasource is reported (not homed: provenance means
+        // "created here"), so the package's own-only document keeps it and compose can detect a changed dependency.
+        redeclaredConnectors?.add(connectorId);
       }
       continue;
     }
