@@ -9,6 +9,7 @@ import type { TodlDocument } from "./emit/json.js";
 import type { SourceFile } from "./diagnostics/span.js";
 import type { Diagnostic } from "./diagnostics/diagnostic.js";
 import { preludeDocument, preludeNames } from "./stdlib/prelude.js";
+import { ConnectorDeclaration } from "./connectors/connector-declaration.js";
 
 /**
  * Load the sources and validate the result; every diagnostic is spanned. The
@@ -86,7 +87,7 @@ export function checkAgainst(
 {
   const model = new Repository(mergeBases([preludeDocument(), ...bases]));
   const provenance = new Map<string, string>();
-  const diagnostics = loadInto(model, sources, preludeNames(), idGenerator, provenance, policy);
+  const diagnostics = [...ConnectorDeclaration.BaseConflicts(bases), ...loadInto(model, sources, preludeNames(), idGenerator, provenance, policy)];
   const resolutionDiagnostics = new ResolutionPass(model, provenance).Resolve();
   return { model, diagnostics: [...diagnostics, ...resolutionDiagnostics, ...validate(model)], provenance };
 }

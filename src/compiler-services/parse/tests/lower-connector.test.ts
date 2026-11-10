@@ -5,6 +5,8 @@ import { load } from "../loader.js";
 import { MetaKind } from "../../model/kinds.js";
 import { Builder } from "../../model/builder.js";
 import { DiagnosticCode } from "../../validate/validate.js";
+import { check, checkAgainst } from "../../api.js";
+import { toJSON, type TodlDocument } from "../../emit/json.js";
 
 class Harness
 {
@@ -211,4 +213,53 @@ test("datasource with a valid kind emits no connector.unknown-kind", () =>
 {
     const { diagnostics } = load([{ uri: "k.todl", text: `namespace k { datasource pg { kind = sql; } }` }]);
     assert.ok(!diagnostics.some((d) => d.code === DiagnosticCode.ConnectorUnknownKind));
+});
+
+/** Namespace-scoped datasource ids declared more than once: identical is one connector, different is a diagnostic. */
+class ConflictHarness
+{
+    static readonly One = 'namespace crm { datasource crm { kind = sql; connection = "one"; host = "h"; } }';
+    static readonly OneReordered = 'namespace crm { datasource crm { host = "h"; connection = "one"; kind = sql; } }';
+    static readonly Two = 'namespace crm { datasource crm { kind = sql; connection = "two"; host = "h"; } }';
+    static readonly ConnectorId = "crm@connector:crm";
+
+    static base(text: string): TodlDocument
+    {
+        const { model, diagnostics } = check([{ uri: "base.todl", text }]);
+        assert.deepEqual(diagnostics, []);
+        return toJSON(model);
+    }
+
+    static conflicts(diagnostics: readonly { code: DiagnosticCode; node: string | null }[]): (string | null)[]
+    {
+        return diagnostics.filter((d) => d.code === DiagnosticCode.ConnectorConflictingDeclaration).map((d) => d.node);
+    }
+}
+
+test("two bases declaring one datasource differently are reported; identical bases are not", () =>
+{
+    const app = [{ uri: "app.todl", text: "namespace app { concept A { } }" }];
+    const differing = checkAgainst([ConflictHarness.base(ConflictHarness.One), ConflictHarness.base(ConflictHarness.Two)], app);
+    assert.deepEqual(ConflictHarness.conflicts(differing.diagnostics), [ConflictHarness.ConnectorId]);
+    const identical = checkAgainst([ConflictHarness.base(ConflictHarness.One), ConflictHarness.base(ConflictHarness.OneReordered)], app);
+    assert.deepEqual(ConflictHarness.conflicts(identical.diagnostics), []);
+});
+
+test("a source redeclaring a base datasource differently is reported; identically is not", () =>
+{
+    const base = ConflictHarness.base(ConflictHarness.One);
+    const differing = checkAgainst([base], [{ uri: "app.todl", text: ConflictHarness.Two }]);
+    assert.deepEqual(ConflictHarness.conflicts(differing.diagnostics), [ConflictHarness.ConnectorId]);
+    assert.equal(differing.model.resolve(ConflictHarness.ConnectorId)?.attrs.get(Builder.ConnectorConnectionAttr), "one");
+    const identical = checkAgainst([base], [{ uri: "app.todl", text: ConflictHarness.OneReordered }]);
+    assert.deepEqual(ConflictHarness.conflicts(identical.diagnostics), []);
+});
+
+test("two source declarations of one datasource: different is reported, identical is one connector", () =>
+{
+    const { diagnostics } = check([{ uri: "a.todl", text: ConflictHarness.One }, { uri: "b.todl", text: ConflictHarness.Two }]);
+    assert.deepEqual(ConflictHarness.conflicts(diagnostics), [ConflictHarness.ConnectorId]);
+    const same = check([{ uri: "a.todl", text: ConflictHarness.One }, { uri: "b.todl", text: ConflictHarness.OneReordered }]);
+    assert.deepEqual(same.diagnostics, []);
+    assert.ok(same.model.resolve(ConflictHarness.ConnectorId));
 });

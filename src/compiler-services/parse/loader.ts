@@ -61,6 +61,7 @@ import { MatchRuleNormalizer } from "./match-rule-normalizer.js";
 import { ApplicationRootPass } from "./application-root-pass.js";
 import { Repository } from "../model/model.js";
 import { Builder, type TermInput } from "../model/builder.js";
+import { ConnectorDeclaration } from "../connectors/connector-declaration.js";
 import { type ConnectionPolicy, ConnectionPolicies } from "../connectors/connection-policy.js";
 import type { Expr } from "../predicate/ast.js";
 import {
@@ -1007,16 +1008,38 @@ export function loadInto(
   // The deployment `policy` rejects inline config / a model `provider` here.
   const connectorBuilder = model.builder();
   const connectorReservedKeys = new Set<string>([Builder.ConnectorKindAttr, Builder.ConnectorConnectionAttr, Builder.ConnectorSecretAttr, Builder.ConnectorProviderAttr]);
+  const stagedConnectors = new Map<string, Record<string, unknown>>();
   for (const { ns, uri, decl: declaration } of units)
   {
     if (declaration.kind !== DeclKind.Connector) continue;
     connectorBuilder.setNamespace(ns);
     if (rec !== undefined) rec.current = uri;
     const connectorId = `${ns}@connector:${declaration.name}`;
-    if (model.has(connectorId)) continue;
     const config: Record<string, string> = {};
     for (const a of declaration.assignments) if (!connectorReservedKeys.has(a.name) && !(a.name in config)) config[a.name] = a.value;
     const find = (key: string) => declaration.assignments.find((a) => a.name === key)?.value ?? null;
+    const declared: Record<string, unknown> = { [Builder.ConnectorNameAttr]: declaration.name, [Builder.ConnectorConfigAttr]: JSON.stringify(config) };
+    for (const key of [Builder.ConnectorKindAttr, Builder.ConnectorConnectionAttr, Builder.ConnectorSecretAttr, Builder.ConnectorProviderAttr])
+    {
+      const value = find(key);
+      if (value !== null) declared[key] = value;
+    }
+    const baseConnector = model.resolve(connectorId);
+    const existingConnector = stagedConnectors.get(connectorId) ?? (baseConnector === undefined ? undefined : Object.fromEntries(baseConnector.attrs));
+    if (existingConnector !== undefined)
+    {
+      // A base or an earlier declaration already holds this namespace-scoped id: identical is one connector, a
+      // different declaration is reported instead of silently keeping the first.
+      if (!ConnectorDeclaration.Same(existingConnector, declared))
+      {
+        diagnostics.push({
+          code: DiagnosticCode.ConnectorConflictingDeclaration, severity: Severity.Error,
+          message: `datasource "${declaration.name}" redeclares "${connectorId}" differently from an existing declaration; the existing one is used`,
+          span: declaration.nameSpan ?? declaration.span, node: connectorId, path: null,
+        });
+      }
+      continue;
+    }
     const kindValue = find(Builder.ConnectorKindAttr);
     if (kindValue === null || !CONNECTOR_KINDS.has(kindValue))
     {
@@ -1045,6 +1068,7 @@ export function loadInto(
         span: declaration.nameSpan ?? declaration.span, node: connectorId, path: null,
       });
     }
+    stagedConnectors.set(connectorId, declared);
     connectorBuilder.defineConnector(
       connectorId, declaration.name, find(Builder.ConnectorKindAttr), JSON.stringify(config),
       find(Builder.ConnectorConnectionAttr), find(Builder.ConnectorSecretAttr), providerValue);
