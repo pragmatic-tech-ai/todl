@@ -16,6 +16,8 @@ export class ImportClosureWalker
     public static readonly IndexFile = 'index.ts';
     private static readonly SpecifierPattern = /(?:^|\n)\s*(?:import|export)\s[^'"]*?from\s*['"]([^'"]+)['"]|(?:^|\n)\s*import\s*['"]([^'"]+)['"]|\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)|\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
     private static readonly Utf8 = 'utf8';
+    private static readonly CurrentDir = '.';
+    private static readonly ParentDir = '..';
     private static readonly CurrentDirPrefix = './';
     private static readonly ParentDirPrefix = '../';
     private static readonly JsExtension = /\.js$/;
@@ -57,7 +59,7 @@ export class ImportClosureWalker
 
     public static IsRelative(specifier: string): boolean
     {
-        return specifier.startsWith(ImportClosureWalker.CurrentDirPrefix) || specifier.startsWith(ImportClosureWalker.ParentDirPrefix);
+        return specifier === ImportClosureWalker.CurrentDir || specifier === ImportClosureWalker.ParentDir || specifier.startsWith(ImportClosureWalker.CurrentDirPrefix) || specifier.startsWith(ImportClosureWalker.ParentDirPrefix);
     }
 
     private Visit(file: string): void
