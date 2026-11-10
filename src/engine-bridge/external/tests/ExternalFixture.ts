@@ -10,7 +10,9 @@ import {
     type QueryRequest,
     type ResolvedConnection,
     type WriteBatch,
+    type WriteFailure,
     type WriteResult,
+    WriteFailureKind,
 } from '../../../model-data/connector-plan.js';
 import type { IDataSourceAdapter, IDataSourceAdapterFactory, PageQuery, PageSlice } from '../../../model-data/data-source-adapter.js';
 import { InMemoryAdapter } from '../../../model-data/tests/fakes.js';
@@ -20,7 +22,9 @@ import { ExternalIdentity } from '../ExternalIdentity.js';
 /**
  * An InMemoryAdapter that logs every request (Query, QueryPage and Apply), serves keyset pages when `CanPage` is set,
  * reports `CanTransact`, and makes call `ThrowAtCall` (1-based, over all three) throw. With `IgnoreWhere` it answers
- * every read as if no Where were given (a source that matches more widely than asked).
+ * every read as if no Where were given (a source that matches more widely than asked). With `FailAfter` set, the next
+ * Apply applies only its first `FailAfter` operations and reports every later one as a failure of `FailKind` (a
+ * sequential source that fails partway); the toggle then clears.
  */
 export class RecordingAdapter implements IDataSourceAdapter
 {
@@ -34,6 +38,8 @@ export class RecordingAdapter implements IDataSourceAdapter
     public CanTransact = false;
     public IgnoreWhere = false;
     public ThrowAtCall: number | undefined;
+    public FailAfter: number | undefined;
+    public FailKind = WriteFailureKind.Error;
     private calls = 0;
 
     public get Calls(): number
@@ -67,7 +73,15 @@ export class RecordingAdapter implements IDataSourceAdapter
     {
         this.Count();
         this.Batches.push(batch);
-        return this.Inner.Apply(batch);
+        const failAfter = this.FailAfter;
+        if (failAfter === undefined)
+        {
+            return this.Inner.Apply(batch);
+        }
+        this.FailAfter = undefined;
+        const applied = await this.Inner.Apply({ ...batch, Operations: batch.Operations.slice(0, failAfter) });
+        const failures: WriteFailure[] = batch.Operations.slice(failAfter).map(op => ({ Key: op.Key, Kind: this.FailKind, Reason: RecordingAdapter.Boom }));
+        return { Applied: applied.Applied, Failures: [...applied.Failures, ...failures] };
     }
 
     public async Dispose(): Promise<void>
@@ -130,6 +144,8 @@ export class ExternalFixture
     public static readonly NameField = 'nm';
     public static readonly TeamField = 'team_fk';
     public static readonly ActiveField = 'act';
+    /** The version column of an Optimistic binding (BindingWith({ VersionField: RevField })). */
+    public static readonly RevField = 'rev';
     public static readonly Acme = 'Acme';
     public static readonly TeamA = 'a';
     private static readonly Version = 'ext-v1';
@@ -156,12 +172,19 @@ export class ExternalFixture
 
     public static Binding(): IExternalBinding
     {
+        return ExternalFixture.BindingWith({});
+    }
+
+    /** The customers binding with `overrides` applied (Writable, Concurrency, Atomicity, VersionField, ...). */
+    public static BindingWith(overrides: Partial<ConnectorBinding>): IExternalBinding
+    {
         const binding: ConnectorBinding = {
             Concept: ExternalFixture.Customer, Connector: ExternalFixture.Connector, Source: ExternalFixture.Source, IdKey: ExternalFixture.IdKey,
             FieldMap: { [ExternalFixture.Id]: ExternalFixture.IdKey, [ExternalFixture.Name]: ExternalFixture.NameField, [ExternalFixture.TeamRel]: ExternalFixture.TeamField,
                 [ExternalFixture.Active]: ExternalFixture.ActiveField,
             },
             Writable: true, Concurrency: WriteConcurrency.LastWriteWins, Atomicity: WriteAtomicity.Sequential,
+            ...overrides,
         };
         return { Model: ExternalFixture.Model, Connector: ExternalFixture.Connector, Binding: binding };
     }
@@ -195,6 +218,15 @@ export class ExternalFixture
         const adapter = new RecordingAdapter();
         adapter.Inner.Seed(ExternalFixture.Source, records);
         return adapter;
+    }
+
+    /** Every customers record as it is in the source now, in all fixture fields (bypassing the request log). */
+    public static Rows(adapter: RecordingAdapter): Promise<readonly ExternalRecord[]>
+    {
+        return adapter.Inner.Query({
+            Source: ExternalFixture.Source,
+            Fields: [ExternalFixture.IdKey, ExternalFixture.NameField, ExternalFixture.TeamField, ExternalFixture.ActiveField, ExternalFixture.RevField],
+        });
     }
 
     private static Prop(name: string, type: ValueType): MemberInput
