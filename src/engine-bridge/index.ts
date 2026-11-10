@@ -13,3 +13,6 @@ export { CellConverter, type IConversion } from './CellConversion.js';
 export type { IExternalBinding, IExternalConnectorPlan, IParsedExternalId } from './external/ExternalBinding.js';
 export { ExternalIdentity } from './external/ExternalIdentity.js';
 export { ExternalValues } from './external/ExternalValues.js';
+export { DataSourceConnector } from './external/DataSourceConnector.js';
+export { FetchTranslator } from './external/FetchTranslator.js';
+export { ResumeToken } from './external/ResumeToken.js';

@@ -262,14 +262,17 @@ class ExportSurface
 {
     public static readonly Expected = [
         'CellConverter',
+        'DataSourceConnector',
         'DescribeDiagnosticCode',
         'EngineBridgeError',
         'EngineBridgeErrorCode',
         'EngineCellMapper',
         'ExternalIdentity',
         'ExternalValues',
+        'FetchTranslator',
         'PolicyDiagnosticCode',
         'PolicyScopeCompiler',
+        'ResumeToken',
         'SavedModelCompiler',
         'SnapshotDescriber',
         'TodlFileConnector',
