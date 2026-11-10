@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import {
+    BindingTable,
     MemberKind,
     ValueType,
     type CellValue,
@@ -11,9 +12,10 @@ import {
     type MemberInput,
 } from '@pragmatic-tech-ai/graph';
 import type { MetadataSnapshot } from '../domain/metadata-snapshot.js';
+import type { ConnectorBinding } from '../model-data/connector-plan.js';
 import { Cardinality, MetaKind } from '../manifest/enums.js';
 import type { Scalar } from '../manifest/logical.js';
-import type { FieldInfo, ReflectedNode, RelationshipInfo, TermInfo, TypeInfo } from '../manifest/reflection/reflection.js';
+import type { FieldInfo, Manifest, ReflectedNode, RelationshipInfo, TermInfo, TypeInfo } from '../manifest/reflection/reflection.js';
 import { EngineBridgeError, EngineBridgeErrorCode } from './EngineBridgeError.js';
 import { CellConverter } from './CellConversion.js';
 import { MessageFormat } from './MessageFormat.js';
@@ -117,8 +119,9 @@ class CanonicalJson
 /**
  * Turns a compiled TODL metadata snapshot into the graph engine's schema description: one definition per concept and
  * aspect under the reserved `todl.Element` root, `todl.Term` for taxonomy terms, a seed node per heap node and term,
- * the `.todl` connector bindings, and a content-derived version. Problems in the data become diagnostics, never
- * exceptions; only a field type of a kind no member can hold throws (`UnsupportedFieldType`).
+ * the `.todl` connector bindings (every plan binding under `EmitExternalBindings`), and a content-derived version.
+ * Problems in the data become diagnostics, never exceptions; only a field type of a kind no member can hold throws
+ * (`UnsupportedFieldType`).
  *
  * Seed `Owner` is the package model id (`PackageRef.model`, e.g. `shop.p`) of the node's home package — the one whose
  * own sources declare the instance (`MetadataSnapshot.HomeModelOf`, the first binder in deps-first load order) —
@@ -151,6 +154,8 @@ export class SnapshotDescriber
     private static readonly CollisionMessage = '"{0}" no longer declares "{1}": a carrier gets "{1}" from an earlier source too';
     private static readonly ParentCycleMessage = '"{0}" extends "{1}", which closes an inheritance cycle; its parent falls back to "{2}"';
     private static readonly InclusionCycleMessage = '"{0}" includes "{1}", which closes an inclusion cycle; the inclusion is dropped';
+    private static readonly ConflictingMessage = '"{0}" is declared differently by "{1}" and "{2}"; the declaration of "{1}" is described';
+    private static readonly UnmappableMessage = '"{0}" in model "{1}" maps the many-valued relationship "{2}" to field "{3}" of "{4}"; it is ignored';
     private static readonly Builtins: ReadonlyMap<string, ValueType> = new Map<string, ValueType>([
         ['string', ValueType.String],
         ['number', ValueType.Float64],
@@ -172,6 +177,8 @@ export class SnapshotDescriber
     private readonly resolving = new Set<string>();
     private readonly taxonomyNames = new Set<string>();
     private readonly diagnostics: IDescribeDiagnostic[] = [];
+    /** Set while a declaration's shape is drafted only for comparison (T12): its diagnostics are not the description's. */
+    private muted = false;
 
     private constructor(private readonly snapshot: MetadataSnapshot, private readonly options: IDescribeOptions) {}
 
@@ -253,19 +260,23 @@ export class SnapshotDescriber
                 SnapshotDescriber.Relationship(TodlNames.Broader, [TodlNames.Term], true),
             ],
         });
+        const declared = new Map<string, { readonly Manifest: Manifest; readonly Shape: IDefinitionDraft }>();
         for (const manifest of this.snapshot.manifests)
         {
             for (const type of manifest.types())
             {
-                if ((type.kind !== MetaKind.Concept && type.kind !== MetaKind.Aspect) || this.drafts.has(type.fullName)) continue;
-                const base = type.isAspect ? null : type.baseType?.fullName ?? null;
-                this.drafts.set(type.fullName, {
-                    Name: type.fullName,
-                    IsAspect: type.isAspect,
-                    Parent: type.isAspect ? null : base ?? TodlNames.Element,
-                    Aspects: type.getDeclaredAspects().map((a) => a.fullName),
-                    Own: this.OwnMembers(type),
-                });
+                if (type.kind !== MetaKind.Concept && type.kind !== MetaKind.Aspect) continue;
+                const first = declared.get(type.fullName);
+                if (first === undefined)
+                {
+                    declared.set(type.fullName, { Manifest: manifest, Shape: this.Shape(type) });
+                }
+                else
+                {
+                    this.CheckDeclaration(type, manifest, first.Manifest, first.Shape);
+                }
+                if (this.drafts.has(type.fullName)) continue;
+                this.drafts.set(type.fullName, this.Draft(type));
             }
         }
         // A parent or aspect that is not itself described (an unresolved cross-manifest ref) falls back to the root.
@@ -274,6 +285,61 @@ export class SnapshotDescriber
             if (draft.Parent !== null && this.drafts.get(draft.Parent)?.IsAspect !== false) draft.Parent = TodlNames.Element;
             draft.Aspects = draft.Aspects.filter((a) => this.drafts.get(a)?.IsAspect === true);
         }
+    }
+
+    private Draft(type: TypeInfo): IDefinitionDraft
+    {
+        const base = type.isAspect ? null : type.baseType?.fullName ?? null;
+        return {
+            Name: type.fullName,
+            IsAspect: type.isAspect,
+            Parent: type.isAspect ? null : base ?? TodlNames.Element,
+            Aspects: type.getDeclaredAspects().map((a) => a.fullName),
+            Own: this.OwnMembers(type),
+        };
+    }
+
+    /** The declaration's drafted shape, for comparison only: its diagnostics are muted (the description reports its own). */
+    private Shape(type: TypeInfo): IDefinitionDraft
+    {
+        this.muted = true;
+        try
+        {
+            return this.Draft(type);
+        }
+        finally
+        {
+            this.muted = false;
+        }
+    }
+
+    /**
+     * Ruling T12: a later manifest of another model that declares `type` (rather than carrying a copy from a dependency
+     * it was loaded over) must declare the first declaration's shape, else ConflictingDefinition.
+     */
+    private CheckDeclaration(type: TypeInfo, manifest: Manifest, first: Manifest, shape: IDefinitionDraft): void
+    {
+        if (manifest.model === first.model || this.snapshot.DependsOn(manifest, first)) return;
+        if (SnapshotDescriber.SameShape(shape, this.Shape(type))) return;
+        this.Report(DescribeDiagnosticCode.ConflictingDefinition, type.fullName,
+            MessageFormat.Format(SnapshotDescriber.ConflictingMessage, type.fullName, first.model, manifest.model));
+    }
+
+    /** Same kind, parent and aspects (in any order), and the same own members by name, each agreeing (Agree). */
+    private static SameShape(a: IDefinitionDraft, b: IDefinitionDraft): boolean
+    {
+        if (a.IsAspect !== b.IsAspect || a.Parent !== b.Parent || a.Aspects.length !== b.Aspects.length || a.Own.length !== b.Own.length)
+        {
+            return false;
+        }
+        const aspects = new Set(a.Aspects);
+        if (!b.Aspects.every((aspect) => aspects.has(aspect))) return false;
+        const own = new Map(a.Own.map((p) => [p.Input.Name, p]));
+        return b.Own.every((plan) =>
+        {
+            const other = own.get(plan.Input.Name);
+            return other !== undefined && SnapshotDescriber.Agree(other, plan);
+        });
     }
 
     /** The first type (deps-first) with this full name that is a concept. */
@@ -723,6 +789,7 @@ export class SnapshotDescriber
 
     private Report(code: DescribeDiagnosticCode, subject: string, message: string): void
     {
+        if (this.muted) return;
         this.diagnostics.push({ Code: code, Subject: subject, Message: message });
     }
 
@@ -766,16 +833,37 @@ export class SnapshotDescriber
                     continue;
                 }
                 bound.set(key, binding.Connector);
-                if (binding.Connector === TodlNames.FileConnector)
-                {
-                    out.push({ Model: plan.Model, Concept: binding.Concept, Connector: binding.Connector });
-                }
-                else
+                const isExternal = binding.Connector !== TodlNames.FileConnector && binding.Connector !== BindingTable.EngineStorage;
+                if (isExternal)
                 {
                     external.add(binding.Concept);
+                }
+                if (this.options.EmitExternalBindings === true)
+                {
+                    out.push({ Model: plan.Model, Concept: binding.Concept, Connector: binding.Connector });
+                    if (isExternal) this.CheckFieldMap(plan.Model, binding);
+                }
+                else if (binding.Connector === TodlNames.FileConnector)
+                {
+                    out.push({ Model: plan.Model, Concept: binding.Concept, Connector: binding.Connector });
                 }
             }
         }
         return out;
+    }
+
+    /** Ruling T5: a many-valued relationship cannot be field-mapped; its field-map entry is reported and ignored. */
+    private CheckFieldMap(model: string, binding: ConnectorBinding): void
+    {
+        const plans = this.Effective(binding.Concept);
+        for (const [member, field] of Object.entries(binding.FieldMap))
+        {
+            const input = plans.get(member)?.Input;
+            if (input?.Kind === MemberKind.Relationship && input.Many)
+            {
+                this.Report(DescribeDiagnosticCode.UnmappableRelationship, `${binding.Concept}${SnapshotDescriber.MemberSeparator}${member}`,
+                    MessageFormat.Format(SnapshotDescriber.UnmappableMessage, binding.Concept, model, member, field, binding.Connector));
+            }
+        }
     }
 }

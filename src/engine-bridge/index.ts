@@ -18,3 +18,14 @@ export { SystemNames, ShareRight, ShareSubject } from './system/SystemNames.js';
 export { ShareGrants } from './system/ShareGrants.js';
 export { ShareGrantScope, type IShareSubjects } from './system/ShareGrantScope.js';
 export type { IPackageDocumentSource } from '../domain/domain.js';
+export {
+    EnvironmentCatalogComposer,
+    DeliveryChannel,
+    type IComposeInput,
+    type IEnvironmentCatalog,
+    type IPackageDelivery,
+} from './environment/EnvironmentCatalogComposer.js';
+export { EnvironmentCatalogError, EnvironmentCatalogErrorCode } from './environment/EnvironmentCatalogError.js';
+export { PackageVersionUnifier, type IUnifiedPackages } from './environment/PackageVersionUnifier.js';
+export { UnifiedPackageSource } from './environment/UnifiedPackageSource.js';
+export { ConnectorPlanMerge, type IMergedConnectors } from './environment/ConnectorPlanMerge.js';

@@ -638,3 +638,95 @@ test('SeedProperties converts attrs as the seed does, defaulting label and class
     const mismatched = SnapshotDescriber.SeedProperties(SeedPropertiesFx.Members, new Map([['n', 'not a number']]), null);
     assert.deepEqual([...mismatched], [[TodlNames.Label, null], [TodlNames.Class, null]]);
 });
+
+/** External bindings in the describer (option EmitExternalBindings, ruling T14) and conflicting definitions (T12). */
+class ExternalDescribeFx
+{
+    public static readonly Crm = 'crm';
+    public static readonly CustomerA = 'namespace acme { concept Customer { name : string?; } }';
+    public static readonly CustomerB = 'namespace acme { concept Customer { age : integer?; } }';
+
+    public static Plan(...bindings: ConnectorBinding[]): ModelConnectorPlan
+    {
+        return { Model: DescribeFixture.Model, Version: DescribeFixture.Version, Connectors: [], Bindings: bindings };
+    }
+
+    public static Emit(snapshot: MetadataSnapshot, plan: ModelConnectorPlan): ISnapshotDescription
+    {
+        return SnapshotDescriber.Describe(snapshot, { DefaultConnector: BindingTable.EngineStorage, ConnectorPlans: [plan], EmitExternalBindings: true });
+    }
+}
+
+describe('SnapshotDescriber external bindings and conflicting definitions (M2.2)', () =>
+{
+    test('external bindings are emitted when asked', async () =>
+    {
+        const snapshot = await DescribeFixture.ShopSnapshot();
+        const plan = ExternalDescribeFx.Plan(DescribeFixture.Binding('shop.Loc', ExternalDescribeFx.Crm), DescribeFixture.Binding('shop.Widget', TodlNames.FileConnector));
+        const emitted = ExternalDescribeFx.Emit(snapshot, plan);
+        assert.deepEqual(emitted.Description.Bindings, [
+            { Model: DescribeFixture.Model, Concept: 'shop.Loc', Connector: ExternalDescribeFx.Crm },
+            { Model: DescribeFixture.Model, Concept: 'shop.Widget', Connector: TodlNames.FileConnector },
+        ]);
+        assert.deepEqual([...emitted.External], ['shop.Loc']);
+        // Without the option: M1 behaviour (only the file binding; the external concept is listed in External).
+        const m1 = DescribeFixture.Describe(snapshot, [plan]);
+        assert.deepEqual(m1.Description.Bindings, [{ Model: DescribeFixture.Model, Concept: 'shop.Widget', Connector: TodlNames.FileConnector }]);
+        assert.deepEqual([...m1.External], ['shop.Loc']);
+    });
+
+    test('an engine-storage binding is emitted but is not external', async () =>
+    {
+        const emitted = ExternalDescribeFx.Emit(await DescribeFixture.ShopSnapshot(), ExternalDescribeFx.Plan(DescribeFixture.Binding('shop.Loc', BindingTable.EngineStorage)));
+        assert.deepEqual(emitted.Description.Bindings, [{ Model: DescribeFixture.Model, Concept: 'shop.Loc', Connector: BindingTable.EngineStorage }]);
+        assert.deepEqual([...emitted.External], []);
+        await DescribeFixture.Opens(emitted.Description);
+    });
+
+    test('a many-valued relationship in a field map is reported unmappable', async () =>
+    {
+        const binding = { ...DescribeFixture.Binding('shop.Widget', ExternalDescribeFx.Crm), FieldMap: { id: 'id', name: 'name', home: 'home_id', parts: 'part_ids' } };
+        const emitted = ExternalDescribeFx.Emit(await DescribeFixture.ShopSnapshot(), ExternalDescribeFx.Plan(binding));
+        assert.deepEqual(emitted.Diagnostics.map((d) => [d.Code, d.Subject]), [[DescribeDiagnosticCode.UnmappableRelationship, 'shop.Widget.parts']]);
+        // Not reported on the M1 path, which serves no external data.
+        assert.deepEqual(DescribeFixture.Describe(await DescribeFixture.ShopSnapshot(), [ExternalDescribeFx.Plan(binding)]).Diagnostics, []);
+    });
+
+    test('conflicting definition is reported', async () =>
+    {
+        const snapshot = await DescribeFixture.Snapshot([
+            { model: 'pkg.one', text: ExternalDescribeFx.CustomerA },
+            { model: 'pkg.two', text: ExternalDescribeFx.CustomerB },
+        ]);
+        const { Diagnostics } = DescribeFixture.Describe(snapshot);
+        assert.deepEqual(Diagnostics.map((d) => [d.Code, d.Subject]), [[DescribeDiagnosticCode.ConflictingDefinition, 'acme.Customer']]);
+        assert.match(Diagnostics[0]!.Message, /pkg\.one/);
+        assert.match(Diagnostics[0]!.Message, /pkg\.two/);
+    });
+
+    test('prelude copies do not conflict', async () =>
+    {
+        const snapshot = await DescribeFixture.Snapshot([
+            { model: 'pkg.one', text: ExternalDescribeFx.CustomerA },
+            { model: 'pkg.two', text: ExternalDescribeFx.CustomerA },
+            { model: 'pkg.three', text: 'namespace other { concept Thing { } }' },
+        ]);
+        assert.equal(snapshot.manifests.filter((m) => m.types().some((t) => t.fullName === TodlNames.Element)).length, 3);
+        assert.deepEqual(DescribeFixture.Describe(snapshot).Diagnostics, []);
+    });
+
+    test('a dependent compiled against an older dependency does not conflict with the loaded one', async () =>
+    {
+        const old = compilePackage([], [{ uri: 'b.todl', text: 'namespace base { concept Cust { name : string?; } }' }], { id: 'base', version: '1.0.0' });
+        const now = compilePackage([], [{ uri: 'b.todl', text: 'namespace base { concept Cust { name : string?; age : integer?; } }' }], { id: 'base', version: '1.3.0' });
+        assert.ok(old.ok && now.ok);
+        const ui = compilePackage([old.package!.document], [{ uri: 'u.todl', text: 'namespace ui { import base; concept Order { cust : base.Cust?; } }' }],
+            { id: 'ui', version: '1.0.0' }, [{ kind: PackageKind.Library, id: 'base', version: '1.3.0' }]);
+        assert.ok(ui.ok, JSON.stringify(ui.errors));
+        const domain = new Domain(new MemoryPackageSource([PackageManifestBridge.toResolved(now.package!), PackageManifestBridge.toResolved(ui.package!)]));
+        await domain.load({ model: 'ui', version: '1.0.0' });
+        const { Description, Diagnostics } = DescribeFixture.Describe(domain.Snapshot);
+        assert.deepEqual(Diagnostics, []);
+        assert.deepEqual(DescribeFixture.Definition(Description, 'base.Cust').Members.map((m) => m.Name), ['name', 'age']);
+    });
+});

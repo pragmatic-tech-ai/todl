@@ -11,12 +11,21 @@ export interface IDescribeOptions
      * `MetadataSnapshot.HomeModelOf` gives), not the TODL `model` declaration name.
      */
     readonly ConnectorPlans?: readonly ModelConnectorPlan[];
+    /**
+     * Emit every plan binding into `Bindings` verbatim (`{ Model, Concept, Connector }`), external ones included, and
+     * report many-valued relationships in an external binding's field map (UnmappableRelationship). Default false: the
+     * M1 behaviour, where only `.todl` file bindings are emitted and external concepts are only listed in `External`
+     * (ruling T14; the dev path keeps it until M2.3 installs DataSourceConnectors there). The environment catalog
+     * composer sets it, with plans whose Connector names are already the engine connector names (rulings T2, T3).
+     */
+    readonly EmitExternalBindings?: boolean;
 }
 
 export interface ISnapshotDescription
 {
     readonly Description: ISchemaDescription;
-    /** Concepts bound to a non-.todl connector (no data in M1; the host denies writes). */
+    /** Concepts bound to a connector other than the `.todl` file connector and engine storage (no data in M1; the host
+     *  denies writes). */
     readonly External: ReadonlySet<string>;
     readonly Diagnostics: readonly IDescribeDiagnostic[];
 }
@@ -52,6 +61,12 @@ export enum DescribeDiagnosticCode
     MemberCollision,
     /** An extends or aspect-inclusion cycle; the closing edge is dropped (a parent falls back to the root). */
     InheritanceCycle,
+    /** A concept or aspect full name declared by manifests of two models (neither depending on the other) with
+     *  different shapes (parent, aspects or own members); the first declaration (deps-first) is described (ruling T12). */
+    ConflictingDefinition,
+    /** A many-valued relationship in an external binding's field map; only single-valued relationships can be
+     *  field-mapped, so the entry is ignored (ruling T5). */
+    UnmappableRelationship,
 }
 
 export interface IDescribeDiagnostic

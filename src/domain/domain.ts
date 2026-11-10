@@ -133,6 +133,7 @@ export class Domain
             this.importRefcount.set(depId, (this.importRefcount.get(depId) ?? 0) + 1);
         }
         this.depsOf.set(id, depIds);
+        this.Snapshot.RecordDependencies(id, depIds);
         this.Snapshot.Finalize(manifest); // deps-first: appended to `order` after its deps
         if (resolved.seed !== undefined) this.Snapshot.BindSeed(resolved.seed, pinned);
         this.onManifestLoaded.emit(manifest);
