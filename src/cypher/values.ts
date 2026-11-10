@@ -2,17 +2,12 @@ import type { Scalar } from "../manifest/logical.js";
 import type { IInstanceMirror } from "../manifest/reflection/reflection.js";
 import type { EntityReader, EntityHost } from "../reflection-client/index.js";
 import { ReflectedEntity, MirrorReader } from "../reflection-client/index.js";
-import { Snapshot, type MirrorSnapshot } from "../graph-api/index.js";
+import { Snapshot } from "../graph-api/index.js";
 import { CypherWriteError } from "./errors.js";
-import { CypherCellCodec } from "./cell-codec.js";
+import { CypherCellCodec } from "../graph-api/wire/index.js";
+import type { CypherValueDto } from "../graph-api/wire/index.js";
 
-/** A node cell: its snapshot under the reserved `$node` key (see CypherCellCodec). */
-export interface NodeCellDto
-{
-    readonly $node: MirrorSnapshot;
-}
-
-export type CypherValueDto = NodeCellDto | Scalar | null | CypherValueDto[] | { [k: string]: CypherValueDto };
+export type { CypherValueDto, NodeCellDto } from "../graph-api/wire/index.js";
 
 export type ParameterValue = Scalar | null | readonly ParameterValue[] | { readonly [key: string]: ParameterValue };
 

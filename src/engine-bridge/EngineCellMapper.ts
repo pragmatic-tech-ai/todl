@@ -1,6 +1,5 @@
 import type { Cypher } from '@pragmatic-tech-ai/graph';
-import type { CypherResultDto } from '../cypher/index.js';
-import type { CypherValueDto } from '../cypher/values.js';
+import type { CypherResultDto, CypherValueDto } from '../graph-api/wire/index.js';
 import type { MetadataSnapshot } from '../domain/metadata-snapshot.js';
 import { GraphQuery } from '../graph-api/graph-query-engine.js';
 import type { FieldSnapshot, MirrorSnapshot } from '../graph-api/snapshot.js';
