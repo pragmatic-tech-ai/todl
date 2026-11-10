@@ -122,14 +122,14 @@ describe('EnvironmentNodePlacement', () =>
     {
         assert.throws(
             () => PlacementFixture.Placement([customers]).Place('crm.Unknown', new Map()),
-            (e: unknown) => e instanceof EngineBridgeError && e.Code === EngineBridgeErrorCode.ForeignId,
+            (e: unknown) => e instanceof EngineBridgeError && e.Code === EngineBridgeErrorCode.NoHomeModel,
         );
     });
 
     test('empty or non-scalar id value is rejected', () =>
     {
         const placement = PlacementFixture.Placement([tags]);
-        for (const bad of ['', true, new Uint8Array(1)] as unknown[])
+        for (const bad of ['', true, new Uint8Array(1), Number.NaN, Number.POSITIVE_INFINITY] as unknown[])
         {
             assert.throws(
                 () => placement.Place('crm.Tag', new Map([['code', bad as never]])),

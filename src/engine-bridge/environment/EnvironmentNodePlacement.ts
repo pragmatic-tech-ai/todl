@@ -30,7 +30,7 @@ export class EnvironmentNodePlacement implements Cypher.INodePlacement
             const owner = this.homeModels.get(concept);
             if (owner === undefined)
             {
-                throw new EngineBridgeError(EngineBridgeErrorCode.ForeignId, EnvironmentNodePlacement.ErrNoHomeModel + concept);
+                throw new EngineBridgeError(EngineBridgeErrorCode.NoHomeModel, EnvironmentNodePlacement.ErrNoHomeModel + concept);
             }
             return { PublicId: this.ids(), Owner: owner };
         }
