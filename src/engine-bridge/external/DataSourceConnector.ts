@@ -1,36 +1,26 @@
 import {
     ConnectorResidency,
-    MemberKind,
+    IdIn,
     PredicateKind,
     type CellValue,
     type IConnectorCapabilities,
     type IConnectorTransaction,
-    type IDefinitionDescription,
     type IExternalConnector,
     type IFetchedRow,
     type IFetchPage,
     type IFetchRequest,
     type ISchemaDescription,
-    type MemberInput,
-    type ValueType,
 } from '@pragmatic-tech-ai/graph';
 import type { IServiceProvider } from '@pragmatic-tech-ai/todl-runtime';
-import type { ExternalRecord, QueryComparison, QueryRequest } from '../../model-data/connector-plan.js';
+import { QueryCompareOp, type ExternalRecord, type QueryComparison, type QueryRequest } from '../../model-data/connector-plan.js';
 import type { DataSourceAdapterCatalog } from '../../model-data/data-source-adapter-catalog.js';
 import type { IDataSourceAdapter } from '../../model-data/data-source-adapter.js';
 import { EngineBridgeError, EngineBridgeErrorCode } from '../EngineBridgeError.js';
 import type { IExternalBinding, IExternalConnectorPlan } from './ExternalBinding.js';
 import type { ExternalIdentity } from './ExternalIdentity.js';
 import { ExternalValues } from './ExternalValues.js';
-import { FetchTranslator } from './FetchTranslator.js';
+import { FetchTranslator, MappedMembers, type IMappedProperty } from './FetchTranslator.js';
 import { ResumeToken } from './ResumeToken.js';
-
-/** A field-mapped property member of a binding: its source field and engine type. */
-interface IMappedProperty
-{
-    readonly Field: string;
-    readonly Type: ValueType;
-}
 
 /** What a binding reads: its mapped properties and its mapped single-valued relationships (member → field). */
 interface IBindingShape
@@ -41,13 +31,15 @@ interface IBindingShape
 }
 
 /**
- * An engine External connector over one TODL data-source connector (rulings T5, T7, T8). Residency is External: the
- * source is the truth, and the engine fetches rows on demand and stores no property data. The connector serves the
+ * An engine External connector over one TODL data-source connector (rulings T5, T7, T8, P10). Residency is External:
+ * the source is the truth, and the engine fetches rows on demand and stores no property data. The connector serves the
  * bindings of its plan, each exactly for its (Model, Concept); a subtype of a bound concept reads as an empty page,
- * since a source holds exactly its bound concept. Push-down is advisory: the top-level conjuncts of the request
- * predicate that translate are sent as a Where and the rest are dropped, because the engine re-checks every row. Nothing
- * is cached: every Fetch reads the source (spec §5.2, §12). A source value that does not fit its member type fails the
- * fetch with ExternalRowInvalid; it never reads as null. The adapter is borrowed, not owned: the
+ * since a source holds exactly its bound concept. Push-down is advisory and sound only: FetchTranslator sends the
+ * top-level conjuncts that cannot exclude a row the engine admits (exact equality and membership on String and Boolean
+ * members, null tests, ids) and drops the rest, because the engine re-checks every row. Key and reverse lookups are
+ * pushed as well, and reverse rows are kept only when their mapped link holds the target, since the engine trusts them.
+ * Nothing is cached: every Fetch reads the source (spec §5.2, §12). A source value that does not fit its member type
+ * fails the fetch with ExternalRowInvalid; it never reads as null. The adapter is borrowed, not owned: the
  * DataSourceAdapterCatalog that opened it disposes it.
  */
 export class DataSourceConnector implements IExternalConnector
@@ -59,33 +51,32 @@ export class DataSourceConnector implements IExternalConnector
     private static readonly ErrLongId = 'External public id exceeds the UTF-8 byte limit (';
     private static readonly ErrLongIdEnd = '): ';
     private static readonly ErrNoWrites = 'External writes are not available on connector ';
+    private static readonly ErrUnpagedResume = 'A resume token was given to a connector whose source does not page: ';
     private static readonly Empty: IFetchPage = Object.freeze({ Rows: Object.freeze([]) });
+    private static readonly PushDown: ReadonlySet<PredicateKind> = new Set([
+        PredicateKind.True, PredicateKind.Compare, PredicateKind.In, PredicateKind.IsNull, PredicateKind.Not, PredicateKind.And, PredicateKind.IdIn,
+    ]);
+    private static readonly ReadCapabilities: IConnectorCapabilities = Object.freeze({
+        KeyLookup: true,
+        ReverseLookup: true,
+        PushDown: DataSourceConnector.PushDown,
+    });
 
     public readonly Name: string;
     public readonly Residency = ConnectorResidency.External as const;
-    public readonly Capabilities: IConnectorCapabilities = {
-        KeyLookup: true,
-        ReverseLookup: true,
-        PushDown: new Set([
-            PredicateKind.True, PredicateKind.Compare, PredicateKind.In, PredicateKind.IsNull, PredicateKind.Not, PredicateKind.And, PredicateKind.IdIn,
-        ]),
-    };
+    public readonly Capabilities = DataSourceConnector.ReadCapabilities;
 
-    private readonly definitions = new Map<string, IDefinitionDescription>();
     private readonly shapes = new Map<string, IBindingShape>();
 
+    /** Member lookups go through `identity`, which is built over the same `description`. */
     public constructor(
         plan: IExternalConnectorPlan,
         private readonly adapter: IDataSourceAdapter,
         private readonly identity: ExternalIdentity,
-        description: ISchemaDescription,
+        _description: ISchemaDescription,
     )
     {
         this.Name = plan.Name;
-        for (const definition of description.Definitions)
-        {
-            this.definitions.set(definition.Name, definition);
-        }
         for (const binding of plan.Bindings)
         {
             this.shapes.set(DataSourceConnector.ShapeKey(binding.Model, binding.Binding.Concept), this.Shape(binding));
@@ -120,43 +111,64 @@ export class DataSourceConnector implements IExternalConnector
         const terms: QueryComparison[] = [];
         if (request.Keys !== undefined)
         {
-            const keys = FetchTranslator.Keys(shape.Binding, request.Keys, this.identity);
-            if (keys === undefined)
-            {
-                return DataSourceConnector.Empty;
-            }
-            terms.push(keys);
+            terms.push(...FetchTranslator.Where(shape.Binding, new IdIn(new Set(request.Keys)), this.identity)!.All);
         }
         if (request.Reverse !== undefined)
         {
-            const field = shape.Links.get(request.Reverse.Relationship);
-            if (field === undefined)
+            const reverse = this.ReverseTerm(shape, request.Reverse.Relationship, request.Reverse.Target);
+            if (reverse === undefined)
             {
                 return DataSourceConnector.Empty;
             }
-            terms.push(FetchTranslator.Reverse(shape.Binding, request.Reverse.Relationship, field, request.Reverse.Target, this.identity));
+            terms.push(reverse);
         }
         terms.push(...FetchTranslator.Where(shape.Binding, request.Predicate, this.identity)?.All ?? []);
+        // An empty `in` (no key or id parses under this binding) matches nothing: skip the source.
+        if (terms.some(t => t.Op === QueryCompareOp.In && t.Values?.length === 0))
+        {
+            return DataSourceConnector.Empty;
+        }
         const query: QueryRequest = { Source: shape.Binding.Binding.Source, Fields: DataSourceConnector.Fields(shape, request) };
         if (terms.length > 0)
         {
             query.Where = { All: terms };
         }
-        return this.Read(shape, request, query);
+        const page = await this.Read(shape, request, query);
+        return request.Reverse === undefined ? page : DataSourceConnector.Linking(page, request.Reverse.Relationship, request.Reverse.Target);
     }
 
     private async Read(shape: IBindingShape, request: IFetchRequest, query: QueryRequest): Promise<IFetchPage>
     {
+        const after = request.Resume === undefined ? undefined : { After: ResumeToken.Decode(request.Resume) };
         if (this.adapter.CanPage !== true || this.adapter.QueryPage === undefined)
         {
+            if (after !== undefined)
+            {
+                throw new EngineBridgeError(EngineBridgeErrorCode.ExternalRowInvalid, DataSourceConnector.ErrUnpagedResume + request.Resume);
+            }
             return { Rows: this.Rows(shape, request, await this.adapter.Query(query)) };
         }
         query.OrderKey = shape.Binding.Binding.IdKey;
         const limit = request.Limit ?? DataSourceConnector.DefaultLimit;
-        const page = request.Resume === undefined ? { Limit: limit } : { After: ResumeToken.Decode(request.Resume), Limit: limit };
-        const slice = await this.adapter.QueryPage(query, page);
+        const slice = await this.adapter.QueryPage(query, after === undefined ? { Limit: limit } : { ...after, Limit: limit });
         const rows = this.Rows(shape, request, slice.Records);
         return slice.NextAfter === undefined ? { Rows: rows } : { Rows: rows, Resume: ResumeToken.Encode(slice.NextAfter) };
+    }
+
+    /** `eq` on the relationship's foreign-key field with the key of `target` (T6); undefined when it is unmapped. */
+    private ReverseTerm(shape: IBindingShape, relationship: string, target: string): QueryComparison | undefined
+    {
+        const field = shape.Links.get(relationship);
+        return field === undefined
+            ? undefined
+            : { Field: field, Op: QueryCompareOp.Eq, Value: this.identity.ForeignKey(shape.Binding, relationship, target) };
+    }
+
+    /** The rows of a reverse page whose link really holds the target: a source may match the key more widely. */
+    private static Linking(page: IFetchPage, relationship: string, target: string): IFetchPage
+    {
+        const rows = page.Rows.filter(r => (r.Links.get(relationship) ?? []).includes(target));
+        return page.Resume === undefined ? { Rows: rows } : { Rows: rows, Resume: page.Resume };
     }
 
     private Rows(shape: IBindingShape, request: IFetchRequest, records: readonly ExternalRecord[]): IFetchedRow[]
@@ -217,50 +229,25 @@ export class DataSourceConnector implements IExternalConnector
         return [...fields];
     }
 
-    /** The mapped members of `binding`: properties by type, single-valued relationships (many-valued are ignored, T5). */
+    /** The mapped members of `binding` by the MappedMembers rule (the same one push-down uses). */
     private Shape(binding: IExternalBinding): IBindingShape
     {
         const properties = new Map<string, IMappedProperty>();
         const links = new Map<string, string>();
-        for (const [member, field] of Object.entries(binding.Binding.FieldMap))
+        for (const member of Object.keys(binding.Binding.FieldMap))
         {
-            const input = this.FindMember(binding.Binding.Concept, member, new Set<string>());
-            if (input?.Kind === MemberKind.Property && input.Type !== undefined)
+            const property = MappedMembers.Property(binding, member, this.identity);
+            const link = MappedMembers.Link(binding, member, this.identity);
+            if (property !== undefined)
             {
-                properties.set(member, { Field: field, Type: input.Type });
+                properties.set(member, property);
             }
-            else if (input?.Kind === MemberKind.Relationship && input.Many !== true)
+            else if (link !== undefined)
             {
-                links.set(member, field);
+                links.set(member, link);
             }
         }
         return { Binding: binding, Properties: properties, Links: links };
-    }
-
-    /** The member `name` declared on `concept` or anything it inherits or carries. */
-    private FindMember(concept: string, name: string, seen: Set<string>): MemberInput | undefined
-    {
-        const definition = this.definitions.get(concept);
-        if (definition === undefined || seen.has(concept))
-        {
-            return undefined;
-        }
-        seen.add(concept);
-        const own = definition.Members.find(m => m.Name === name);
-        if (own !== undefined)
-        {
-            return own;
-        }
-        const supers = definition.Parent === null ? definition.Aspects : [definition.Parent, ...definition.Aspects];
-        for (const parent of supers)
-        {
-            const found = this.FindMember(parent, name, seen);
-            if (found !== undefined)
-            {
-                return found;
-            }
-        }
-        return undefined;
     }
 
     private static ShapeKey(model: string, concept: string): string

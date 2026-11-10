@@ -7,7 +7,7 @@ import { EngineBridgeError, EngineBridgeErrorCode } from '../EngineBridgeError.j
  */
 export class ResumeToken
 {
-    private static readonly Prefix = '1.';
+    public static readonly Prefix = '1.';
     private static readonly Encoding = 'base64url';
     private static readonly AfterKey = 'After';
     private static readonly ErrMalformed = 'Malformed external resume token: ';

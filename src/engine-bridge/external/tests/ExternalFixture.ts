@@ -18,7 +18,8 @@ import { ExternalIdentity } from '../ExternalIdentity.js';
 
 /**
  * An InMemoryAdapter that logs every request (Query, QueryPage and Apply), serves keyset pages when `CanPage` is set,
- * reports `CanTransact`, and makes call `ThrowAtCall` (1-based, over all three) throw.
+ * reports `CanTransact`, and makes call `ThrowAtCall` (1-based, over all three) throw. With `IgnoreWhere` it answers
+ * every read as if no Where were given (a source that matches more widely than asked).
  */
 export class RecordingAdapter implements IDataSourceAdapter
 {
@@ -30,6 +31,7 @@ export class RecordingAdapter implements IDataSourceAdapter
     public readonly Batches: WriteBatch[] = [];
     public CanPage = false;
     public CanTransact = false;
+    public IgnoreWhere = false;
     public ThrowAtCall: number | undefined;
     private calls = 0;
 
@@ -42,7 +44,7 @@ export class RecordingAdapter implements IDataSourceAdapter
     {
         this.Count();
         this.Queries.push(request);
-        return this.Inner.Query(request);
+        return this.Inner.Query(this.Effective(request));
     }
 
     public async QueryPage(request: QueryRequest, page: PageQuery): Promise<PageSlice>
@@ -51,7 +53,7 @@ export class RecordingAdapter implements IDataSourceAdapter
         this.Queries.push(request);
         this.Pages.push(page);
         const key = request.OrderKey ?? request.Fields[0]!;
-        const rows = [...await this.Inner.Query(request)]
+        const rows = [...await this.Inner.Query(this.Effective(request))]
             .sort((a, b) => RecordingAdapter.Order(a[key] ?? null, b[key] ?? null))
             .filter(r => page.After === undefined || RecordingAdapter.Order(r[key] ?? null, page.After) > 0);
         const records = rows.slice(0, page.Limit);
@@ -69,6 +71,11 @@ export class RecordingAdapter implements IDataSourceAdapter
 
     public async Dispose(): Promise<void>
     {
+    }
+
+    private Effective(request: QueryRequest): QueryRequest
+    {
+        return this.IgnoreWhere ? { Source: request.Source, Fields: request.Fields } : request;
     }
 
     private Count(): void
@@ -129,7 +136,7 @@ export class ExternalFixture
         return {
             Version: ExternalFixture.Version,
             Indexes: [],
-            Seed: [{ PublicId: ExternalFixture.TeamA, Concept: ExternalFixture.Team, Owner: ExternalFixture.Model, Properties: { id: ExternalFixture.TeamA }, Links: [] }],
+            Seed: [{ PublicId: ExternalFixture.TeamA, Concept: ExternalFixture.Team, Owner: ExternalFixture.Model, Properties: { [ExternalFixture.Id]: ExternalFixture.TeamA }, Links: [] }],
             Bindings: [{ Model: ExternalFixture.Model, Concept: ExternalFixture.Customer, Connector: ExternalFixture.Connector }],
             Definitions: [
                 ExternalFixture.Def(ExternalFixture.Customer, [
@@ -147,7 +154,7 @@ export class ExternalFixture
     {
         const binding: ConnectorBinding = {
             Concept: ExternalFixture.Customer, Connector: ExternalFixture.Connector, Source: ExternalFixture.Source, IdKey: ExternalFixture.IdKey,
-            FieldMap: { id: ExternalFixture.IdKey, name: ExternalFixture.NameField, team: ExternalFixture.TeamField },
+            FieldMap: { [ExternalFixture.Id]: ExternalFixture.IdKey, [ExternalFixture.Name]: ExternalFixture.NameField, [ExternalFixture.TeamRel]: ExternalFixture.TeamField },
             Writable: true, Concurrency: WriteConcurrency.LastWriteWins, Atomicity: WriteAtomicity.Sequential,
         };
         return { Model: ExternalFixture.Model, Connector: ExternalFixture.Connector, Binding: binding };

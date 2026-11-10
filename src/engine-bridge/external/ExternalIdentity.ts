@@ -150,7 +150,7 @@ export class ExternalIdentity
     }
 
     /** The member `name` declared on `concept` or anything it inherits or carries. */
-    private FindMember(concept: string, name: string): MemberInput | undefined
+    public FindMember(concept: string, name: string): MemberInput | undefined
     {
         return this.FindMemberIn(concept, name, new Set<string>());
     }

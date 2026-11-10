@@ -8,7 +8,10 @@ import {
     CompareOp,
     ConnectorResidency,
     Cypher,
+    DateValue,
     EdgeDirection,
+    IdIn,
+    In,
     IsNull,
     Not,
     Predicate,
@@ -20,13 +23,14 @@ import { DataSourceAdapterCatalog } from '../../../model-data/data-source-adapte
 import { EngineBridgeError, EngineBridgeErrorCode } from '../../EngineBridgeError.js';
 import { EngineFixture } from '../../tests/EngineFixture.js';
 import { DataSourceConnector } from '../DataSourceConnector.js';
+import { ResumeToken } from '../ResumeToken.js';
 import { ExternalFixture as Fx, RecordingAdapter, RecordingAdapterFactory } from './ExternalFixture.js';
 
 /** A connector over the fixture plan and a recording adapter seeded with `records`. */
 class ReadHarness
 {
-    private static readonly Foreign = 'foreign';
-    private static readonly Query = 'MATCH (c:`crm.Customer`)-[:team]->(t) RETURN c.name, t.id';
+    public static readonly ForeignKey = 'foreign';
+    public static readonly CypherText = 'MATCH (c:`crm.Customer`)-[:team]->(t) RETURN c.name, t.id';
 
     public readonly Plan = Fx.Plan();
     public readonly Identity = Fx.Identity(this.Plan);
@@ -52,16 +56,6 @@ class ReadHarness
         return { Model: Fx.Model, Concept: Fx.Customer, Predicate: Predicate.True, Members: [Fx.Id, Fx.Name, Fx.TeamRel], ...extra };
     }
 
-    public static get ForeignKey(): string
-    {
-        return ReadHarness.Foreign;
-    }
-
-    public static get CypherText(): string
-    {
-        return ReadHarness.Query;
-    }
-
     public Mint(storageId: string): string
     {
         return this.Identity.Mint(this.Plan.Bindings[0]!, storageId);
@@ -70,6 +64,30 @@ class ReadHarness
     public LastWhere(): unknown
     {
         return this.Adapter.Queries[this.Adapter.Queries.length - 1]!.Where;
+    }
+
+    /** Three customers: 7 Acme (team a), '012' Beta (no team), 9 null name (team b). */
+    public static Mixed(): ReadHarness
+    {
+        return ReadHarness.Over([ReadHarness.Acme(), { cust_id: '012', nm: ReadHarness.Beta, team_fk: null }, { cust_id: 9, nm: null, team_fk: ReadHarness.TeamB }]);
+    }
+
+    public static readonly Beta = 'Beta';
+    public static readonly TeamB = 'b';
+
+    /** The ids a fetch under `predicate` returns. */
+    public async Ids(predicate: Predicate, extra: Partial<IFetchRequest> = {}): Promise<string[]>
+    {
+        return (await this.Connector.Fetch(ReadHarness.Request({ ...extra, Predicate: predicate }))).Rows.map(r => r.PublicId);
+    }
+
+    /** Asserts `predicate` is not pushed down and returns exactly the rows of no push-down. */
+    public async AssertNotPushed(predicate: Predicate): Promise<void>
+    {
+        const unpushed = await this.Ids(Predicate.True);
+        const pushed = await this.Ids(predicate);
+        assert.equal(this.LastWhere(), undefined);
+        assert.deepEqual(pushed, unpushed);
     }
 
     public static async Rejects(action: Promise<unknown>, code: EngineBridgeErrorCode): Promise<void>
@@ -157,6 +175,90 @@ describe('DataSourceConnector read side', () =>
         assert.deepEqual(h.LastWhere(), { All: [{ Field: Fx.NameField, Op: QueryCompareOp.IsNotNull, Value: null }] });
     });
 
+    test('a relationship member is never pushed down', async () =>
+    {
+        const h = ReadHarness.Mixed();
+        await h.AssertNotPushed(new IsNull(Fx.TeamRel));
+        await h.AssertNotPushed(new Not(new IsNull(Fx.TeamRel)));
+        await h.AssertNotPushed(new Compare(Fx.TeamRel, CompareOp.Eq, Fx.TeamA));
+        await h.AssertNotPushed(new In(Fx.TeamRel, [Fx.TeamA]));
+    });
+
+    test('numeric equality and membership are not pushed', async () =>
+    {
+        const h = ReadHarness.Mixed();
+        // '012' reads as 12n: a source comparison on the raw field would lose that row.
+        await h.AssertNotPushed(new Compare(Fx.Id, CompareOp.Eq, 12n));
+        await h.AssertNotPushed(new In(Fx.Id, [12n]));
+    });
+
+    test('inequality and ranges are not pushed', async () =>
+    {
+        const h = ReadHarness.Mixed();
+        await h.AssertNotPushed(new Compare(Fx.Name, CompareOp.Ne, Fx.Acme));
+        for (const op of [CompareOp.Lt, CompareOp.Le, CompareOp.Gt, CompareOp.Ge])
+        {
+            await h.AssertNotPushed(new Compare(Fx.Name, op, ReadHarness.Beta));
+            await h.AssertNotPushed(new Compare(Fx.Id, op, 8n));
+        }
+    });
+
+    test('unmapped members, unsafe bigints and temporal values are not pushed', async () =>
+    {
+        const h = ReadHarness.Mixed();
+        await h.AssertNotPushed(new Compare(ReadHarness.ForeignKey, CompareOp.Eq, Fx.Acme));
+        await h.AssertNotPushed(new IsNull(ReadHarness.ForeignKey));
+        await h.AssertNotPushed(new Compare(Fx.Name, CompareOp.Eq, 2n ** 60n));
+        await h.AssertNotPushed(new Compare(Fx.Name, CompareOp.Eq, new DateValue(1)));
+        await h.AssertNotPushed(new In(Fx.Name, [Fx.Acme, 2n ** 60n]));
+    });
+
+    test('String equality and membership are pushed', async () =>
+    {
+        const h = ReadHarness.Mixed();
+        assert.deepEqual(await h.Ids(new Compare(Fx.Name, CompareOp.Eq, Fx.Acme)), [h.Mint('7')]);
+        assert.deepEqual(h.LastWhere(), { All: [{ Field: Fx.NameField, Op: QueryCompareOp.Eq, Value: Fx.Acme }] });
+        assert.deepEqual(await h.Ids(new In(Fx.Name, [Fx.Acme, ReadHarness.Beta])), [h.Mint('7'), h.Mint('012')]);
+        assert.deepEqual(h.LastWhere(), { All: [{ Field: Fx.NameField, Op: QueryCompareOp.In, Value: null, Values: [Fx.Acme, ReadHarness.Beta] }] });
+        assert.deepEqual(await h.Ids(new IsNull(Fx.Name)), [h.Mint('9')]);
+        assert.deepEqual(h.LastWhere(), { All: [{ Field: Fx.NameField, Op: QueryCompareOp.IsNull, Value: null }] });
+    });
+
+    test('IdIn pushes the ids of this binding only', async () =>
+    {
+        const h = ReadHarness.Mixed();
+        assert.deepEqual(await h.Ids(new IdIn(new Set([h.Mint('9'), ReadHarness.ForeignKey]))), [h.Mint('9')]);
+        assert.deepEqual(h.LastWhere(), { All: [{ Field: Fx.IdKey, Op: QueryCompareOp.In, Value: null, Values: [9] }] });
+
+        const calls = h.Adapter.Calls;
+        assert.deepEqual(await h.Ids(new IdIn(new Set([ReadHarness.ForeignKey]))), []);
+        assert.equal(h.Adapter.Calls, calls);
+    });
+
+    test('keys combine with the predicate and paging', async () =>
+    {
+        const h = ReadHarness.Mixed();
+        h.Adapter.CanPage = true;
+        const page = await h.Connector.Fetch(ReadHarness.Request({
+            Keys: [h.Mint('7'), h.Mint('9')], Predicate: new Not(new IsNull(Fx.Name)), Limit: 1,
+        }));
+        assert.deepEqual(h.LastWhere(), { All: [
+            { Field: Fx.IdKey, Op: QueryCompareOp.In, Value: null, Values: [7, 9] },
+            { Field: Fx.NameField, Op: QueryCompareOp.IsNotNull, Value: null },
+        ] });
+        assert.equal(h.Adapter.Queries[0]!.OrderKey, Fx.IdKey);
+        assert.deepEqual(page.Rows.map(r => r.PublicId), [h.Mint('7')]);
+        assert.notEqual(page.Resume, undefined);
+    });
+
+    test('reverse rows keep only those whose link holds the target', async () =>
+    {
+        const h = ReadHarness.Mixed();
+        h.Adapter.IgnoreWhere = true;
+        const page = await h.Connector.Fetch(ReadHarness.Request({ Reverse: { Relationship: Fx.TeamRel, Target: Fx.TeamA } }));
+        assert.deepEqual(page.Rows.map(r => r.PublicId), [h.Mint('7')]);
+    });
+
     test('subtype request on a bound ancestor is empty', async () =>
     {
         const h = ReadHarness.Over();
@@ -195,8 +297,16 @@ describe('DataSourceConnector read side', () =>
         h.Adapter.CanPage = true;
         await ReadHarness.Rejects(h.Connector.Fetch(ReadHarness.Request({ Resume: 'garbage' })), EngineBridgeErrorCode.ExternalRowInvalid);
         await ReadHarness.Rejects(h.Connector.Fetch(ReadHarness.Request({ Resume: '1.!!' })), EngineBridgeErrorCode.ExternalRowInvalid);
-        const noAfter = '1.' + Buffer.from(JSON.stringify({ Other: 1 })).toString('base64url');
+        const noAfter = ResumeToken.Prefix + Buffer.from(JSON.stringify({ Other: 1 })).toString('base64url');
         await ReadHarness.Rejects(h.Connector.Fetch(ReadHarness.Request({ Resume: noAfter })), EngineBridgeErrorCode.ExternalRowInvalid);
+        assert.equal(h.Adapter.Calls, 0);
+    });
+
+    test('a resume token to a source that does not page fails', async () =>
+    {
+        const h = ReadHarness.Over();
+        await ReadHarness.Rejects(h.Connector.Fetch(ReadHarness.Request({ Resume: ResumeToken.Encode(7) })), EngineBridgeErrorCode.ExternalRowInvalid);
+        await ReadHarness.Rejects(h.Connector.Fetch(ReadHarness.Request({ Resume: 'garbage' })), EngineBridgeErrorCode.ExternalRowInvalid);
         assert.equal(h.Adapter.Calls, 0);
     });
 
