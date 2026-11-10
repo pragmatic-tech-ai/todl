@@ -96,6 +96,10 @@ describe('ExternalIdentity', () =>
         const identity = new ExternalIdentity({ ...description, Definitions: defs }, [customers, floats]);
         assert.equal(identity.StorageKey(floats, '1.5'), 1.5);
         assert.equal(identity.StorageKey(floats, '1.50'), '1.50');
+        assert.equal(identity.StorageKey(floats, '1e+21'), 1e21);
+        assert.equal(identity.StorageKey(floats, '1e-7'), 1e-7);
+        assert.equal(identity.StorageKey(floats, '1e21'), '1e21');
+        assert.equal(identity.StorageKey(customers, '1e+21'), '1e+21');
         assert.equal(identity.StorageKey(floats, '0.12345678901234567890'), '0.12345678901234567890');
         assert.equal(identity.StorageKey(customers, '9007199254740993'), '9007199254740993');
         assert.equal(identity.StorageKey(customers, '007'), '007');

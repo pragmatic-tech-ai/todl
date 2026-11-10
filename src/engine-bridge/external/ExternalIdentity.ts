@@ -71,8 +71,9 @@ export class ExternalIdentity
         {
             const value = Number(storageId);
             // Only canonical text round-trips: '007', '1.0' or a long float would change the id on the way out.
-            const exact = ExternalIdentity.DecimalPattern.test(storageId) && String(value) === storageId;
-            if (exact && (type === ValueType.Float64 || Number.isSafeInteger(value)))
+            const canonical = Number.isFinite(value) && String(value) === storageId;
+            const exact = type === ValueType.Float64 ? canonical : canonical && ExternalIdentity.DecimalPattern.test(storageId) && Number.isSafeInteger(value);
+            if (exact)
             {
                 return value;
             }
