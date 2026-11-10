@@ -55,10 +55,11 @@ interface IAttemptedBatch
  * Commit writes the batches in order. For each it first reads a before-image (Query with IdKey in the batch keys, over
  * IdKey, every FieldMap field and the version field). A create of a new row (ChangeBatcher's Creates) whose key the
  * before-image holds is a conflict: the batch is not written and Commit throws ExternalWriteError (ExternalWriteFailed)
- * with a Conflict failure per such key, so a create never silently updates an existing row. Otherwise it sets each
- * operation's Version from the before-image for an Optimistic binding (owner question Q1: this guards the commit window
- * only), then calls adapter.Apply. Per-operation failures throw ExternalWriteError (ExternalWriteFailed) and stop the
- * commit. A thrown adapter error propagates as it is.
+ * with a Conflict failure per such key, so a create never silently updates a row the before-image saw. The check covers
+ * the before-image only: a row another writer inserts between that read and adapter.Apply is still upserted (the same
+ * commit-window limit as Q1). Otherwise it sets each operation's Version from the before-image for an Optimistic
+ * binding (owner question Q1: this guards the commit window only), then calls adapter.Apply. Per-operation failures
+ * throw ExternalWriteError (ExternalWriteFailed) and stop the commit. A thrown adapter error propagates as it is.
  *
  * Revert before Commit discards. After Commit, or after a Commit that stopped partway, it compensates every operation
  * that applied, in reverse order: a key without a before-image is deleted, every other key is upserted back to its

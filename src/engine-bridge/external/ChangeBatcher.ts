@@ -72,14 +72,20 @@ class PendingWrite
  * Translates the change set an engine transaction hands a DataSourceConnector into source write batches (ruling T9).
  * It only translates and validates; it has no remote effect. The ops on one public id merge in order into one
  * WriteOperation: CreateNode, SetProperty and Link merge into an Upsert (a create also writes its key into IdKey, and a
- * create after a Delete of the id nulls every mapped field it does not set); a DeleteNode makes it a Delete, and a CreateNode then DeleteNode in one set cancels out; an Unlink of a mapped foreign
- * key sets it to null, unless the set already re-pointed the key at another target. There is one WriteBatch per binding,
- * in order of first appearance, its operations in order of first appearance of their ids.
+ * create after a Delete of the id nulls every mapped field it does not set); a DeleteNode makes it a Delete, and a
+ * CreateNode then DeleteNode in one set cancels out; an Unlink of a mapped foreign key sets it to null, unless the set
+ * already re-pointed the key at another target. There is one WriteBatch per binding, in order of first appearance, its
+ * operations in order of first appearance of their ids.
+ *
+ * Delete then Create nulls every mapped column the set did not write, rather than keeping the deleted row's values. A
+ * source with a NOT NULL column among them rejects that upsert, which surfaces at Commit as ExternalWriteFailed; the
+ * old value is never kept silently.
  *
  * A change it cannot express throws: a public id that is not one of `connector`'s (ForeignId), a binding that is not
  * Writable (NotWritable), and as UnsupportedExternalChange a SetOwner, a create of another concept than the binding's,
- * a create with a numeric id member whose key is not numeric (no id value was given), an unmapped member, a change to the id member of a node the set did not create (or a value of it that differs from the
- * minted key), link properties, a temporal value, and any change after a Delete of the same id.
+ * a create with a numeric id member whose key is not numeric (no id value was given), an unmapped member, a change to
+ * the id member of a node the set did not create (or a value of it that differs from the minted key), link properties,
+ * a temporal value, and any change after a Delete of the same id.
  */
 export class ChangeBatcher
 {
