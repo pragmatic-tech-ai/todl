@@ -12,7 +12,11 @@ export class ExternalIdentity
     private static readonly Separator = '#';
     private static readonly SourceSeparator = '.';
     private static readonly DecimalPattern = /^-?\d+(\.\d+)?$/;
+    private static readonly ListSeparator = ', ';
+    private static readonly ModelOpen = ' (model ';
+    private static readonly ModelClose = ')';
     private static readonly ErrAmbiguous = 'More than one external binding fits concept ';
+    private static readonly ErrBindings = ': ';
 
     private readonly definitions = new Map<string, IDefinitionDescription>();
     private readonly all: readonly IExternalBinding[];
@@ -63,10 +67,12 @@ export class ExternalIdentity
     public StorageKey(binding: IExternalBinding, storageId: string): ExternalFieldValue
     {
         const type = this.IdMemberType(binding);
-        if ((type === ValueType.Int64 || type === ValueType.Float64) && ExternalIdentity.DecimalPattern.test(storageId))
+        if (type === ValueType.Int64 || type === ValueType.Float64)
         {
             const value = Number(storageId);
-            if (type === ValueType.Int64 ? Number.isSafeInteger(value) : Number.isFinite(value))
+            // Only canonical text round-trips: '007', '1.0' or a long float would change the id on the way out.
+            const exact = ExternalIdentity.DecimalPattern.test(storageId) && String(value) === storageId;
+            if (exact && (type === ValueType.Float64 || Number.isSafeInteger(value)))
             {
                 return value;
             }
@@ -110,7 +116,8 @@ export class ExternalIdentity
         const matches = this.all.filter(b => b.Binding.Concept === concept);
         if (matches.length > 1)
         {
-            throw new EngineBridgeError(EngineBridgeErrorCode.AmbiguousExternalBinding, ExternalIdentity.ErrAmbiguous + concept);
+            const names = matches.map(b => b.Connector + ExternalIdentity.ModelOpen + b.Model + ExternalIdentity.ModelClose).join(ExternalIdentity.ListSeparator);
+            throw new EngineBridgeError(EngineBridgeErrorCode.AmbiguousExternalBinding, ExternalIdentity.ErrAmbiguous + concept + ExternalIdentity.ErrBindings + names);
         }
         return matches[0];
     }
