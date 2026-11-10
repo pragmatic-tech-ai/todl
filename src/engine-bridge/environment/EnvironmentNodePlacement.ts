@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import type { CellValue, Cypher } from '@pragmatic-tech-ai/graph';
-import type { IExternalBinding } from '../external/ExternalBinding.js';
+import { ValueType, type CellValue, type Cypher } from '@pragmatic-tech-ai/graph';
+import { EngineBridgeError, EngineBridgeErrorCode } from '../EngineBridgeError.js';
 import type { ExternalIdentity } from '../external/ExternalIdentity.js';
 
 /**
@@ -10,9 +10,9 @@ import type { ExternalIdentity } from '../external/ExternalIdentity.js';
  */
 export class EnvironmentNodePlacement implements Cypher.INodePlacement
 {
-    private static readonly NoOwner = '';
-    /** A decimal-text probe: StorageKey returns a number for it only when the binding's id member is numeric. */
-    private static readonly NumericProbe = '0';
+    private static readonly ErrNoHomeModel = 'No home model is known for concept ';
+    private static readonly ErrBadId = 'The id member of an external create must be a non-empty string, a bigint or a finite number: ';
+    private static readonly EmptyText = '';
 
     public constructor(
         private readonly identity: ExternalIdentity,
@@ -22,31 +22,40 @@ export class EnvironmentNodePlacement implements Cypher.INodePlacement
     {
     }
 
-    public Place(concept: string, properties: ReadonlyMap<string, CellValue>): ReturnType<Cypher.INodePlacement['Place']>
+    public Place(concept: string, properties: ReadonlyMap<string, CellValue>): Cypher.INodePlace
     {
         const binding = this.identity.CreateTarget(concept);
         if (binding === undefined)
         {
-            return { PublicId: this.ids(), Owner: this.homeModels.get(concept) ?? EnvironmentNodePlacement.NoOwner };
+            const owner = this.homeModels.get(concept);
+            if (owner === undefined)
+            {
+                throw new EngineBridgeError(EngineBridgeErrorCode.ForeignId, EnvironmentNodePlacement.ErrNoHomeModel + concept);
+            }
+            return { PublicId: this.ids(), Owner: owner };
         }
-        const idMember = EnvironmentNodePlacement.IdMember(binding);
+        const idMember = this.identity.IdMemberName(binding);
         const value = idMember === undefined ? undefined : properties.get(idMember);
         if (value !== undefined && value !== null)
         {
-            return { PublicId: this.identity.Mint(binding, String(value)), Owner: binding.Model };
+            return { PublicId: this.identity.Mint(binding, EnvironmentNodePlacement.IdText(concept, value)), Owner: binding.Model };
         }
         const key = this.ids();
         const publicId = this.identity.Mint(binding, key);
-        if (idMember === undefined || typeof this.identity.StorageKey(binding, EnvironmentNodePlacement.NumericProbe) === 'number')
+        // Only a text id member can hold the minted key; a numeric one cannot (Q3), and an unmapped one has none.
+        if (idMember !== undefined && this.identity.IdMemberType(binding) === ValueType.String)
         {
-            return { PublicId: publicId, Owner: binding.Model };
+            return { PublicId: publicId, Owner: binding.Model, Defaults: new Map<string, CellValue>([[idMember, key]]) };
         }
-        return { PublicId: publicId, Owner: binding.Model, Defaults: new Map<string, CellValue>([[idMember, key]]) };
+        return { PublicId: publicId, Owner: binding.Model };
     }
 
-    /** The member mapped to the source's id field. */
-    private static IdMember(binding: IExternalBinding): string | undefined
+    private static IdText(concept: string, value: CellValue): string
     {
-        return Object.entries(binding.Binding.FieldMap).find(([, field]) => field === binding.Binding.IdKey)?.[0];
+        if (typeof value === 'bigint' || (typeof value === 'number' && Number.isFinite(value)) || (typeof value === 'string' && value !== EnvironmentNodePlacement.EmptyText))
+        {
+            return String(value);
+        }
+        throw new EngineBridgeError(EngineBridgeErrorCode.UnsupportedValue, EnvironmentNodePlacement.ErrBadId + concept);
     }
 }
