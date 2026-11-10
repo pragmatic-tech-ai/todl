@@ -18,6 +18,7 @@ import type { IDataSourceAdapter } from '../../model-data/data-source-adapter.js
 import { EngineBridgeError, EngineBridgeErrorCode } from '../EngineBridgeError.js';
 import type { IExternalBinding, IExternalConnectorPlan } from './ExternalBinding.js';
 import type { ExternalIdentity } from './ExternalIdentity.js';
+import { DataSourceTransaction } from './DataSourceTransaction.js';
 import { ExternalValues } from './ExternalValues.js';
 import { FetchTranslator, MappedMembers, type IMappedProperty } from './FetchTranslator.js';
 import { ResumeToken } from './ResumeToken.js';
@@ -79,6 +80,15 @@ class ImmutableSet<T> extends Set<T>
  * Nothing is cached: every Fetch reads the source (spec §5.2, §12). A source value that does not fit its member type
  * fails the fetch with ExternalRowInvalid; it never reads as null. The adapter is borrowed, not owned: the
  * DataSourceAdapterCatalog that opened it disposes it.
+ *
+ * Writes (ruling T9) go through a DataSourceTransaction per engine transaction: Apply translates and validates only,
+ * Commit writes one batch per binding after reading its before-image, and Revert compensates what applied. How much a
+ * failed write leaves behind depends on the adapter kind. SQL transacts per batch, so a Transactional binding's failed
+ * batch applied nothing and only batches that already committed are compensated. Mongo transacts on a replica set only;
+ * a standalone server cannot, so its Transactional bindings are refused at Apply and its Sequential ones compensate.
+ * REST and GraphQL never transact and compensate only. Compensation restores before-images last-write-wins, so a
+ * concurrent change to the same rows during the window can be overwritten: the far side is the connector's best effort
+ * (spec §6), and a failed compensation surfaces as CompensationFailed.
  */
 export class DataSourceConnector implements IExternalConnector
 {
@@ -88,7 +98,6 @@ export class DataSourceConnector implements IExternalConnector
     private static readonly ErrNoKey = 'External row has no key: ';
     private static readonly ErrLongId = 'External public id exceeds the UTF-8 byte limit (';
     private static readonly ErrLongIdEnd = '): ';
-    private static readonly ErrNoWrites = 'External writes are not available on connector ';
     private static readonly ErrUnpagedResume = 'A resume token was given to a connector whose source does not page: ';
     private static readonly Empty: IFetchPage = Object.freeze({ Rows: Object.freeze([]) });
     private static readonly PushDown: ReadonlySet<PredicateKind> = new ImmutableSet([
@@ -133,10 +142,10 @@ export class DataSourceConnector implements IExternalConnector
         return new DataSourceConnector(plan, await adapters.Open(plan.Spec, services), identity, description);
     }
 
-    /** The write side lands with DataSourceTransaction (Task 4). */
+    /** Opens the write side of one engine transaction (ruling T9; see the class comment for compensation). */
     public Begin(): Promise<IConnectorTransaction>
     {
-        return Promise.reject(new EngineBridgeError(EngineBridgeErrorCode.UnsupportedExternalChange, DataSourceConnector.ErrNoWrites + this.Name));
+        return Promise.resolve(new DataSourceTransaction(this.Name, this.adapter, this.identity));
     }
 
     public async Fetch(request: IFetchRequest): Promise<IFetchPage>

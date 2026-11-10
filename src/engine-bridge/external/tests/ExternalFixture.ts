@@ -10,7 +10,12 @@ import {
     type QueryRequest,
     type ResolvedConnection,
     type WriteBatch,
+    type WriteFailure,
+    type WriteOperation,
+    QueryCompareOp,
+    WriteOperationKind,
     type WriteResult,
+    WriteFailureKind,
 } from '../../../model-data/connector-plan.js';
 import type { IDataSourceAdapter, IDataSourceAdapterFactory, PageQuery, PageSlice } from '../../../model-data/data-source-adapter.js';
 import { InMemoryAdapter } from '../../../model-data/tests/fakes.js';
@@ -20,7 +25,11 @@ import { ExternalIdentity } from '../ExternalIdentity.js';
 /**
  * An InMemoryAdapter that logs every request (Query, QueryPage and Apply), serves keyset pages when `CanPage` is set,
  * reports `CanTransact`, and makes call `ThrowAtCall` (1-based, over all three) throw. With `IgnoreWhere` it answers
- * every read as if no Where were given (a source that matches more widely than asked).
+ * every read as if no Where were given (a source that matches more widely than asked). With `FailAfter` set, the next
+ * Apply applies only its first `FailAfter` operations and reports every later one as a failure of `FailKind` (a
+ * sequential source that fails partway); the toggle then clears. `ThrowAfter` does the same but throws after applying
+ * the first operations (a driver that dies mid-batch). With `PartialUpserts` an upsert of an existing row merges its
+ * fields into the row, as SQL `ON CONFLICT DO UPDATE SET <given columns>` does, instead of InMemoryAdapter's replace.
  */
 export class RecordingAdapter implements IDataSourceAdapter
 {
@@ -34,6 +43,10 @@ export class RecordingAdapter implements IDataSourceAdapter
     public CanTransact = false;
     public IgnoreWhere = false;
     public ThrowAtCall: number | undefined;
+    public FailAfter: number | undefined;
+    public FailKind = WriteFailureKind.Error;
+    public ThrowAfter: number | undefined;
+    public PartialUpserts = false;
     private calls = 0;
 
     public get Calls(): number
@@ -67,11 +80,41 @@ export class RecordingAdapter implements IDataSourceAdapter
     {
         this.Count();
         this.Batches.push(batch);
-        return this.Inner.Apply(batch);
+        const written = this.PartialUpserts ? await this.Merged(batch) : batch;
+        const throwAfter = this.ThrowAfter;
+        if (throwAfter !== undefined)
+        {
+            this.ThrowAfter = undefined;
+            await this.Inner.Apply({ ...written, Operations: written.Operations.slice(0, throwAfter) });
+            throw new Error(RecordingAdapter.Boom);
+        }
+        const failAfter = this.FailAfter;
+        if (failAfter === undefined)
+        {
+            return this.Inner.Apply(written);
+        }
+        this.FailAfter = undefined;
+        const applied = await this.Inner.Apply({ ...written, Operations: written.Operations.slice(0, failAfter) });
+        const failures: WriteFailure[] = batch.Operations.slice(failAfter).map(op => ({ Key: op.Key, Kind: this.FailKind, Reason: RecordingAdapter.Boom }));
+        return { Applied: applied.Applied, Failures: [...applied.Failures, ...failures] };
     }
 
     public async Dispose(): Promise<void>
     {
+    }
+
+    /** The batch with each upsert of an existing row carrying that row's other fields (a partial update). */
+    private async Merged(batch: WriteBatch): Promise<WriteBatch>
+    {
+        const operations: WriteOperation[] = [];
+        for (const op of batch.Operations)
+        {
+            const rows = op.Kind === WriteOperationKind.Upsert
+                ? await this.Inner.Query({ Source: batch.Source, Fields: ExternalFixture.AllFields, Where: { All: [{ Field: batch.IdKey, Op: QueryCompareOp.Eq, Value: op.Key }] } })
+                : [];
+            operations.push(rows.length === 0 ? op : { ...op, Fields: { ...rows[0]!, ...op.Fields } });
+        }
+        return { ...batch, Operations: operations };
     }
 
     private Effective(request: QueryRequest): QueryRequest
@@ -111,7 +154,7 @@ export class RecordingAdapterFactory implements IDataSourceAdapterFactory
 }
 
 /**
- * crm.Customer { id: Int64, name: String, active: Boolean, team -> crm.Team } bound to connector `crm` (source `customers`, key
+ * crm.Customer { id: Int64, name: String, active: Boolean, revision: Int64, team -> crm.Team } bound to connector `crm` (source `customers`, key
  * `cust_id`), its subtype crm.VipCustomer, and crm.Team { id: String } held by the engine.
  */
 export class ExternalFixture
@@ -130,6 +173,14 @@ export class ExternalFixture
     public static readonly NameField = 'nm';
     public static readonly TeamField = 'team_fk';
     public static readonly ActiveField = 'act';
+    /** The version column of an Optimistic binding (BindingWith({ VersionField: RevField })). */
+    public static readonly RevField = 'rev';
+    /** The version member, mapped to RevField by OptimisticBinding. */
+    public static readonly Revision = 'revision';
+    /** Every field a customers row can hold. */
+    public static readonly AllFields: readonly string[] = [
+        ExternalFixture.IdKey, ExternalFixture.NameField, ExternalFixture.TeamField, ExternalFixture.ActiveField, ExternalFixture.RevField,
+    ];
     public static readonly Acme = 'Acme';
     public static readonly TeamA = 'a';
     private static readonly Version = 'ext-v1';
@@ -146,6 +197,7 @@ export class ExternalFixture
                     ExternalFixture.Prop(ExternalFixture.Id, ValueType.Int64),
                     ExternalFixture.Prop(ExternalFixture.Name, ValueType.String),
                     ExternalFixture.Prop(ExternalFixture.Active, ValueType.Boolean),
+                    ExternalFixture.Prop(ExternalFixture.Revision, ValueType.Int64),
                     { Name: ExternalFixture.TeamRel, Kind: MemberKind.Relationship, Targets: [ExternalFixture.Team] },
                 ]),
                 ExternalFixture.Def(ExternalFixture.Vip, [], ExternalFixture.Customer),
@@ -156,14 +208,32 @@ export class ExternalFixture
 
     public static Binding(): IExternalBinding
     {
+        return ExternalFixture.BindingWith({});
+    }
+
+    /** The customers binding with `overrides` applied (Writable, Concurrency, Atomicity, VersionField, ...). */
+    public static BindingWith(overrides: Partial<ConnectorBinding>): IExternalBinding
+    {
         const binding: ConnectorBinding = {
             Concept: ExternalFixture.Customer, Connector: ExternalFixture.Connector, Source: ExternalFixture.Source, IdKey: ExternalFixture.IdKey,
             FieldMap: { [ExternalFixture.Id]: ExternalFixture.IdKey, [ExternalFixture.Name]: ExternalFixture.NameField, [ExternalFixture.TeamRel]: ExternalFixture.TeamField,
                 [ExternalFixture.Active]: ExternalFixture.ActiveField,
             },
             Writable: true, Concurrency: WriteConcurrency.LastWriteWins, Atomicity: WriteAtomicity.Sequential,
+            ...overrides,
         };
         return { Model: ExternalFixture.Model, Connector: ExternalFixture.Connector, Binding: binding };
+    }
+
+    /** The customers binding as Optimistic, its version column `rev` mapped as the `revision` member. */
+    public static OptimisticBinding(): IExternalBinding
+    {
+        const base = ExternalFixture.Binding().Binding;
+        return ExternalFixture.BindingWith({
+            Concurrency: WriteConcurrency.Optimistic,
+            VersionField: ExternalFixture.RevField,
+            FieldMap: { ...base.FieldMap, [ExternalFixture.Revision]: ExternalFixture.RevField },
+        });
     }
 
     public static Spec(): ConnectorSpec
@@ -195,6 +265,12 @@ export class ExternalFixture
         const adapter = new RecordingAdapter();
         adapter.Inner.Seed(ExternalFixture.Source, records);
         return adapter;
+    }
+
+    /** Every customers record as it is in the source now, in all fixture fields (bypassing the request log). */
+    public static Rows(adapter: RecordingAdapter): Promise<readonly ExternalRecord[]>
+    {
+        return adapter.Inner.Query({ Source: ExternalFixture.Source, Fields: ExternalFixture.AllFields });
     }
 
     private static Prop(name: string, type: ValueType): MemberInput
