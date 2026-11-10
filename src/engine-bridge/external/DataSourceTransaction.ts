@@ -3,6 +3,7 @@ import {
     QueryCompareOp,
     WriteAtomicity,
     WriteConcurrency,
+    WriteFailureKind,
     WriteOperationKind,
     type ExternalFieldValue,
     type ExternalRecord,
@@ -16,6 +17,13 @@ import { ChangeBatcher, type IPendingBatch } from './ChangeBatcher.js';
 import type { IExternalBinding } from './ExternalBinding.js';
 import type { ExternalIdentity } from './ExternalIdentity.js';
 import { ExternalWriteError } from './ExternalWriteError.js';
+
+/** Consecutive compensating operations of one concurrency, sent as one sequential batch. */
+interface IUndoRun
+{
+    readonly Guarded: boolean;
+    readonly Operations: WriteOperation[];
+}
 
 /** Where a DataSourceTransaction is in its life. */
 enum TransactionState
@@ -34,6 +42,8 @@ interface IAttemptedBatch
     /** Before-image rows by key text; a key without one did not exist before the write. */
     readonly Before: ReadonlyMap<string, ExternalRecord>;
     Applied: readonly WriteOperation[];
+    /** The version each applied upsert carries after the write, by key text, when the adapter reported it. */
+    Versions: ReadonlyMap<string, ExternalFieldValue>;
 }
 
 /**
@@ -43,9 +53,12 @@ interface IAttemptedBatch
  * adapter cannot transact (UnsupportedExternalChange). Changes of several Apply calls merge as one change set.
  *
  * Commit writes the batches in order. For each it first reads a before-image (Query with IdKey in the batch keys, over
- * IdKey, every FieldMap field and the version field), sets each operation's Version from it for an Optimistic binding
- * (owner question Q1: this guards the commit window only), then calls adapter.Apply. Per-operation failures throw
- * ExternalWriteError (ExternalWriteFailed) and stop the commit. A thrown adapter error propagates as it is.
+ * IdKey, every FieldMap field and the version field). A create of a new row (ChangeBatcher's Creates) whose key the
+ * before-image holds is a conflict: the batch is not written and Commit throws ExternalWriteError (ExternalWriteFailed)
+ * with a Conflict failure per such key, so a create never silently updates an existing row. Otherwise it sets each
+ * operation's Version from the before-image for an Optimistic binding (owner question Q1: this guards the commit window
+ * only), then calls adapter.Apply. Per-operation failures throw ExternalWriteError (ExternalWriteFailed) and stop the
+ * commit. A thrown adapter error propagates as it is.
  *
  * Revert before Commit discards. After Commit, or after a Commit that stopped partway, it compensates every operation
  * that applied, in reverse order: a key without a before-image is deleted, every other key is upserted back to its
@@ -54,12 +67,20 @@ interface IAttemptedBatch
  * did not is harmless). A batch of a Transactional binding over a transacting adapter that failed applied nothing.
  * A failed compensation throws ExternalWriteError (CompensationFailed) after every batch was tried. Before-images live
  * only as long as the transaction (spec §5.2, §12).
+ *
+ * Optimistic bindings: compensation is best effort. When the adapter reported the version a committed upsert left
+ * (WriteResult.Versions, e.g. VersionBumpingAdapter), the compensating upsert is guarded with that version and leaves
+ * the version field to the source, so the version moves forward rather than back to the before-image (no ABA), and a
+ * concurrent change since the commit makes the compensation fail (CompensationFailed) instead of being overwritten.
+ * Without a reported version (a source that reports none, an explicitly written version member, an adapter call that
+ * threw) the before-image is restored last-write-wins, version field included.
  */
 export class DataSourceTransaction implements IConnectorTransaction
 {
     private static readonly ErrClosed = 'The external transaction no longer takes this call: ';
     private static readonly ErrNoTransact = 'A transactional binding needs an adapter that can transact: ';
     private static readonly ErrWrite = 'External write failed on ';
+    private static readonly ErrExists = 'A created external row already exists in the source';
     private static readonly ErrCompensate = 'Compensating an external write failed on ';
     private static readonly SourceSeparator = '.';
     private static readonly CountOpen = ' (';
@@ -81,6 +102,8 @@ export class DataSourceTransaction implements IConnectorTransaction
     public async Apply(changes: ConnectorChangeSet): Promise<void>
     {
         this.RequireState(TransactionState.Open);
+        // The engine calls Apply once per transaction. A further call re-merges the whole accumulated list, so the ops on
+        // one id still merge into one operation across calls.
         const all = [...this.changes, ...changes.Changes];
         const pending = ChangeBatcher.Batches(new ConnectorChangeSet(all), this.identity, this.connector);
         for (const batch of pending)
@@ -119,14 +142,23 @@ export class DataSourceTransaction implements IConnectorTransaction
     {
         const binding = pending.Binding;
         const before = await this.BeforeImage(binding, pending.Batch);
+        const existing: WriteFailure[] = pending.Batch.Operations
+            .filter(o => pending.Creates.has(o) && before.has(DataSourceTransaction.KeyText(o.Key)))
+            .map(o => ({ Key: o.Key, Kind: WriteFailureKind.Conflict, Reason: DataSourceTransaction.ErrExists }));
+        if (existing.length > 0)
+        {
+            throw DataSourceTransaction.WriteFailed(binding, existing);
+        }
         const batch = DataSourceTransaction.Guarded(binding, pending.Batch, before);
         const transacted = binding.Binding.Atomicity === WriteAtomicity.Transactional && this.adapter.CanTransact === true;
-        const attempt: IAttemptedBatch = { Binding: binding, Before: before, Applied: batch.Operations };
+        const attempt: IAttemptedBatch = { Binding: binding, Before: before, Applied: batch.Operations, Versions: new Map() };
         this.attempted.push(attempt);
         let failures: readonly WriteFailure[];
         try
         {
-            failures = (await this.adapter.Apply(batch)).Failures;
+            const result = await this.adapter.Apply(batch);
+            failures = result.Failures;
+            attempt.Versions = new Map((result.Versions ?? []).map(v => [DataSourceTransaction.KeyText(v.Key), v.Version]));
         }
         catch (error)
         {
@@ -140,12 +172,17 @@ export class DataSourceTransaction implements IConnectorTransaction
         {
             const failed = new Set(failures.map(f => DataSourceTransaction.KeyText(f.Key)));
             attempt.Applied = transacted ? [] : batch.Operations.filter(o => !failed.has(DataSourceTransaction.KeyText(o.Key)));
-            throw new ExternalWriteError(
-                EngineBridgeErrorCode.ExternalWriteFailed,
-                DataSourceTransaction.ErrWrite + DataSourceTransaction.Where(binding) + DataSourceTransaction.CountOpen + failures.length + DataSourceTransaction.CountClose,
-                binding,
-                failures);
+            throw DataSourceTransaction.WriteFailed(binding, failures);
         }
+    }
+
+    private static WriteFailed(binding: IExternalBinding, failures: readonly WriteFailure[]): ExternalWriteError
+    {
+        return new ExternalWriteError(
+            EngineBridgeErrorCode.ExternalWriteFailed,
+            DataSourceTransaction.ErrWrite + DataSourceTransaction.Where(binding) + DataSourceTransaction.CountOpen + failures.length + DataSourceTransaction.CountClose,
+            binding,
+            failures);
     }
 
     /** The current rows of the batch's keys, over IdKey, every FieldMap field and the version field. */
@@ -192,13 +229,11 @@ export class DataSourceTransaction implements IConnectorTransaction
         let first: ExternalWriteError | undefined;
         for (const attempt of [...this.attempted].reverse())
         {
-            const operations = DataSourceTransaction.Undo(attempt);
-            if (operations.length === 0)
+            for (const run of DataSourceTransaction.Undo(attempt))
             {
-                continue;
+                const failure = await this.Undo(attempt.Binding, run);
+                first ??= failure;
             }
-            const failure = await this.Undo(attempt.Binding, operations);
-            first ??= failure;
         }
         this.attempted.length = 0;
         if (first !== undefined)
@@ -207,16 +242,20 @@ export class DataSourceTransaction implements IConnectorTransaction
         }
     }
 
-    /** Applies the compensating operations of one batch; the error describing a failure, else undefined. */
-    private async Undo(binding: IExternalBinding, operations: readonly WriteOperation[]): Promise<ExternalWriteError | undefined>
+    /** Applies one run of compensating operations; the error describing a failure, else undefined. */
+    private async Undo(binding: IExternalBinding, run: IUndoRun): Promise<ExternalWriteError | undefined>
     {
         const b = binding.Binding;
         const message = DataSourceTransaction.ErrCompensate + DataSourceTransaction.Where(binding);
+        const batch: WriteBatch = { Source: b.Source, IdKey: b.IdKey, Operations: run.Operations, Concurrency: WriteConcurrency.LastWriteWins, Atomicity: WriteAtomicity.Sequential };
+        if (run.Guarded && b.VersionField !== undefined)
+        {
+            batch.Concurrency = WriteConcurrency.Optimistic;
+            batch.VersionField = b.VersionField;
+        }
         try
         {
-            const result = await this.adapter.Apply({
-                Source: b.Source, IdKey: b.IdKey, Operations: operations, Concurrency: WriteConcurrency.LastWriteWins, Atomicity: WriteAtomicity.Sequential,
-            });
+            const result = await this.adapter.Apply(batch);
             return result.Failures.length === 0
                 ? undefined
                 : new ExternalWriteError(EngineBridgeErrorCode.CompensationFailed, message, binding, result.Failures);
@@ -227,23 +266,53 @@ export class DataSourceTransaction implements IConnectorTransaction
         }
     }
 
-    /** The compensating operations of what applied, in reverse order. */
-    private static Undo(attempt: IAttemptedBatch): WriteOperation[]
+    /**
+     * The compensating operations of what applied, in reverse order, cut into runs of one concurrency. An upsert back to a
+     * before-image whose committed version the adapter reported is guarded with that version and leaves out the version
+     * field (the source moves it on); everything else is last-write-wins.
+     */
+    private static Undo(attempt: IAttemptedBatch): IUndoRun[]
     {
-        const undo: WriteOperation[] = [];
+        const versionField = attempt.Binding.Binding.VersionField;
+        const optimistic = attempt.Binding.Binding.Concurrency === WriteConcurrency.Optimistic && versionField !== undefined;
+        const runs: IUndoRun[] = [];
         for (const op of [...attempt.Applied].reverse())
         {
-            const row = attempt.Before.get(DataSourceTransaction.KeyText(op.Key));
-            if (row !== undefined)
+            const key = DataSourceTransaction.KeyText(op.Key);
+            const row = attempt.Before.get(key);
+            const version = attempt.Versions.get(key);
+            let undo: WriteOperation;
+            let guarded = false;
+            if (row !== undefined && optimistic && version !== undefined)
             {
-                undo.push({ Kind: WriteOperationKind.Upsert, Key: op.Key, Fields: { ...row } });
+                const fields: Record<string, ExternalFieldValue> = { ...row };
+                delete fields[versionField!];
+                undo = { Kind: WriteOperationKind.Upsert, Key: op.Key, Fields: fields, Version: version };
+                guarded = true;
+            }
+            else if (row !== undefined)
+            {
+                undo = { Kind: WriteOperationKind.Upsert, Key: op.Key, Fields: { ...row } };
             }
             else if (op.Kind === WriteOperationKind.Upsert)
             {
-                undo.push({ Kind: WriteOperationKind.Delete, Key: op.Key, Fields: {} });
+                undo = { Kind: WriteOperationKind.Delete, Key: op.Key, Fields: {} };
+            }
+            else
+            {
+                continue;
+            }
+            const last = runs[runs.length - 1];
+            if (last !== undefined && last.Guarded === guarded)
+            {
+                last.Operations.push(undo);
+            }
+            else
+            {
+                runs.push({ Guarded: guarded, Operations: [undo] });
             }
         }
-        return undo;
+        return runs;
     }
 
     private RequireState(state: TransactionState): void

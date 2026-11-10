@@ -1,4 +1,4 @@
-import { WriteOp, type ConnectorChange, type ConnectorChangeSet, type ILinkOp, type ISetPropertyOp, type IUnlinkOp } from '@pragmatic-tech-ai/graph';
+import { ValueType, WriteOp, type ConnectorChange, type ConnectorChangeSet, type ILinkOp, type ISetPropertyOp, type IUnlinkOp } from '@pragmatic-tech-ai/graph';
 import { WriteOperationKind, type ExternalFieldValue, type WriteBatch, type WriteOperation } from '../../model-data/connector-plan.js';
 import { EngineBridgeError, EngineBridgeErrorCode } from '../EngineBridgeError.js';
 import type { IExternalBinding } from './ExternalBinding.js';
@@ -11,6 +11,11 @@ export interface IPendingBatch
 {
     readonly Binding: IExternalBinding;
     readonly Batch: WriteBatch;
+    /**
+     * The operations of `Batch` that create a row the change set did not delete first: a key that already exists in the
+     * source is a conflict (DataSourceTransaction checks them against the before-image before writing).
+     */
+    readonly Creates: ReadonlySet<WriteOperation>;
 }
 
 /** What the merged ops on one public id amount to so far. */
@@ -36,25 +41,44 @@ class PendingWrite
     {
     }
 
+    /**
+     * The merged operation. A create that replaces a row the set deleted (Delete then Create) writes every FieldMap field
+     * it did not set as null, so a partial-update source keeps nothing of the deleted row; IdKey and the version field
+     * are left to the key and the source.
+     */
     public Operation(): WriteOperation
     {
-        return this.Kind === PendingKind.Delete
-            ? { Kind: WriteOperationKind.Delete, Key: this.Key, Fields: {} }
-            : { Kind: WriteOperationKind.Upsert, Key: this.Key, Fields: Object.fromEntries(this.Fields) };
+        if (this.Kind === PendingKind.Delete)
+        {
+            return { Kind: WriteOperationKind.Delete, Key: this.Key, Fields: {} };
+        }
+        const fields = new Map(this.Fields);
+        if (this.Created && !this.BornHere)
+        {
+            const b = this.Binding.Binding;
+            for (const field of Object.values(b.FieldMap))
+            {
+                if (field !== b.IdKey && field !== b.VersionField && !fields.has(field))
+                {
+                    fields.set(field, null);
+                }
+            }
+        }
+        return { Kind: WriteOperationKind.Upsert, Key: this.Key, Fields: Object.fromEntries(fields) };
     }
 }
 
 /**
  * Translates the change set an engine transaction hands a DataSourceConnector into source write batches (ruling T9).
  * It only translates and validates; it has no remote effect. The ops on one public id merge in order into one
- * WriteOperation: CreateNode, SetProperty and Link merge into an Upsert (a create also writes its key into IdKey); a
- * DeleteNode makes it a Delete, and a CreateNode then DeleteNode in one set cancels out; an Unlink of a mapped foreign
+ * WriteOperation: CreateNode, SetProperty and Link merge into an Upsert (a create also writes its key into IdKey, and a
+ * create after a Delete of the id nulls every mapped field it does not set); a DeleteNode makes it a Delete, and a CreateNode then DeleteNode in one set cancels out; an Unlink of a mapped foreign
  * key sets it to null, unless the set already re-pointed the key at another target. There is one WriteBatch per binding,
  * in order of first appearance, its operations in order of first appearance of their ids.
  *
  * A change it cannot express throws: a public id that is not one of `connector`'s (ForeignId), a binding that is not
  * Writable (NotWritable), and as UnsupportedExternalChange a SetOwner, a create of another concept than the binding's,
- * an unmapped member, a change to the id member of a node the set did not create (or a value of it that differs from the
+ * a create with a numeric id member whose key is not numeric (no id value was given), an unmapped member, a change to the id member of a node the set did not create (or a value of it that differs from the
  * minted key), link properties, a temporal value, and any change after a Delete of the same id.
  */
 export class ChangeBatcher
@@ -69,6 +93,7 @@ export class ChangeBatcher
     private static readonly ErrIdValue = 'The id member of an external create must equal its key: ';
     private static readonly ErrLinkProperties = 'An external foreign key cannot carry link properties: ';
     private static readonly ErrAfterDelete = 'An external node cannot be changed after it was deleted: ';
+    private static readonly ErrNumericKey = 'An external create with a numeric id member needs a numeric id value; the source cannot hold a generated key: ';
     private static readonly ErrDuplicate = 'An external node is created twice: ';
     private static readonly MemberSeparator = '.';
 
@@ -84,7 +109,17 @@ export class ChangeBatcher
         {
             if (writes.size > 0)
             {
-                batches.push({ Binding: binding, Batch: ChangeBatcher.Batch(binding, [...writes.values()].map(w => w.Operation())) });
+                const creates = new Set<WriteOperation>();
+                const operations = [...writes.values()].map(w =>
+                {
+                    const operation = w.Operation();
+                    if (w.BornHere)
+                    {
+                        creates.add(operation);
+                    }
+                    return operation;
+                });
+                batches.push({ Binding: binding, Batch: ChangeBatcher.Batch(binding, operations), Creates: creates });
             }
         }
         return batches;
@@ -139,7 +174,7 @@ export class ChangeBatcher
         switch (change.Op)
         {
             case WriteOp.CreateNode:
-                ChangeBatcher.Create(write, change.Concept, publicId);
+                ChangeBatcher.Create(write, change.Concept, publicId, identity);
                 return;
             case WriteOp.DeleteNode:
                 if (write.BornHere)
@@ -167,11 +202,17 @@ export class ChangeBatcher
         }
     }
 
-    private static Create(write: PendingWrite, concept: string, publicId: string): void
+    private static Create(write: PendingWrite, concept: string, publicId: string, identity: ExternalIdentity): void
     {
         if (concept !== write.Binding.Binding.Concept)
         {
             throw new EngineBridgeError(EngineBridgeErrorCode.UnsupportedExternalChange, ChangeBatcher.ErrConcept + concept + ChangeBatcher.ErrIdSeparator + publicId);
+        }
+        // A numeric id column cannot hold a generated text key (owner question Q3): the create must give the id value.
+        const idType = identity.IdMemberType(write.Binding);
+        if ((idType === ValueType.Int64 || idType === ValueType.Float64) && typeof write.Key !== 'number')
+        {
+            throw new EngineBridgeError(EngineBridgeErrorCode.UnsupportedExternalChange, ChangeBatcher.ErrNumericKey + publicId);
         }
         if (write.Created)
         {
