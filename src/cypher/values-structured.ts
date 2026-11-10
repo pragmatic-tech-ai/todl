@@ -1,5 +1,5 @@
 import { CypherValue, NodeValue, type CypherValueDto } from "./values.js";
-import { CypherCellCodec } from "./cell-codec.js";
+import { CypherCellCodec } from "../graph-api/wire/index.js";
 
 export type RelDto = { from: string; type: string; to: string };
 

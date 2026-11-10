@@ -6,7 +6,7 @@ import { Manifest } from "../../manifest/reflection/reflection.js";
 import { ManifestWriter } from "../../manifest/manifest-writer.js";
 import type { LogicalManifest } from "../../manifest/logical.js";
 import { CypherEngine } from "../engine.js";
-import { CypherCellCodec } from "../cell-codec.js";
+import { CypherCellCodec } from "../../graph-api/wire/index.js";
 import type { ParameterValue } from "../values.js";
 
 class CodecFixture
