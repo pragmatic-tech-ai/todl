@@ -30,6 +30,16 @@ export class ConnectorDeclaration
         return MessageTemplate.Format(ConnectorDeclaration.RedeclaredMessage, name, connectorId);
     }
 
+    /**
+     * True when `node` is a connector the compiled sources declare themselves, even though a base already holds an
+     * identical one (ruling P16): the loader homes such a redeclaration in `provenance`, and it belongs to the
+     * package's own-only document so that compose compares it against the dependency's (possibly newer) declaration.
+     */
+    public static IsOwnRedeclaration(node: { readonly id: string; readonly metaKind: MetaKind | null }, provenance: ReadonlyMap<string, string>): boolean
+    {
+        return node.metaKind === MetaKind.Connector && provenance.has(node.id);
+    }
+
     /** One ConnectorConflictingDeclaration per connector id that two bases declare differently (the first base is kept). */
     public static BaseConflicts(bases: readonly TodlDocument[]): Diagnostic[]
     {

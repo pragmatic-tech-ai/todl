@@ -11,6 +11,7 @@
  */
 
 import { checkAgainst } from "../compiler-services/api.js";
+import { ConnectorDeclaration } from "../compiler-services/connectors/connector-declaration.js";
 import { toJSON, toJSONOwn, type TodlDocument, type EmitOptions } from "../compiler-services/emit/json.js";
 import { Severity, type Diagnostic } from "../compiler-services/diagnostics/diagnostic.js";
 import type { SourceFile } from "../compiler-services/diagnostics/span.js";
@@ -109,7 +110,9 @@ export function compilePackage(
   // own-set.)
   const baseIds = new Set<string>();
   for (const b of [preludeDocument(), ...bases]) for (const n of b.nodes) baseIds.add(n.id);
-  const ownIds = new Set(model.allNodes().map((n) => n.id).filter((id) => !baseIds.has(id)));
+  // A base datasource the sources redeclare identically is also own (ruling P16), so compose can detect a dependency
+  // that later changes it instead of silently re-pointing this package.
+  const ownIds = new Set(model.allNodes().filter((n) => !baseIds.has(n.id) || ConnectorDeclaration.IsOwnRedeclaration(n, provenance)).map((n) => n.id));
 
   const fullDocument = toJSON(model, emit);
   const document: PackageDocument = toJSONOwn(model, ownIds, emit);

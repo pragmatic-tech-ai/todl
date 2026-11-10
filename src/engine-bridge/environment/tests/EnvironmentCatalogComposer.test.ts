@@ -63,6 +63,10 @@ class ComposeFx
     public static readonly CrmLibNoSource = 'namespace crm { concept Customer { name : string?; } }';
     /** An app over CrmLib binding the library's concept to the library's datasource. */
     public static readonly CrmApp = 'namespace crm { model App : crm { connect crm; populate Customer key cust_id { name = "full_name"; } } }';
+    /** CrmApp that also redeclares the library's datasource identically (ruling P16: kept in the app's own document). */
+    public static readonly CrmAppRedeclared = 'namespace crm { datasource crm { kind = sql; connection = "crm-db"; } model App : crm { connect crm; populate Customer key cust_id { name = "full_name"; } } }';
+    /** A newer library version whose datasource points at another connection. */
+    public static readonly CrmLibOtherDb = 'namespace crm { concept Customer { name : string?; } datasource crm { kind = sql; connection = "other-db"; } }';
     public static readonly CrmConnector = 'crm@connector:crm';
     public static readonly Customer = 'crm.Customer';
     public static readonly CustomerSource = 'Customer';
@@ -311,6 +315,23 @@ describe('EnvironmentCatalogComposer', () =>
         assert.equal(error.Subject, ComposeFx.CrmConnector);
         ComposeFx.NamesDeliveries(error, ComposeFx.AppA, ComposeFx.SetB);
         assert.ok(error.message.startsWith(`package "${ComposeFx.CrmAppId}" declares datasource "${ComposeFx.CrmConnector}" and its dependency "${ComposeFx.LeadLibId}" declares it differently`), error.message);
+    });
+
+    test('an app redeclaring a dependency datasource identically is not re-pointed by a changed dependency (P16)', async () =>
+    {
+        const fx = await (await (await new ComposeFx().Add(ComposeFx.CrmLibId, ComposeFx.CrmLib))
+            .Add(ComposeFx.CrmLibId, ComposeFx.CrmLibOtherDb, [], ComposeFx.NextVersion))
+            .Add(ComposeFx.CrmAppId, ComposeFx.CrmAppRedeclared, [[ComposeFx.CrmLibId, ComposeFx.Version]]);
+        // Identical redeclaration: one connector, one binding.
+        const same = await fx.Compose(fx.Deploy(ComposeFx.AppA, ComposeFx.CrmAppId));
+        assert.deepEqual(same.Connectors.map((c) => [c.Name, c.Spec.Connection]), [[ComposeFx.CrmConnector, ComposeFx.CrmConnection]]);
+        assert.deepEqual(same.Description.Bindings, [{ Model: ComposeFx.CrmAppId, Concept: ComposeFx.Customer, Connector: ComposeFx.CrmConnector }]);
+        // The library's next version changes the connection: the app's own declaration no longer agrees.
+        const pinsOtherDb: IPackageDelivery = { Channel: DeliveryChannel.Promote, Name: ComposeFx.SetB, Packages: [fx.Ref(ComposeFx.CrmLibId, ComposeFx.NextVersion)] };
+        const error = await fx.Rejects(EnvironmentCatalogErrorCode.ConflictingConnector, fx.Deploy(ComposeFx.AppA, ComposeFx.CrmAppId), pinsOtherDb);
+        assert.equal(error.Subject, ComposeFx.CrmConnector);
+        ComposeFx.NamesDeliveries(error, ComposeFx.AppA, ComposeFx.SetB);
+        assert.ok(error.message.startsWith(`package "${ComposeFx.CrmAppId}" declares datasource "${ComposeFx.CrmConnector}" and its dependency "${ComposeFx.CrmLibId}" declares it differently`), error.message);
     });
 
     test('an error with no known delivery renders no deliveries clause', () =>

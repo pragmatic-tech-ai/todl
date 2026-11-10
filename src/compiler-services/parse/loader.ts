@@ -1038,6 +1038,12 @@ export function loadInto(
           span: declaration.nameSpan ?? declaration.span, node: connectorId, path: null,
         });
       }
+      else
+      {
+        // Ruling P16: an identical redeclaration is homed in this compile's sources, so the package's own-only
+        // document keeps it and a later, different dependency declaration surfaces as a conflict at compose.
+        recordHome(rec, connectorId);
+      }
       continue;
     }
     const kindValue = find(Builder.ConnectorKindAttr);
