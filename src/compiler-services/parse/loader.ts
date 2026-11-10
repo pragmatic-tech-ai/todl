@@ -1034,7 +1034,7 @@ export function loadInto(
       {
         diagnostics.push({
           code: DiagnosticCode.ConnectorConflictingDeclaration, severity: Severity.Error,
-          message: `datasource "${declaration.name}" redeclares "${connectorId}" differently from an existing declaration; the existing one is used`,
+          message: ConnectorDeclaration.Redeclared(declaration.name, connectorId),
           span: declaration.nameSpan ?? declaration.span, node: connectorId, path: null,
         });
       }

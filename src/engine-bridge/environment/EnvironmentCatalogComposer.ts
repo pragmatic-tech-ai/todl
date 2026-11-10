@@ -87,6 +87,7 @@ export class EnvironmentCatalogComposer
     private static readonly ConflictingMessage = 'the deliveries cannot share one environment{0}: {1}';
     private static readonly UnknownConnectorMessage = 'package "{0}"{1} populates "{2}" from connector "{3}", which neither it nor its dependencies declare';
     private static readonly ConflictingConnectorMessage = 'datasource "{0}" is declared differently by packages "{1}" and "{2}"{3}, and package "{4}" sees both';
+    private static readonly ConflictingOwnConnectorMessage = 'package "{1}" declares datasource "{0}" and its dependency "{2}" declares it differently{3}';
     private static readonly SystemDelivery = SystemNames.Model;
 
     private constructor() {}
@@ -202,8 +203,10 @@ export class EnvironmentCatalogComposer
                 {
                     const deliveries = [...new Set([first.Model, next].flatMap((m) => deliveriesOf.get(m) ?? []))].sort();
                     throw new EnvironmentCatalogError(EnvironmentCatalogErrorCode.ConflictingConnector, node.id, deliveries,
-                        MessageFormat.Format(EnvironmentCatalogComposer.ConflictingConnectorMessage, node.id, first.Model, next,
-                            EnvironmentCatalogError.DeliveredBy(deliveries), model));
+                        first.Model === model
+                            ? MessageFormat.Format(EnvironmentCatalogComposer.ConflictingOwnConnectorMessage, node.id, model, next, EnvironmentCatalogError.DeliveredBy(deliveries))
+                            : MessageFormat.Format(EnvironmentCatalogComposer.ConflictingConnectorMessage, node.id, first.Model, next,
+                                EnvironmentCatalogError.DeliveredBy(deliveries), model));
                 }
             }
             queue.push(...(dependency.dependencies ?? []).map((d) => d.id));

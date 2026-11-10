@@ -15,12 +15,19 @@ export class ConnectorDeclaration
         Builder.ConnectorNameAttr, Builder.ConnectorKindAttr, Builder.ConnectorConnectionAttr, Builder.ConnectorSecretAttr, Builder.ConnectorProviderAttr,
     ];
     private static readonly BasesMessage = "datasource \"{0}\" is declared differently by two of the packages compiled against; the first is used";
+    private static readonly RedeclaredMessage = "datasource \"{0}\" redeclares \"{1}\" differently from an existing declaration; the existing one is used";
 
     /** True when two connector nodes' attrs declare one connector: equal name, kind, connection, secret, provider and config (key order ignored). */
     public static Same(a: Readonly<Record<string, unknown>>, b: Readonly<Record<string, unknown>>): boolean
     {
         if (!ConnectorDeclaration.ScalarAttrs.every((key) => a[key] === b[key])) return false;
         return ConnectorDeclaration.SameConfig(a[Builder.ConnectorConfigAttr], b[Builder.ConnectorConfigAttr]);
+    }
+
+    /** The ConnectorConflictingDeclaration message for a source declaration `name` that differs from the existing `connectorId`. */
+    public static Redeclared(name: string, connectorId: string): string
+    {
+        return MessageTemplate.Format(ConnectorDeclaration.RedeclaredMessage, name, connectorId);
     }
 
     /** One ConnectorConflictingDeclaration per connector id that two bases declare differently (the first base is kept). */
