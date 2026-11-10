@@ -109,7 +109,7 @@ class ShareFx
     {
         const dir = kind === StorageKind.Lmdb ? mkdtempSync(join(tmpdir(), ShareFx.TempPrefix)) : undefined;
         const storage: IEngineStorage = dir === undefined ? { Kind: kind } : { Kind: kind, Path: dir };
-        const engine = await EngineFixture.Open(await ShareFx.Description(), storage);
+        const engine = await EngineFixture.Open(await ShareFx.Description(), { Storage: storage });
         try
         {
             const t = await engine.Begin(AccessScope.System);

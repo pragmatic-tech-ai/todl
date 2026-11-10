@@ -136,21 +136,22 @@ export class ExternalIdentity
         return this.all.filter(b => targets.some(t => this.IsA(b.Binding.Concept, t)));
     }
 
-    private IdMemberType(binding: IExternalBinding): ValueType | undefined
+    /** The member mapped to the source's id field (the FieldMap entry whose value is IdKey); undefined when none is. */
+    public IdMemberName(binding: IExternalBinding): string | undefined
     {
-        for (const [member, field] of Object.entries(binding.Binding.FieldMap))
-        {
-            if (field === binding.Binding.IdKey)
-            {
-                const input = this.FindMember(binding.Binding.Concept, member);
-                return input?.Kind === MemberKind.Property ? input.Type : undefined;
-            }
-        }
-        return undefined;
+        return Object.entries(binding.Binding.FieldMap).find(([, field]) => field === binding.Binding.IdKey)?.[0];
+    }
+
+    /** The value type of the id member; undefined when it is unmapped or not a property. */
+    public IdMemberType(binding: IExternalBinding): ValueType | undefined
+    {
+        const member = this.IdMemberName(binding);
+        const input = member === undefined ? undefined : this.FindMember(binding.Binding.Concept, member);
+        return input?.Kind === MemberKind.Property ? input.Type : undefined;
     }
 
     /** The member `name` declared on `concept` or anything it inherits or carries. */
-    private FindMember(concept: string, name: string): MemberInput | undefined
+    public FindMember(concept: string, name: string): MemberInput | undefined
     {
         return this.FindMemberIn(concept, name, new Set<string>());
     }

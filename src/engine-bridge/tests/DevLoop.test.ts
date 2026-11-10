@@ -276,6 +276,7 @@ class ExportSurface
 {
     public static readonly Expected = [
         'CellConverter',
+        'DataSourceConnector',
         // The environment catalog composer (rulings T2, T3, T4, T11, T12).
         'ConnectorPlanMerge',
         'DeliveryChannel',
@@ -288,10 +289,13 @@ class ExportSurface
         'EngineBridgeError',
         'EngineBridgeErrorCode',
         'EngineCellMapper',
+        'EnvironmentNodePlacement',
         'ExternalIdentity',
         'ExternalValues',
+        'FetchTranslator',
         'PolicyDiagnosticCode',
         'PolicyScopeCompiler',
+        'ResumeToken',
         'SavedModelCompiler',
         // The todl.system package (ruling T10): its source, names and share-grant predicates.
         'ShareGrantScope',
