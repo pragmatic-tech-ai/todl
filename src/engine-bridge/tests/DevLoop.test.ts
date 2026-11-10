@@ -7,7 +7,6 @@ import type {
     IDescribeDiagnostic,
     IDescribeOptions,
     IEnvironmentCatalog,
-    IMergedConnectors,
     IPackageDelivery,
     IPackageDocumentSource,
     IPolicyDiagnostic,
@@ -62,7 +61,6 @@ interface IExportedTypes
     readonly Catalog: IEnvironmentCatalog;
     readonly Delivery: IPackageDelivery;
     readonly Unified: IUnifiedPackages;
-    readonly Merged: IMergedConnectors;
 }
 
 /** A shop model in a memory workspace, compiled through the package pipeline into an engine over the file connector. */
@@ -278,7 +276,6 @@ class ExportSurface
         'CellConverter',
         'DataSourceConnector',
         // The environment catalog composer (rulings T2, T3, T4, T11, T12).
-        'ConnectorPlanMerge',
         'DeliveryChannel',
         'EnvironmentCatalogComposer',
         'EnvironmentCatalogError',

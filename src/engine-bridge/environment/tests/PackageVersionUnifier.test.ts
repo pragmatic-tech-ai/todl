@@ -4,7 +4,7 @@ import { Domain, type PackageRef } from '../../../domain/domain.js';
 import { MemoryPackageSource } from '../../../domain/memory-package-source.js';
 import { compilePackage, PackageKind, type PackageDocument } from '../../../publish/publish.js';
 import { PackageManifestBridge } from '../../../solution-services/package-manager/package-manifest-bridge.js';
-import { DeliveryChannel, type IPackageDelivery } from '../EnvironmentCatalogComposer.js';
+import { DeliveryChannel, type IPackageDelivery } from '../PackageDelivery.js';
 import { EnvironmentCatalogError, EnvironmentCatalogErrorCode } from '../EnvironmentCatalogError.js';
 import { PackageVersionUnifier } from '../PackageVersionUnifier.js';
 import { UnifiedPackageSource } from '../UnifiedPackageSource.js';

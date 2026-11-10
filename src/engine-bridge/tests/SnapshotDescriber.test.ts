@@ -729,4 +729,25 @@ describe('SnapshotDescriber external bindings and conflicting definitions (M2.2)
         assert.deepEqual(Diagnostics, []);
         assert.deepEqual(DescribeFixture.Definition(Description, 'base.Cust').Members.map((m) => m.Name), ['name', 'age']);
     });
+
+    test('a dependent cannot re-declare a dependency type, so only carried copies are skipped', () =>
+    {
+        // T12 skips a dependent's copy of a dependency's type. That is only sound because a dependent package cannot
+        // re-declare (or augment) a type its dependency declares: the compiler refuses it outright. Should that ever
+        // become legal, this test fails and the skip must compare shapes instead.
+        const base = compilePackage([], [{ uri: 'b.todl', text: 'namespace base { concept Cust { name : string?; } }' }], { id: 'base', version: '1.0.0' });
+        assert.ok(base.ok);
+        for (const text of [
+            'namespace base { concept Cust { name : string?; extra : integer?; } }',
+            'namespace base { concept Cust { name : string?; } }',
+        ])
+        {
+            assert.throws(() =>
+            {
+                const out = compilePackage([base.package!.document], [{ uri: 'u.todl', text }], { id: 'ui', version: '1.0.0' },
+                    [{ kind: PackageKind.Library, id: 'base', version: '1.0.0' }]);
+                if (!out.ok) throw new Error(JSON.stringify(out.errors));
+            }, /base\.Cust/);
+        }
+    });
 });

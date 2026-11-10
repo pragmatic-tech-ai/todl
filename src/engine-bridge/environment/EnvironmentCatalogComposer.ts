@@ -1,6 +1,7 @@
 import { BindingTable, type ISchemaDescription } from '@pragmatic-tech-ai/graph';
 import { ConnectorPlanEmitter } from '../../codegen/connector-plan-emitter.js';
 import { fromJSON } from '../../compiler-services/emit/json.js';
+import { Builder } from '../../compiler-services/model/builder.js';
 import { MetaKind } from '../../compiler-services/model/kinds.js';
 import { Domain, type IPackageDocumentSource, type PackageRef, type PackageSource, type ResolvedPackage } from '../../domain/domain.js';
 import type { MetadataSnapshot } from '../../domain/metadata-snapshot.js';
@@ -16,27 +17,10 @@ import { SystemNames } from '../system/SystemNames.js';
 import { SystemPackage } from '../system/SystemPackage.js';
 import { TodlNames } from '../TodlNames.js';
 import { ConnectorPlanMerge } from './ConnectorPlanMerge.js';
+import { DeliveryChannel, type IPackageDelivery } from './PackageDelivery.js';
 import { EnvironmentCatalogError, EnvironmentCatalogErrorCode } from './EnvironmentCatalogError.js';
 import { PackageVersionUnifier } from './PackageVersionUnifier.js';
 import { UnifiedPackageSource } from './UnifiedPackageSource.js';
-
-/** How a package set reached the environment. */
-export enum DeliveryChannel
-{
-    /** An app deployed to the environment. */
-    Deploy = 1,
-    /** A promote set promoted into the environment. */
-    Promote = 2,
-}
-
-/** One app's, or one promote set's, packages. */
-export interface IPackageDelivery
-{
-    readonly Channel: DeliveryChannel;
-    /** The app name or the promote set id. */
-    readonly Name: string;
-    readonly Packages: readonly Required<PackageRef>[];
-}
 
 export interface IComposeInput
 {
@@ -87,7 +71,7 @@ class SystemFirstPackageSource implements PackageSource, IPackageDocumentSource
 }
 
 /**
- * Composes an environment's runtime catalog from its deliveries (rulings T2, T3, T4, T11, T12). Pure: it reads compiled
+ * Composes an environment's runtime catalog from its deliveries (rulings T2, T3, T4, T11, T12, P12). Pure: it reads compiled
  * packages and writes nothing, so a host runs it on a prospective delivery set to validate a deploy or promote, and
  * re-runs it over the current deliveries after one (the description then upgrades the engine, spec §4.3).
  *
@@ -99,7 +83,8 @@ class SystemFirstPackageSource implements PackageSource, IPackageDocumentSource
  */
 export class EnvironmentCatalogComposer
 {
-    private static readonly ConflictingMessage = 'the deliveries cannot share one environment: {0}';
+    private static readonly ConflictingMessage = 'deliveries {0} cannot share one environment: {1}';
+    private static readonly UnknownConnectorMessage = 'package "{0}" (delivered by {1}) populates "{2}" from connector "{3}", which neither it nor its dependencies declare';
     private static readonly SystemDelivery = SystemNames.Model;
 
     private constructor() {}
@@ -117,7 +102,8 @@ export class EnvironmentCatalogComposer
             await domain.load(ref);
             documents.set(ref.model, await source.Document(ref));
         }
-        const merged = ConnectorPlanMerge.Merge(packages.map((ref) => EnvironmentCatalogComposer.PlanOf(ref, documents.get(ref.model)!)), unified.Deliveries);
+        const plans = packages.map((ref) => EnvironmentCatalogComposer.PlanOf(ref, documents, unified.Deliveries.get(ref.model) ?? []));
+        const merged = ConnectorPlanMerge.Merge(plans, unified.Deliveries);
         const described = SnapshotDescriber.Describe(domain.Snapshot, {
             DefaultConnector: BindingTable.EngineStorage,
             ConnectorPlans: merged.Plans,
@@ -129,7 +115,7 @@ export class EnvironmentCatalogComposer
             const declarers = [...documents].filter(([, doc]) => EnvironmentCatalogComposer.Declares(doc, conflict.Subject)).map(([model]) => model);
             const deliveries = [...new Set(declarers.flatMap((m) => unified.Deliveries.get(m) ?? []))].sort();
             throw new EnvironmentCatalogError(EnvironmentCatalogErrorCode.ConflictingDefinition, conflict.Subject, deliveries,
-                MessageFormat.Format(EnvironmentCatalogComposer.ConflictingMessage, conflict.Message));
+                MessageFormat.Format(EnvironmentCatalogComposer.ConflictingMessage, EnvironmentCatalogError.List(deliveries), conflict.Message));
         }
         const description = described.Description;
         const external = EnvironmentCatalogComposer.Described(description, merged.External);
@@ -144,11 +130,30 @@ export class EnvironmentCatalogComposer
         };
     }
 
-    /** The package's connector plan: every model of its document merged, under the package model id. */
-    private static PlanOf(ref: Required<PackageRef>, doc: PackageDocument): ModelConnectorPlan
+    /**
+     * The package's connector plan: every model of its document merged, under the package model id. Ruling P12: a model
+     * may `connect` a datasource declared in a dependency, which the own-only document does not hold, so the plan is
+     * built over the document plus the datasource nodes of its (unified) dependency closure. A population whose connector
+     * is still not visible is UnknownConnector (PlanFor would skip it, and the concept would fall to engine storage).
+     */
+    private static PlanOf(ref: Required<PackageRef>, documents: ReadonlyMap<string, PackageDocument>, deliveries: readonly string[]): ModelConnectorPlan
     {
+        const doc = documents.get(ref.model)!;
+        const visible = EnvironmentCatalogComposer.WithDependencyConnectors(doc, documents);
+        const connectors = new Set(visible.nodes.filter((n) => n.metaKind === MetaKind.Connector).map((n) => n.id));
+        for (const node of doc.nodes)
+        {
+            if (node.metaKind !== MetaKind.Population) continue;
+            const connector = String(node.attrs[Builder.BindingConnectorAttr]);
+            if (!connectors.has(connector))
+            {
+                throw new EnvironmentCatalogError(EnvironmentCatalogErrorCode.UnknownConnector, connector, deliveries,
+                    MessageFormat.Format(EnvironmentCatalogComposer.UnknownConnectorMessage, ref.model, EnvironmentCatalogError.List(deliveries),
+                        String(node.attrs[Builder.BindingConceptAttr]), connector));
+            }
+        }
         const plan: ModelConnectorPlan = { Model: ref.model, Version: ref.version, Connectors: [], Bindings: [] };
-        const repository = fromJSON(doc);
+        const repository = fromJSON(visible);
         for (const model of ModelShardExtractor.ModelsOf(doc))
         {
             const part = ConnectorPlanEmitter.PlanFor(repository, model);
@@ -157,6 +162,32 @@ export class EnvironmentCatalogComposer
             plan.Bindings.push(...part.Bindings);
         }
         return plan;
+    }
+
+    /** `doc` plus every datasource node of the packages it depends on, transitively, at their chosen versions. */
+    private static WithDependencyConnectors(doc: PackageDocument, documents: ReadonlyMap<string, PackageDocument>): PackageDocument
+    {
+        const nodes = [...doc.nodes];
+        const ids = new Set(nodes.map((n) => n.id));
+        const seen = new Set<string>();
+        const queue = (doc.dependencies ?? []).map((d) => d.id);
+        while (queue.length > 0)
+        {
+            const model = queue.shift()!;
+            const dependency = documents.get(model);
+            if (seen.has(model) || dependency === undefined) continue;
+            seen.add(model);
+            for (const node of dependency.nodes)
+            {
+                if (node.metaKind === MetaKind.Connector && !ids.has(node.id))
+                {
+                    nodes.push(node);
+                    ids.add(node.id);
+                }
+            }
+            queue.push(...(dependency.dependencies ?? []).map((d) => d.id));
+        }
+        return { ...doc, nodes };
     }
 
     /** The external bindings the description kept (the describer drops invalid and duplicate ones), in its order. */

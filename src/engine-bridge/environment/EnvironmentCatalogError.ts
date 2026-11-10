@@ -11,6 +11,9 @@ export enum EnvironmentCatalogErrorCode
     ConflictingDefinition,
     /** Two models bind one (concept, connector, source), so their external public ids would collide (ruling T4). */
     DuplicateExternalSource,
+    /** A binding whose connector the environment cannot resolve: no spec of that name is visible to the package that
+     *  binds it (controller ruling P12; a binding never falls back to engine storage silently). */
+    UnknownConnector,
 }
 
 /**
@@ -21,6 +24,7 @@ export enum EnvironmentCatalogErrorCode
 export class EnvironmentCatalogError extends Error
 {
     private static readonly ErrorName = 'EnvironmentCatalogError';
+    private static readonly ListSeparator = ', ';
 
     public readonly Code: EnvironmentCatalogErrorCode;
     public readonly Subject: string;
@@ -33,5 +37,11 @@ export class EnvironmentCatalogError extends Error
         this.Code = code;
         this.Subject = subject;
         this.Deliveries = Object.freeze([...deliveries]);
+    }
+
+    /** Delivery names as an error message lists them: each quoted, comma-separated. */
+    public static List(deliveries: readonly string[]): string
+    {
+        return deliveries.map((d) => JSON.stringify(d)).join(EnvironmentCatalogError.ListSeparator);
     }
 }

@@ -20,16 +20,18 @@ export interface IMergedConnectors
  * Merges the connector plans of an environment's packages (one plan per package, `Model` the package model id).
  * Specs merge by engine name `Id ?? Name` (T2): a reserved name is ReservedConnectorName, and two specs of one name
  * that are not the same spec are ConflictingConnector. A binding links to its spec by `ConnectorId ?? Connector`;
- * one to a builtin-kind spec or to `todl-file` becomes engine storage, every other one takes its engine name (T3). Two
+ * one to a builtin-kind spec or to `todl-file` becomes engine storage, every other one takes its engine name (T3), and
+ * one whose spec is absent is UnknownConnector (ruling P12: a binding never falls back to engine storage silently). Two
  * external bindings of different models with one (concept, connector, source) are DuplicateExternalSource (T4).
  * Errors name the deliveries that brought the packages in (`deliveries`: package model → delivery names).
  */
 export class ConnectorPlanMerge
 {
     private static readonly ReservedNames: ReadonlySet<string> = new Set([BindingTable.EngineStorage, TodlNames.FileConnector]);
-    private static readonly ReservedMessage = 'connector "{0}" of package "{1}" uses a reserved connector name';
-    private static readonly ConflictMessage = 'connector "{0}" is declared differently by packages "{1}" and "{2}"';
-    private static readonly DuplicateSourceMessage = 'packages "{0}" and "{1}" both bind "{2}" to source "{3}" of connector "{4}"; their ids would collide';
+    private static readonly ReservedMessage = 'connector "{0}" of package "{1}" (delivered by {2}) uses a reserved connector name';
+    private static readonly ConflictMessage = 'connector "{0}" is declared differently by packages "{1}" and "{2}" (delivered by {3})';
+    private static readonly DuplicateSourceMessage = 'packages "{0}" and "{1}" (delivered by {2}) both bind "{3}" to source "{4}" of connector "{5}"; their ids would collide';
+    private static readonly UnknownMessage = '"{0}" in package "{1}" (delivered by {2}) is bound to connector "{3}", which no visible datasource declares';
     private static readonly SourceSubject = '{0}#{1}.{2}';
     private static readonly KeySeparator = '\u0000';
 
@@ -79,8 +81,9 @@ export class ConnectorPlanMerge
         const name = spec.Id ?? spec.Name;
         if (ConnectorPlanMerge.ReservedNames.has(name))
         {
-            throw new EnvironmentCatalogError(EnvironmentCatalogErrorCode.ReservedConnectorName, name, this.DeliveriesOf(model),
-                MessageFormat.Format(ConnectorPlanMerge.ReservedMessage, name, model));
+            const deliveries = this.DeliveriesOf(model);
+            throw new EnvironmentCatalogError(EnvironmentCatalogErrorCode.ReservedConnectorName, name, deliveries,
+                MessageFormat.Format(ConnectorPlanMerge.ReservedMessage, name, model, EnvironmentCatalogError.List(deliveries)));
         }
         const existing = this.specs.get(name);
         if (existing === undefined)
@@ -90,8 +93,9 @@ export class ConnectorPlanMerge
         }
         if (!ConnectorPlanMerge.SameSpec(existing.Spec, spec))
         {
-            throw new EnvironmentCatalogError(EnvironmentCatalogErrorCode.ConflictingConnector, name, this.DeliveriesOf(existing.Model, model),
-                MessageFormat.Format(ConnectorPlanMerge.ConflictMessage, name, existing.Model, model));
+            const deliveries = this.DeliveriesOf(existing.Model, model);
+            throw new EnvironmentCatalogError(EnvironmentCatalogErrorCode.ConflictingConnector, name, deliveries,
+                MessageFormat.Format(ConnectorPlanMerge.ConflictMessage, name, existing.Model, model, EnvironmentCatalogError.List(deliveries)));
         }
     }
 
@@ -103,13 +107,20 @@ export class ConnectorPlanMerge
         {
             return { ...binding, Connector: BindingTable.EngineStorage };
         }
+        if (spec === undefined)
+        {
+            const deliveries = this.DeliveriesOf(model);
+            throw new EnvironmentCatalogError(EnvironmentCatalogErrorCode.UnknownConnector, name, deliveries,
+                MessageFormat.Format(ConnectorPlanMerge.UnknownMessage, binding.Concept, model, EnvironmentCatalogError.List(deliveries), name));
+        }
         const key = [binding.Concept, name, binding.Source].join(ConnectorPlanMerge.KeySeparator);
         const holder = this.sources.get(key);
         if (holder !== undefined && holder !== model)
         {
+            const deliveries = this.DeliveriesOf(holder, model);
             throw new EnvironmentCatalogError(EnvironmentCatalogErrorCode.DuplicateExternalSource,
-                MessageFormat.Format(ConnectorPlanMerge.SourceSubject, binding.Concept, name, binding.Source), this.DeliveriesOf(holder, model),
-                MessageFormat.Format(ConnectorPlanMerge.DuplicateSourceMessage, holder, model, binding.Concept, binding.Source, name));
+                MessageFormat.Format(ConnectorPlanMerge.SourceSubject, binding.Concept, name, binding.Source), deliveries,
+                MessageFormat.Format(ConnectorPlanMerge.DuplicateSourceMessage, holder, model, EnvironmentCatalogError.List(deliveries), binding.Concept, binding.Source, name));
         }
         this.sources.set(key, model);
         this.external.push({ Model: model, Connector: name, Binding: binding });

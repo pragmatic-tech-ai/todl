@@ -1,6 +1,6 @@
 import type { PackageRef, PackageSource } from '../../domain/domain.js';
 import { MessageFormat } from '../MessageFormat.js';
-import type { IPackageDelivery } from './EnvironmentCatalogComposer.js';
+import type { IPackageDelivery } from './PackageDelivery.js';
 import { EnvironmentCatalogError, EnvironmentCatalogErrorCode } from './EnvironmentCatalogError.js';
 
 /** A version string read for unification (ruling T11): semver when it is exactly `major.minor.patch`. */
