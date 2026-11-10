@@ -7,6 +7,7 @@ export { PolicyScopeCompiler, PolicyDiagnosticCode, type IPolicyDiagnostic } fro
 export { type ITodlDraftSession, type ITodlModelWorkspace } from './TodlModelWorkspace.js';
 export { TodlFileConnector } from './TodlFileConnector.js';
 export { TodlNodePlacement } from './TodlNodePlacement.js';
+export { EnvironmentNodePlacement } from './environment/EnvironmentNodePlacement.js';
 export { EngineCellMapper, type IHiddenMembers } from './EngineCellMapper.js';
 export { SavedModelCompiler, type ISavedModel, type ISavedSnapshot } from './SavedModelCompiler.js';
 export { CellConverter, type IConversion } from './CellConversion.js';
