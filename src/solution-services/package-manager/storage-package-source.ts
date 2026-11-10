@@ -12,6 +12,7 @@ import { ManifestEmitter } from "../../compiler-services/emit/manifest.js";
 import { ManifestWriter } from "../../manifest/manifest-writer.js";
 import { PackageManifestBridge } from "./package-manifest-bridge.js";
 import { type PackageDocument } from "../../publish/publish.js";
+import { MessageTemplate } from "../../compiler-services/diagnostics/message-template.js";
 
 // The disk-backed PackageSource — the SPEC-06 `RegistryPackageSource` the Domain
 // comment deferred. It reads the BlobPackageStore on-disk layout
@@ -24,6 +25,8 @@ import { type PackageDocument } from "../../publish/publish.js";
 // dependencies flow through as domain-tier refs for transitive composition.
 export class StoragePackageSource implements PackageSource, IPackageDocumentSource, ResourceSource
 {
+    private static readonly NotFoundMessage = 'package "{0}@{1}" not found in storage';
+
     constructor(private readonly storage: IStorage) {}
 
     public async resolve(ref: PackageRef): Promise<ResolvedPackage>
@@ -46,7 +49,7 @@ export class StoragePackageSource implements PackageSource, IPackageDocumentSour
     public async Document(ref: Required<PackageRef>): Promise<PackageDocument>
     {
         const path = StoragePackageSource.modelPath(ref.model, ref.version);
-        if (!(await this.storage.Exists(path))) throw new Error(`package "${ref.model}@${ref.version}" not found in storage`);
+        if (!(await this.storage.Exists(path))) throw new Error(MessageTemplate.Format(StoragePackageSource.NotFoundMessage, ref.model, ref.version));
         return JSON.parse(await this.storage.ReadText(path)) as PackageDocument;
     }
 

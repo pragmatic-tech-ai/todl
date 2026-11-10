@@ -14,6 +14,12 @@ class SystemPackageGenerator
     private static readonly Indent = 4;
     private static readonly Header = '// GENERATED from system.todl by scripts/gen-system-package.mts — do not edit by hand.';
     private static readonly Wrote = 'wrote src/engine-bridge/system/system-package.generated.ts';
+    private static readonly ImportLine = "import type { PackageDocument } from '../../publish/publish.js';";
+    private static readonly ClassName = 'SystemPackageDocument';
+    private static readonly DocComment = '/** The compiled {0} package document (own-only; the prelude is implicit). */';
+    private static readonly CastComment = '    // The model.json shape: enum members are their serialized string values, hence the cast.';
+    private static readonly Placeholder = '{0}';
+    private static readonly At = '@';
 
     public static Run(): void
     {
@@ -26,14 +32,15 @@ class SystemPackageGenerator
         const json = JSON.stringify(out.package.document, null, SystemPackageGenerator.Indent)
             .split('\n')
             .join('\n' + ' '.repeat(SystemPackageGenerator.Indent));
+        const identity = SystemNames.Model + SystemPackageGenerator.At + SystemNames.Version;
         const lines = [
             SystemPackageGenerator.Header,
-            "import type { PackageDocument } from '../../publish/publish.js';",
+            SystemPackageGenerator.ImportLine,
             '',
-            `/** The compiled ${SystemNames.Model}@${SystemNames.Version} package document (own-only; the prelude is implicit). */`,
-            'export class SystemPackageDocument',
+            SystemPackageGenerator.DocComment.replace(SystemPackageGenerator.Placeholder, identity),
+            `export class ${SystemPackageGenerator.ClassName}`,
             '{',
-            '    // The model.json shape: enum members are their serialized string values, hence the cast.',
+            SystemPackageGenerator.CastComment,
             `    public static readonly Document: PackageDocument = ${json} as unknown as PackageDocument;`,
             '}',
             '',

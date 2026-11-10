@@ -5,12 +5,14 @@ import { ShareRight, type ShareSubject, SystemNames } from './SystemNames.js';
 /** How a share grant node is identified and what it stores (ruling T10). */
 export class ShareGrants
 {
+    /** Every ShareRight in declaration order: the boolean members a grant stores, derived from the enum itself. */
+    public static readonly Rights: readonly ShareRight[] = Object.freeze(Object.values(ShareRight));
+
     private static readonly IdPrefix = 'share.';
     private static readonly HashAlgorithm = 'sha256';
     private static readonly HexEncoding = 'hex';
     private static readonly Separator = '\u0000';
     private static readonly HashLength = 32;
-    private static readonly Rights: readonly ShareRight[] = [ShareRight.Read, ShareRight.Update, ShareRight.Delete, ShareRight.Assign, ShareRight.Share];
 
     /**
      * The grant's engine public id: `share.` and the first 32 hex digits of sha256(record NUL kind NUL subject). It is

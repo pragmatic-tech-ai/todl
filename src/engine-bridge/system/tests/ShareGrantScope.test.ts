@@ -32,6 +32,8 @@ interface IGrant
     readonly Kind: ShareSubject;
     readonly Subject: string;
     readonly Rights: readonly ShareRight[];
+    /** The concept the grant is written as; ShareGrant when absent (a lookalike otherwise). */
+    readonly Concept?: string;
 }
 
 /** A Doc package next to todl.system, opened on one engine backend with records r1 and r2. */
@@ -40,7 +42,15 @@ class ShareFx
     public static readonly Model = 'docs.p';
     public static readonly Version = '1.0.0';
     public static readonly Doc = 'docs.Doc';
-    public static readonly Source = 'namespace docs { concept Doc { } }';
+    /** Note copies ShareGrant's members: a lookalike whose `record` edges must never count as grants. */
+    public static readonly Lookalike = 'docs.Note';
+    public static readonly Source = `namespace docs
+{
+    concept Doc { }
+    concept Note { record : todl.Element; subjectKind : string; subjectId : string; read : boolean?; update : boolean?; delete : boolean?; assign : boolean?; share : boolean?; }
+}`;
+    public static readonly Anonymous = '';
+    public static readonly LookalikeId = 'n1';
     public static readonly R1 = 'r1';
     public static readonly R2 = 'r2';
     public static readonly Principal = 'p';
@@ -70,9 +80,9 @@ class ShareFx
         return ShareFx.description;
     }
 
-    public static Subjects(teams: readonly string[] = []): IShareSubjects
+    public static Subjects(teams: readonly string[] = [], principal: string = ShareFx.Principal): IShareSubjects
     {
-        return { PrincipalId: ShareFx.Principal, Teams: teams };
+        return { PrincipalId: principal, Teams: teams };
     }
 
     public static Scope(subjects: IShareSubjects, grantRows: Predicate = ShareGrantScope.GrantRows(subjects)): AccessScope
@@ -88,8 +98,8 @@ class ShareFx
 
     public static WriteGrant(t: GraphTransaction, grant: IGrant): void
     {
-        const id = ShareGrants.PublicId(grant.Record, grant.Kind, grant.Subject);
-        t.CreateNode(id, SystemNames.ShareGrant);
+        const id = grant.Concept === undefined ? ShareGrants.PublicId(grant.Record, grant.Kind, grant.Subject) : ShareFx.LookalikeId;
+        t.CreateNode(id, grant.Concept ?? SystemNames.ShareGrant);
         for (const [name, value] of ShareGrants.Properties(grant.Kind, grant.Subject, grant.Rights)) t.SetProperty(id, name, value);
         t.Link(id, SystemNames.Record, grant.Record);
     }
@@ -137,6 +147,12 @@ describe('ShareGrants (ruling T10)', () =>
         assert.match(a, /^share\.[0-9a-f]{32}$/);
         assert.notEqual(a, ShareGrants.PublicId(ShareFx.R1, ShareSubject.Principal, ShareFx.OtherPrincipal));
         assert.notEqual(a, ShareGrants.PublicId(ShareFx.R1, ShareSubject.Team, ShareFx.Principal));
+    });
+
+    test('an anonymous caller with no teams matches no grant (fail closed)', () =>
+    {
+        assert.equal(ShareGrantScope.SubjectMatch(ShareFx.Subjects([], ShareFx.Anonymous)), FalsePredicate.Instance);
+        assert.equal(ShareGrantScope.SubjectMatch(ShareFx.Subjects([ShareFx.Anonymous], ShareFx.Anonymous)), FalsePredicate.Instance);
     });
 
     test('properties name the subject and every right, unlisted rights false', () =>
@@ -189,6 +205,24 @@ describe('ShareGrantScope widening (ruling T10)', () =>
             await ShareFx.With(kind, [ShareFx.Grant(ShareFx.R1, [ShareRight.Read], ShareSubject.Principal, ShareFx.OtherPrincipal)], async (engine) =>
             {
                 assert.deepEqual(await ShareFx.Docs(engine, ShareFx.Scope(ShareFx.Subjects())), []);
+            });
+        });
+
+        test(`a lookalike concept with a record edge does not widen (${backend})`, async () =>
+        {
+            const forged: IGrant = { ...ShareFx.Grant(ShareFx.R1, [ShareRight.Read]), Concept: ShareFx.Lookalike };
+            await ShareFx.With(kind, [forged], async (engine) =>
+            {
+                assert.deepEqual(await ShareFx.Docs(engine, ShareFx.Scope(ShareFx.Subjects())), []);
+            });
+        });
+
+        test(`a grant to the empty principal id does not widen for an anonymous caller (${backend})`, async () =>
+        {
+            const grant = ShareFx.Grant(ShareFx.R1, [ShareRight.Read], ShareSubject.Principal, ShareFx.Anonymous);
+            await ShareFx.With(kind, [grant], async (engine) =>
+            {
+                assert.deepEqual(await ShareFx.Docs(engine, ShareFx.Scope(ShareFx.Subjects([], ShareFx.Anonymous))), []);
             });
         });
 

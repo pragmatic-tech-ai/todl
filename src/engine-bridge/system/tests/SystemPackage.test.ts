@@ -10,14 +10,17 @@ import { MemoryPackageSource } from '../../../domain/memory-package-source.js';
 import { EngineFixture } from '../../tests/EngineFixture.js';
 import { TodlNames } from '../../TodlNames.js';
 import { SystemPackage } from '../SystemPackage.js';
-import { ShareRight, SystemNames } from '../SystemNames.js';
+import { ShareGrants } from '../ShareGrants.js';
+import { SystemNames } from '../SystemNames.js';
 
 /** Describes resolved packages through the normal Domain path. */
 class SystemFx
 {
     public static readonly SourceUri = 'system.todl';
-    public static readonly Source = readFileSync(fileURLToPath(new URL('../system.todl', import.meta.url)), 'utf8');
-    public static readonly Booleans: readonly string[] = [ShareRight.Read, ShareRight.Update, ShareRight.Delete, ShareRight.Assign, ShareRight.Share];
+    public static readonly Utf8 = 'utf8';
+    public static readonly Source = readFileSync(fileURLToPath(new URL('../system.todl', import.meta.url)), SystemFx.Utf8);
+    public static readonly OtherModel = 'other';
+    public static readonly OtherVersion = '2.0.0';
 
     public static async Definitions(resolved: ResolvedPackage): Promise<readonly IDefinitionDescription[]>
     {
@@ -62,7 +65,7 @@ describe('SystemPackage (ruling T10)', () =>
             assert.equal(m?.Kind, MemberKind.Property, name);
             assert.equal(m.Kind === MemberKind.Property ? m.Type : undefined, ValueType.String, name);
         }
-        for (const name of SystemFx.Booleans)
+        for (const name of ShareGrants.Rights)
         {
             const m = member(name);
             assert.equal(m?.Kind, MemberKind.Property, name);
@@ -79,7 +82,7 @@ describe('SystemPackage (ruling T10)', () =>
         const second = await source.Document(SystemPackage.Ref);
         assert.ok(second.nodes.length > 0);
         assert.deepEqual(await source.versions(SystemPackage.Ref.model), [SystemPackage.Ref.version]);
-        await assert.rejects(source.resolve({ model: 'other' }));
-        await assert.rejects(source.Document({ model: SystemPackage.Ref.model, version: '2.0.0' }));
+        await assert.rejects(source.resolve({ model: SystemFx.OtherModel }));
+        await assert.rejects(source.Document({ model: SystemPackage.Ref.model, version: SystemFx.OtherVersion }));
     });
 });

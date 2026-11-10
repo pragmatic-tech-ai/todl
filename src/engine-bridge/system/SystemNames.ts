@@ -15,6 +15,13 @@ export class SystemNames
     public static readonly SubjectId = 'subjectId';
 }
 
+/** Who a share is to; the values equal the protocol's ShareSubjectKind. */
+export enum ShareSubject
+{
+    Principal = 'principal',
+    Team = 'team',
+}
+
 /** A right a share grants; each value is the name of the ShareGrant boolean member that holds it. */
 export enum ShareRight
 {
@@ -23,11 +30,4 @@ export enum ShareRight
     Delete = 'delete',
     Assign = 'assign',
     Share = 'share',
-}
-
-/** Who a share is to; the values equal the protocol's ShareSubjectKind. */
-export enum ShareSubject
-{
-    Principal = 'principal',
-    Team = 'team',
 }
