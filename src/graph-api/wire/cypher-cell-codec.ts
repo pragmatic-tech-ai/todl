@@ -1,5 +1,5 @@
-import type { MirrorSnapshot } from "../graph-api/index.js";
-import type { CypherValueDto, NodeCellDto } from "./values.js";
+import type { MirrorSnapshot } from "../snapshot.js";
+import type { CypherValueDto, NodeCellDto } from "./cypher-wire-dto.js";
 
 /**
  * Non-forgeable encoding of node cells beside user maps. A node is `{ "$node": snapshot }`; a map is a plain object,
