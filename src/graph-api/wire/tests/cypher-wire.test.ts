@@ -1,67 +1,18 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Cypher, CypherWire } from '../../../index.js';
+import { ImportClosureWalker } from '../../../tests/support/ImportClosureWalker.js';
 
-/** Statically walks the relative import closure of an entry file and collects forbidden specifiers. */
-class WireImportWalker
+/** The wire module must reach neither the engine nor any file under a `cypher` directory or named cypher. */
+class WireForbidden
 {
-    private static readonly SpecifierPattern = /(?:^|\n)\s*(?:import|export)\s[^'"]*?from\s*['"]([^'"]+)['"]|(?:^|\n)\s*import\s*['"]([^'"]+)['"]|\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
-    private static readonly Utf8 = 'utf8';
-    private static readonly Engine = '@pragmatic-tech-ai/graph';
-    private static readonly CypherSegment = '/cypher/';
-    private static readonly Relative = '.';
-    private static readonly JsExtension = /\.js$/;
-    private static readonly TsExtension = '.ts';
-    private static readonly IndexFile = 'index.ts';
+    private static readonly CypherSegments = new Set(['cypher', 'cypher.ts']);
 
-    private readonly visited = new Set<string>();
-    private readonly offenders: string[] = [];
-
-    public static Offenders(entry: string): { Files: number; Offenders: string[] }
+    public static Is(specifier: string, resolved: string | undefined): boolean
     {
-        const walker = new WireImportWalker();
-        walker.Visit(entry);
-        return { Files: walker.visited.size, Offenders: walker.offenders };
-    }
-
-    private Visit(file: string): void
-    {
-        if (this.visited.has(file))
-        {
-            return;
-        }
-        this.visited.add(file);
-        const source = fs.readFileSync(file, WireImportWalker.Utf8);
-        for (const match of source.matchAll(WireImportWalker.SpecifierPattern))
-        {
-            const specifier = match[1] ?? match[2] ?? match[3] ?? '';
-            const normalized = specifier.split(path.sep).join('/');
-            if (normalized.startsWith(WireImportWalker.Engine) || normalized.includes(WireImportWalker.CypherSegment))
-            {
-                this.offenders.push(`${path.basename(file)} -> ${specifier}`);
-            }
-            if (specifier.startsWith(WireImportWalker.Relative))
-            {
-                const resolved = WireImportWalker.Resolve(file, specifier);
-                assert.ok(resolved !== undefined, `unresolved ${specifier} in ${file}`);
-                this.Visit(resolved);
-            }
-        }
-    }
-
-    private static Resolve(from: string, specifier: string): string | undefined
-    {
-        const base = path.resolve(path.dirname(from), specifier);
-        const candidates = [
-            base.replace(WireImportWalker.JsExtension, WireImportWalker.TsExtension),
-            base,
-            base + WireImportWalker.TsExtension,
-            path.join(base, WireImportWalker.IndexFile),
-        ];
-        return candidates.find(c => fs.existsSync(c) && fs.statSync(c).isFile());
+        return ImportClosureWalker.IsEngine(specifier) || (resolved !== undefined && resolved.split(path.sep).some(segment => WireForbidden.CypherSegments.has(segment)));
     }
 }
 
@@ -79,14 +30,16 @@ test('wire codec is the Cypher codec', () =>
 
 test('wire module is engine- and cypher-free', () =>
 {
-    const result = WireImportWalker.Offenders(WireTestPaths.WireIndex);
+    const result = new ImportClosureWalker(WireForbidden.Is).Walk(WireTestPaths.WireIndex);
     assert.ok(result.Files >= 3);
     assert.deepEqual(result.Offenders, []);
+    assert.deepEqual(result.Unresolved, []);
 });
 
 test('assembler is cypher-free', () =>
 {
-    const result = WireImportWalker.Offenders(WireTestPaths.Assembler);
+    const result = new ImportClosureWalker(WireForbidden.Is).Walk(WireTestPaths.Assembler);
     assert.ok(result.Files >= 2);
     assert.deepEqual(result.Offenders, []);
+    assert.deepEqual(result.Unresolved, []);
 });
