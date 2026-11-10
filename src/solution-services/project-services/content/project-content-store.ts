@@ -22,6 +22,10 @@ interface FolderState
     readonly pendingRemovals: Map<string, { id: ContentNodeId; inoKey: string; isDir: boolean }>
     readonly pendingAdds: Map<string, { inoKey: string; isDir: boolean }>
     timer?: ReturnType<typeof setTimeout> | undefined
+    // In-flight raw fs-change handlers (inode lookup awaits) and callers parked until the
+    // settle window closes: lets WhenIdle wait on real completion instead of a fixed sleep.
+    readonly changes: Set<Promise<void>>
+    readonly settleWaiters: Array<() => void>
 }
 
 // A reactive, lazy per-project content store over an IStorage: enumerates a folder
@@ -72,6 +76,7 @@ export class ProjectContentStore
             if (state.sinks.size > 0) return;
             if (state.watchOff !== undefined) { state.watchOff(); state.watchOff = undefined }
             if (state.timer !== undefined) { clearTimeout(state.timer); state.timer = undefined }
+            ProjectContentStore.releaseSettleWaiters(state)
             // Last observer left: drop the watcher and mark unloaded so a re-subscribe
             // re-Lists (catching changes missed while collapsed) and restarts the watcher.
             // The id maps (byPath/byIno) are kept so re-realized children keep their ids.
@@ -90,13 +95,36 @@ export class ProjectContentStore
         {
             s.watchOff?.(); s.watchOff = undefined
             if (s.timer !== undefined) { clearTimeout(s.timer); s.timer = undefined }
+            ProjectContentStore.releaseSettleWaiters(s)
         }
     }
 
-    // Test seam: await any in-flight folder load so assertions need no sleeps.
+    // Test seam: await every in-flight folder load, raw fs-change handler, and open settle
+    // window until the store is quiescent, so assertions need no sleeps.
     public async WhenIdle(): Promise<void>
     {
-        for (const s of this.folders.values()) await s.loading
+        let busy = true
+        while (busy)
+        {
+            busy = false
+            for (const s of [...this.folders.values()])
+            {
+                if (s.loading !== undefined) { await s.loading }
+                if (s.changes.size > 0) { busy = true; await Promise.all([...s.changes]) }
+                if (s.timer !== undefined) { busy = true; await new Promise<void>((resolve) => { s.settleWaiters.push(resolve) }) }
+            }
+        }
+    }
+
+    private trackChange(state: FolderState, c: FileChange): void
+    {
+        const p = this.onFileChange(state, c).finally(() => { state.changes.delete(p) })
+        state.changes.add(p)
+    }
+
+    private static releaseSettleWaiters(state: FolderState): void
+    {
+        for (const resolve of state.settleWaiters.splice(0)) resolve()
     }
 
     public NodeById(id: ContentNodeId): ProjectContentNode | undefined
@@ -177,7 +205,7 @@ export class ProjectContentStore
         let s = this.folders.get(folder)
         if (s === undefined)
         {
-            s = { loaded: false, children: new Map(), byPath: new Map(), byIno: new Map(), sinks: new Set(), pendingRemovals: new Map(), pendingAdds: new Map() }
+            s = { loaded: false, children: new Map(), byPath: new Map(), byIno: new Map(), sinks: new Set(), pendingRemovals: new Map(), pendingAdds: new Map(), changes: new Set(), settleWaiters: [] }
             this.folders.set(folder, s)
         }
         return s
@@ -211,7 +239,7 @@ export class ProjectContentStore
         state.loaded = true
         if (isWatchableStorage(this.storage))
         {
-            state.watchOff = this.storage.Watch(dirPath, (c) => { void this.onFileChange(state, c) })
+            state.watchOff = this.storage.Watch(dirPath, (c) => { this.trackChange(state, c) })
         }
     }
 
@@ -261,6 +289,8 @@ export class ProjectContentStore
         const flush = (): void =>
         {
             state.timer = undefined
+            try
+            {
             // Pass 1: pair adds to removals by inode+kind → renames (id preserved).
             for (const [addPath, add] of [...state.pendingAdds])
             {
@@ -300,6 +330,11 @@ export class ProjectContentStore
                 if (add.inoKey !== '') state.byIno.set(add.inoKey, node.Id)
                 for (const sink of [...state.sinks]) sink(new ContentAdded(node))
             }
+            }
+            finally
+            {
+                ProjectContentStore.releaseSettleWaiters(state)
+            }
         }
         state.timer = setTimeout(flush, this.settleMs)
     }
@@ -328,7 +363,7 @@ export class ProjectContentStore
         const sub = this.folders.get(id)
         if (sub === undefined) return
         if (sub.watchOff !== undefined) { sub.watchOff(); sub.watchOff = undefined }
-        if (!this.disposed && isWatchableStorage(this.storage)) sub.watchOff = this.storage.Watch(newPath, (c) => { void this.onFileChange(sub, c) })
+        if (!this.disposed && isWatchableStorage(this.storage)) sub.watchOff = this.storage.Watch(newPath, (c) => { this.trackChange(sub, c) })
         const rewritten = new Map<string, ContentNodeId>()
         for (const [childPath, childId] of sub.byPath)
         {
