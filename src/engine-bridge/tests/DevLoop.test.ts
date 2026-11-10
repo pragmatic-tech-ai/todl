@@ -270,6 +270,7 @@ class ExportSurface
         'EngineBridgeError',
         'EngineBridgeErrorCode',
         'EngineCellMapper',
+        'EnvironmentNodePlacement',
         'ExternalIdentity',
         'ExternalValues',
         'PolicyDiagnosticCode',
