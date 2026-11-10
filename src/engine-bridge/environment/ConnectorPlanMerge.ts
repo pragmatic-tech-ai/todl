@@ -28,10 +28,10 @@ export interface IMergedConnectors
 export class ConnectorPlanMerge
 {
     private static readonly ReservedNames: ReadonlySet<string> = new Set([BindingTable.EngineStorage, TodlNames.FileConnector]);
-    private static readonly ReservedMessage = 'connector "{0}" of package "{1}" (delivered by {2}) uses a reserved connector name';
-    private static readonly ConflictMessage = 'connector "{0}" is declared differently by packages "{1}" and "{2}" (delivered by {3})';
-    private static readonly DuplicateSourceMessage = 'packages "{0}" and "{1}" (delivered by {2}) both bind "{3}" to source "{4}" of connector "{5}"; their ids would collide';
-    private static readonly UnknownMessage = '"{0}" in package "{1}" (delivered by {2}) is bound to connector "{3}", which no visible datasource declares';
+    private static readonly ReservedMessage = 'connector "{0}" of package "{1}"{2} uses a reserved connector name';
+    private static readonly ConflictMessage = 'connector "{0}" is declared differently by packages "{1}" and "{2}"{3}';
+    private static readonly DuplicateSourceMessage = 'packages "{0}" and "{1}"{2} both bind "{3}" to source "{4}" of connector "{5}"; their ids would collide';
+    private static readonly UnknownMessage = '"{0}" in package "{1}"{2} is bound to connector "{3}", which no visible datasource declares';
     private static readonly SourceSubject = '{0}#{1}.{2}';
     private static readonly KeySeparator = '\u0000';
 
@@ -83,7 +83,7 @@ export class ConnectorPlanMerge
         {
             const deliveries = this.DeliveriesOf(model);
             throw new EnvironmentCatalogError(EnvironmentCatalogErrorCode.ReservedConnectorName, name, deliveries,
-                MessageFormat.Format(ConnectorPlanMerge.ReservedMessage, name, model, EnvironmentCatalogError.List(deliveries)));
+                MessageFormat.Format(ConnectorPlanMerge.ReservedMessage, name, model, EnvironmentCatalogError.DeliveredBy(deliveries)));
         }
         const existing = this.specs.get(name);
         if (existing === undefined)
@@ -95,7 +95,7 @@ export class ConnectorPlanMerge
         {
             const deliveries = this.DeliveriesOf(existing.Model, model);
             throw new EnvironmentCatalogError(EnvironmentCatalogErrorCode.ConflictingConnector, name, deliveries,
-                MessageFormat.Format(ConnectorPlanMerge.ConflictMessage, name, existing.Model, model, EnvironmentCatalogError.List(deliveries)));
+                MessageFormat.Format(ConnectorPlanMerge.ConflictMessage, name, existing.Model, model, EnvironmentCatalogError.DeliveredBy(deliveries)));
         }
     }
 
@@ -111,7 +111,7 @@ export class ConnectorPlanMerge
         {
             const deliveries = this.DeliveriesOf(model);
             throw new EnvironmentCatalogError(EnvironmentCatalogErrorCode.UnknownConnector, name, deliveries,
-                MessageFormat.Format(ConnectorPlanMerge.UnknownMessage, binding.Concept, model, EnvironmentCatalogError.List(deliveries), name));
+                MessageFormat.Format(ConnectorPlanMerge.UnknownMessage, binding.Concept, model, EnvironmentCatalogError.DeliveredBy(deliveries), name));
         }
         const key = [binding.Concept, name, binding.Source].join(ConnectorPlanMerge.KeySeparator);
         const holder = this.sources.get(key);
@@ -120,7 +120,7 @@ export class ConnectorPlanMerge
             const deliveries = this.DeliveriesOf(holder, model);
             throw new EnvironmentCatalogError(EnvironmentCatalogErrorCode.DuplicateExternalSource,
                 MessageFormat.Format(ConnectorPlanMerge.SourceSubject, binding.Concept, name, binding.Source), deliveries,
-                MessageFormat.Format(ConnectorPlanMerge.DuplicateSourceMessage, holder, model, EnvironmentCatalogError.List(deliveries), binding.Concept, binding.Source, name));
+                MessageFormat.Format(ConnectorPlanMerge.DuplicateSourceMessage, holder, model, EnvironmentCatalogError.DeliveredBy(deliveries), binding.Concept, binding.Source, name));
         }
         this.sources.set(key, model);
         this.external.push({ Model: model, Connector: name, Binding: binding });

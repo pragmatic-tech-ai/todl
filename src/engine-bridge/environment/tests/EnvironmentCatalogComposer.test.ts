@@ -69,6 +69,21 @@ class ComposeFx
     public static readonly CustomerKey = 'cust_id';
     public static readonly NameField = 'full_name';
     public static readonly CustomerName = 'Ada';
+    public static readonly CrmConnection = 'crm-db';
+    public static readonly CrmLibId = 'crm.lib';
+    public static readonly CrmAppId = 'crm.app';
+    public static readonly LeadLibId = 'crm.leads';
+    /** A second library in namespace crm declaring the same datasource (identically, or with another connection). */
+    public static readonly LeadLib = 'namespace crm { concept Lead { } datasource crm { kind = sql; connection = "crm-db"; } }';
+    public static readonly LeadLibOtherDb = 'namespace crm { concept Lead { } datasource crm { kind = sql; connection = "other-db"; } }';
+    public static readonly Base = 'base';
+    public static readonly Ui = 'ui';
+    public static readonly BaseCust = 'base.Cust';
+    public static readonly UiOrder = 'ui.Order';
+    public static readonly NextVersion = '1.1.0';
+    public static readonly BaseUpgrade = '1.3.0';
+    public static readonly Nowhere = 'nowhere';
+    public static readonly NewOrder = 'order-new';
 
     public readonly Storage = new CompiledOnlyStorage();
     private readonly documents = new Map<string, PackageDocument>();
@@ -213,19 +228,19 @@ describe('EnvironmentCatalogComposer', () =>
     test('a dependent package composes over the unified dependency without a false conflict', async () =>
     {
         const fx = await (await (await new ComposeFx()
-            .Add('base', 'namespace base { concept Cust { name : string?; } }'))
-            .Add('base', 'namespace base { concept Cust { name : string?; age : integer?; } }', [], '1.3.0'))
-            .Add('ui', 'namespace ui { import base; concept Order { cust : base.Cust?; } model U : ui { Order u1 { } } }', [['base', '1.0.0']]);
-        const pinsNewBase: IPackageDelivery = { Channel: DeliveryChannel.Deploy, Name: ComposeFx.AppB, Packages: [fx.Ref('base', '1.3.0')] };
-        const catalog = await fx.Compose(fx.Deploy(ComposeFx.AppA, 'ui'), pinsNewBase);
+            .Add(ComposeFx.Base, 'namespace base { concept Cust { name : string?; } }'))
+            .Add(ComposeFx.Base, 'namespace base { concept Cust { name : string?; age : integer?; } }', [], ComposeFx.BaseUpgrade))
+            .Add(ComposeFx.Ui, 'namespace ui { import base; concept Order { cust : base.Cust?; } model U : ui { Order u1 { } } }', [[ComposeFx.Base, ComposeFx.Version]]);
+        const pinsNewBase: IPackageDelivery = { Channel: DeliveryChannel.Deploy, Name: ComposeFx.AppB, Packages: [fx.Ref(ComposeFx.Base, ComposeFx.BaseUpgrade)] };
+        const catalog = await fx.Compose(fx.Deploy(ComposeFx.AppA, ComposeFx.Ui), pinsNewBase);
         assert.deepEqual(catalog.Diagnostics, []);
-        assert.deepEqual(catalog.Packages, [fx.Ref('base', '1.3.0'), { model: SystemNames.Model, version: SystemNames.Version }, fx.Ref('ui')]);
-        assert.deepEqual(catalog.Snapshot.manifests.map((m) => `${m.model}@${m.version}`).filter((m) => m.startsWith('base')), ['base@1.3.0']);
-        const cust = catalog.Description.Definitions.find((d) => d.Name === 'base.Cust')!;
+        assert.deepEqual(catalog.Packages, [fx.Ref(ComposeFx.Base, ComposeFx.BaseUpgrade), { model: SystemNames.Model, version: SystemNames.Version }, fx.Ref(ComposeFx.Ui)]);
+        assert.deepEqual(catalog.Snapshot.manifests.filter((m) => m.model === ComposeFx.Base).map((m) => m.version), [ComposeFx.BaseUpgrade]);
+        const cust = catalog.Description.Definitions.find((d) => d.Name === ComposeFx.BaseCust)!;
         assert.deepEqual(cust.Members.map((m) => m.Name), ['name', 'age']);
-        assert.equal(catalog.HomeModels.get('base.Cust'), 'base');
-        assert.equal(catalog.HomeModels.get('ui.Order'), 'ui');
-        assert.equal(catalog.Description.Seed.find((s) => s.PublicId === 'ui.u1')?.Owner, 'ui');
+        assert.equal(catalog.HomeModels.get(ComposeFx.BaseCust), ComposeFx.Base);
+        assert.equal(catalog.HomeModels.get(ComposeFx.UiOrder), ComposeFx.Ui);
+        assert.equal(catalog.Description.Seed.find((s) => s.PublicId === 'ui.u1')?.Owner, ComposeFx.Ui);
         const engine = await GraphEngine.Open({ Description: catalog.Description, Storage: { Kind: StorageKind.Memory } });
         await engine.dispose();
     });
@@ -243,31 +258,55 @@ describe('EnvironmentCatalogComposer', () =>
 
     test('a datasource declared in a dependency binds (P12)', async () =>
     {
-        const fx = await (await new ComposeFx().Add('crm.lib', ComposeFx.CrmLib)).Add('crm.app', ComposeFx.CrmApp, [['crm.lib', ComposeFx.Version]]);
-        const catalog = await fx.Compose(fx.Deploy(ComposeFx.AppA, 'crm.app'));
-        assert.deepEqual(catalog.Description.Bindings, [{ Model: 'crm.app', Concept: ComposeFx.Customer, Connector: ComposeFx.CrmConnector }]);
-        assert.deepEqual(catalog.Connectors.map((c) => [c.Name, c.Spec.Connection]), [[ComposeFx.CrmConnector, 'crm-db']]);
-        assert.deepEqual(catalog.Identity.Bindings().map((b) => b.Model), ['crm.app']);
+        const fx = await (await new ComposeFx().Add(ComposeFx.CrmLibId, ComposeFx.CrmLib)).Add(ComposeFx.CrmAppId, ComposeFx.CrmApp, [[ComposeFx.CrmLibId, ComposeFx.Version]]);
+        const catalog = await fx.Compose(fx.Deploy(ComposeFx.AppA, ComposeFx.CrmAppId));
+        assert.deepEqual(catalog.Description.Bindings, [{ Model: ComposeFx.CrmAppId, Concept: ComposeFx.Customer, Connector: ComposeFx.CrmConnector }]);
+        assert.deepEqual(catalog.Connectors.map((c) => [c.Name, c.Spec.Connection]), [[ComposeFx.CrmConnector, ComposeFx.CrmConnection]]);
+        assert.deepEqual(catalog.Identity.Bindings().map((b) => b.Model), [ComposeFx.CrmAppId]);
     });
 
     test('a datasource that no visible package declares is an unknown connector (P12)', async () =>
     {
-        const fx = await (await (await new ComposeFx().Add('crm.lib', ComposeFx.CrmLib))
-            .Add('crm.lib', ComposeFx.CrmLibNoSource, [], '1.1.0'))
-            .Add('crm.app', ComposeFx.CrmApp, [['crm.lib', ComposeFx.Version]]);
+        const fx = await (await (await new ComposeFx().Add(ComposeFx.CrmLibId, ComposeFx.CrmLib))
+            .Add(ComposeFx.CrmLibId, ComposeFx.CrmLibNoSource, [], ComposeFx.NextVersion))
+            .Add(ComposeFx.CrmAppId, ComposeFx.CrmApp, [[ComposeFx.CrmLibId, ComposeFx.Version]]);
         // App B pins crm.lib@1.1.0, which no longer declares the datasource crm.app binds to.
-        const pinsNewLib: IPackageDelivery = { Channel: DeliveryChannel.Deploy, Name: ComposeFx.AppB, Packages: [fx.Ref('crm.lib', '1.1.0')] };
-        const error = await fx.Rejects(EnvironmentCatalogErrorCode.UnknownConnector, fx.Deploy(ComposeFx.AppA, 'crm.app'), pinsNewLib);
+        const pinsNewLib: IPackageDelivery = { Channel: DeliveryChannel.Deploy, Name: ComposeFx.AppB, Packages: [fx.Ref(ComposeFx.CrmLibId, ComposeFx.NextVersion)] };
+        const error = await fx.Rejects(EnvironmentCatalogErrorCode.UnknownConnector, fx.Deploy(ComposeFx.AppA, ComposeFx.CrmAppId), pinsNewLib);
         assert.equal(error.Subject, ComposeFx.CrmConnector);
         ComposeFx.NamesDeliveries(error, ComposeFx.AppA);
         assert.match(error.message, /crm\.Customer/);
     });
 
+    test('two dependencies declaring one datasource differently are a conflicting connector', async () =>
+    {
+        const fx = await (await (await (await new ComposeFx().Add(ComposeFx.CrmLibId, ComposeFx.CrmLib))
+            .Add(ComposeFx.LeadLibId, ComposeFx.LeadLib))
+            .Add(ComposeFx.LeadLibId, ComposeFx.LeadLibOtherDb, [], ComposeFx.NextVersion))
+            .Add(ComposeFx.CrmAppId, ComposeFx.CrmApp, [[ComposeFx.CrmLibId, ComposeFx.Version], [ComposeFx.LeadLibId, ComposeFx.Version]]);
+        // Compiled over two identical declarations, the app composes; the leads library's next version changes the connection.
+        const same = await fx.Compose(fx.Deploy(ComposeFx.AppA, ComposeFx.CrmAppId));
+        assert.deepEqual(same.Connectors.map((c) => [c.Name, c.Spec.Connection]), [[ComposeFx.CrmConnector, ComposeFx.CrmConnection]]);
+        const pinsOtherDb: IPackageDelivery = { Channel: DeliveryChannel.Promote, Name: ComposeFx.SetB, Packages: [fx.Ref(ComposeFx.LeadLibId, ComposeFx.NextVersion)] };
+        const error = await fx.Rejects(EnvironmentCatalogErrorCode.ConflictingConnector, fx.Deploy(ComposeFx.AppA, ComposeFx.CrmAppId), pinsOtherDb);
+        assert.equal(error.Subject, ComposeFx.CrmConnector);
+        ComposeFx.NamesDeliveries(error, ComposeFx.AppA, ComposeFx.SetB);
+        assert.ok(error.message.includes(ComposeFx.CrmLibId) && error.message.includes(ComposeFx.LeadLibId), error.message);
+    });
+
+    test('an error with no known delivery renders no deliveries clause', () =>
+    {
+        assert.equal(EnvironmentCatalogError.DeliveredBy([]), '');
+        assert.equal(EnvironmentCatalogError.DeliveredBy([ComposeFx.AppA, ComposeFx.SetB]), ` (delivered by "${ComposeFx.AppA}", "${ComposeFx.SetB}")`);
+        assert.throws(() => ConnectorPlanMerge.Merge([ComposeFx.Plan('pkg.a', { Bindings: [ComposeFx.Binding('a.Cust', ComposeFx.Nowhere)] })], new Map()),
+            (error: unknown) => error instanceof EnvironmentCatalogError && !error.message.includes('delivered by') && !error.message.includes('""'));
+    });
+
     test('a binding whose spec is absent is an unknown connector', () =>
     {
-        assert.throws(() => ConnectorPlanMerge.Merge([ComposeFx.Plan('pkg.a', { Bindings: [ComposeFx.Binding('a.Cust', 'nowhere')] })], new Map([['pkg.a', [ComposeFx.AppA]]])),
+        assert.throws(() => ConnectorPlanMerge.Merge([ComposeFx.Plan('pkg.a', { Bindings: [ComposeFx.Binding('a.Cust', ComposeFx.Nowhere)] })], new Map([['pkg.a', [ComposeFx.AppA]]])),
             (error: unknown) => error instanceof EnvironmentCatalogError && error.Code === EnvironmentCatalogErrorCode.UnknownConnector
-                && error.Subject === 'nowhere' && error.message.includes(JSON.stringify(ComposeFx.AppA)));
+                && error.Subject === ComposeFx.Nowhere && error.message.includes(JSON.stringify(ComposeFx.AppA)));
     });
 
     test('builtin and todl-file bindings become engine storage', () =>
@@ -372,13 +411,13 @@ describe('EnvironmentCatalogComposer', () =>
             const external = await cypher.Execute(AccessScope.System, 'MATCH (c:crm.Customer) RETURN c.name');
             assert.deepEqual(ComposeFx.Scalars(external.Rows), [ComposeFx.CustomerName]);
             // A create is placed by HomeModels: an engine node owned by the package that declares its concept.
-            const placement = new EnvironmentNodePlacement(catalog.Identity, catalog.HomeModels, () => 'order-new');
+            const placement = new EnvironmentNodePlacement(catalog.Identity, catalog.HomeModels, () => ComposeFx.NewOrder);
             await cypher.Execute(AccessScope.System, "CREATE (:shopa.Order {total: '9'})", { Placement: placement });
             const reader = await engine.BeginRead(AccessScope.System);
             try
             {
-                assert.equal(await reader.OwnerOf('order-new'), 'shop.a');
-                assert.equal(await reader.ConceptOf('order-new'), 'shopa.Order');
+                assert.equal(await reader.OwnerOf(ComposeFx.NewOrder), 'shop.a');
+                assert.equal(await reader.ConceptOf(ComposeFx.NewOrder), 'shopa.Order');
             }
             finally
             {

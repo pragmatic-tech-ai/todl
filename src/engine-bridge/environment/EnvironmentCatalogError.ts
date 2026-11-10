@@ -25,6 +25,9 @@ export class EnvironmentCatalogError extends Error
 {
     private static readonly ErrorName = 'EnvironmentCatalogError';
     private static readonly ListSeparator = ', ';
+    private static readonly DeliveredByOpen = ' (delivered by ';
+    private static readonly DeliveredByClose = ')';
+    private static readonly NoDeliveries = '';
 
     public readonly Code: EnvironmentCatalogErrorCode;
     public readonly Subject: string;
@@ -39,9 +42,14 @@ export class EnvironmentCatalogError extends Error
         this.Deliveries = Object.freeze([...deliveries]);
     }
 
-    /** Delivery names as an error message lists them: each quoted, comma-separated. */
-    public static List(deliveries: readonly string[]): string
+    /**
+     * The deliveries clause of an error message: ` (delivered by "a", "b")`, each name quoted, or nothing when no
+     * delivery is known.
+     */
+    public static DeliveredBy(deliveries: readonly string[]): string
     {
-        return deliveries.map((d) => JSON.stringify(d)).join(EnvironmentCatalogError.ListSeparator);
+        if (deliveries.length === 0) return EnvironmentCatalogError.NoDeliveries;
+        return EnvironmentCatalogError.DeliveredByOpen + deliveries.map((d) => JSON.stringify(d)).join(EnvironmentCatalogError.ListSeparator)
+            + EnvironmentCatalogError.DeliveredByClose;
     }
 }

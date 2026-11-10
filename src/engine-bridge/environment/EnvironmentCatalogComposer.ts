@@ -1,6 +1,7 @@
 import { BindingTable, type ISchemaDescription } from '@pragmatic-tech-ai/graph';
 import { ConnectorPlanEmitter } from '../../codegen/connector-plan-emitter.js';
-import { fromJSON } from '../../compiler-services/emit/json.js';
+import { ConnectorDeclaration } from '../../compiler-services/connectors/connector-declaration.js';
+import { fromJSON, type JsonNode } from '../../compiler-services/emit/json.js';
 import { Builder } from '../../compiler-services/model/builder.js';
 import { MetaKind } from '../../compiler-services/model/kinds.js';
 import { Domain, type IPackageDocumentSource, type PackageRef, type PackageSource, type ResolvedPackage } from '../../domain/domain.js';
@@ -83,8 +84,9 @@ class SystemFirstPackageSource implements PackageSource, IPackageDocumentSource
  */
 export class EnvironmentCatalogComposer
 {
-    private static readonly ConflictingMessage = 'deliveries {0} cannot share one environment: {1}';
-    private static readonly UnknownConnectorMessage = 'package "{0}" (delivered by {1}) populates "{2}" from connector "{3}", which neither it nor its dependencies declare';
+    private static readonly ConflictingMessage = 'the deliveries cannot share one environment{0}: {1}';
+    private static readonly UnknownConnectorMessage = 'package "{0}"{1} populates "{2}" from connector "{3}", which neither it nor its dependencies declare';
+    private static readonly ConflictingConnectorMessage = 'datasource "{0}" is declared differently by packages "{1}" and "{2}"{3}, and package "{4}" sees both';
     private static readonly SystemDelivery = SystemNames.Model;
 
     private constructor() {}
@@ -102,7 +104,7 @@ export class EnvironmentCatalogComposer
             await domain.load(ref);
             documents.set(ref.model, await source.Document(ref));
         }
-        const plans = packages.map((ref) => EnvironmentCatalogComposer.PlanOf(ref, documents, unified.Deliveries.get(ref.model) ?? []));
+        const plans = packages.map((ref) => EnvironmentCatalogComposer.PlanOf(ref, documents, unified.Deliveries));
         const merged = ConnectorPlanMerge.Merge(plans, unified.Deliveries);
         const described = SnapshotDescriber.Describe(domain.Snapshot, {
             DefaultConnector: BindingTable.EngineStorage,
@@ -115,7 +117,7 @@ export class EnvironmentCatalogComposer
             const declarers = [...documents].filter(([, doc]) => EnvironmentCatalogComposer.Declares(doc, conflict.Subject)).map(([model]) => model);
             const deliveries = [...new Set(declarers.flatMap((m) => unified.Deliveries.get(m) ?? []))].sort();
             throw new EnvironmentCatalogError(EnvironmentCatalogErrorCode.ConflictingDefinition, conflict.Subject, deliveries,
-                MessageFormat.Format(EnvironmentCatalogComposer.ConflictingMessage, EnvironmentCatalogError.List(deliveries), conflict.Message));
+                MessageFormat.Format(EnvironmentCatalogComposer.ConflictingMessage, EnvironmentCatalogError.DeliveredBy(deliveries), conflict.Message));
         }
         const description = described.Description;
         const external = EnvironmentCatalogComposer.Described(description, merged.External);
@@ -136,10 +138,11 @@ export class EnvironmentCatalogComposer
      * built over the document plus the datasource nodes of its (unified) dependency closure. A population whose connector
      * is still not visible is UnknownConnector (PlanFor would skip it, and the concept would fall to engine storage).
      */
-    private static PlanOf(ref: Required<PackageRef>, documents: ReadonlyMap<string, PackageDocument>, deliveries: readonly string[]): ModelConnectorPlan
+    private static PlanOf(ref: Required<PackageRef>, documents: ReadonlyMap<string, PackageDocument>, deliveriesOf: ReadonlyMap<string, readonly string[]>): ModelConnectorPlan
     {
         const doc = documents.get(ref.model)!;
-        const visible = EnvironmentCatalogComposer.WithDependencyConnectors(doc, documents);
+        const deliveries = deliveriesOf.get(ref.model) ?? [];
+        const visible = EnvironmentCatalogComposer.WithDependencyConnectors(ref.model, documents, deliveriesOf);
         const connectors = new Set(visible.nodes.filter((n) => n.metaKind === MetaKind.Connector).map((n) => n.id));
         for (const node of doc.nodes)
         {
@@ -148,7 +151,7 @@ export class EnvironmentCatalogComposer
             if (!connectors.has(connector))
             {
                 throw new EnvironmentCatalogError(EnvironmentCatalogErrorCode.UnknownConnector, connector, deliveries,
-                    MessageFormat.Format(EnvironmentCatalogComposer.UnknownConnectorMessage, ref.model, EnvironmentCatalogError.List(deliveries),
+                    MessageFormat.Format(EnvironmentCatalogComposer.UnknownConnectorMessage, ref.model, EnvironmentCatalogError.DeliveredBy(deliveries),
                         String(node.attrs[Builder.BindingConceptAttr]), connector));
             }
         }
@@ -164,25 +167,43 @@ export class EnvironmentCatalogComposer
         return plan;
     }
 
-    /** `doc` plus every datasource node of the packages it depends on, transitively, at their chosen versions. */
-    private static WithDependencyConnectors(doc: PackageDocument, documents: ReadonlyMap<string, PackageDocument>): PackageDocument
+    /**
+     * The document of package `model` plus every datasource node of the packages it depends on, transitively, at their
+     * chosen versions. Datasource ids are namespace-scoped, so two of those packages may declare one id: identical
+     * declarations are one connector, different ones are ConflictingConnector (never first-wins).
+     */
+    private static WithDependencyConnectors(model: string, documents: ReadonlyMap<string, PackageDocument>, deliveriesOf: ReadonlyMap<string, readonly string[]>): PackageDocument
     {
+        const doc = documents.get(model)!;
         const nodes = [...doc.nodes];
-        const ids = new Set(nodes.map((n) => n.id));
+        const declarers = new Map<string, { readonly Node: JsonNode; readonly Model: string }>();
+        for (const node of nodes)
+        {
+            if (node.metaKind === MetaKind.Connector) declarers.set(node.id, { Node: node, Model: model });
+        }
         const seen = new Set<string>();
         const queue = (doc.dependencies ?? []).map((d) => d.id);
         while (queue.length > 0)
         {
-            const model = queue.shift()!;
-            const dependency = documents.get(model);
-            if (seen.has(model) || dependency === undefined) continue;
-            seen.add(model);
+            const next = queue.shift()!;
+            const dependency = documents.get(next);
+            if (seen.has(next) || dependency === undefined) continue;
+            seen.add(next);
             for (const node of dependency.nodes)
             {
-                if (node.metaKind === MetaKind.Connector && !ids.has(node.id))
+                if (node.metaKind !== MetaKind.Connector) continue;
+                const first = declarers.get(node.id);
+                if (first === undefined)
                 {
+                    declarers.set(node.id, { Node: node, Model: next });
                     nodes.push(node);
-                    ids.add(node.id);
+                }
+                else if (!ConnectorDeclaration.Same(first.Node.attrs, node.attrs))
+                {
+                    const deliveries = [...new Set([first.Model, next].flatMap((m) => deliveriesOf.get(m) ?? []))].sort();
+                    throw new EnvironmentCatalogError(EnvironmentCatalogErrorCode.ConflictingConnector, node.id, deliveries,
+                        MessageFormat.Format(EnvironmentCatalogComposer.ConflictingConnectorMessage, node.id, first.Model, next,
+                            EnvironmentCatalogError.DeliveredBy(deliveries), model));
                 }
             }
             queue.push(...(dependency.dependencies ?? []).map((d) => d.id));
