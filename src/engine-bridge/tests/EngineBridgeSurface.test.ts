@@ -53,6 +53,7 @@ class SurfaceExpectations
         'EnvironmentCatalogComposer',
         'EnvironmentCatalogError',
         'EnvironmentCatalogErrorCode',
+        'ExternalCatalogDescriber',
         'PackageVersionUnifier',
         'UnifiedPackageSource',
         'DescribeDiagnosticCode',
