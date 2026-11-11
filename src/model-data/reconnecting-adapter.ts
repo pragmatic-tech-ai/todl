@@ -7,7 +7,9 @@ import type { ConnectionRetryPolicy, IReconnectObserver } from "./connection-rec
  *  evict-and-reopen (re-resolving credentials via the reopen closure). Driver-agnostic: it asks the
  *  inner adapter to classify each thrown error (absent classifier -> Permanent, i.e. no retry).
  *  Every attempt of Query, QueryPage and Apply, retries and reopened inners included, runs on the
- *  caller's context. */
+ *  caller's context. An Auth/Dead failure classification evicts and reopens the one shared inner adapter for every
+ *  caller, so an adapter acting as the caller must keep per-user connection/token handling inside itself, keyed by
+ *  the context's Key, and must not classify a per-user token failure as Auth/Dead. */
 export class ReconnectingAdapter implements IDataSourceAdapter
 {
     private static readonly PagingUnsupportedMessage = "inner adapter does not support paged reads";

@@ -1,7 +1,7 @@
 import {
     WriteOp,
-    type ConnectorContext,
     type CellValue,
+    type ConnectorContext,
     type ConnectorChange,
     type ConnectorChangeSet,
     type IConnectorTransaction,

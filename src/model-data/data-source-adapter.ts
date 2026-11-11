@@ -30,7 +30,8 @@ export interface IDataSourceContext
 /**
  * A live connection to one external data source. Every call takes an optional trailing `context`: the engine-driven
  * paths (DataSourceConnector, DataSourceTransaction) pass the caller's; the federated, prefetch and working-copy paths
- * have no caller and pass none. An adapter that does not act as the caller ignores it.
+ * have no caller and pass none. An adapter that does not act as the caller ignores it. An absent context (undefined)
+ * means the anonymous context, the same as Key ''.
  */
 export interface IDataSourceAdapter
 {
