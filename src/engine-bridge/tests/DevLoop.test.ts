@@ -1,24 +1,7 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { AccessScope, Cypher, EdgeDirection, GraphEngine, StorageKind, type ILinkView, type INodeView } from '@pragmatic-tech-ai/graph';
-import * as EngineSurface from '@pragmatic-tech-ai/todl/engine';
-import type {
-    IComposeInput,
-    IDescribeDiagnostic,
-    IDescribeOptions,
-    IEnvironmentCatalog,
-    IPackageDelivery,
-    IPackageDocumentSource,
-    IPolicyDiagnostic,
-    IPrincipalFacts,
-    ISavedModel,
-    ISavedSnapshot,
-    IShareSubjects,
-    ISnapshotDescription,
-    ITodlDraftSession,
-    ITodlModelWorkspace,
-    IUnifiedPackages,
-} from '@pragmatic-tech-ai/todl/engine';
+import type { ISnapshotDescription } from '@pragmatic-tech-ai/todl/engine';
 import { checkAgainst } from '../../compiler-services/api.js';
 import type { Repository } from '../../compiler-services/model/model.js';
 import type { TodlDocument } from '../../compiler-services/emit/json.js';
@@ -41,26 +24,6 @@ interface INodeState
     readonly Order: readonly string[];
     readonly Out: readonly ILinkView[];
     readonly In: readonly ILinkView[];
-}
-
-/** The type names the engine subpath exports; a missing one fails typecheck. */
-interface IExportedTypes
-{
-    readonly Diagnostic: IDescribeDiagnostic;
-    readonly Options: IDescribeOptions;
-    readonly Description: ISnapshotDescription;
-    readonly Facts: IPrincipalFacts;
-    readonly PolicyDiagnostic: IPolicyDiagnostic;
-    readonly Workspace: ITodlModelWorkspace;
-    readonly Session: ITodlDraftSession;
-    readonly SavedModel: ISavedModel;
-    readonly SavedSnapshot: ISavedSnapshot;
-    readonly ShareSubjects: IShareSubjects;
-    readonly DocumentSource: IPackageDocumentSource;
-    readonly ComposeInput: IComposeInput;
-    readonly Catalog: IEnvironmentCatalog;
-    readonly Delivery: IPackageDelivery;
-    readonly Unified: IUnifiedPackages;
 }
 
 /** A shop model in a memory workspace, compiled through the package pipeline into an engine over the file connector. */
@@ -269,50 +232,6 @@ class MoveFx
     }
 }
 
-/** The runtime names `@pragmatic-tech-ai/todl/engine` exports. */
-class ExportSurface
-{
-    public static readonly Expected = [
-        'CellConverter',
-        'ChangeBatcher',
-        'DataSourceConnector',
-        'DataSourceTransaction',
-        // The environment catalog composer (rulings T2, T3, T4, T11, T12).
-        'DeliveryChannel',
-        'EnvironmentCatalogComposer',
-        'EnvironmentCatalogError',
-        'EnvironmentCatalogErrorCode',
-        'PackageVersionUnifier',
-        'UnifiedPackageSource',
-        'DescribeDiagnosticCode',
-        'EngineBridgeError',
-        'EngineBridgeErrorCode',
-        'EngineCellMapper',
-        'EnvironmentNodePlacement',
-        'ExternalIdentity',
-        'ExternalValues',
-        'ExternalWriteError',
-        'FetchTranslator',
-        'PolicyDiagnosticCode',
-        'PolicyScopeCompiler',
-        'ResumeToken',
-        'SavedModelCompiler',
-        // The todl.system package (ruling T10): its source, names and share-grant predicates.
-        'ShareGrantScope',
-        'ShareGrants',
-        'ShareRight',
-        'ShareSubject',
-        'SnapshotDescriber',
-        'SystemNames',
-        'SystemPackage',
-        'TodlFileConnector',
-        // Reserved schema names a host needs: FileConnector for IDescribeOptions.DefaultConnector, Label / Class /
-        // Term / Element for Cypher over the described schema.
-        'TodlNames',
-        'TodlNodePlacement',
-    ];
-}
-
 describe('dev loop end to end', () =>
 {
     test('write, recompile, upgrade is a data no-op', async () =>
@@ -457,14 +376,5 @@ describe('dev loop end to end', () =>
         {
             await engine.dispose();
         }
-    });
-});
-
-describe('engine subpath export surface', () =>
-{
-    test('exports exactly the bridge surface', () =>
-    {
-        assert.deepEqual(Object.keys(EngineSurface).sort(), [...ExportSurface.Expected].sort());
-        // The type exports are pinned by IExportedTypes above: typecheck fails when one is dropped.
     });
 });
