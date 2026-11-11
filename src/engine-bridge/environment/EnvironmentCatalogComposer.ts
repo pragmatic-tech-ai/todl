@@ -1,13 +1,14 @@
 import { BindingTable, type ISchemaDescription } from '@pragmatic-tech-ai/graph';
 import { ConnectorPlanEmitter } from '../../codegen/connector-plan-emitter.js';
 import { ConnectorDeclaration } from '../../compiler-services/connectors/connector-declaration.js';
-import { fromJSON, type JsonNode } from '../../compiler-services/emit/json.js';
+import type { JsonNode } from '../../compiler-services/emit/json.js';
 import { Builder } from '../../compiler-services/model/builder.js';
 import { MetaKind } from '../../compiler-services/model/kinds.js';
 import { Domain, type IPackageDocumentSource, type PackageRef, type PackageSource } from '../../domain/domain.js';
 import type { MetadataSnapshot } from '../../domain/metadata-snapshot.js';
 import type { ConnectorBinding, ConnectorSpec, ModelConnectorPlan } from '../../model-data/connector-plan.js';
 import { ModelShardExtractor } from '../../model-data/model-shard-extractor.js';
+import { PackageManifestBridge } from '../../solution-services/package-manager/package-manifest-bridge.js';
 import type { PackageDocument } from '../../publish/publish.js';
 import type { IExternalBinding, IExternalConnectorPlan } from '../external/ExternalBinding.js';
 import { ExternalIdentity } from '../external/ExternalIdentity.js';
@@ -21,6 +22,7 @@ import { TodlNames } from '../TodlNames.js';
 import { ConnectorPlanMerge } from './ConnectorPlanMerge.js';
 import { DeliveryChannel, type IPackageDelivery } from './PackageDelivery.js';
 import { EnvironmentCatalogError, EnvironmentCatalogErrorCode } from './EnvironmentCatalogError.js';
+import { EnvironmentSecurity } from './EnvironmentSecurity.js';
 import { PackageVersionUnifier } from './PackageVersionUnifier.js';
 import { UnifiedPackageSource } from './UnifiedPackageSource.js';
 
@@ -47,6 +49,8 @@ export interface IEnvironmentCatalog
     readonly HomeModels: ReadonlyMap<string, string>;
     /** The describer's diagnostics (none is ConflictingDefinition: that is an error). */
     readonly Diagnostics: readonly IDescribeDiagnostic[];
+    /** Every chosen package's security, composed from the same documents, so swapping the catalog swaps it too (spec §9.4). */
+    readonly Security: EnvironmentSecurity;
 }
 
 /**
@@ -116,14 +120,16 @@ export class EnvironmentCatalogComposer
         }
         const description = described.Description;
         const external = EnvironmentCatalogComposer.Described(description, merged.External);
+        const homes = EnvironmentCatalogComposer.HomeModels(documents);
         return {
             Description: description,
             Packages: packages,
             Snapshot: domain.Snapshot,
             Connectors: EnvironmentCatalogComposer.Connectors(external, merged.Specs),
             Identity: new ExternalIdentity(description, external),
-            HomeModels: EnvironmentCatalogComposer.HomeModels(documents),
+            HomeModels: homes,
             Diagnostics: described.Diagnostics,
+            Security: EnvironmentSecurity.Compose(documents, homes, external, unified.Deliveries),
         };
     }
 
@@ -132,6 +138,7 @@ export class EnvironmentCatalogComposer
      * may `connect` a datasource declared in a dependency, which the own-only document does not hold, so the plan is
      * built over the document plus the datasource nodes of its (unified) dependency closure. A population whose connector
      * is still not visible is UnknownConnector (PlanFor would skip it, and the concept would fall to engine storage).
+     * The repository is built over the compile foundation, so a document's edges to `todl.system` nodes resolve.
      */
     private static PlanOf(ref: Required<PackageRef>, documents: ReadonlyMap<string, PackageDocument>, deliveriesOf: ReadonlyMap<string, readonly string[]>): ModelConnectorPlan
     {
@@ -151,7 +158,7 @@ export class EnvironmentCatalogComposer
             }
         }
         const plan: ModelConnectorPlan = { Model: ref.model, Version: ref.version, Connectors: [], Bindings: [] };
-        const repository = fromJSON(visible);
+        const repository = PackageManifestBridge.repositoryOf(visible);
         for (const model of ModelShardExtractor.ModelsOf(doc))
         {
             const part = ConnectorPlanEmitter.PlanFor(repository, model);

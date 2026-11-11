@@ -1,6 +1,6 @@
 import { Repository } from "../../compiler-services/model/model.js";
 import { mergeBases } from "../../compiler-services/api.js";
-import { preludeDocument } from "../../compiler-services/stdlib/prelude.js";
+import { CompileFoundation, FoundationKind } from "../../compiler-services/stdlib/compile-foundation.js";
 import { ManifestEmitter, type DataGraph } from "../../compiler-services/emit/manifest.js";
 import { ManifestWriter } from "../../manifest/manifest-writer.js";
 import { type LogicalManifest } from "../../manifest/logical.js";
@@ -20,10 +20,13 @@ export class PackageManifestBridge
   // The repository a manifest is emitted from: the document over the prelude. A published (own-only) document
   // carries no prelude, which is every package's implicit base; without it the virtual root Element and its
   // members (label, description) vanish and parent-less concepts get no base. A full closure already holds the
-  // prelude, and mergeBases keeps the first copy of each node, so its repository is unchanged.
+  // prelude, and mergeBases keeps the first copy of each node, so its repository is unchanged. A document that
+  // references a `todl.system` node (`: todl.system.Owned`) records the system package as a dependency instead of
+  // carrying its nodes, so the system document is seeded too, else its edges to those nodes cannot resolve.
   static repositoryOf(doc: TodlDocument): Repository
   {
-    return new Repository(mergeBases([preludeDocument(), doc]));
+    const kind = CompileFoundation.ReferencesSystem(doc) ? FoundationKind.PreludeAndSystem : FoundationKind.PreludeOnly;
+    return new Repository(mergeBases([...CompileFoundation.Documents(kind), doc]));
   }
 
   // The logical manifest for a compiled Repository (schema tier only).
