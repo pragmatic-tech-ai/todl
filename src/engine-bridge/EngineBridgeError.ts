@@ -32,6 +32,8 @@ export enum EngineBridgeErrorCode
     NoHomeModel,
     /** A connector plan binding that its ExternalIdentity does not hold, so its public ids could never parse. */
     UnknownExternalBinding,
+    /** A create sets a system field (owner, owningBusinessUnit) the engine places itself on an owned concept (spec C3). */
+    SystemFieldWrite,
 }
 
 /** Failure raised by the TODL-on-engine bridge; Code identifies the category. */

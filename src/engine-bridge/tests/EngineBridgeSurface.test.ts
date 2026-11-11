@@ -71,6 +71,7 @@ class SurfaceExpectations
         'ShareRight',
         'ShareSubject',
         'SnapshotDescriber',
+        'SystemFieldGuard',
         'SystemFirstPackageSource',
         'SystemNames',
         'SystemPackage',

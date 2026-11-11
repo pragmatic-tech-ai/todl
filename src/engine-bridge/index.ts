@@ -24,6 +24,7 @@ export { SystemFirstPackageSource } from './system/SystemFirstPackageSource.js';
 export { SystemNames, ShareRight, ShareSubject } from './system/SystemNames.js';
 export { ShareGrants } from './system/ShareGrants.js';
 export { ShareGrantScope, type IShareSubjects } from './system/ShareGrantScope.js';
+export { SystemFieldGuard } from './system/SystemFieldGuard.js';
 export type { IPackageDocumentSource } from '../domain/domain.js';
 export { EnvironmentCatalogComposer, type IComposeInput, type IEnvironmentCatalog } from './environment/EnvironmentCatalogComposer.js';
 export { DeliveryChannel, type IPackageDelivery } from './environment/PackageDelivery.js';

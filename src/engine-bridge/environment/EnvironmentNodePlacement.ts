@@ -2,21 +2,31 @@ import { randomUUID } from 'node:crypto';
 import { ValueType, type CellValue, type Cypher } from '@pragmatic-tech-ai/graph';
 import { EngineBridgeError, EngineBridgeErrorCode } from '../EngineBridgeError.js';
 import type { ExternalIdentity } from '../external/ExternalIdentity.js';
+import { MessageFormat } from '../MessageFormat.js';
+import type { IPrincipalFacts } from '../PrincipalFacts.js';
+import { SystemNames } from '../system/SystemNames.js';
 
 /**
  * Places the nodes a Cypher CREATE / MERGE makes in an environment (ruling T8). A concept with an external binding
  * is created in that source: public id minted from the id member's value (else a fresh key), owner the binding's
- * model. Every other create is an engine node with a random id owned by the concept's home model.
+ * model. Every other create is an engine node with a random id owned by the concept's home model; when its concept is
+ * owned (todl.system.Owned, directly or through a parent), the placement defaults its owner to the acting principal and
+ * its owning business unit to the principal's home unit (spec C3), and refuses a create that sets either itself
+ * (SystemFieldWrite, whatever the scope). External concepts are never owned (the composer rejects them).
  */
 export class EnvironmentNodePlacement implements Cypher.INodePlacement
 {
     private static readonly ErrNoHomeModel = 'No home model is known for concept ';
     private static readonly ErrBadId = 'The id member of an external create must be a non-empty string, a bigint or a finite number: ';
     private static readonly EmptyText = '';
+    private static readonly ErrSystemField = 'A create of owned concept {0} may not set system field {1}; the engine places it';
+    private static readonly SystemFields: readonly string[] = [SystemNames.Owner, SystemNames.OwningBusinessUnit];
 
     public constructor(
         private readonly identity: ExternalIdentity,
         private readonly homeModels: ReadonlyMap<string, string>,
+        private readonly owned: ReadonlySet<string>,
+        private readonly principal: IPrincipalFacts,
         private readonly ids: () => string = randomUUID,
     )
     {
@@ -32,7 +42,12 @@ export class EnvironmentNodePlacement implements Cypher.INodePlacement
             {
                 throw new EngineBridgeError(EngineBridgeErrorCode.NoHomeModel, EnvironmentNodePlacement.ErrNoHomeModel + concept);
             }
-            return { PublicId: this.ids(), Owner: owner };
+            if (!this.owned.has(concept))
+            {
+                return { PublicId: this.ids(), Owner: owner };
+            }
+            EnvironmentNodePlacement.RejectSystemFields(concept, properties);
+            return { PublicId: this.ids(), Owner: owner, Defaults: this.OwnedDefaults() };
         }
         const idMember = this.identity.IdMemberName(binding);
         const value = idMember === undefined ? undefined : properties.get(idMember);
@@ -48,6 +63,23 @@ export class EnvironmentNodePlacement implements Cypher.INodePlacement
             return { PublicId: publicId, Owner: binding.Model, Defaults: new Map<string, CellValue>([[idMember, key]]) };
         }
         return { PublicId: publicId, Owner: binding.Model };
+    }
+
+    private OwnedDefaults(): ReadonlyMap<string, CellValue>
+    {
+        return new Map<string, CellValue>([
+            [SystemNames.Owner, this.principal.Id],
+            [SystemNames.OwningBusinessUnit, this.principal.HomeBusinessUnitId],
+        ]);
+    }
+
+    private static RejectSystemFields(concept: string, properties: ReadonlyMap<string, CellValue>): void
+    {
+        const field = EnvironmentNodePlacement.SystemFields.find((f) => properties.has(f));
+        if (field !== undefined)
+        {
+            throw new EngineBridgeError(EngineBridgeErrorCode.SystemFieldWrite, MessageFormat.Format(EnvironmentNodePlacement.ErrSystemField, concept, field));
+        }
     }
 
     private static IdText(concept: string, value: CellValue): string
