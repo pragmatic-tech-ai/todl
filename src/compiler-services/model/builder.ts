@@ -14,6 +14,7 @@
 
 import { Graph, EdgeKind, Tier, Cardinality, type Node, type NodeId, type Scalar, type FieldDecl } from "./graph.js";
 import { MetaKind } from "./kinds.js";
+import type { BaseRoleName } from "../security/security-terms.js";
 
 /** A taxonomy term = a class of its concept: its fixed field values (an attr
  * map) plus zero-or-more nested child terms. `concept` names which of the
@@ -71,6 +72,13 @@ export class Builder
   public static readonly MatchConceptAttr = Builder.IdentityConceptAttr;
   public static readonly MatchRulesAttr = "rules";
   public static readonly MergeRulesAttr = "rules";
+  /** Reserved operator-node attr keys: the reified form's endpoint members. */
+  public static readonly OperatorFromAttr = "from";
+  public static readonly OperatorToAttr = "to";
+  /** Reserved role / role-contribution attr keys. `privileges` is a JSON `ISecurityPrivilege[]`. */
+  public static readonly RoleNameAttr = "name";
+  public static readonly RolePrivilegesAttr = "privileges";
+  public static readonly ContributionRoleAttr = "role";
   /** Reserved connector-node attr keys. `config` is a JSON object of the inline
    *  NON-secret assignments (everything except kind/connection/secret). */
   public static readonly ConnectorNameAttr = "name";
@@ -348,8 +356,8 @@ export class Builder
   ): this
   {
     this.stagedNodes.push(this.makeNode(glyph, Tier.Ontology, { metaKind: MetaKind.Operator }));
-    if (fromMember !== null) this.stagedAttrs.push({ id: glyph, name: "from", value: fromMember });
-    if (toMember !== null) this.stagedAttrs.push({ id: glyph, name: "to", value: toMember });
+    if (fromMember !== null) this.stagedAttrs.push({ id: glyph, name: Builder.OperatorFromAttr, value: fromMember });
+    if (toMember !== null) this.stagedAttrs.push({ id: glyph, name: Builder.OperatorToAttr, value: toMember });
     if (relationship !== null) this.stagedAttrs.push({ id: glyph, name: "relationship", value: relationship });
     this.stagedEdges.push({ kind: EdgeKind.Targets, via: null, from: glyph, to: concept });
     return this;
@@ -382,6 +390,24 @@ export class Builder
     this.stagedNodes.push(this.makeNode(id, Tier.Ontology, { metaKind: MetaKind.Merge }));
     this.stagedAttrs.push({ id, name: Builder.MatchConceptAttr, value: concept });
     this.stagedAttrs.push({ id, name: Builder.MergeRulesAttr, value: rulesJson });
+    return this;
+  }
+
+  /** Define a package role node (Ontology-tier) named `name`, carrying its privileges as JSON `ISecurityPrivilege[]`. */
+  DefineRole(id: NodeId, name: string, privilegesJson: string): this
+  {
+    this.stagedNodes.push(this.makeNode(id, Tier.Ontology, { metaKind: MetaKind.Role }));
+    this.stagedAttrs.push({ id, name: Builder.RoleNameAttr, value: name });
+    this.stagedAttrs.push({ id, name: Builder.RolePrivilegesAttr, value: privilegesJson });
+    return this;
+  }
+
+  /** Define a base-role contribution node (Ontology-tier): the privileges a package adds to `baseRole`, as JSON `ISecurityPrivilege[]`. */
+  DefineRoleContribution(id: NodeId, baseRole: BaseRoleName, privilegesJson: string): this
+  {
+    this.stagedNodes.push(this.makeNode(id, Tier.Ontology, { metaKind: MetaKind.RoleContribution }));
+    this.stagedAttrs.push({ id, name: Builder.ContributionRoleAttr, value: baseRole });
+    this.stagedAttrs.push({ id, name: Builder.RolePrivilegesAttr, value: privilegesJson });
     return this;
   }
 

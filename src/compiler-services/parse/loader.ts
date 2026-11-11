@@ -82,6 +82,7 @@ import { makeResolver, type Home, type Resolver } from "../resolve/resolver.js";
 import { collectDefinitions, visitReferences } from "./references.js";
 import { NodeIdQualifier } from "./node-id-qualifier.js";
 import { CompileFoundation } from "../stdlib/compile-foundation.js";
+import { SecurityLowering, type ISecurityUnit } from "../security/security-lowering.js";
 import { BaseListClassifier } from "./base-list-classifier.js";
 import { DeriveSerializer } from "./derive-serializer.js";
 import { MemberAnnotationTarget } from "./member-annotation-target.js";
@@ -333,7 +334,8 @@ export function loadInto(
   // `undefinedIds` accumulates everything that fails to resolve; it is threaded
   // into every `commit()` below so edges to those ids are dropped, not dangled.
   const undefinedIds = new Set<string>();
-  const { nsOf, exists, reachable, resolveRef } = makeResolver(model, defined, sourceNs, reserved);
+  const resolver = makeResolver(model, defined, sourceNs, reserved);
+  const { nsOf, exists, reachable, resolveRef } = resolver;
 
   // Normalize + validate `uses` targets FIRST — the term-body scope resolution
   // below reads each taxonomy's (flat) `uses` list to form `used.term`
@@ -946,6 +948,24 @@ export function loadInto(
   }
   mergeBuilder.commit(undefinedIds);
 
+  // ═══════════════════════ SECURITY declarations (roles, contributions, profiles) ═══════════════════════
+  // `role` / `contribute` lower to `<ns>.<name>@role` / `<ns>.<baseRole>@contribution` nodes; concept references
+  // resolve here (unknown and foreign concepts are diagnosed and dropped). Whole-model rules run in SecurityValidator.
+  const securityUnits: ISecurityUnit[] = [];
+  for (const unit of units)
+  {
+    const decl = unit.decl;
+    if (decl.kind === DeclKind.Role || decl.kind === DeclKind.Contribution || decl.kind === DeclKind.Profile)
+    {
+      securityUnits.push({ ns: unit.ns, imports: unit.imports, uri: unit.uri, decl });
+    }
+  }
+  for (const home of new SecurityLowering(model, resolver, diagnostics).Lower(securityUnits))
+  {
+    if (rec !== undefined) rec.current = home.Uri;
+    recordHome(rec, home.Id);
+  }
+
   // ═══════════════════ CONNECTORS + POPULATIONS (external data) ═════════════════
   // `datasource` decls lower to namespace-scoped Connector nodes
   // (`<ns>@connector:<name>`); each model's `populate` lowers to one Population node
@@ -1324,6 +1344,9 @@ function recordSpans(model: Repository, units: readonly { ns: string; decl: Decl
         break;
       case DeclKind.Package:
         break; // application spans are recorded during the applications pass
+      case DeclKind.Operator:
+        if (declaration.glyphSpan !== undefined) model.recordSpan(declaration.glyph, declaration.glyphSpan);
+        break;
     }
   }
 }

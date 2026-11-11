@@ -80,6 +80,19 @@ export enum DiagnosticCode
   PreludeNameRedeclared = "prelude.name-redeclared",
   // Security foundation: a source redeclares a name the implicit todl.system package provides (Error).
   SecuritySystemNameRedeclared = "security.system-name-redeclared",
+  // Package roles and base-role contributions (all Error).
+  SecurityUnknownConcept = "security.unknown-concept",
+  SecurityForeignConcept = "security.foreign-concept",
+  SecurityUnknownAction = "security.unknown-action",
+  SecurityUnknownDepth = "security.unknown-depth",
+  SecurityUnknownBaseRole = "security.unknown-base-role",
+  SecuritySystemAdministratorContribution = "security.system-administrator-contribution",
+  SecurityRoleShadowsBaseRole = "security.role-shadows-base-role",
+  SecurityDuplicateRole = "security.duplicate-role",
+  SecurityDuplicatePrivilege = "security.duplicate-privilege",
+  SecurityDepthRequiresOwnership = "security.depth-requires-ownership",
+  SecurityEdgeConceptPrivilege = "security.edge-concept-privilege",
+  SecurityEdgeEndpointsConflict = "security.edge-endpoints-conflict",
   // Annotation phase.
   AnnotationDuplicate = "annotation.duplicate",
   AnnotationUnknownParam = "annotation.unknown-param",

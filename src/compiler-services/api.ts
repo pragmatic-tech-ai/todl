@@ -11,6 +11,7 @@ import type { Diagnostic } from "./diagnostics/diagnostic.js";
 import { preludeNames } from "./stdlib/prelude.js";
 import { CompileFoundation, FoundationKind } from "./stdlib/compile-foundation.js";
 import { ConnectorDeclaration } from "./connectors/connector-declaration.js";
+import { SecurityValidator } from "./security/security-validator.js";
 
 /**
  * Load the sources and validate the result; every diagnostic is spanned. The
@@ -89,12 +90,16 @@ export function checkAgainst(
   foundation: FoundationKind = FoundationKind.PreludeAndSystem,
 ): { model: Repository; diagnostics: Diagnostic[]; provenance: Map<string, string>; redeclaredConnectors: ReadonlySet<string> }
 {
-  const model = new Repository(mergeBases([...CompileFoundation.Documents(foundation), ...bases]));
+  const seed = mergeBases([...CompileFoundation.Documents(foundation), ...bases]);
+  // The merged foundation and bases: everything here is a dependency's, not the package's own.
+  const seededIds: ReadonlySet<string> = new Set(seed.allNodes().map((n) => n.id));
+  const model = new Repository(seed);
   const provenance = new Map<string, string>();
   const redeclaredConnectors = new Set<string>();
   const diagnostics = [...ConnectorDeclaration.BaseConflicts(bases), ...loadInto(model, sources, preludeNames(), idGenerator, provenance, policy, redeclaredConnectors)];
   const resolutionDiagnostics = new ResolutionPass(model, provenance).Resolve();
-  return { model, diagnostics: [...diagnostics, ...resolutionDiagnostics, ...validate(model)], provenance, redeclaredConnectors };
+  const securityDiagnostics = new SecurityValidator(model, seededIds).Validate();
+  return { model, diagnostics: [...diagnostics, ...resolutionDiagnostics, ...validate(model), ...securityDiagnostics], provenance, redeclaredConnectors };
 }
 
 /**
