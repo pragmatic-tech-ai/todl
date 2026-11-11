@@ -78,6 +78,38 @@ export enum DiagnosticCode
   ConstructorOutOfScope = "constructor.out-of-scope",
   // Prelude (default library) phase.
   PreludeNameRedeclared = "prelude.name-redeclared",
+  // Security foundation: a source redeclares a name the implicit todl.system package provides (Error).
+  SecuritySystemNameRedeclared = "security.system-name-redeclared",
+  // Package roles and base-role contributions (all Error).
+  SecurityUnknownConcept = "security.unknown-concept",
+  SecurityForeignConcept = "security.foreign-concept",
+  SecurityUnknownAction = "security.unknown-action",
+  SecurityUnknownDepth = "security.unknown-depth",
+  SecurityUnknownBaseRole = "security.unknown-base-role",
+  SecuritySystemAdministratorContribution = "security.system-administrator-contribution",
+  SecurityRoleShadowsBaseRole = "security.role-shadows-base-role",
+  SecurityDuplicateRole = "security.duplicate-role",
+  SecurityDuplicatePrivilege = "security.duplicate-privilege",
+  SecurityDepthRequiresOwnership = "security.depth-requires-ownership",
+  SecurityEdgeConceptPrivilege = "security.edge-concept-privilege",
+  SecurityEdgeEndpointsConflict = "security.edge-endpoints-conflict",
+  // Secured fields and field profiles (all Error).
+  SecuritySecuredOnAspect = "security.secured-on-aspect",
+  SecuritySecuredIdentityKey = "security.secured-identity-key",
+  SecuritySecuredMatchMember = "security.secured-match-member",
+  SecuritySecuredInDerive = "security.secured-in-derive",
+  SecurityDuplicateProfile = "security.duplicate-profile",
+  SecurityProfileUnknownField = "security.profile-unknown-field",
+  SecurityProfileFieldNotSecured = "security.profile-field-not-secured",
+  SecurityUnknownProfileRight = "security.unknown-profile-right",
+  SecurityWriteWithoutRead = "security.write-without-read",
+  // System ownership fields of owned concepts (all Error).
+  SecuritySystemFieldDeclared = "security.system-field-declared",
+  SecuritySystemFieldDerived = "security.system-field-derived",
+  SecuritySystemFieldAnnotated = "security.system-field-annotated",
+  SecuritySystemFieldWritten = "security.system-field-written",
+  SecurityOwnedEdgeConcept = "security.owned-edge-concept",
+  SecurityExternalConcept = "security.external-concept",
   // Annotation phase.
   AnnotationDuplicate = "annotation.duplicate",
   AnnotationUnknownParam = "annotation.unknown-param",
@@ -97,9 +129,6 @@ export enum DiagnosticCode
   MatchUnsupportedRule = "match.unsupported-rule",
   MergeUnknownConcept = "merge.unknown-concept",
   MergeUnknownField = "merge.unknown-field",
-  PolicyUnknownConcept = "policy.unknown-concept",
-  PolicyUnknownField = "policy.unknown-field",
-  PolicyUnsupportedRule = "policy.unsupported-rule",
   // External-data connectors: `populate` must name a real concept, real members, one
   // population per concept per model, and a resolvable connector.
   ConnectorUnknownConcept = "connector.unknown-concept",

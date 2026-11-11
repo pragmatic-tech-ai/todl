@@ -24,6 +24,8 @@ export interface IExternalCatalog
     readonly Description: ISchemaDescription;
     /** The concepts served by an external connector. */
     readonly External: ReadonlySet<string>;
+    /** The external bindings the description kept, in its order (EnvironmentSecurity rejects a secured one). */
+    readonly ExternalBindings: readonly IExternalBinding[];
     /** One plan per external connector the description binds, sorted by Name. */
     readonly Connectors: readonly IExternalConnectorPlan[];
     /** Public ids and keys over the described external bindings. */
@@ -76,6 +78,7 @@ export class ExternalCatalogDescriber
         return {
             Description: description,
             External: new Set(external.map((b) => b.Binding.Concept)),
+            ExternalBindings: external,
             Connectors: ExternalCatalogDescriber.Connectors(external, merged.Specs),
             Identity: new ExternalIdentity(description, external),
             Diagnostics: described.Diagnostics,

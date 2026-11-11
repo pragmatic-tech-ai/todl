@@ -6,6 +6,7 @@
 
 import { Repository } from "../compiler-services/model/model.js";
 import { toJSON } from "../compiler-services/emit/json.js";
+import { CompileFoundation, FoundationKind } from "../compiler-services/stdlib/compile-foundation.js";
 import type { NodeId } from "../compiler-services/model/graph.js";
 import { ApplicationModelData } from "./application-model-data.js";
 import { generateReadClient } from "./read-client.js";
@@ -36,7 +37,9 @@ export class ModelPackageGenerator
         const registryClass = options.registryClassName ?? ModelPackageGenerator.DefaultRegistryClassName;
         const accessorClass = pascalCase(options.name);
 
-        const { root: rootId, shards } = ApplicationModelData.Strict(toJSON(repo));
+        const document = toJSON(repo);
+        const unused = CompileFoundation.UnusedSystemIds(FoundationKind.PreludeAndSystem, document);
+        const { root: rootId, shards } = ApplicationModelData.Strict(CompileFoundation.WithoutUnusedSystem(FoundationKind.PreludeAndSystem, document, unused));
         const models = [...shards.keys()].sort();
 
         const plans = new Map<NodeId, ModelConnectorPlan>();
@@ -50,7 +53,7 @@ export class ModelPackageGenerator
         }
 
         const header = ModelPackageGenerator.EmitHeader(runtimeImport, plans.size > 0, plans.size < models.length);
-        const body = generateReadClient(repo, { name: options.name, importSpecifier: runtimeImport, omitHeader: true });
+        const body = generateReadClient(repo, { name: options.name, importSpecifier: runtimeImport, omitHeader: true, unusedSystemIds: unused });
         const shardsCode = models
             .map((m) => `const ${ModelPackageGenerator.SlugFor(m)}: TodlDocument = JSON.parse(${JSON.stringify(JSON.stringify(shards.get(m)))});`)
             .join("\n");

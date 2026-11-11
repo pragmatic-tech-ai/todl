@@ -1,5 +1,5 @@
 // GENERATED from system.todl by scripts/gen-system-package.mts — do not edit by hand.
-import type { PackageDocument } from '../../publish/publish.js';
+import type { PackageDocument } from '../../../publish/publish.js';
 
 /** The compiled todl.system@1.0.0 package document (own-only; the prelude is implicit). */
 export class SystemPackageDocument
@@ -7,6 +7,31 @@ export class SystemPackageDocument
     // The model.json shape: enum members are their serialized string values, hence the cast.
     public static readonly Document: PackageDocument = {
         "nodes": [
+            {
+                "id": "todl.system.Owned",
+                "tier": "Ontology",
+                "type": null,
+                "metaKind": "aspect",
+                "namespace": "todl.system",
+                "localId": null,
+                "isClass": false,
+                "class": null,
+                "storageId": null,
+                "canonicalId": null,
+                "fields": [
+                    {
+                        "name": "owner",
+                        "type": "string",
+                        "cardinality": 1
+                    },
+                    {
+                        "name": "owningBusinessUnit",
+                        "type": "string",
+                        "cardinality": 1
+                    }
+                ],
+                "attrs": {}
+            },
             {
                 "id": "todl.system.ShareGrant",
                 "tier": "Ontology",

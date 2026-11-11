@@ -29,6 +29,8 @@ interface INodeState
 /** A shop model in a memory workspace, compiled through the package pipeline into an engine over the file connector. */
 class DevLoopFx
 {
+    public static readonly RetiredPolicyNames: readonly string[] = ['PolicyScopeCompiler', 'PolicyDiagnosticCode'];
+    public static readonly SecurityNames: readonly string[] = ['EnvironmentSecurity', 'SystemFieldGuard', 'OwnershipAssignment', 'SystemFirstPackageSource'];
     public static readonly Model = 'shop.p';
     public static readonly Namespace = 'shop';
     public static readonly Version = '1.0.0';
@@ -375,6 +377,19 @@ describe('dev loop end to end', () =>
         finally
         {
             await engine.dispose();
+        }
+    });
+
+    test('the engine bridge no longer exports the tier-2 policy compiler', async () =>
+    {
+        const keys = Object.keys(await import('../index.js'));
+        for (const name of DevLoopFx.RetiredPolicyNames)
+        {
+            assert.ok(!keys.includes(name), name);
+        }
+        for (const name of DevLoopFx.SecurityNames)
+        {
+            assert.ok(keys.includes(name), name);
         }
     });
 });

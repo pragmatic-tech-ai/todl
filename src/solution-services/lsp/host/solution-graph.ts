@@ -1,7 +1,8 @@
 import { Signal, type IStorage } from '@pragmatic-tech-ai/todl-runtime';
 import { mergeBases } from '../../../compiler-services/api.js';
 import { loadInto } from '../../../compiler-services/parse/loader.js';
-import { preludeDocument, preludeNames } from '../../../compiler-services/stdlib/prelude.js';
+import { preludeNames } from '../../../compiler-services/stdlib/prelude.js';
+import { CompileFoundation, FoundationKind } from '../../../compiler-services/stdlib/compile-foundation.js';
 import { validate } from '../../../compiler-services/validate/validate.js';
 import { Repository } from '../../../compiler-services/model/model.js';
 import { MetaKind } from '../../../compiler-services/model/kinds.js';
@@ -91,11 +92,11 @@ export class SolutionGraph
 
     public readonly Changed: Signal<SolutionGraphChange> = new Signal<SolutionGraphChange>();
 
-    // A fresh, empty state whose model is prelude + the given published bases merged once.
+    // A fresh, empty state whose model is the foundation (prelude + todl.system) + the given published bases merged once.
     private static FreshState(bases: readonly TodlDocument[] = []): GraphState
     {
         return {
-            model: new Repository(mergeBases([preludeDocument(), ...bases])),
+            model: new Repository(mergeBases([...CompileFoundation.Documents(FoundationKind.PreludeAndSystem), ...bases])),
             provenance: new Map(),
             memberOf: new Map(),
             originOf: new Map(),

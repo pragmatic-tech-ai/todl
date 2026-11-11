@@ -5,10 +5,12 @@ import { WriteAtomicity, WriteConcurrency } from '../../../model-data/connector-
 import { EngineBridgeError, EngineBridgeErrorCode } from '../../EngineBridgeError.js';
 import type { IExternalBinding } from '../../external/ExternalBinding.js';
 import { ExternalIdentity } from '../../external/ExternalIdentity.js';
+import type { IPrincipalFacts } from '../../PrincipalFacts.js';
 import { EnvironmentNodePlacement } from '../EnvironmentNodePlacement.js';
 
 class PlacementFixture
 {
+    public static readonly Principal: IPrincipalFacts = { Id: 'u-fixture', HomeBusinessUnitId: 'bu-fixture' };
     public static Prop(name: string, type: ValueType): MemberInput
     {
         return { Name: name, Kind: MemberKind.Property, Type: type, Nullable: true };
@@ -42,7 +44,7 @@ class PlacementFixture
     public static Placement(bindings: IExternalBinding[]): EnvironmentNodePlacement
     {
         const identity = new ExternalIdentity(PlacementFixture.Description(), bindings);
-        return new EnvironmentNodePlacement(identity, new Map([['crm.Team', 'crm-pkg']]), () => 'u1');
+        return new EnvironmentNodePlacement(identity, new Map([['crm.Team', 'crm-pkg']]), new Set(), PlacementFixture.Principal, () => 'u1');
     }
 }
 

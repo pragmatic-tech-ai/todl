@@ -77,6 +77,8 @@ export interface FieldDecl
   name: string;
   type: NodeId;
   cardinality: Cardinality;
+  /** True when the field is field-level secured; absent (never `false`) otherwise. */
+  secured?: boolean;
 }
 
 export interface Node

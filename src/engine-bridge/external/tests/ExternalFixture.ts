@@ -20,6 +20,7 @@ import {
 import type { IDataSourceAdapter, IDataSourceAdapterFactory, PageQuery, PageSlice } from '../../../model-data/data-source-adapter.js';
 import { InMemoryAdapter } from '../../../model-data/tests/fakes.js';
 import type { IExternalBinding, IExternalConnectorPlan } from '../ExternalBinding.js';
+import type { IPrincipalFacts } from '../../PrincipalFacts.js';
 import { ExternalIdentity } from '../ExternalIdentity.js';
 
 /**
@@ -159,6 +160,7 @@ export class RecordingAdapterFactory implements IDataSourceAdapterFactory
  */
 export class ExternalFixture
 {
+    public static readonly Principal: IPrincipalFacts = { Id: 'u-fixture', HomeBusinessUnitId: 'bu-fixture' };
     public static readonly Model = 'crm';
     public static readonly Connector = 'crm';
     public static readonly Source = 'customers';

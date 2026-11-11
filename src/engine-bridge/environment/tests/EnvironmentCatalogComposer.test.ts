@@ -9,6 +9,7 @@ import { StoragePackageSource } from '../../../solution-services/package-manager
 import { DataSourceConnector } from '../../external/DataSourceConnector.js';
 import { RecordingAdapter } from '../../external/tests/ExternalFixture.js';
 import { SystemNames } from '../../system/SystemNames.js';
+import type { IPrincipalFacts } from '../../PrincipalFacts.js';
 import { EngineFixture } from '../../tests/EngineFixture.js';
 import { TodlNames } from '../../TodlNames.js';
 import { ConnectorPlanMerge } from '../ConnectorPlanMerge.js';
@@ -44,6 +45,7 @@ class CompiledOnlyStorage extends FakeStorage
 /** Packages compiled in the test and published as `<id>/<version>/model.json` (only) into a storage. */
 class ComposeFx
 {
+    public static readonly Principal: IPrincipalFacts = { Id: 'u-fixture', HomeBusinessUnitId: 'bu-fixture' };
     public static readonly Version = '1.0.0';
     public static readonly AppA = 'app-a';
     public static readonly AppB = 'app-b';
@@ -471,7 +473,7 @@ describe('EnvironmentCatalogComposer', () =>
             const external = await cypher.Execute(AccessScope.System, 'MATCH (c:crm.Customer) RETURN c.name');
             assert.deepEqual(ComposeFx.Scalars(external.Rows), [ComposeFx.CustomerName]);
             // A create is placed by HomeModels: an engine node owned by the package that declares its concept.
-            const placement = new EnvironmentNodePlacement(catalog.Identity, catalog.HomeModels, () => ComposeFx.NewOrder);
+            const placement = new EnvironmentNodePlacement(catalog.Identity, catalog.HomeModels, new Set(), ComposeFx.Principal, () => ComposeFx.NewOrder);
             await cypher.Execute(AccessScope.System, "CREATE (:shopa.Order {total: '9'})", { Placement: placement });
             const reader = await engine.BeginRead(AccessScope.System);
             try

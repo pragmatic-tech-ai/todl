@@ -1,13 +1,10 @@
-import type { Scalar } from '../manifest/logical.js';
-
 /**
- * What a policy may ask about the acting principal: named facts (claims, groups, ...). TODL-declared and
- * identity-free; the host adapts its own principal to this shape. An absent fact reads as undefined.
+ * The acting principal as the engine bridge sees it: identity-free; the host adapts its own principal to this shape.
  */
 export interface IPrincipalFacts
 {
-    /** The principal's stable id (for diagnostics and caching; policies do not read it). */
+    /** The acting principal's id (a user id or the environment's system principal id, C7). */
     readonly Id: string;
-    /** The fact called `name`: a scalar, a list of scalars (e.g. groups), or undefined when absent. */
-    Get(name: string): Scalar | readonly Scalar[] | undefined;
+    /** The principal's home business unit id (C3: owningBusinessUnit on create). */
+    readonly HomeBusinessUnitId: string;
 }

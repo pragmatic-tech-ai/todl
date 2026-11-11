@@ -15,7 +15,7 @@ import { Repository, type FieldSchema } from "../compiler-services/model/model.j
 import { type Entity } from "../compiler-services/model/entity.js";
 import { toJSON, fromJSON, type TodlDocument } from "../compiler-services/emit/json.js";
 import { checkAgainst } from "../compiler-services/api.js";
-import { preludeDocument } from "../compiler-services/stdlib/prelude.js";
+import { CompileFoundation, FoundationKind } from "../compiler-services/stdlib/compile-foundation.js";
 import { collectOperators, deriveBindings, emitModelTodl } from "../compiler-services/emit/todl.js";
 import type { Diagnostic } from "../compiler-services/diagnostics/diagnostic.js";
 import { ModelBlockSplicer, SourceLayout } from "./source-layout.js";
@@ -75,7 +75,7 @@ export class ModelDraft
   private blockConforms = new Map<string, Map<string, string>>();
 
   private constructor(
-    /** The frozen bases as documents: [prelude, ...bases]. */
+    /** The frozen bases as documents: [...CompileFoundation.Documents(PreludeAndSystem), ...bases]. */
     private readonly baseDocs: readonly TodlDocument[],
     readonly namespace: string,
   )
@@ -86,7 +86,7 @@ export class ModelDraft
   /** Open an empty draft over the given frozen bases (meta-model + libraries). */
   static on(bases: readonly Repository[], opts: { namespace: string }): ModelDraft
   {
-    return new ModelDraft([preludeDocument(), ...bases.map((b) => toJSON(b))], opts.namespace);
+    return new ModelDraft([...CompileFoundation.Documents(FoundationKind.PreludeAndSystem), ...bases.map((b) => toJSON(b))], opts.namespace);
   }
 
   /** Reopen a saved `.todl` model as an editable draft: compile it against the
@@ -107,7 +107,7 @@ export class ModelDraft
     opts: ModelDraftOptions,
   ): ModelDraft
   {
-    const baseDocs = [preludeDocument(), ...bases.map((b) => toJSON(b))];
+    const baseDocs = [...CompileFoundation.Documents(FoundationKind.PreludeAndSystem), ...bases.map((b) => toJSON(b))];
     const baseIds = new Set(baseDocs.flatMap((d) => d.nodes.map((n) => n.id)));
     const result = checkAgainst([...baseDocs], sources.map((s) => ({ uri: s.uri, text: s.text })));
     const compiled = toJSON(result.model);

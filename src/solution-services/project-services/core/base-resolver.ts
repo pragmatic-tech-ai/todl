@@ -1,5 +1,6 @@
 import { PackageKind, type PackageRef } from '../../../publish/publish.js'
 import { type TodlDocument } from '../../../compiler-services/emit/json.js'
+import { CompileFoundation } from '../../../compiler-services/stdlib/compile-foundation.js'
 import { type ProjectBaseModelBindings } from './base-binding.js'
 import { type IPackageSource, type SourcedPackage } from '../../todl-build-system/package-source.js'
 
@@ -51,6 +52,8 @@ export class RecursiveProjectReferencesResolver
             const key = `${ref.kind}:${ref.id}@${ref.version}`
             if (visited.has(key)) continue
             visited.add(key)
+            // todl.system is seeded into every compile by the implicit foundation; there is nothing to fetch.
+            if (CompileFoundation.ProvidesDependency(ref.id)) continue
 
             const pkg = await source.TryGet(ref)
             if (pkg === undefined)
