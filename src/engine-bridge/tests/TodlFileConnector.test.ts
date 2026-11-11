@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
     AccessScope,
     ConnectorChangeSet,
+    ConnectorContext,
     ConnectorError,
     Cypher,
     DateTimeValue,
@@ -136,7 +137,7 @@ class ConnectorFx
 
     public static async Applied(connector: TodlFileConnector, changes: readonly ConnectorChange[]): Promise<IConnectorTransaction>
     {
-        const txn = await connector.Begin();
+        const txn = await connector.Begin(ConnectorContext.Anonymous);
         await txn.Apply(new ConnectorChangeSet(changes));
         return txn;
     }
@@ -277,7 +278,7 @@ describe('TodlFileConnector', () =>
         const connector = new TodlFileConnector(ConnectorFx.Workspace());
         for (const id of ['other.w9', 'w9', 'shop.', 'shop.a.b'])
         {
-            const txn = await connector.Begin();
+            const txn = await connector.Begin(ConnectorContext.Anonymous);
             ConnectorFx.AssertBridge(await ConnectorFx.Rejection(txn.Apply(new ConnectorChangeSet([ConnectorFx.Create(id, ConnectorFx.Widget)]))), EngineBridgeErrorCode.ForeignId);
             await txn.Revert();
         }
@@ -297,7 +298,7 @@ describe('TodlFileConnector', () =>
         ];
         for (const [member, value] of values)
         {
-            const txn = await connector.Begin();
+            const txn = await connector.Begin(ConnectorContext.Anonymous);
             ConnectorFx.AssertBridge(await ConnectorFx.Rejection(txn.Apply(new ConnectorChangeSet([ConnectorFx.Set(ConnectorFx.W0, member, value)]))), EngineBridgeErrorCode.UnsupportedValue);
             await txn.Revert();
         }
@@ -307,7 +308,7 @@ describe('TodlFileConnector', () =>
     {
         const workspace = ConnectorFx.Workspace();
         const connector = new TodlFileConnector(workspace);
-        const txn = await connector.Begin();
+        const txn = await connector.Begin(ConnectorContext.Anonymous);
         const change = ConnectorFx.Set('lib.x', ConnectorFx.Name, 'n', ConnectorFx.Widget, 'lib.p');
         ConnectorFx.AssertBridge(await ConnectorFx.Rejection(txn.Apply(new ConnectorChangeSet([change]))), EngineBridgeErrorCode.NotEditable);
         await txn.Revert();
@@ -322,7 +323,7 @@ describe('TodlFileConnector', () =>
         ];
         for (const write of writes)
         {
-            const unowned = await connector.Begin();
+            const unowned = await connector.Begin(ConnectorContext.Anonymous);
             ConnectorFx.AssertBridge(await ConnectorFx.Rejection(unowned.Apply(new ConnectorChangeSet([write]))), EngineBridgeErrorCode.NotEditable);
             await unowned.Revert();
         }
@@ -655,7 +656,7 @@ describe('TodlFileConnector refusals and routing', () =>
     {
         const workspace = RefusalFx.ClassedWorkspace();
         const connector = new TodlFileConnector(workspace);
-        const refused = await connector.Begin();
+        const refused = await connector.Begin(ConnectorContext.Anonymous);
         const error = ConnectorFx.AssertBridge(await ConnectorFx.Rejection(refused.Apply(new ConnectorChangeSet([ConnectorFx.Set(RefusalFx.W9, ConnectorFx.Name, null)]))), EngineBridgeErrorCode.UnsupportedValue);
         assert.ok(error.message.includes(ConnectorFx.Name) && error.message.includes(RefusalFx.W9), error.message);
         await refused.Revert();
@@ -675,7 +676,7 @@ describe('TodlFileConnector refusals and routing', () =>
         ];
         for (const change of changes)
         {
-            const txn = await connector.Begin();
+            const txn = await connector.Begin(ConnectorContext.Anonymous);
             ConnectorFx.AssertBridge(await ConnectorFx.Rejection(txn.Apply(new ConnectorChangeSet([change]))), EngineBridgeErrorCode.UnsupportedValue);
             await txn.Revert();
         }
@@ -695,7 +696,7 @@ describe('TodlFileConnector refusals and routing', () =>
         const connector = new TodlFileConnector(ConnectorFx.Workspace());
         for (const from of [ConnectorFx.Missing, ConnectorFx.Big])
         {
-            const txn = await connector.Begin();
+            const txn = await connector.Begin(ConnectorContext.Anonymous);
             const error = ConnectorFx.AssertBridge(await ConnectorFx.Rejection(txn.Apply(new ConnectorChangeSet([ConnectorFx.Unlink(from, ConnectorFx.Parts, ConnectorFx.W1)]))), EngineBridgeErrorCode.NotEditable);
             assert.ok(!error.message.includes(from) && !error.message.includes(ConnectorFx.W1), error.message);
             await txn.Revert();

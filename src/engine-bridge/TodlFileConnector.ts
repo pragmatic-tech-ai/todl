@@ -1,5 +1,6 @@
 import {
     WriteOp,
+    type ConnectorContext,
     type CellValue,
     type ConnectorChange,
     type ConnectorChangeSet,
@@ -693,7 +694,8 @@ export class TodlFileConnector implements IGraphConnector
     {
     }
 
-    public Begin(): Promise<IConnectorTransaction>
+    /** The dev-loop file connector has no external source, so the context is not forwarded anywhere. */
+    public Begin(_context: ConnectorContext): Promise<IConnectorTransaction>
     {
         return Promise.resolve(new TodlFileTransaction(this.workspace, this.locks));
     }

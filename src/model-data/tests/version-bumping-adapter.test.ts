@@ -7,21 +7,25 @@ import { InMemoryAdapterFactory } from "./fakes.js";
 
 class BumpFixture
 {
+    public static readonly Caller = "alice";
+    public static readonly Source = "order";
+    public static readonly IdKey = "id";
+
     public static async Adapter(): Promise<VersionBumpingAdapter>
     {
         const factory = new InMemoryAdapterFactory(DataSourceKind.Sql);
-        factory.Adapter.Seed("order", [{ id: "O1", label: "a", ver: 7 }, { id: "O2", label: "b", ver: "etag-1" }]);
+        factory.Adapter.Seed(BumpFixture.Source, [{ id: "O1", label: "a", ver: 7 }, { id: "O2", label: "b", ver: "etag-1" }]);
         return new VersionBumpingAdapter(await factory.Open({ Kind: DataSourceKind.Sql, Config: {} } as ResolvedConnection));
     }
 
     public static Batch(ops: WriteBatch["Operations"], concurrency = WriteConcurrency.Optimistic): WriteBatch
     {
-        return { Source: "order", IdKey: "id", Operations: ops, Concurrency: concurrency, Atomicity: WriteAtomicity.Sequential, VersionField: "ver" };
+        return { Source: BumpFixture.Source, IdKey: BumpFixture.IdKey, Operations: ops, Concurrency: concurrency, Atomicity: WriteAtomicity.Sequential, VersionField: "ver" };
     }
 
     public static async Row(adapter: VersionBumpingAdapter, id: string): Promise<Record<string, unknown> | undefined>
     {
-        return (await adapter.Query({ Source: "order", Fields: ["id", "label", "ver"] })).find(r => r["id"] === id);
+        return (await adapter.Query({ Source: BumpFixture.Source, Fields: ["id", "label", "ver"] })).find(r => r[BumpFixture.IdKey] === id);
     }
 }
 
@@ -93,12 +97,12 @@ test("the bumped Apply keeps its context", async () =>
         Apply: async (_batch, context) => { seen.push(context); return { Applied: 1, Failures: [] }; },
         Dispose: async () => {},
     };
-    const caller: IDataSourceContext = { Key: "alice" };
+    const caller: IDataSourceContext = { Key: BumpFixture.Caller };
     const adapter = new VersionBumpingAdapter(inner);
     const result = await adapter.Apply(BumpFixture.Batch([{ Kind: WriteOperationKind.Upsert, Key: "O1", Fields: { label: "x" }, Version: 7 }]), caller);
     assert.deepEqual(result.Versions, [{ Key: "O1", Version: 8 }]);
-    await adapter.Query({ Source: "order", Fields: ["id"] }, caller);
-    await adapter.QueryPage!({ Source: "order", Fields: ["id"] }, { Limit: 1 }, caller);
+    await adapter.Query({ Source: BumpFixture.Source, Fields: [BumpFixture.IdKey] }, caller);
+    await adapter.QueryPage!({ Source: BumpFixture.Source, Fields: [BumpFixture.IdKey] }, { Limit: 1 }, caller);
     assert.equal(seen.length, 3);
     assert.ok(seen.every((c) => c === caller));
 });

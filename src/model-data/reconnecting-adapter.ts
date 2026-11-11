@@ -5,7 +5,9 @@ import type { ConnectionRetryPolicy, IReconnectObserver } from "./connection-rec
 
 /** Wraps a data-source adapter so transient failures retry with backoff and dead/auth failures
  *  evict-and-reopen (re-resolving credentials via the reopen closure). Driver-agnostic: it asks the
- *  inner adapter to classify each thrown error (absent classifier -> Permanent, i.e. no retry). */
+ *  inner adapter to classify each thrown error (absent classifier -> Permanent, i.e. no retry).
+ *  Every attempt of Query, QueryPage and Apply, retries and reopened inners included, runs on the
+ *  caller's context. */
 export class ReconnectingAdapter implements IDataSourceAdapter
 {
     private static readonly PagingUnsupportedMessage = "inner adapter does not support paged reads";
@@ -52,7 +54,6 @@ export class ReconnectingAdapter implements IDataSourceAdapter
         return this.inner.CanPage ?? false;
     }
 
-    // Every attempt, retries and reopened inners included, runs on the caller's context.
     public Query(request: QueryRequest, context?: IDataSourceContext): Promise<readonly ExternalRecord[]>
     {
         return this.Run((adapter) => adapter.Query(request, context));
