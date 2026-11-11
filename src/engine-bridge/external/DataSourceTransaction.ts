@@ -16,6 +16,7 @@ import { EngineBridgeError, EngineBridgeErrorCode } from '../EngineBridgeError.j
 import { ChangeBatcher, type IPendingBatch } from './ChangeBatcher.js';
 import type { IExternalBinding } from './ExternalBinding.js';
 import type { ExternalIdentity } from './ExternalIdentity.js';
+import { ExternalVersionConflict } from './ExternalVersionConflict.js';
 import { ExternalWriteError } from './ExternalWriteError.js';
 
 /** Consecutive compensating operations of one concurrency, sent as one sequential batch. */
@@ -57,9 +58,14 @@ interface IAttemptedBatch
  * before-image holds is a conflict: the batch is not written and Commit throws ExternalWriteError (ExternalWriteFailed)
  * with a Conflict failure per such key, so a create never silently updates a row the before-image saw. The check covers
  * the before-image only: a row another writer inserts between that read and adapter.Apply is still upserted (the same
- * commit-window limit as Q1). Otherwise it sets each operation's Version from the before-image for an Optimistic
- * binding (owner question Q1: this guards the commit window only), then calls adapter.Apply. Per-operation failures
- * throw ExternalWriteError (ExternalWriteFailed) and stop the commit. An error raised by the transaction itself
+ * commit-window limit). For an Optimistic binding with a version field it then runs the version pre-check (rulings
+ * R119 V2, R122 G1): an operation whose change carried an ExpectedVersion (the version the transaction read) conflicts
+ * when its before-image row is gone or carries another version, and the batch throws ExternalVersionConflict (an engine
+ * ConflictError) without calling adapter.Apply. Each operation, deletes included, is then guarded with its expected
+ * version, else with the before-image's (V3: a write with nothing read cannot be stale), and adapter.Apply is called. A
+ * Conflict failure the adapter reports for an Optimistic batch (the source's guard caught a change after the pre-check)
+ * is an ExternalVersionConflict too; other per-operation failures throw ExternalWriteError (ExternalWriteFailed). Either
+ * stops the commit. An error raised by the transaction itself
  * (e.g., a constraint checked only at COMMIT, a serialization failure, a lost connection) and the adapters'
  * identifier guards propagate as the adapter's error (the engine reports them as ConnectorError).
  *
@@ -78,9 +84,8 @@ interface IAttemptedBatch
  * Without a reported version (a source that reports none, an explicitly written version member, an adapter call that
  * threw) the before-image is restored last-write-wins, version field included.
  *
- * Superseded design note: spec §11.2 (engine 0.3.0 / 0.4.0 plans) replaces the commit-window guard (Q1), the
- * no-source-assigned-keys rule (Q3) and the deferred-to-commit writes described here with read-time optimistic locking
- * and immediate external writes that take source-assigned keys.
+ * Superseded design note: spec §11.2 (engine 0.4.0 plan) replaces the no-source-assigned-keys rule (Q3) and the
+ * deferred-to-commit writes described here with immediate external writes that take source-assigned keys.
  */
 export class DataSourceTransaction implements IConnectorTransaction
 {
@@ -88,6 +93,9 @@ export class DataSourceTransaction implements IConnectorTransaction
     private static readonly ErrNoTransact = 'A transactional binding needs an adapter that can transact: ';
     private static readonly ErrWrite = 'External write failed on ';
     private static readonly ErrExists = 'A created external row already exists in the source';
+    private static readonly ErrStale = 'External row changed since it was read on ';
+    private static readonly ErrStaleRow = 'The row changed since this transaction read it';
+    private static readonly ErrGoneRow = 'The row was removed since this transaction read it';
     private static readonly ErrCompensate = 'Compensating an external write failed on ';
     private static readonly SourceSeparator = '.';
     private static readonly CountOpen = ' (';
@@ -156,7 +164,12 @@ export class DataSourceTransaction implements IConnectorTransaction
         {
             throw DataSourceTransaction.WriteFailed(binding, existing);
         }
-        const batch = DataSourceTransaction.Guarded(binding, pending.Batch, before);
+        const stale = DataSourceTransaction.Stale(pending, before);
+        if (stale.length > 0)
+        {
+            throw DataSourceTransaction.VersionConflict(binding, stale);
+        }
+        const batch = DataSourceTransaction.Guarded(binding, pending, before);
         const transacted = binding.Binding.Atomicity === WriteAtomicity.Transactional && this.adapter.CanTransact === true;
         const attempt: IAttemptedBatch = { Binding: binding, Before: before, Applied: batch.Operations, Versions: new Map() };
         this.attempted.push(attempt);
@@ -179,8 +192,58 @@ export class DataSourceTransaction implements IConnectorTransaction
         {
             const failed = new Set(failures.map(f => DataSourceTransaction.KeyText(f.Key)));
             attempt.Applied = transacted ? [] : batch.Operations.filter(o => !failed.has(DataSourceTransaction.KeyText(o.Key)));
-            throw DataSourceTransaction.WriteFailed(binding, failures);
+            throw DataSourceTransaction.Optimistic(binding) && failures.some(f => f.Kind === WriteFailureKind.Conflict)
+                ? DataSourceTransaction.VersionConflict(binding, failures)
+                : DataSourceTransaction.WriteFailed(binding, failures);
         }
+    }
+
+    private static VersionConflict(binding: IExternalBinding, failures: readonly WriteFailure[]): ExternalVersionConflict
+    {
+        return new ExternalVersionConflict(
+            DataSourceTransaction.ErrStale + DataSourceTransaction.Where(binding) + DataSourceTransaction.CountOpen + failures.length + DataSourceTransaction.CountClose,
+            binding,
+            failures);
+    }
+
+    /** True for an Optimistic binding with a version field: its writes are version-guarded. */
+    private static Optimistic(binding: IExternalBinding): boolean
+    {
+        return binding.Binding.Concurrency === WriteConcurrency.Optimistic && binding.Binding.VersionField !== undefined;
+    }
+
+    /**
+     * The version pre-check of an Optimistic batch (rulings R119 V2, R122 G1): a Conflict failure for each operation with
+     * an expected version whose before-image row is missing or carries another version. Versions compare as text, as keys
+     * do, so a source answering `'4'` for 4 still matches.
+     */
+    private static Stale(pending: IPendingBatch, before: ReadonlyMap<string, ExternalRecord>): WriteFailure[]
+    {
+        if (!DataSourceTransaction.Optimistic(pending.Binding))
+        {
+            return [];
+        }
+        const versionField = pending.Binding.Binding.VersionField!;
+        const failures: WriteFailure[] = [];
+        for (const op of pending.Batch.Operations)
+        {
+            const expected = pending.Expected.get(op);
+            if (expected === undefined)
+            {
+                continue;
+            }
+            const row = before.get(DataSourceTransaction.KeyText(op.Key));
+            const current = row === undefined ? undefined : row[versionField] ?? null;
+            if (current === undefined)
+            {
+                failures.push({ Key: op.Key, Kind: WriteFailureKind.Conflict, Reason: DataSourceTransaction.ErrGoneRow });
+            }
+            else if (current === null || String(current) !== String(expected))
+            {
+                failures.push({ Key: op.Key, Kind: WriteFailureKind.Conflict, Reason: DataSourceTransaction.ErrStaleRow });
+            }
+        }
+        return failures;
     }
 
     private static WriteFailed(binding: IExternalBinding, failures: readonly WriteFailure[]): ExternalWriteError
@@ -215,16 +278,27 @@ export class DataSourceTransaction implements IConnectorTransaction
         return before;
     }
 
-    /** The batch with each operation's Version taken from its before-image, for an Optimistic binding with a version field. */
-    private static Guarded(binding: IExternalBinding, batch: WriteBatch, before: ReadonlyMap<string, ExternalRecord>): WriteBatch
+    /**
+     * The batch with each operation's Version, for an Optimistic binding with a version field: the version the
+     * transaction read (IPendingBatch.Expected, ruling R119 V2), else the before-image's (V3: nothing was read, so nothing
+     * can be stale). Deletes carry it too (R122 G1). An operation with neither (a row the before-image does not hold) is
+     * left without one.
+     */
+    private static Guarded(binding: IExternalBinding, pending: IPendingBatch, before: ReadonlyMap<string, ExternalRecord>): WriteBatch
     {
-        const versionField = binding.Binding.VersionField;
-        if (binding.Binding.Concurrency !== WriteConcurrency.Optimistic || versionField === undefined)
+        const batch = pending.Batch;
+        if (!DataSourceTransaction.Optimistic(binding))
         {
             return batch;
         }
+        const versionField = binding.Binding.VersionField!;
         const operations = batch.Operations.map(o =>
         {
+            const expected = pending.Expected.get(o);
+            if (expected !== undefined)
+            {
+                return { ...o, Version: expected };
+            }
             const row = before.get(DataSourceTransaction.KeyText(o.Key));
             return row === undefined ? o : { ...o, Version: row[versionField] ?? null };
         });

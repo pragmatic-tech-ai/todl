@@ -1,4 +1,4 @@
-import { ValueType, WriteOp, type ConnectorChange, type ConnectorChangeSet, type ILinkOp, type ISetPropertyOp, type IUnlinkOp } from '@pragmatic-tech-ai/graph';
+import { ValueType, WriteOp, type ConnectorChange, type ConnectorChangeSet, type ILinkOp, type ISetPropertyOp, type IUnlinkOp, type RowVersion } from '@pragmatic-tech-ai/graph';
 import { WriteOperationKind, type ExternalFieldValue, type WriteBatch, type WriteOperation } from '../../model-data/connector-plan.js';
 import { EngineBridgeError, EngineBridgeErrorCode } from '../EngineBridgeError.js';
 import type { IExternalBinding } from './ExternalBinding.js';
@@ -16,6 +16,11 @@ export interface IPendingBatch
      * source is a conflict (DataSourceTransaction checks them against the before-image before writing).
      */
     readonly Creates: ReadonlySet<WriteOperation>;
+    /**
+     * The version the transaction read for each operation's row (ConnectorChange.ExpectedVersion, ruling R119 V2), as the
+     * source value; an operation without one has no entry. DataSourceTransaction guards an Optimistic batch with it.
+     */
+    readonly Expected: ReadonlyMap<WriteOperation, ExternalFieldValue>;
 }
 
 /** What the merged ops on one public id amount to so far. */
@@ -35,6 +40,11 @@ class PendingWrite
     public BornHere = false;
     /** True until the first op on the id has merged. */
     public Fresh = true;
+    /**
+     * The ExpectedVersion of the first non-create change on the id: the version the transaction read for the row that
+     * existed before the set. Undefined when that change carried none, or when the set created the id first.
+     */
+    public Expected: RowVersion | undefined;
     public readonly Fields = new Map<string, ExternalFieldValue>();
 
     public constructor(public readonly Binding: IExternalBinding, public readonly StorageId: string, public readonly Key: ExternalFieldValue)
@@ -75,7 +85,8 @@ class PendingWrite
  * create after a Delete of the id nulls every mapped field it does not set); a DeleteNode makes it a Delete, and a
  * CreateNode then DeleteNode in one set cancels out; an Unlink of a mapped foreign key sets it to null, unless the set
  * already re-pointed the key at another target. There is one WriteBatch per binding, in order of first appearance, its
- * operations in order of first appearance of their ids.
+ * operations in order of first appearance of their ids. Each operation's expected version is the ExpectedVersion of the
+ * first change on its id when that change is not a create (IPendingBatch.Expected, ruling R119 V2).
  *
  * Delete then Create nulls every mapped column the set did not write, rather than keeping the deleted row's values. A
  * source that rejects that upsert per statement (a NOT NULL column among them) reports it as a per-operation failure,
@@ -124,6 +135,7 @@ export class ChangeBatcher
             if (writes.size > 0)
             {
                 const creates = new Set<WriteOperation>();
+                const expected = new Map<WriteOperation, ExternalFieldValue>();
                 const operations = [...writes.values()].map(w =>
                 {
                     const operation = w.Operation();
@@ -131,9 +143,13 @@ export class ChangeBatcher
                     {
                         creates.add(operation);
                     }
+                    if (w.Expected !== undefined)
+                    {
+                        expected.set(operation, ExternalValues.FromVersion(w.Expected));
+                    }
                     return operation;
                 });
-                batches.push({ Binding: binding, Batch: ChangeBatcher.Batch(binding, operations), Creates: creates });
+                batches.push({ Binding: binding, Batch: ChangeBatcher.Batch(binding, operations), Creates: creates, Expected: expected });
             }
         }
         return batches;
@@ -178,6 +194,10 @@ export class ChangeBatcher
         {
             write = new PendingWrite(binding, parsed.StorageId, identity.StorageKey(binding, parsed.StorageId));
             writes.set(publicId, write);
+        }
+        if (write.Fresh && change.Op !== WriteOp.CreateNode)
+        {
+            write.Expected = change.ExpectedVersion;
         }
         ChangeBatcher.MergeInto(write, writes, change, publicId, identity);
         write.Fresh = false;

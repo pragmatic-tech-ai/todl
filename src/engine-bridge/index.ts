@@ -18,6 +18,7 @@ export { DataSourceConnector } from './external/DataSourceConnector.js';
 export { DataSourceTransaction } from './external/DataSourceTransaction.js';
 export { ChangeBatcher, type IPendingBatch } from './external/ChangeBatcher.js';
 export { ExternalWriteError } from './external/ExternalWriteError.js';
+export { ExternalVersionConflict } from './external/ExternalVersionConflict.js';
 export { FetchTranslator } from './external/FetchTranslator.js';
 export { ResumeToken } from './external/ResumeToken.js';
 export { SystemPackage } from './system/SystemPackage.js';
