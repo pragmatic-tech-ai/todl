@@ -170,6 +170,10 @@ export class DataSourceTransaction implements IConnectorTransaction
             throw DataSourceTransaction.VersionConflict(binding, stale);
         }
         const batch = DataSourceTransaction.Guarded(binding, pending, before);
+        if (batch.Operations.length === 0)
+        {
+            return;
+        }
         const transacted = binding.Binding.Atomicity === WriteAtomicity.Transactional && this.adapter.CanTransact === true;
         const attempt: IAttemptedBatch = { Binding: binding, Before: before, Applied: batch.Operations, Versions: new Map() };
         this.attempted.push(attempt);
@@ -281,8 +285,9 @@ export class DataSourceTransaction implements IConnectorTransaction
     /**
      * The batch with each operation's Version, for an Optimistic binding with a version field: the version the
      * transaction read (IPendingBatch.Expected, ruling R119 V2), else the before-image's (V3: nothing was read, so nothing
-     * can be stale). Deletes carry it too (R122 G1). An operation with neither (a row the before-image does not hold) is
-     * left without one.
+     * can be stale). Deletes carry it too (R122 G1). A Delete with neither is dropped: nothing was read and the row is
+     * already gone, so there is nothing to delete or guard (sent, it would be an unretryable Conflict). Any other
+     * operation with neither (an upsert of a row the before-image does not hold) is left without one.
      */
     private static Guarded(binding: IExternalBinding, pending: IPendingBatch, before: ReadonlyMap<string, ExternalRecord>): WriteBatch
     {
@@ -292,16 +297,24 @@ export class DataSourceTransaction implements IConnectorTransaction
             return batch;
         }
         const versionField = binding.Binding.VersionField!;
-        const operations = batch.Operations.map(o =>
+        const operations: WriteOperation[] = [];
+        for (const o of batch.Operations)
         {
             const expected = pending.Expected.get(o);
+            const row = before.get(DataSourceTransaction.KeyText(o.Key));
             if (expected !== undefined)
             {
-                return { ...o, Version: expected };
+                operations.push({ ...o, Version: expected });
             }
-            const row = before.get(DataSourceTransaction.KeyText(o.Key));
-            return row === undefined ? o : { ...o, Version: row[versionField] ?? null };
-        });
+            else if (row !== undefined)
+            {
+                operations.push({ ...o, Version: row[versionField] ?? null });
+            }
+            else if (o.Kind !== WriteOperationKind.Delete)
+            {
+                operations.push(o);
+            }
+        }
         return { ...batch, Operations: operations };
     }
 
