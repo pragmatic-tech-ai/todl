@@ -93,6 +93,16 @@ export enum DiagnosticCode
   SecurityDepthRequiresOwnership = "security.depth-requires-ownership",
   SecurityEdgeConceptPrivilege = "security.edge-concept-privilege",
   SecurityEdgeEndpointsConflict = "security.edge-endpoints-conflict",
+  // Secured fields and field profiles (all Error).
+  SecuritySecuredOnAspect = "security.secured-on-aspect",
+  SecuritySecuredIdentityKey = "security.secured-identity-key",
+  SecuritySecuredMatchMember = "security.secured-match-member",
+  SecuritySecuredInDerive = "security.secured-in-derive",
+  SecurityDuplicateProfile = "security.duplicate-profile",
+  SecurityProfileUnknownField = "security.profile-unknown-field",
+  SecurityProfileFieldNotSecured = "security.profile-field-not-secured",
+  SecurityUnknownProfileRight = "security.unknown-profile-right",
+  SecurityWriteWithoutRead = "security.write-without-read",
   // Annotation phase.
   AnnotationDuplicate = "annotation.duplicate",
   AnnotationUnknownParam = "annotation.unknown-param",

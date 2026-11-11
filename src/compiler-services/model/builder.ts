@@ -79,6 +79,8 @@ export class Builder
   public static readonly RoleNameAttr = "name";
   public static readonly RolePrivilegesAttr = "privileges";
   public static readonly ContributionRoleAttr = "role";
+  public static readonly ProfileNameAttr = "name";
+  public static readonly ProfileFieldsAttr = "fields";
   /** Reserved connector-node attr keys. `config` is a JSON object of the inline
    *  NON-secret assignments (everything except kind/connection/secret). */
   public static readonly ConnectorNameAttr = "name";
@@ -271,9 +273,10 @@ export class Builder
    *  field's schema is carried on the owner node (SPEC-01 #4) — no member node,
    *  no `HasField` edge; the value lands in an instance's `attrs` (scalar) or a
    *  relationship edge (reference) at the instance tier. */
-  addField(concept: NodeId, name: string, type: NodeId, cardinality: Cardinality = Cardinality.One): this
+  addField(concept: NodeId, name: string, type: NodeId, cardinality: Cardinality = Cardinality.One, secured = false): this
   {
-    this.stagedFields.push({ concept, decl: { name, type, cardinality } });
+    // `secured` is written only when true, so unsecured fields (and existing documents) are unchanged.
+    this.stagedFields.push({ concept, decl: secured ? { name, type, cardinality, secured } : { name, type, cardinality } });
     return this;
   }
 
@@ -408,6 +411,15 @@ export class Builder
     this.stagedNodes.push(this.makeNode(id, Tier.Ontology, { metaKind: MetaKind.RoleContribution }));
     this.stagedAttrs.push({ id, name: Builder.ContributionRoleAttr, value: baseRole });
     this.stagedAttrs.push({ id, name: Builder.RolePrivilegesAttr, value: privilegesJson });
+    return this;
+  }
+
+  /** Define a field-profile node (Ontology-tier) named `name`, carrying its entries as JSON `IFieldProfileEntry[]`. */
+  DefineFieldProfile(id: NodeId, name: string, fieldsJson: string): this
+  {
+    this.stagedNodes.push(this.makeNode(id, Tier.Ontology, { metaKind: MetaKind.FieldProfile }));
+    this.stagedAttrs.push({ id, name: Builder.ProfileNameAttr, value: name });
+    this.stagedAttrs.push({ id, name: Builder.ProfileFieldsAttr, value: fieldsJson });
     return this;
   }
 

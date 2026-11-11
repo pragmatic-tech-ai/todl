@@ -83,6 +83,7 @@ import { collectDefinitions, visitReferences } from "./references.js";
 import { NodeIdQualifier } from "./node-id-qualifier.js";
 import { CompileFoundation } from "../stdlib/compile-foundation.js";
 import { SecurityLowering, type ISecurityUnit } from "../security/security-lowering.js";
+import { FieldSecurityRules } from "../security/field-security-rules.js";
 import { BaseListClassifier } from "./base-list-classifier.js";
 import { DeriveSerializer } from "./derive-serializer.js";
 import { MemberAnnotationTarget } from "./member-annotation-target.js";
@@ -748,7 +749,7 @@ export function loadInto(
     }
     for (const field of declaration.fields)
     {
-      second.addField(conceptId, field.name, field.type, field.cardinality);
+      second.addField(conceptId, field.name, field.type, field.cardinality, field.secured === true);
     }
     for (const relationship of declaration.relationships)
     {
@@ -811,6 +812,7 @@ export function loadInto(
     if (model.has(identityId) || stagedIdentities.has(identityId)) continue;
     stagedIdentities.add(identityId);
     identityBuilder.defineIdentity(identityId, conceptId, declaration.key);
+    model.recordSpan(FieldSecurityRules.KeySpanKey(identityId, declaration.key), declaration.keySpan ?? declaration.span);
     recordHome(rec, identityId);
   }
   identityBuilder.commit(undefinedIds);
@@ -875,6 +877,11 @@ export function loadInto(
           span: rule.span, node: conceptId, path: unknown,
         });
         continue;
+      }
+      for (const field of normalized)
+      {
+        const fieldSpanKey = FieldSecurityRules.KeySpanKey(`${conceptId}@match`, field);
+        if (model.spanOf(fieldSpanKey) === null) model.recordSpan(fieldSpanKey, rule.span);
       }
       const existing = matchRulesByConcept.get(conceptId);
       if (existing === undefined)
@@ -1360,6 +1367,10 @@ class TypeMemberSpanRecorder
     for (const member of [...decl.fields, ...decl.relationships])
     {
       if (member.nameSpan !== undefined) model.recordSpan(Repository.memberKey(id, member.name), member.nameSpan);
+    }
+    for (const field of decl.fields)
+    {
+      if (field.securedSpan !== undefined) model.recordSpan(FieldSecurityRules.SecuredSpanKey(id, field.name), field.securedSpan);
     }
     if (decl.kind !== DeclKind.Concept) return;
     for (const derive of decl.derives) model.recordSpan(Repository.deriveKey(id, derive.member), derive.span);
