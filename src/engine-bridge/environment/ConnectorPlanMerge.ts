@@ -21,7 +21,8 @@ export interface IMergedConnectors
  * Merges the connector plans of an environment's packages (one plan per package, `Model` the package model id).
  * Specs merge by engine name `Id ?? Name` (T2): a reserved name is ReservedConnectorName, and two specs of one name
  * that are not the same spec are ConflictingConnector. A binding links to its spec by `ConnectorId ?? Connector`;
- * one to a builtin-kind spec or to `todl-file` becomes engine storage, every other one takes its engine name (T3), and
+ * one to a builtin-kind spec or to `todl-file` is routed to `localConnector` (default engine storage, R107; a spec
+ * named like `localConnector` is ReservedConnectorName too), every other one takes its engine name (T3), and
  * one whose spec is absent is UnknownConnector (ruling P12: a binding never falls back to engine storage silently). Two
  * external bindings of different models whose public ids share one minted prefix (`Concept#Connector.Source#`) are
  * DuplicateExternalSource (T4).
@@ -43,13 +44,13 @@ export class ConnectorPlanMerge
     private readonly sources = new Map<string, string>();
     private readonly external: IExternalBinding[] = [];
 
-    private constructor(private readonly deliveries: ReadonlyMap<string, readonly string[]>)
+    private constructor(private readonly deliveries: ReadonlyMap<string, readonly string[]>, private readonly localConnector: string)
     {
     }
 
-    public static Merge(plans: readonly ModelConnectorPlan[], deliveries: ReadonlyMap<string, readonly string[]>): IMergedConnectors
+    public static Merge(plans: readonly ModelConnectorPlan[], deliveries: ReadonlyMap<string, readonly string[]>, localConnector: string = BindingTable.EngineStorage): IMergedConnectors
     {
-        const merge = new ConnectorPlanMerge(deliveries);
+        const merge = new ConnectorPlanMerge(deliveries, localConnector);
         for (const plan of plans)
         {
             for (const spec of plan.Connectors)
@@ -83,7 +84,7 @@ export class ConnectorPlanMerge
     private AddSpec(model: string, spec: ConnectorSpec): void
     {
         const name = spec.Id ?? spec.Name;
-        if (ConnectorPlanMerge.ReservedNames.has(name))
+        if (ConnectorPlanMerge.ReservedNames.has(name) || name === this.localConnector)
         {
             const deliveries = this.DeliveriesOf(model);
             throw new EnvironmentCatalogError(EnvironmentCatalogErrorCode.ReservedConnectorName, name, deliveries,
@@ -109,7 +110,7 @@ export class ConnectorPlanMerge
         const spec = this.specs.get(name)?.Spec;
         if (spec?.Kind === DataSourceKind.Builtin || (spec === undefined && name === TodlNames.FileConnector))
         {
-            return { ...binding, Connector: BindingTable.EngineStorage };
+            return { ...binding, Connector: this.localConnector };
         }
         if (spec === undefined)
         {

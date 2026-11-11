@@ -6,20 +6,19 @@ import { Builder } from '../../compiler-services/model/builder.js';
 import { MetaKind } from '../../compiler-services/model/kinds.js';
 import { Domain, type IPackageDocumentSource, type PackageRef, type PackageSource } from '../../domain/domain.js';
 import type { MetadataSnapshot } from '../../domain/metadata-snapshot.js';
-import type { ConnectorBinding, ConnectorSpec, ModelConnectorPlan } from '../../model-data/connector-plan.js';
+import type { ModelConnectorPlan } from '../../model-data/connector-plan.js';
 import { ModelShardExtractor } from '../../model-data/model-shard-extractor.js';
 import { PackageManifestBridge } from '../../solution-services/package-manager/package-manifest-bridge.js';
 import type { PackageDocument } from '../../publish/publish.js';
-import type { IExternalBinding, IExternalConnectorPlan } from '../external/ExternalBinding.js';
+import type { IExternalConnectorPlan } from '../external/ExternalBinding.js';
 import { ExternalIdentity } from '../external/ExternalIdentity.js';
 import { MessageFormat } from '../MessageFormat.js';
-import { SnapshotDescriber } from '../SnapshotDescriber.js';
 import { DescribeDiagnosticCode, type IDescribeDiagnostic } from '../SnapshotDescription.js';
 import { SystemNames } from '../system/SystemNames.js';
 import { SystemFirstPackageSource } from '../../solution-services/package-manager/system-first-package-source.js';
 import { SystemPackage } from '../../solution-services/package-manager/system-package.js';
-import { TodlNames } from '../TodlNames.js';
 import { ConnectorPlanMerge } from './ConnectorPlanMerge.js';
+import { ExternalCatalogDescriber } from './ExternalCatalogDescriber.js';
 import { DeliveryChannel, type IPackageDelivery } from './PackageDelivery.js';
 import { EnvironmentCatalogError, EnvironmentCatalogErrorCode } from './EnvironmentCatalogError.js';
 import { EnvironmentSecurity } from './EnvironmentSecurity.js';
@@ -67,14 +66,9 @@ export interface IEnvironmentCatalog
 export class EnvironmentCatalogComposer
 {
     private static readonly ConflictingMessage = 'the deliveries cannot share one environment{0}: {1}';
-    private static readonly DuplicateBindingMessage = 'package "{0}"{1} populates "{2}" from both {3} and {4}; one concept has one source per package';
-    private static readonly InvalidBindingMessage = 'package "{0}"{1} has a binding the environment cannot describe: {2}';
-    private static readonly BindingTarget = 'connector "{0}" source "{1}"';
     private static readonly ConflictingConnectorMessage = 'datasource "{0}" is declared differently by packages "{1}" and "{2}"{3}, and package "{4}" sees both';
     private static readonly ConflictingOwnConnectorMessage = 'package "{1}" declares datasource "{0}" and its dependency "{2}" declares it differently{3}';
     private static readonly SystemDelivery = SystemNames.Model;
-    private static readonly ListSeparator = ', ';
-    private static readonly KeySeparator = '#';
 
     private constructor()
     {
@@ -94,14 +88,12 @@ export class EnvironmentCatalogComposer
             documents.set(ref.model, await source.Document(ref));
         }
         const plans = packages.map((ref) => EnvironmentCatalogComposer.PlanOf(ref, documents, unified.Deliveries));
-        const merged = ConnectorPlanMerge.Merge(plans, unified.Deliveries);
-        EnvironmentCatalogComposer.RejectDuplicateBindings(merged.Plans, unified.Deliveries);
-        const described = SnapshotDescriber.Describe(domain.Snapshot, {
+        const catalog = ExternalCatalogDescriber.Describe(domain.Snapshot, plans, {
             DefaultConnector: BindingTable.EngineStorage,
-            ConnectorPlans: merged.Plans,
-            EmitExternalBindings: true,
+            LocalConnector: BindingTable.EngineStorage,
+            Deliveries: unified.Deliveries,
         });
-        const conflict = described.Diagnostics.find((d) => d.Code === DescribeDiagnosticCode.ConflictingDefinition);
+        const conflict = catalog.Diagnostics.find((d) => d.Code === DescribeDiagnosticCode.ConflictingDefinition);
         if (conflict !== undefined)
         {
             const declarers = [...documents].filter(([, doc]) => EnvironmentCatalogComposer.Declares(doc, conflict.Subject)).map(([model]) => model);
@@ -109,27 +101,16 @@ export class EnvironmentCatalogComposer
             throw new EnvironmentCatalogError(EnvironmentCatalogErrorCode.ConflictingDefinition, conflict.Subject, deliveries,
                 MessageFormat.Format(EnvironmentCatalogComposer.ConflictingMessage, EnvironmentCatalogError.DeliveredBy(deliveries), conflict.Message));
         }
-        const invalid = described.Diagnostics.find((d) => d.Code === DescribeDiagnosticCode.InvalidBinding);
-        if (invalid !== undefined)
-        {
-            const binders = merged.Plans.filter((p) => p.Bindings.some((b) => b.Concept === invalid.Subject)).map((p) => p.Model);
-            const deliveries = [...new Set(binders.flatMap((m) => unified.Deliveries.get(m) ?? []))].sort();
-            throw new EnvironmentCatalogError(EnvironmentCatalogErrorCode.InvalidBinding, invalid.Subject, deliveries,
-                MessageFormat.Format(EnvironmentCatalogComposer.InvalidBindingMessage, binders.join(EnvironmentCatalogComposer.ListSeparator),
-                    EnvironmentCatalogError.DeliveredBy(deliveries), invalid.Message));
-        }
-        const description = described.Description;
-        const external = EnvironmentCatalogComposer.Described(description, merged.External);
         const homes = EnvironmentCatalogComposer.HomeModels(documents);
         return {
-            Description: description,
+            Description: catalog.Description,
             Packages: packages,
             Snapshot: domain.Snapshot,
-            Connectors: EnvironmentCatalogComposer.Connectors(external, merged.Specs),
-            Identity: new ExternalIdentity(description, external),
+            Connectors: catalog.Connectors,
+            Identity: catalog.Identity,
             HomeModels: homes,
-            Diagnostics: described.Diagnostics,
-            Security: EnvironmentSecurity.Compose(documents, homes, description, external, unified.Deliveries),
+            Diagnostics: catalog.Diagnostics,
+            Security: EnvironmentSecurity.Compose(documents, homes, catalog.Description, catalog.ExternalBindings, unified.Deliveries),
         };
     }
 
@@ -228,31 +209,6 @@ export class EnvironmentCatalogComposer
         return out;
     }
 
-    /** The external bindings the description kept (the describer drops invalid and duplicate ones), in its order. */
-    private static Described(description: ISchemaDescription, candidates: readonly IExternalBinding[]): IExternalBinding[]
-    {
-        const out: IExternalBinding[] = [];
-        for (const bound of description.Bindings)
-        {
-            if (bound.Connector === BindingTable.EngineStorage || bound.Connector === TodlNames.FileConnector) continue;
-            const binding = candidates.find((c) => c.Model === bound.Model && c.Binding.Concept === bound.Concept && c.Connector === bound.Connector);
-            if (binding !== undefined) out.push(binding);
-        }
-        return out;
-    }
-
-    /** One plan per external connector the bindings use, sorted by name. */
-    private static Connectors(bindings: readonly IExternalBinding[], specs: ReadonlyMap<string, ConnectorSpec>): IExternalConnectorPlan[]
-    {
-        const out: IExternalConnectorPlan[] = [];
-        for (const name of [...new Set(bindings.map((b) => b.Connector))].sort())
-        {
-            const spec = specs.get(name);
-            if (spec !== undefined) out.push({ Name: name, Spec: spec, Bindings: bindings.filter((b) => b.Connector === name) });
-        }
-        return out;
-    }
-
     /**
      * Concept → its home package: the first package, in sorted model-id order (the order `documents` holds the chosen
      * packages in), whose own document declares the concept. When two packages that do not depend on each other declare
@@ -271,46 +227,6 @@ export class EnvironmentCatalogComposer
             }
         }
         return homes;
-    }
-
-    /**
-     * One package binds each concept once (I2, T12, P12): two different bindings of one concept in one package (two of
-     * its models populate it from different connectors or sources, or one of them leaves it to engine storage) are
-     * DuplicateBinding, never resolved first-wins. Identical repeats are one binding.
-     */
-    private static RejectDuplicateBindings(plans: readonly ModelConnectorPlan[], deliveriesOf: ReadonlyMap<string, readonly string[]>): void
-    {
-        for (const plan of plans)
-        {
-            const first = new Map<string, ConnectorBinding>();
-            for (const binding of plan.Bindings)
-            {
-                const previous = first.get(binding.Concept);
-                if (previous === undefined)
-                {
-                    first.set(binding.Concept, binding);
-                    continue;
-                }
-                if (EnvironmentCatalogComposer.SameBinding(previous, binding)) continue;
-                const deliveries = [...(deliveriesOf.get(plan.Model) ?? [])].sort();
-                throw new EnvironmentCatalogError(EnvironmentCatalogErrorCode.DuplicateBinding, binding.Concept, deliveries,
-                    MessageFormat.Format(EnvironmentCatalogComposer.DuplicateBindingMessage, plan.Model, EnvironmentCatalogError.DeliveredBy(deliveries), binding.Concept,
-                        MessageFormat.Format(EnvironmentCatalogComposer.BindingTarget, previous.Connector, previous.Source),
-                        MessageFormat.Format(EnvironmentCatalogComposer.BindingTarget, binding.Connector, binding.Source)));
-            }
-        }
-    }
-
-    private static SameBinding(a: ConnectorBinding, b: ConnectorBinding): boolean
-    {
-        return EnvironmentCatalogComposer.BindingKey(a) === EnvironmentCatalogComposer.BindingKey(b);
-    }
-
-    private static BindingKey(binding: ConnectorBinding): string
-    {
-        const fields = Object.entries(binding.FieldMap).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-            .map(([member, field]) => member + EnvironmentCatalogComposer.KeySeparator + field);
-        return JSON.stringify([binding.Connector, binding.Source, binding.IdKey, fields, binding.Writable, binding.VersionField ?? null, binding.Concurrency, binding.Atomicity]);
     }
 
     private static Declares(doc: PackageDocument, fullName: string): boolean

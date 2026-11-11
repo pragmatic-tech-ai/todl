@@ -29,6 +29,7 @@ export { SystemFieldGuard } from './system/SystemFieldGuard.js';
 export { OwnershipAssignment, type IOwnerAssignment } from './system/OwnershipAssignment.js';
 export type { IPackageDocumentSource } from '../domain/domain.js';
 export { EnvironmentCatalogComposer, type IComposeInput, type IEnvironmentCatalog } from './environment/EnvironmentCatalogComposer.js';
+export { ExternalCatalogDescriber, type IExternalCatalog, type IExternalCatalogOptions } from './environment/ExternalCatalogDescriber.js';
 export { DeliveryChannel, type IPackageDelivery } from './environment/PackageDelivery.js';
 export { EnvironmentCatalogError, EnvironmentCatalogErrorCode } from './environment/EnvironmentCatalogError.js';
 export { EnvironmentSecurity, type IEnvironmentSecurity } from './environment/EnvironmentSecurity.js';

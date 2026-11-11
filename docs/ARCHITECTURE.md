@@ -393,9 +393,9 @@ The draft is not a Cypher write target of its own: Cypher writes run on the grap
 engine and reach `.todl` sources through `engine-bridge`'s `TodlFileConnector`
 (below), which edits a draft session per owner model. The former TODL-Cypher
 write seam over a draft (a draft writer plus a draft-to-graph baker) is retired.
-TODL's own Cypher write path (`src/cypher`: `ICypherWriter`, the write operators,
-the write overlay) stays until milestone 2 (ruling T9-b); its tests run over the
-test-only `DraftTestWriter` in `src/authoring/tests/draft-cypher-harness.ts`.
+TODL's own Cypher engine (`src/cypher`, incl. `ICypherWriter`, the write
+operators and the write overlay) and the root `Cypher` namespace were retired in
+M2.3 (0.57.0); it is no longer a server path and offline Plexus does not use it.
 
 ### engine-bridge — TODL on the graph engine
 
@@ -446,8 +446,12 @@ surface; the old runtime paths are untouched until M2.3.
   `EnvironmentNodePlacement` for creates. Failures are
   `EnvironmentCatalogError`.
 - `CypherWire` (root export) is the engine-free wire codec.
-- `IDescribeOptions.EmitExternalBindings` defaults to `false` (dev keeps M1
-  behaviour).
+- `SnapshotDescriber` always emits every plan binding, external ones included
+  (the M1 `IDescribeOptions.EmitExternalBindings` switch was removed in M2.3).
+- Retired in M2.3 with the server's connector runtime: `ConnectorRuntimeGraphQuery`,
+  `ConnectorPrefetch`, `ConnectorMirrorMapper`, `ConjunctiveQueryFilterProvider`.
+  `FederatedModelDataConnector`/`ConnectorWorkingCopy` stay: `ModelPackageGenerator`
+  still emits them for connector-backed typed packages.
 
 ---
 

@@ -5,7 +5,7 @@ import type { IExternalBinding, IParsedExternalId } from './ExternalBinding.js';
 
 /**
  * Public ids and keys of external nodes (rulings T4, T6). A public id is `Concept#Connector.Source#StorageId`
- * (ConnectorMirrorMapper's shape); the storage id is everything after the second `#`, verbatim.
+ * (the shape the retired ConnectorMirrorMapper minted); the storage id is everything after the second `#`, verbatim.
  */
 export class ExternalIdentity
 {

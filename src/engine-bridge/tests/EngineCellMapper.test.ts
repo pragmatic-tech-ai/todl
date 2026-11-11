@@ -6,7 +6,7 @@ import { compilePackage, PackageKind } from "../../publish/publish.js";
 import { PackageManifestBridge } from "../../solution-services/package-manager/package-manifest-bridge.js";
 import { Domain } from "../../domain/domain.js";
 import { MemoryPackageSource } from "../../domain/memory-package-source.js";
-import type { CypherResultDto } from "../../cypher/index.js";
+import type { CypherResultDto } from "../../graph-api/wire/index.js";
 import type { MetadataSnapshot } from "../../domain/metadata-snapshot.js";
 import { TodlNames } from "../TodlNames.js";
 import { EngineCellMapper } from "../EngineCellMapper.js";
