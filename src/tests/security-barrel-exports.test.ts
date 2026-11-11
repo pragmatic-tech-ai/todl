@@ -6,7 +6,7 @@ class SecurityBarrel
 {
     public static readonly Names: readonly string[] = [
         "SecurityAction", "SecurityDepth", "BaseRoleName", "FieldProfileRight", "SecurityTerms", "SecurityNames",
-        "PackageSecurity", "PackageSecurityCompiler", "ReifiedOperators",
+        "PackageSecurity", "PackageSecurityCompiler", "ReifiedOperators", "CompileFoundation", "FoundationKind",
     ];
 }
 

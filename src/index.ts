@@ -212,6 +212,7 @@ export { validate } from './compiler-services/validate/validate.js';
 export { Severity, DiagnosticCode, type Diagnostic } from './compiler-services/diagnostics/diagnostic.js';
 export type { Position, SourceSpan, SourceFile } from './compiler-services/diagnostics/span.js';
 export { check, checkAgainst } from './compiler-services/api.js';
+export { CompileFoundation, FoundationKind } from './compiler-services/stdlib/compile-foundation.js';
 export { ResolutionPass } from './compiler-services/resolution/resolution-pass.js';
 export type { MergeDecision } from './compiler-services/resolution/resolution-pass.js';
 export { MergeStrategy } from './compiler-services/parse/ast.js';
