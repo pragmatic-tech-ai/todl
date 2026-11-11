@@ -146,7 +146,7 @@ export class EnvironmentCatalogComposer
             Snapshot: domain.Snapshot,
             Connectors: EnvironmentCatalogComposer.Connectors(external, merged.Specs),
             Identity: new ExternalIdentity(description, external),
-            HomeModels: EnvironmentCatalogComposer.HomeModels(documents, domain.Snapshot),
+            HomeModels: EnvironmentCatalogComposer.HomeModels(documents),
             Diagnostics: described.Diagnostics,
         };
     }
@@ -258,21 +258,20 @@ export class EnvironmentCatalogComposer
     }
 
     /**
-     * Concept → its home package: the snapshot's rule (`MetadataSnapshot.HomeModelOf`, the first package to bind it in
-     * deps-first load order), the same one the describer uses for seed owners, so seeds and creates agree. When two
-     * packages that do not depend on each other declare one concept identically (ruling T12), the home is the one loaded
-     * first; the Domain loads chosen packages sorted by model id, so that is the lower model id. Should that package
-     * leave the environment, the concept moves to the remaining declarer at the next Compose, while nodes created before
-     * keep the owner they were given.
+     * Concept → its home package: the first package, in sorted model-id order (the order `documents` holds the chosen
+     * packages in), whose own document declares the concept. When two packages that do not depend on each other declare
+     * one concept identically (ruling T12), the home is the lower model id. Should that package leave the environment,
+     * the concept moves to the remaining declarer at the next Compose, while nodes created before keep the owner they
+     * were given.
      */
-    private static HomeModels(documents: ReadonlyMap<string, PackageDocument>, snapshot: MetadataSnapshot): Map<string, string>
+    private static HomeModels(documents: ReadonlyMap<string, PackageDocument>): Map<string, string>
     {
         const homes = new Map<string, string>();
         for (const [model, doc] of documents)
         {
             for (const node of doc.nodes)
             {
-                if (node.metaKind === MetaKind.Concept && !homes.has(node.id)) homes.set(node.id, snapshot.HomeModelOf(node.id) ?? model);
+                if (node.metaKind === MetaKind.Concept && !homes.has(node.id)) homes.set(node.id, model);
             }
         }
         return homes;

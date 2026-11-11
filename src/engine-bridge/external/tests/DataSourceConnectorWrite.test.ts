@@ -94,6 +94,8 @@ class WriteHarness
     public static readonly NewName = 'N';
     public static readonly Unsafe = '9007199254740993';
     public static readonly Padded = '007';
+    public static readonly Int64Max = '9223372036854775807';
+    public static readonly BeyondInt64 = '9223372036854775808';
     public static readonly Other = 'Other';
     public static readonly Beta = 'Beta';
     public static readonly Owner = 'other.Model';
@@ -253,6 +255,16 @@ describe('DataSourceConnector write side', () =>
             { Kind: WriteOperationKind.Upsert, Key: WriteHarness.Unsafe, Fields: { [Fx.IdKey]: WriteHarness.Unsafe } },
         ]);
         WriteHarness.Throws(() => h.Operations(WriteHarness.Create(h.Id(WriteHarness.Padded))), EngineBridgeErrorCode.UnsupportedExternalChange);
+    });
+
+    test('an Int64 id outside the signed 64-bit range fails at Apply', async () =>
+    {
+        const h = WriteHarness.Over();
+        const max = h.Id(WriteHarness.Int64Max);
+        assert.deepEqual(h.Operations(WriteHarness.Create(max)), [{ Kind: WriteOperationKind.Upsert, Key: WriteHarness.Int64Max, Fields: { [Fx.IdKey]: WriteHarness.Int64Max } }]);
+        const txn = await h.Connector.Begin();
+        await WriteHarness.Rejects(txn.Apply(WriteHarness.Changes(WriteHarness.Create(h.Id(WriteHarness.BeyondInt64)))), EngineBridgeErrorCode.UnsupportedExternalChange);
+        assert.equal(h.Adapter.Calls, 0);
     });
 
     test('unlink clears the foreign key', () =>

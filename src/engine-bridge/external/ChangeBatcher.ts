@@ -104,6 +104,8 @@ export class ChangeBatcher
     private static readonly ErrAfterDelete = 'An external node cannot be changed after it was deleted: ';
     private static readonly ErrNumericKey = 'An external create with a numeric id member needs a numeric id value; the source cannot hold a generated key: ';
     private static readonly ErrNonCanonicalKey = 'An external create with a numeric id member needs the id in canonical decimal form: ';
+    private static readonly Int64Min = -(2n ** 63n);
+    private static readonly Int64Max = 2n ** 63n - 1n;
     private static readonly CanonicalInteger = /^(0|-?[1-9]\d*)$/;
     private static readonly NumericText = /^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/;
     private static readonly ErrDuplicate = 'An external node is created twice: ';
@@ -235,7 +237,8 @@ export class ChangeBatcher
 
     /**
      * A numeric id column cannot hold a generated text key (owner question Q3): the create must give the id value. An
-     * Int64 id beyond 2^53 has a canonical decimal text key and is sent as that text (as reads and updates already do);
+     * Int64 id beyond 2^53 has a canonical decimal text key and is sent as that text (as reads and updates already do)
+     * when it fits a signed 64-bit integer (outside that range it is refused);
      * a non-canonical numeric text ('007') would change the id on the round trip and is refused with its own message.
      */
     private static RequireNumericKey(write: PendingWrite, publicId: string, identity: ExternalIdentity): void
@@ -245,12 +248,19 @@ export class ChangeBatcher
         {
             return;
         }
-        if (idType === ValueType.Int64 && ChangeBatcher.CanonicalInteger.test(write.StorageId))
+        if (idType === ValueType.Int64 && ChangeBatcher.CanonicalInteger.test(write.StorageId) && ChangeBatcher.InInt64Range(write.StorageId))
         {
             return;
         }
         const message = ChangeBatcher.NumericText.test(write.StorageId) ? ChangeBatcher.ErrNonCanonicalKey : ChangeBatcher.ErrNumericKey;
         throw new EngineBridgeError(EngineBridgeErrorCode.UnsupportedExternalChange, message + publicId);
+    }
+
+    /** True when the canonical integer text `text` fits a signed 64-bit integer (an int8 column). */
+    private static InInt64Range(text: string): boolean
+    {
+        const value = BigInt(text);
+        return value >= ChangeBatcher.Int64Min && value <= ChangeBatcher.Int64Max;
     }
 
     private static SetProperty(write: PendingWrite, op: ISetPropertyOp, identity: ExternalIdentity): void
