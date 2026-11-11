@@ -212,6 +212,7 @@ export { validate } from './compiler-services/validate/validate.js';
 export { Severity, DiagnosticCode, type Diagnostic } from './compiler-services/diagnostics/diagnostic.js';
 export type { Position, SourceSpan, SourceFile } from './compiler-services/diagnostics/span.js';
 export { check, checkAgainst } from './compiler-services/api.js';
+export { CompileFoundation, FoundationKind } from './compiler-services/stdlib/compile-foundation.js';
 export { ResolutionPass } from './compiler-services/resolution/resolution-pass.js';
 export type { MergeDecision } from './compiler-services/resolution/resolution-pass.js';
 export { MergeStrategy } from './compiler-services/parse/ast.js';
@@ -491,26 +492,17 @@ export { BuildService, type PublishOutcome as BuildPublishOutcome } from './solu
 export { InMemoryBuildStorage } from './solution-services/todl-build-system/in-memory-build-storage.js';
 export { ScopeFlatteningStorage } from './solution-services/todl-build-system/scope-flattening-storage.js';
 
-// Policy predicate surface (consumed by the identity bridge)
-export {
-  PolicyNodeKind,
-  PolicyRefRoot,
-  PolicyBoolOp,
-  PolicyCompareOp,
-  PolicyPredicateMembers,
-  type PolicyPredicate,
-  type PolicyRef,
-  type PolicyLiteral,
-  type PolicyOperand,
-  type PolicyCompare,
-  type PolicyMembership,
-  type PolicyBool,
-  type PolicyNot,
-} from './compiler-services/policy/policy-predicate.js';
-export { PolicyPredicateCodec } from './compiler-services/policy/policy-predicate-codec.js';
-export { parsePolicyPredicate, PolicyParseError } from './compiler-services/policy/policy-predicate-parser.js';
 export * as Cypher from './cypher/index.js';
 export * as CypherWire from './graph-api/wire/index.js';
 export { ConnectorMirrorMapper } from './model-data/connector-mirror-mapper.js';
 export { ConnectorPrefetch, type INodeReflector } from './model-data/connector-prefetch.js';
 export { ConnectorRuntimeGraphQuery } from './graph-api/connector-runtime-graph-query.js';
+
+export { SecurityAction, SecurityDepth, BaseRoleName, FieldProfileRight, SecurityTerms } from './compiler-services/security/security-terms.js';
+export { PackageSecurityCompiler } from './compiler-services/security/package-security-compiler.js';
+export { SecurityNames } from './compiler-services/security/security-names.js';
+export { ReifiedOperators } from './compiler-services/security/reified-operators.js';
+export {
+    PackageSecurity, type IPackageSecurity, type IPackageRole, type ISecurityPrivilege, type ISecuredField,
+    type IFieldProfile, type IFieldProfileEntry, type IEdgeConcept,
+} from './compiler-services/security/package-security.js';

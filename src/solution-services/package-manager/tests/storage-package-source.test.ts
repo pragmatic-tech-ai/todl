@@ -5,11 +5,12 @@ import { Repository } from "../../../compiler-services/model/model.js";
 import { Cardinality } from "../../../compiler-services/model/graph.js";
 import { toJSON } from "../../../compiler-services/emit/json.js";
 import { BlobPackageStore, type PackageSink } from "../../../publish/stores.js";
-import { PackageKind, type CompiledPackage, type PackageDocument } from "../../../publish/publish.js";
+import { compilePackage, PackageKind, type CompiledPackage, type PackageDocument } from "../../../publish/publish.js";
 import { Domain } from "../../../domain/domain.js";
 import { Manifest } from "../../../manifest/reflection/reflection.js";
 import type { ManifestJson } from "../../../manifest/records.js";
 import { StoragePackageSource } from "../storage-package-source.js";
+import { PackageSecurity } from "../../../compiler-services/security/package-security.js";
 
 // ── fixtures ──────────────────────────────────────────────────────────────
 
@@ -44,7 +45,7 @@ function sink(storage: IStorage): PackageSink
 
 function packageOf(doc: PackageDocument, id: string, version: string): CompiledPackage
 {
-  return { id, version, document: doc, fullDocument: doc, sources: [{ uri: `${id}.todl`, text: "" }], classes: [] };
+  return { id, version, document: doc, fullDocument: doc, sources: [{ uri: `${id}.todl`, text: "" }], classes: [], Security: PackageSecurity.Empty };
 }
 
 // Publish `buildRepo()` as `<id>/<version>/model.json` into a fresh FakeStorage.
@@ -147,6 +148,19 @@ describe("StoragePackageSource — end-to-end compose through Domain", () => {
     const mirror = domain.reflect(hero!);
     assert.equal(mirror.type.name, "Widget");
     assert.equal(mirror.field("label")?.value, "Hi");
+  });
+
+  test("Domain.load of a package that uses Owned serves its todl.system dependency without the engine", async () => {
+    const out = compilePackage([], [{ uri: "hr.todl", text: "namespace hr { concept Employee : todl.system.Owned { name : string; } }" }], { id: "hr", version: "1.0.0" });
+    assert.ok(out.ok, JSON.stringify(out.errors));
+    const storage = new FakeStorage();
+    await new BlobPackageStore(sink(storage)).persist(out.package!);
+    const domain = new Domain(new StoragePackageSource(storage));
+
+    await domain.load({ model: "hr", version: "1.0.0" });
+
+    assert.equal(domain.getManifest("todl.system")?.version, "1.0.0");
+    assert.ok(domain.getType("hr.Employee"));
   });
 });
 

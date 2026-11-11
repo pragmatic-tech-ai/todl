@@ -115,7 +115,7 @@ are the demo/corpus suite and are **not** published (`files: ["dist", "README.md
 | `src/authoring/` | The write path: `ModelDraft` stages instances over frozen bases and serialises back to `.todl`. |
 | `src/publish/` | Pure compile-and-persist spine: `compilePackage`, `CompiledPackage`, package stores. |
 | `src/domain/` | The multi-manifest runtime host (`Domain`, `MetadataSnapshot`) for versioned, cross-package reflection. |
-| `src/engine-bridge/` | TODL on the `@pragmatic-tech-ai/graph` engine (export `./engine`): describes a compiled snapshot as an engine schema + seed, compiles policies into access scopes, persists engine writes back into `.todl` files. The only folder that imports the engine. |
+| `src/engine-bridge/` | TODL on the `@pragmatic-tech-ai/graph` engine (export `./engine`): describes a compiled snapshot as an engine schema + seed, persists engine writes back into `.todl` files. The only folder that imports the engine. |
 | `src/graph-api/` | Read-only query surface (`GraphQuery`, `Snapshot`) and, under `browser/`, the app bootstrap. |
 | `src/solution-services/` | The build systems, package sources/registries, project types, and multi-project solution builder. |
 | `src/application/` | Composition/host layer (`ApplicationBootstrapper`, `MuralHost`); the generic model-browser view here is legacy. |
@@ -415,17 +415,6 @@ in the engine or its native `lmdb` storage. A host that imports
   root, taxonomy terms as `todl.Term` nodes, one seed node per instance (Owner = the
   package whose own sources declare it), bindings with `DefaultConnector`.
   Problems become `DescribeDiagnosticCode` diagnostics, never throws.
-- `PolicyScopeCompiler` compiles a model's policies into an engine `AccessScope`
-  for an `IPrincipalFacts`; leaves the engine cannot express compile fail-closed
-  with a `PolicyDiagnosticCode` diagnostic.
-  Numeric members mirror the identity evaluator's raw-text `===`: a fact or
-  literal in the canonical text of a number (`2`, `-3`, `2.5`, `1e+21`) matches
-  that number, a JS number never matches (TODL holds entity numbers as decimal
-  text), and a non-canonical string (`02`, `+2`, `2.0`, `0x10`, `1e1`, `.5`)
-  fails closed with a `ValueTypeMismatch` diagnostic. Residual: the engine stores
-  entity values typed, so a non-canonical value seeded from a `.todl` file
-  (`count = "02"`) is held as its number and matches the canonical claim `"2"`,
-  where the evaluator would compare the raw texts and not match.
 - `TodlFileConnector` (connector name `TodlNames.FileConnector` = `todl-file`) is
   the engine connector that writes committed changes back into each owning
   model's `.todl` files through an `ITodlModelWorkspace` / `ITodlDraftSession`
@@ -456,9 +445,6 @@ surface; the old runtime paths are untouched until M2.3.
   (`SystemPackage`, `ShareGrants`, `ShareGrantScope`) and
   `EnvironmentNodePlacement` for creates. Failures are
   `EnvironmentCatalogError`.
-- `PolicyScopeCompiler.FromRules` compiles runtime policy rules with typed
-  value semantics; a `MalformedPolicy` diagnostic means the concept failed
-  closed and should be treated as fatal by the host.
 - `CypherWire` (root export) is the engine-free wire codec.
 - `IDescribeOptions.EmitExternalBindings` defaults to `false` (dev keeps M1
   behaviour).
@@ -793,6 +779,31 @@ The build output `index.html` is fully self-contained. At runtime:
   cardinality → `?`/`[]`/`[+]`, `enum{}` → `taxonomy{}`); `recase.ts` handles the
   kebab → C-like identifier convention.
 
+**Package security (0.55.0, S1).** Packages declare their own security; the engine
+bridge places and guards the system-owned fields.
+
+- `EnvironmentSecurity` composes the per-package `IPackageSecurity` of an
+  environment's deliveries into an `IEnvironmentSecurity` (roles, contributions,
+  secured fields, profiles and `EdgeConcepts`) alongside the catalog. Each
+  package's security stays as compiled; the environment's effective owned set
+  (`OwnedConcepts()`) and the secured-external check are judged over the composed
+  description, so a subconcept inherits ownership and secured fields from its
+  parent as unified, not as compiled.
+- `EnvironmentNodePlacement` places the `todl.system.Owned` owner fields on
+  created nodes; `SystemFieldGuard` is a scope transform that makes those fields
+  read-only, and hosts MUST apply it to every runtime read-write scope (placement
+  defaults on create are exempt); `OwnershipAssignment` is the only later writer
+  of those fields.
+- `SystemPackage` and `SystemFirstPackageSource` live in
+  `solution-services/package-manager` (engine-free; `./engine` re-exports them):
+  they serve `todl.system` from the embedded package, unrelated to resolution
+  order. `StoragePackageSource` serves it the same way, so the engine-free
+  `Domain` route loads a package that uses `Owned`.
+- `SecurityValidator` runs only in `checkAgainst` (build and publish): security
+  diagnostics are build-only and the LSP `SolutionGraph` does not show them live.
+- Forwarding the caller's `ConnectorContext` to connectors is pending (Task 11,
+  PR12) and is not part of this surface.
+
 ---
 
 ## 13. Package surface and dependencies
@@ -803,7 +814,8 @@ parse, migrate, and the solution-services surface). Beyond the root, the package
 exposes focused subpath exports: `./solution-services/lsp`, `./language-server`,
 `./package-manager` (+ `/connections`), `./build-system-core`,
 `./todl-build-system`, `./project-system`, `./domain`, `./graph-api`, and
-`./engine` (the engine bridge, see §7).
+`./engine` (the engine bridge, see §7; also `EnvironmentSecurity`,
+`SystemFieldGuard`, `OwnershipAssignment`, `SystemFirstPackageSource`).
 
 Every subpath's `import` has two conditions: **`development`** → raw `./src/**/*.ts`
 and **`default`** → compiled `./dist/**/*.js`. In-repo tooling and tests run with

@@ -103,4 +103,18 @@ describe('RecursiveProjectReferencesResolver — multiple base references', () =
         assert.equal(problems.length, 1)
         assert.match(problems[0]!, /missing/)
     })
+
+    test('a dependency on todl.system is satisfied by the compile foundation, not fetched', async () =>
+    {
+        const source = new MapSource(new Map([
+            ['owned', pkg('OwnedConcept', [{ kind: PackageKind.MetaModel, ...ref('todl.system') }])],
+        ]))
+
+        const { bases, problems } = await RecursiveProjectReferencesResolver.Resolve(source, {
+            metaModels: [ref('owned')],
+        })
+
+        assert.deepEqual(problems, [])
+        assert.equal(bases.length, 1)
+    })
 })

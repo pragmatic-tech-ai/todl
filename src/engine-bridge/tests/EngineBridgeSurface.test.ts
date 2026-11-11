@@ -8,7 +8,6 @@ import type {
     IEnvironmentCatalog,
     IPackageDelivery,
     IPackageDocumentSource,
-    IPolicyDiagnostic,
     IPrincipalFacts,
     ISavedModel,
     ISavedSnapshot,
@@ -27,7 +26,6 @@ interface IExportedTypes
     readonly Options: IDescribeOptions;
     readonly Description: ISnapshotDescription;
     readonly Facts: IPrincipalFacts;
-    readonly PolicyDiagnostic: IPolicyDiagnostic;
     readonly Workspace: ITodlModelWorkspace;
     readonly Session: ITodlDraftSession;
     readonly SavedModel: ISavedModel;
@@ -53,6 +51,7 @@ class SurfaceExpectations
         'EnvironmentCatalogComposer',
         'EnvironmentCatalogError',
         'EnvironmentCatalogErrorCode',
+        'EnvironmentSecurity',
         'PackageVersionUnifier',
         'UnifiedPackageSource',
         'DescribeDiagnosticCode',
@@ -65,16 +64,17 @@ class SurfaceExpectations
         'ExternalVersionConflict',
         'ExternalWriteError',
         'FetchTranslator',
-        'PolicyDiagnosticCode',
-        'PolicyScopeCompiler',
         'ResumeToken',
         'SavedModelCompiler',
         // The todl.system package (ruling T10): its source, names and share-grant predicates.
+        'OwnershipAssignment',
         'ShareGrantScope',
         'ShareGrants',
         'ShareRight',
         'ShareSubject',
         'SnapshotDescriber',
+        'SystemFieldGuard',
+        'SystemFirstPackageSource',
         'SystemNames',
         'SystemPackage',
         'TodlFileConnector',
@@ -87,7 +87,6 @@ class SurfaceExpectations
     public static readonly RootCypherWire = 'CypherWire';
     public static readonly NoHomeModel = 'NoHomeModel';
     public static readonly UnknownConnector = 'UnknownConnector';
-    public static readonly FromRules = 'FromRules';
     public static readonly RootLeak = 'root must not export ';
 }
 
@@ -97,7 +96,6 @@ describe('EngineBridgeSurface', () =>
     {
         assert.deepEqual(Object.keys(EngineSurface).sort(), [...SurfaceExpectations.EngineExports].sort());
         // The type exports are pinned by IExportedTypes above: typecheck fails when one is dropped.
-        assert.equal(typeof EngineSurface.PolicyScopeCompiler.FromRules, 'function', SurfaceExpectations.FromRules);
         assert.ok(SurfaceExpectations.NoHomeModel in EngineSurface.EngineBridgeErrorCode);
         assert.ok(SurfaceExpectations.UnknownConnector in EngineSurface.EnvironmentCatalogErrorCode);
     });

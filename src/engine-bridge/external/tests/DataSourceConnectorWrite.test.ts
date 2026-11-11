@@ -69,7 +69,7 @@ class EngineHarness
 
     public Execute(text: string): Promise<Cypher.CypherResult>
     {
-        const placement = new EnvironmentNodePlacement(this.Identity, new Map([[Fx.Team, Fx.Model]]), randomUUID);
+        const placement = new EnvironmentNodePlacement(this.Identity, new Map([[Fx.Team, Fx.Model]]), new Set(), Fx.Principal, randomUUID);
         return new Cypher.CypherEngine(this.Engine).Execute(AccessScope.System, text, { Placement: placement });
     }
 

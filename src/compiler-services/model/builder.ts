@@ -14,6 +14,7 @@
 
 import { Graph, EdgeKind, Tier, Cardinality, type Node, type NodeId, type Scalar, type FieldDecl } from "./graph.js";
 import { MetaKind } from "./kinds.js";
+import type { BaseRoleName } from "../security/security-terms.js";
 
 /** A taxonomy term = a class of its concept: its fixed field values (an attr
  * map) plus zero-or-more nested child terms. `concept` names which of the
@@ -71,9 +72,15 @@ export class Builder
   public static readonly MatchConceptAttr = Builder.IdentityConceptAttr;
   public static readonly MatchRulesAttr = "rules";
   public static readonly MergeRulesAttr = "rules";
-  /** Reserved policy-node attr keys (the concept reuses the identity key). */
-  public static readonly PolicyConceptAttr = Builder.IdentityConceptAttr;
-  public static readonly PolicyRulesAttr = "rules";
+  /** Reserved operator-node attr keys: the reified form's endpoint members. */
+  public static readonly OperatorFromAttr = "from";
+  public static readonly OperatorToAttr = "to";
+  /** Reserved role / role-contribution attr keys. `privileges` is a JSON `ISecurityPrivilege[]`. */
+  public static readonly RoleNameAttr = "name";
+  public static readonly RolePrivilegesAttr = "privileges";
+  public static readonly ContributionRoleAttr = "role";
+  public static readonly ProfileNameAttr = "name";
+  public static readonly ProfileFieldsAttr = "fields";
   /** Reserved connector-node attr keys. `config` is a JSON object of the inline
    *  NON-secret assignments (everything except kind/connection/secret). */
   public static readonly ConnectorNameAttr = "name";
@@ -239,6 +246,12 @@ export class Builder
     return `${owner}${Builder.MemberTargetSeparator}${member}`;
   }
 
+  /** The owner of the member target `memberTarget` hosting `member`: the inverse of {@link Builder.MemberTargetId}. */
+  public static MemberTargetOwner(memberTarget: NodeId, member: string): NodeId
+  {
+    return memberTarget.slice(0, memberTarget.length - member.length - Builder.MemberTargetSeparator.length);
+  }
+
   /** Stage an annotation application on an inherited/contributed member of `owner`
    *  (`member <name> { annotate … }`, R6). The application hangs off the member target
    *  {@link Builder.MemberTargetId} (a {@link MetaKind.MemberTarget} node, staged once),
@@ -266,9 +279,10 @@ export class Builder
    *  field's schema is carried on the owner node (SPEC-01 #4) — no member node,
    *  no `HasField` edge; the value lands in an instance's `attrs` (scalar) or a
    *  relationship edge (reference) at the instance tier. */
-  addField(concept: NodeId, name: string, type: NodeId, cardinality: Cardinality = Cardinality.One): this
+  addField(concept: NodeId, name: string, type: NodeId, cardinality: Cardinality = Cardinality.One, secured = false): this
   {
-    this.stagedFields.push({ concept, decl: { name, type, cardinality } });
+    // `secured` is written only when true, so unsecured fields (and existing documents) are unchanged.
+    this.stagedFields.push({ concept, decl: secured ? { name, type, cardinality, secured } : { name, type, cardinality } });
     return this;
   }
 
@@ -351,8 +365,8 @@ export class Builder
   ): this
   {
     this.stagedNodes.push(this.makeNode(glyph, Tier.Ontology, { metaKind: MetaKind.Operator }));
-    if (fromMember !== null) this.stagedAttrs.push({ id: glyph, name: "from", value: fromMember });
-    if (toMember !== null) this.stagedAttrs.push({ id: glyph, name: "to", value: toMember });
+    if (fromMember !== null) this.stagedAttrs.push({ id: glyph, name: Builder.OperatorFromAttr, value: fromMember });
+    if (toMember !== null) this.stagedAttrs.push({ id: glyph, name: Builder.OperatorToAttr, value: toMember });
     if (relationship !== null) this.stagedAttrs.push({ id: glyph, name: "relationship", value: relationship });
     this.stagedEdges.push({ kind: EdgeKind.Targets, via: null, from: glyph, to: concept });
     return this;
@@ -388,13 +402,30 @@ export class Builder
     return this;
   }
 
-  /** Define a policy node (Ontology-tier) carrying `concept`'s access rules as a
-   *  JSON array of `{ effect, action, predicate }`. */
-  definePolicy(id: NodeId, concept: NodeId, rulesJson: string): this
+  /** Define a package role node (Ontology-tier) named `name`, carrying its privileges as JSON `ISecurityPrivilege[]`. */
+  DefineRole(id: NodeId, name: string, privilegesJson: string): this
   {
-    this.stagedNodes.push(this.makeNode(id, Tier.Ontology, { metaKind: MetaKind.Policy }));
-    this.stagedAttrs.push({ id, name: Builder.PolicyConceptAttr, value: concept });
-    this.stagedAttrs.push({ id, name: Builder.PolicyRulesAttr, value: rulesJson });
+    this.stagedNodes.push(this.makeNode(id, Tier.Ontology, { metaKind: MetaKind.Role }));
+    this.stagedAttrs.push({ id, name: Builder.RoleNameAttr, value: name });
+    this.stagedAttrs.push({ id, name: Builder.RolePrivilegesAttr, value: privilegesJson });
+    return this;
+  }
+
+  /** Define a base-role contribution node (Ontology-tier): the privileges a package adds to `baseRole`, as JSON `ISecurityPrivilege[]`. */
+  DefineRoleContribution(id: NodeId, baseRole: BaseRoleName, privilegesJson: string): this
+  {
+    this.stagedNodes.push(this.makeNode(id, Tier.Ontology, { metaKind: MetaKind.RoleContribution }));
+    this.stagedAttrs.push({ id, name: Builder.ContributionRoleAttr, value: baseRole });
+    this.stagedAttrs.push({ id, name: Builder.RolePrivilegesAttr, value: privilegesJson });
+    return this;
+  }
+
+  /** Define a field-profile node (Ontology-tier) named `name`, carrying its entries as JSON `IFieldProfileEntry[]`. */
+  DefineFieldProfile(id: NodeId, name: string, fieldsJson: string): this
+  {
+    this.stagedNodes.push(this.makeNode(id, Tier.Ontology, { metaKind: MetaKind.FieldProfile }));
+    this.stagedAttrs.push({ id, name: Builder.ProfileNameAttr, value: name });
+    this.stagedAttrs.push({ id, name: Builder.ProfileFieldsAttr, value: fieldsJson });
     return this;
   }
 

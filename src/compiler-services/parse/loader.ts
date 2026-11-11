@@ -54,9 +54,6 @@
 
 import { parse } from "./parser.js";
 import { parsePredicate } from "./predicate-parser.js";
-import { parsePolicyPredicate } from "../policy/policy-predicate-parser.js";
-import { PolicyPredicateCodec } from "../policy/policy-predicate-codec.js";
-import { PolicyPredicateMembers, type PolicyPredicate } from "../policy/policy-predicate.js";
 import { MatchRuleNormalizer } from "./match-rule-normalizer.js";
 import { ApplicationRootPass } from "./application-root-pass.js";
 import { Repository } from "../model/model.js";
@@ -84,6 +81,9 @@ import { type IdGenerator, SnowflakeIdGenerator } from "../model/id-generator.js
 import { makeResolver, type Home, type Resolver } from "../resolve/resolver.js";
 import { collectDefinitions, visitReferences } from "./references.js";
 import { NodeIdQualifier } from "./node-id-qualifier.js";
+import { CompileFoundation } from "../stdlib/compile-foundation.js";
+import { SecurityLowering, type ISecurityUnit } from "../security/security-lowering.js";
+import { FieldSecurityRules } from "../security/field-security-rules.js";
 import { BaseListClassifier } from "./base-list-classifier.js";
 import { DeriveSerializer } from "./derive-serializer.js";
 import { MemberAnnotationTarget } from "./member-annotation-target.js";
@@ -230,7 +230,7 @@ export function loadInto(
   // A source that redeclares a name the default library (prelude) already
   // provides is warned and DROPPED — the prelude wins (it is the foundation
   // base), and re-defining the same node id would otherwise make the builder
-  // throw on the duplicate. Named ontology declarations carry `.name` + `.span`.
+  // throw on the duplicate. A seeded `todl.system` name is an error, also dropped. Named ontology declarations carry `.name` + `.span`.
   const active = units.filter(({ ns, decl }) => {
     const named =
       decl.kind === DeclKind.Primitive ||
@@ -238,6 +238,20 @@ export function loadInto(
       decl.kind === DeclKind.Aspect ||
       decl.kind === DeclKind.Annotation ||
       decl.kind === DeclKind.Taxonomy;
+    // A name the seeded `todl.system` foundation provides is reserved outright: the
+    // security model depends on it, so redeclaring it is an error, not a warning.
+    if (named && CompileFoundation.IsSeededSystemName(model, NodeIdQualifier.Qualify(ns, decl.name)))
+    {
+      diagnostics.push({
+        code: DiagnosticCode.SecuritySystemNameRedeclared,
+        severity: Severity.Error,
+        message: CompileFoundation.SystemNameRedeclared(decl.name),
+        span: decl.span,
+        node: decl.name,
+        path: null,
+      });
+      return false;
+    }
     // `reserved` now holds the prelude's QUALIFIED ids (`todl.*`), so a redeclaration
     // only genuinely collides when the local name qualifies to the same id.
     if (reserved.size > 0 && named && reserved.has(NodeIdQualifier.Qualify(ns, decl.name)))
@@ -321,7 +335,8 @@ export function loadInto(
   // `undefinedIds` accumulates everything that fails to resolve; it is threaded
   // into every `commit()` below so edges to those ids are dropped, not dangled.
   const undefinedIds = new Set<string>();
-  const { nsOf, exists, reachable, resolveRef } = makeResolver(model, defined, sourceNs, reserved);
+  const resolver = makeResolver(model, defined, sourceNs, reserved);
+  const { nsOf, exists, reachable, resolveRef } = resolver;
 
   // Normalize + validate `uses` targets FIRST — the term-body scope resolution
   // below reads each taxonomy's (flat) `uses` list to form `used.term`
@@ -734,7 +749,7 @@ export function loadInto(
     }
     for (const field of declaration.fields)
     {
-      second.addField(conceptId, field.name, field.type, field.cardinality);
+      second.addField(conceptId, field.name, field.type, field.cardinality, field.secured === true);
     }
     for (const relationship of declaration.relationships)
     {
@@ -797,6 +812,7 @@ export function loadInto(
     if (model.has(identityId) || stagedIdentities.has(identityId)) continue;
     stagedIdentities.add(identityId);
     identityBuilder.defineIdentity(identityId, conceptId, declaration.key);
+    model.recordSpan(FieldSecurityRules.KeySpanKey(identityId, declaration.key), declaration.keySpan ?? declaration.span);
     recordHome(rec, identityId);
   }
   identityBuilder.commit(undefinedIds);
@@ -861,6 +877,11 @@ export function loadInto(
           span: rule.span, node: conceptId, path: unknown,
         });
         continue;
+      }
+      for (const field of normalized)
+      {
+        const fieldSpanKey = FieldSecurityRules.KeySpanKey(`${conceptId}@match`, field);
+        if (model.spanOf(fieldSpanKey) === null) model.recordSpan(fieldSpanKey, rule.span);
       }
       const existing = matchRulesByConcept.get(conceptId);
       if (existing === undefined)
@@ -934,75 +955,24 @@ export function loadInto(
   }
   mergeBuilder.commit(undefinedIds);
 
-  // ═══════════════════════ POLICY declarations (access rules) ═══════════════════════
-  // Lower each `policy <Concept> { allow|deny <action> when <pred>; ... }`. A malformed
-  // predicate or an unknown `entity.<member>` is diagnosed and the rule DROPPED (never
-  // silently lowered). Rules append per concept, in order, into ONE `<concept>@policy` node.
-  const policyBuilder = model.builder();
-  const policyRulesByConcept = new Map<NodeId, { effect: string; action: string; predicate: unknown }[]>();
-  const policyConceptOrder: NodeId[] = [];
-  for (const { ns, imports, uri, decl: declaration } of units)
+  // ═══════════════════════ SECURITY declarations (roles, contributions, profiles) ═══════════════════════
+  // `role` / `contribute` lower to `<ns>.<name>@role` / `<ns>.<baseRole>@contribution` nodes; concept references
+  // resolve here (unknown concepts are diagnosed and dropped). Whole-model rules, package scope included, run in
+  // SecurityValidator against the compile's seeded ids.
+  const securityUnits: ISecurityUnit[] = [];
+  for (const unit of units)
   {
-    if (declaration.kind !== DeclKind.Policy) continue;
-    policyBuilder.setNamespace(ns);
-    if (rec !== undefined) rec.current = uri;
-    const resolved = resolveRef(declaration.concept, { ns, imports });
-    const conceptId = resolved.kind === "qualified" ? resolved.flat : declaration.concept;
-    if (resolved.kind === "undefined" || resolved.kind === "unreachable" || model.resolve(conceptId)?.metaKind !== MetaKind.Concept)
+    const decl = unit.decl;
+    if (decl.kind === DeclKind.Role || decl.kind === DeclKind.Contribution || decl.kind === DeclKind.Profile)
     {
-      diagnostics.push({
-        code: DiagnosticCode.PolicyUnknownConcept, severity: Severity.Error,
-        message: `policy references unknown concept "${declaration.concept}"`,
-        span: declaration.conceptSpan ?? declaration.span, node: declaration.concept, path: null,
-      });
-      continue;
-    }
-    const fieldNames = new Set(model.effectiveSchema(conceptId).fields.map((f) => f.name));
-    for (const rule of declaration.rules)
-    {
-      let predicate: PolicyPredicate;
-      try
-      {
-        predicate = parsePolicyPredicate(rule.predicate);
-      }
-      catch (error)
-      {
-        diagnostics.push({
-          code: DiagnosticCode.PolicyUnsupportedRule, severity: Severity.Error,
-          message: `policy rule is not a valid predicate: ${(error as Error).message}`,
-          span: rule.span, node: conceptId, path: null,
-        });
-        continue;
-      }
-      // Only entity-rooted members are validated; principal.<x> claims have no schema yet (later phase).
-      const unknown = PolicyPredicateMembers.EntityMembers(predicate).find((m) => m !== Builder.StorageIdKey && !fieldNames.has(m));
-      if (unknown !== undefined)
-      {
-        diagnostics.push({
-          code: DiagnosticCode.PolicyUnknownField, severity: Severity.Error,
-          message: `policy rule field "${unknown}" is not a field of "${declaration.concept}"`,
-          span: rule.span, node: conceptId, path: unknown,
-        });
-        continue;
-      }
-      const serialized = { effect: rule.effect, action: rule.action, predicate: JSON.parse(PolicyPredicateCodec.ToJson(predicate)) as unknown };
-      const existing = policyRulesByConcept.get(conceptId);
-      if (existing === undefined)
-      {
-        policyRulesByConcept.set(conceptId, [serialized]);
-        policyConceptOrder.push(conceptId);
-      }
-      else existing.push(serialized);
+      securityUnits.push({ ns: unit.ns, imports: unit.imports, uri: unit.uri, decl });
     }
   }
-  for (const conceptId of policyConceptOrder)
+  for (const home of new SecurityLowering(model, resolver, diagnostics).Lower(securityUnits))
   {
-    const policyId = `${conceptId}@policy`;
-    if (model.has(policyId)) continue;
-    policyBuilder.definePolicy(policyId, conceptId, JSON.stringify(policyRulesByConcept.get(conceptId)!));
-    recordHome(rec, policyId);
+    if (rec !== undefined) rec.current = home.Uri;
+    recordHome(rec, home.Id);
   }
-  policyBuilder.commit(undefinedIds);
 
   // ═══════════════════ CONNECTORS + POPULATIONS (external data) ═════════════════
   // `datasource` decls lower to namespace-scoped Connector nodes
@@ -1174,6 +1144,7 @@ export function loadInto(
       if (model.has(bindingId)) continue;
       const source = populate.source ?? conceptId.slice(conceptId.lastIndexOf(".") + 1);
       populateBuilder.defineBinding(bindingId, modelNodeId, conceptId, connectorId, source, idKey, JSON.stringify(fieldMap), !populate.readOnly, versionMember, populate.concurrency, populate.atomicity);
+      model.recordSpan(bindingId, populate.conceptSpan ?? populate.span);
       recordHome(rec, bindingId);
     }
   }
@@ -1382,6 +1353,9 @@ function recordSpans(model: Repository, units: readonly { ns: string; decl: Decl
         break;
       case DeclKind.Package:
         break; // application spans are recorded during the applications pass
+      case DeclKind.Operator:
+        if (declaration.glyphSpan !== undefined) model.recordSpan(declaration.glyph, declaration.glyphSpan);
+        break;
     }
   }
 }
@@ -1394,6 +1368,10 @@ class TypeMemberSpanRecorder
     for (const member of [...decl.fields, ...decl.relationships])
     {
       if (member.nameSpan !== undefined) model.recordSpan(Repository.memberKey(id, member.name), member.nameSpan);
+    }
+    for (const field of decl.fields)
+    {
+      if (field.securedSpan !== undefined) model.recordSpan(FieldSecurityRules.SecuredSpanKey(id, field.name), field.securedSpan);
     }
     if (decl.kind !== DeclKind.Concept) return;
     for (const derive of decl.derives) model.recordSpan(Repository.deriveKey(id, derive.member), derive.span);

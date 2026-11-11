@@ -20,7 +20,7 @@ import { Domain } from '../../../domain/domain.js';
 import { MemoryPackageSource } from '../../../domain/memory-package-source.js';
 import { EngineFixture } from '../../tests/EngineFixture.js';
 import type { ISnapshotDescription } from '../../SnapshotDescription.js';
-import { SystemPackage } from '../SystemPackage.js';
+import { SystemPackage } from '../../../solution-services/package-manager/system-package.js';
 import { ShareRight, ShareSubject, SystemNames } from '../SystemNames.js';
 import { ShareGrants } from '../ShareGrants.js';
 import { ShareGrantScope, type IShareSubjects } from '../ShareGrantScope.js';

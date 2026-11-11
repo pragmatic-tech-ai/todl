@@ -9,6 +9,8 @@
 import { MetaKind } from "../compiler-services/model/kinds.js";
 import { Cardinality, type NodeId } from "../compiler-services/model/graph.js";
 import { Repository } from "../compiler-services/model/model.js";
+import { toJSON } from "../compiler-services/emit/json.js";
+import { CompileFoundation, FoundationKind } from "../compiler-services/stdlib/compile-foundation.js";
 import { pascalCase, camelCase, pluralize, allocateNames, allocateUnique } from "./naming.js";
 
 export interface ReadClientOptions
@@ -19,6 +21,8 @@ export interface ReadClientOptions
   importSpecifier?: string;
   /** Omit the file header + import lines (the caller emits its own). Default false. */
   omitHeader?: boolean;
+  /** The `todl.system` ids the model never uses (CompileFoundation.UnusedSystemIds), when the caller already has them. */
+  unusedSystemIds?: ReadonlySet<string>;
 }
 
 /** True when `typeId` names a concept or taxonomy (→ reference); false for a primitive. */
@@ -61,14 +65,16 @@ export function generateReadClient(repo: Repository, options: ReadClientOptions)
 {
   const importSpecifier = options.importSpecifier ?? "@pragmatic-tech-ai/todl";
 
+  // `todl.system` nodes the compile seeded but the model never uses get no generated surface.
+  const unused = options.unusedSystemIds ?? CompileFoundation.UnusedSystemIds(FoundationKind.PreludeAndSystem, toJSON(repo));
   const concepts = repo
     .allNodes()
-    .filter((n) => n.metaKind === MetaKind.Concept)
+    .filter((n) => n.metaKind === MetaKind.Concept && !unused.has(n.id))
     .map((n) => n.id)
     .sort();
   const taxonomies = repo
     .allNodes()
-    .filter((n) => n.metaKind === MetaKind.Taxonomy)
+    .filter((n) => n.metaKind === MetaKind.Taxonomy && !unused.has(n.id))
     .map((n) => n.id)
     .sort();
 

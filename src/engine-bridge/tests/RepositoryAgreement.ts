@@ -3,6 +3,8 @@ import { AccessScope, type GraphEngine } from "@pragmatic-tech-ai/graph";
 import type { Repository } from "../../compiler-services/model/model.js";
 import type { Node } from "../../compiler-services/model/graph.js";
 import { MetaKind } from "../../compiler-services/model/kinds.js";
+import { toJSON } from "../../compiler-services/emit/json.js";
+import { CompileFoundation, FoundationKind } from "../../compiler-services/stdlib/compile-foundation.js";
 import { MessageFormat } from "../MessageFormat.js";
 import { TodlNames } from "../TodlNames.js";
 
@@ -58,15 +60,17 @@ export class RepositoryAgreement
     /** Asserts `engine` agrees with `repo`; `label` prefixes every failure message. */
     public static async Compare(engine: GraphEngine, repo: Repository, label: string): Promise<IAgreementCounts>
     {
-        const concepts = [...repo.nodesOfMetaKind(MetaKind.Concept), ...repo.nodesOfMetaKind(MetaKind.Aspect)];
-        const seeded = RepositoryAgreement.InstancesOf(repo, concepts);
+        // The described closure leaves out the seeded todl.system nodes the model never uses, so the engine has no such types.
+        const unused = CompileFoundation.UnusedSystemIds(FoundationKind.PreludeAndSystem, toJSON(repo));
+        const concepts = [...repo.nodesOfMetaKind(MetaKind.Concept), ...repo.nodesOfMetaKind(MetaKind.Aspect)].filter((x) => !unused.has(x));
+        const seeded = RepositoryAgreement.InstancesOf(repo, concepts).filter((n) => !unused.has(n.id));
         const catalog = engine.Catalog;
         let pairs = 0;
-        const terms = repo.nodesOfMetaKind(MetaKind.Term);
+        const terms = repo.nodesOfMetaKind(MetaKind.Term).filter((x) => !unused.has(x));
         assert.deepEqual(await RepositoryAgreement.Scan(engine, TodlNames.Term), [...terms].sort(), MessageFormat.Format(RepositoryAgreement.ScanMessage, label, TodlNames.Term));
         for (const x of concepts)
         {
-            const instances = repo.InstancesMatching(x).filter((n) => !repo.isClass(n.id)).map((n) => n.id);
+            const instances = repo.InstancesMatching(x).filter((n) => !repo.isClass(n.id) && !unused.has(n.id)).map((n) => n.id);
             const expected = (x === TodlNames.Element ? [...instances, ...terms] : instances).sort();
             assert.deepEqual(await RepositoryAgreement.Scan(engine, x), expected, MessageFormat.Format(RepositoryAgreement.ScanMessage, label, x));
             for (const instance of seeded)

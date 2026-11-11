@@ -1,10 +1,20 @@
-/** Names of the `todl.system` package (ruling T10): its identity and the share-grant concept's members. */
+import { SecurityNames } from '../../compiler-services/security/security-names.js';
+
+/** Names of the `todl.system` package (ruling T10): its identity, the Owned aspect and the share-grant concept's members. */
 export class SystemNames
 {
     /** The system package's model id. */
-    public static readonly Model = 'todl.system';
+    public static readonly Model = SecurityNames.SystemModel;
     /** The system package's version. */
-    public static readonly Version = '1.0.0';
+    public static readonly Version = SecurityNames.SystemVersion;
+    /** The aspect of a record owned by a principal and a business unit. */
+    public static readonly Owned = SecurityNames.OwnedAspect;
+    /** Owned property: the owning principal id. */
+    public static readonly Owner = SecurityNames.Owner;
+    /** Owned property: the owning business unit id. */
+    public static readonly OwningBusinessUnit = SecurityNames.OwningBusinessUnit;
+    /** Both Owned system fields (owner, owningBusinessUnit). */
+    public static readonly SystemFields: ReadonlySet<string> = SecurityNames.SystemFields;
     /** The concept of one share of one record with one subject. */
     public static readonly ShareGrant = 'todl.system.ShareGrant';
     /** ShareGrant relationship: the shared record (any element; an external record is linked through its stub). */

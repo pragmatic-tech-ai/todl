@@ -1,13 +1,14 @@
 import { BindingTable, type ISchemaDescription } from '@pragmatic-tech-ai/graph';
 import { ConnectorPlanEmitter } from '../../codegen/connector-plan-emitter.js';
 import { ConnectorDeclaration } from '../../compiler-services/connectors/connector-declaration.js';
-import { fromJSON, type JsonNode } from '../../compiler-services/emit/json.js';
+import type { JsonNode } from '../../compiler-services/emit/json.js';
 import { Builder } from '../../compiler-services/model/builder.js';
 import { MetaKind } from '../../compiler-services/model/kinds.js';
-import { Domain, type IPackageDocumentSource, type PackageRef, type PackageSource, type ResolvedPackage } from '../../domain/domain.js';
+import { Domain, type IPackageDocumentSource, type PackageRef, type PackageSource } from '../../domain/domain.js';
 import type { MetadataSnapshot } from '../../domain/metadata-snapshot.js';
 import type { ConnectorBinding, ConnectorSpec, ModelConnectorPlan } from '../../model-data/connector-plan.js';
 import { ModelShardExtractor } from '../../model-data/model-shard-extractor.js';
+import { PackageManifestBridge } from '../../solution-services/package-manager/package-manifest-bridge.js';
 import type { PackageDocument } from '../../publish/publish.js';
 import type { IExternalBinding, IExternalConnectorPlan } from '../external/ExternalBinding.js';
 import { ExternalIdentity } from '../external/ExternalIdentity.js';
@@ -15,11 +16,13 @@ import { MessageFormat } from '../MessageFormat.js';
 import { SnapshotDescriber } from '../SnapshotDescriber.js';
 import { DescribeDiagnosticCode, type IDescribeDiagnostic } from '../SnapshotDescription.js';
 import { SystemNames } from '../system/SystemNames.js';
-import { SystemPackage } from '../system/SystemPackage.js';
+import { SystemFirstPackageSource } from '../../solution-services/package-manager/system-first-package-source.js';
+import { SystemPackage } from '../../solution-services/package-manager/system-package.js';
 import { TodlNames } from '../TodlNames.js';
 import { ConnectorPlanMerge } from './ConnectorPlanMerge.js';
 import { DeliveryChannel, type IPackageDelivery } from './PackageDelivery.js';
 import { EnvironmentCatalogError, EnvironmentCatalogErrorCode } from './EnvironmentCatalogError.js';
+import { EnvironmentSecurity } from './EnvironmentSecurity.js';
 import { PackageVersionUnifier } from './PackageVersionUnifier.js';
 import { UnifiedPackageSource } from './UnifiedPackageSource.js';
 
@@ -46,31 +49,8 @@ export interface IEnvironmentCatalog
     readonly HomeModels: ReadonlyMap<string, string>;
     /** The describer's diagnostics (none is ConflictingDefinition: that is an error). */
     readonly Diagnostics: readonly IDescribeDiagnostic[];
-}
-
-/** A package source that serves `todl.system` from SystemPackage and every other model from `inner`. */
-class SystemFirstPackageSource implements PackageSource, IPackageDocumentSource
-{
-    private readonly system = new SystemPackage();
-
-    public constructor(private readonly inner: PackageSource & IPackageDocumentSource)
-    {
-    }
-
-    public resolve(ref: PackageRef): Promise<ResolvedPackage>
-    {
-        return ref.model === SystemNames.Model ? this.system.resolve(ref) : this.inner.resolve(ref);
-    }
-
-    public async versions(model: string): Promise<readonly string[]>
-    {
-        return model === SystemNames.Model ? this.system.versions(model) : ((await this.inner.versions?.(model)) ?? []);
-    }
-
-    public Document(ref: Required<PackageRef>): Promise<PackageDocument>
-    {
-        return ref.model === SystemNames.Model ? this.system.Document(ref) : this.inner.Document(ref);
-    }
+    /** Every chosen package's security, composed from the same documents, so swapping the catalog swaps it too (spec §9.4). */
+    readonly Security: EnvironmentSecurity;
 }
 
 /**
@@ -140,14 +120,16 @@ export class EnvironmentCatalogComposer
         }
         const description = described.Description;
         const external = EnvironmentCatalogComposer.Described(description, merged.External);
+        const homes = EnvironmentCatalogComposer.HomeModels(documents);
         return {
             Description: description,
             Packages: packages,
             Snapshot: domain.Snapshot,
             Connectors: EnvironmentCatalogComposer.Connectors(external, merged.Specs),
             Identity: new ExternalIdentity(description, external),
-            HomeModels: EnvironmentCatalogComposer.HomeModels(documents),
+            HomeModels: homes,
             Diagnostics: described.Diagnostics,
+            Security: EnvironmentSecurity.Compose(documents, homes, description, external, unified.Deliveries),
         };
     }
 
@@ -156,6 +138,8 @@ export class EnvironmentCatalogComposer
      * may `connect` a datasource declared in a dependency, which the own-only document does not hold, so the plan is
      * built over the document plus the datasource nodes of its (unified) dependency closure. A population whose connector
      * is still not visible is UnknownConnector (PlanFor would skip it, and the concept would fall to engine storage).
+     * The repository is built over the compile foundation and the chosen documents of the dependency closure, so the
+     * document's edges to `todl.system` nodes and to a dependency's concepts (`Contractor : hr.Employee`) resolve.
      */
     private static PlanOf(ref: Required<PackageRef>, documents: ReadonlyMap<string, PackageDocument>, deliveriesOf: ReadonlyMap<string, readonly string[]>): ModelConnectorPlan
     {
@@ -175,7 +159,8 @@ export class EnvironmentCatalogComposer
             }
         }
         const plan: ModelConnectorPlan = { Model: ref.model, Version: ref.version, Connectors: [], Bindings: [] };
-        const repository = fromJSON(visible);
+        const closure = EnvironmentCatalogComposer.DependencyClosure(ref.model, documents).map((m) => documents.get(m)!);
+        const repository = PackageManifestBridge.repositoryOf(visible, closure);
         for (const model of ModelShardExtractor.ModelsOf(doc))
         {
             const part = ConnectorPlanEmitter.PlanFor(repository, model);
@@ -200,15 +185,9 @@ export class EnvironmentCatalogComposer
         {
             if (node.metaKind === MetaKind.Connector) declarers.set(node.id, { Node: node, Model: model });
         }
-        const seen = new Set<string>();
-        const queue = (doc.dependencies ?? []).map((d) => d.id);
-        while (queue.length > 0)
+        for (const next of EnvironmentCatalogComposer.DependencyClosure(model, documents))
         {
-            const next = queue.shift()!;
-            const dependency = documents.get(next);
-            if (seen.has(next) || dependency === undefined) continue;
-            seen.add(next);
-            for (const node of dependency.nodes)
+            for (const node of documents.get(next)!.nodes)
             {
                 if (node.metaKind !== MetaKind.Connector) continue;
                 const first = declarers.get(node.id);
@@ -227,9 +206,26 @@ export class EnvironmentCatalogComposer
                                 EnvironmentCatalogError.DeliveredBy(deliveries), model));
                 }
             }
-            queue.push(...(dependency.dependencies ?? []).map((d) => d.id));
         }
         return { ...doc, nodes };
+    }
+
+    /** The models package `model` depends on, transitively, breadth-first, each once; only chosen models (those in `documents`). */
+    private static DependencyClosure(model: string, documents: ReadonlyMap<string, PackageDocument>): string[]
+    {
+        const out: string[] = [];
+        const seen = new Set<string>();
+        const queue = (documents.get(model)!.dependencies ?? []).map((d) => d.id);
+        while (queue.length > 0)
+        {
+            const next = queue.shift()!;
+            const dependency = documents.get(next);
+            if (seen.has(next) || dependency === undefined) continue;
+            seen.add(next);
+            out.push(next);
+            queue.push(...(dependency.dependencies ?? []).map((d) => d.id));
+        }
+        return out;
     }
 
     /** The external bindings the description kept (the describer drops invalid and duplicate ones), in its order. */

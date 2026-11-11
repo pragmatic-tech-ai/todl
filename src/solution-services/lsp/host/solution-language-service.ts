@@ -14,7 +14,7 @@ import type { PackageSource } from "../../../domain/domain.js";
 import { AnalysisEngine } from "../analysis/analysis-engine.js";
 import { AnalyzeKind, type AnalyzeContext, type AnalyzeRequest, type AnalyzeResponse } from "../analysis/protocol.js";
 import type { GraphSlice } from "../analysis/graph-slice.js";
-import { preludeDocument } from "../../../compiler-services/stdlib/prelude.js";
+import { CompileFoundation, FoundationKind } from "../../../compiler-services/stdlib/compile-foundation.js";
 import type { RenameError } from "../analysis/rename-provider.js";
 import { AnalysisEngineKey, type IAnalysisEngine } from "./i-analysis-engine.js";
 import { ProjectRegistry, PushedSourceProvider, type Project, type OpenDocuments } from "./project-registry.js";
@@ -778,7 +778,7 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
         }
         if (ownIds.size === 0) return undefined;
         const visibleIds = new Set<string>(ownIds);
-        for (const node of preludeDocument().nodes) visibleIds.add(node.id);
+        for (const doc of CompileFoundation.Documents(FoundationKind.PreludeAndSystem)) for (const node of doc.nodes) visibleIds.add(node.id);
         for (const base of project.Bases) for (const node of base.nodes) visibleIds.add(node.id);
         const diagnosticsByUri = this.solutionGraph.DiagnosticsByUri();
         return {

@@ -78,11 +78,13 @@ import {
   type IdentityDecl,
   type MatchDecl,
   type MatchRule,
+  type RoleDecl,
+  type ContributionDecl,
+  type ProfileDecl,
+  type PrivilegeEntry,
+  type ConceptPrivileges,
+  type ProfileEntry,
   type MergeDecl,
-  type PolicyDecl,
-  type PolicyRule,
-  PolicyEffect,
-  PolicyAction,
   type MergeRule,
   MergeStrategy,
   type EdgeApplication,
@@ -139,6 +141,12 @@ class Parser
   private static readonly DeriveKeyword = "derive";
   private static readonly MemberKeyword = "member";
   private static readonly AspectKeyword = "aspect";
+  private static readonly RoleKeyword = "role";
+  private static readonly ContributeKeyword = "contribute";
+  private static readonly ProfileKeyword = "profile";
+  private static readonly SecuredKeyword = "secured";
+  private static readonly ExpectedConceptFieldMessage = "expected <Concept>.<field>";
+  private static readonly SecuredNonFieldMessage = "\"secured\" applies only to a field declaration (`secured <name> : <type>;`)";
   private static readonly DescriptionMember = "description";
   private static readonly ReadOnlyMember = "read-only";
   private static readonly VersionMember = "version";
@@ -255,13 +263,21 @@ class Parser
       this.checkKeyword("model") || this.checkKeyword("annotation") ||
       this.checkKeyword("package") || this.checkKeyword("operator") ||
       this.checkKeyword("identity") || this.checkKeyword("match") ||
-      this.checkKeyword("merge") || this.checkKeyword("policy") || this.checkKeyword("datasource") ||
+      this.checkKeyword("merge") || this.checkKeyword("datasource") ||
+      this.startsSecurityDeclaration() ||
       this.checkKeyword("class") || this.checkKeyword("internal") || this.checkKeyword("sealed")
     )
     {
       return true;
     }
     return this.check(TokenKind.Identifier) && this.peekKind(1) === TokenKind.Identifier;
+  }
+
+  /** True at `role` / `contribute` / `profile` followed by an identifier (otherwise it is a plain identifier). */
+  private startsSecurityDeclaration(): boolean
+  {
+    return (this.checkKeyword(Parser.RoleKeyword) || this.checkKeyword(Parser.ContributeKeyword) || this.checkKeyword(Parser.ProfileKeyword)) &&
+      this.peekKind(1) === TokenKind.Identifier;
   }
 
   /** After a member error, skip to the next member boundary inside the current
@@ -327,11 +343,16 @@ class Parser
    * been consumed yet), so the span covers exactly the tokens the production ate. */
   private spanFrom(start: Token): SourceSpan
   {
-    const last = this.tokens[this.pos > 0 ? this.pos - 1 : 0] ?? start;
+    return this.spanBetween(start, this.tokens[this.pos > 0 ? this.pos - 1 : 0] ?? start);
+  }
+
+  /** Span from the start of `start` through the end of `end` (both already consumed). */
+  private spanBetween(start: Token, end: Token): SourceSpan
+  {
     return {
       uri: this.uri,
       start: { line: start.line, column: start.column },
-      end: { line: last.endLine, column: last.endColumn },
+      end: { line: end.endLine, column: end.endColumn },
     };
   }
 
@@ -397,6 +418,9 @@ class Parser
     if (this.checkKeyword("viewpoint")) return this.parseViewpoint(start);
     if (this.checkKeyword("concept")) return this.parseConcept(start);
     if (this.checkKeyword(Parser.AspectKeyword) && this.peekKind(1) === TokenKind.Identifier) return this.parseAspect(start);
+    if (this.checkKeyword(Parser.RoleKeyword) && this.peekKind(1) === TokenKind.Identifier) return this.parseRole(start);
+    if (this.checkKeyword(Parser.ContributeKeyword) && this.peekKind(1) === TokenKind.Identifier) return this.parseContribution(start);
+    if (this.checkKeyword(Parser.ProfileKeyword) && this.peekKind(1) === TokenKind.Identifier) return this.parseProfile(start);
     if (this.checkKeyword("model")) return this.parseModel(start);
     if (this.checkKeyword("annotation")) return this.parseAnnotation(start);
     if (this.checkKeyword("package")) return this.parsePackage(start);
@@ -404,7 +428,6 @@ class Parser
     if (this.checkKeyword("identity")) return this.parseIdentity(start);
     if (this.checkKeyword("match")) return this.parseMatch(start);
     if (this.checkKeyword("merge")) return this.parseMerge(start);
-    if (this.checkKeyword("policy")) return this.parsePolicy(start);
     if (this.checkKeyword("datasource")) return this.parseConnector(start);
     if (this.checkKeyword("class"))
     {
@@ -758,6 +781,89 @@ class Parser
     return decl;
   }
 
+  /** `<Concept> { <action> = <depth>; … }` blocks until the closing `}` of the enclosing role/contribution body. */
+  private parseConceptPrivileges(): ConceptPrivileges[]
+  {
+    const concepts: ConceptPrivileges[] = [];
+    this.parseBodyMembers(() =>
+    {
+      const conceptStart = this.current();
+      const concept = this.parseDottedPath();
+      const conceptSpan = this.spanFrom(conceptStart);
+      const entries: PrivilegeEntry[] = [];
+      this.expect(TokenKind.LBrace);
+      this.parseBodyMembers(() =>
+      {
+        const entryStart = this.current();
+        const actionTok = this.expect(TokenKind.Identifier);
+        this.expect(TokenKind.Equals);
+        const depthTok = this.expect(TokenKind.Identifier);
+        this.expect(TokenKind.Semicolon);
+        entries.push({
+          action: actionTok.value, depth: depthTok.value, span: this.spanFrom(entryStart),
+          actionSpan: tokenSpan(actionTok, this.uri), depthSpan: tokenSpan(depthTok, this.uri),
+        });
+      });
+      this.expect(TokenKind.RBrace);
+      concepts.push({ concept, entries, span: this.spanFrom(conceptStart), conceptSpan });
+    });
+    return concepts;
+  }
+
+  /** `role <Name> { <Concept> { <action> = <depth>; … } … }`. Namespace scope only. */
+  private parseRole(start: Token): RoleDecl
+  {
+    this.expectKeyword(Parser.RoleKeyword);
+    const nameTok = this.expect(TokenKind.Identifier);
+    this.expect(TokenKind.LBrace);
+    const concepts = this.parseConceptPrivileges();
+    this.expect(TokenKind.RBrace);
+    return { kind: DeclKind.Role, name: nameTok.value, concepts, span: this.spanFrom(start), nameSpan: tokenSpan(nameTok, this.uri) };
+  }
+
+  /** `contribute <BaseRole> { <Concept> { <action> = <depth>; … } … }`. Namespace scope only. */
+  private parseContribution(start: Token): ContributionDecl
+  {
+    this.expectKeyword(Parser.ContributeKeyword);
+    const baseTok = this.expect(TokenKind.Identifier);
+    this.expect(TokenKind.LBrace);
+    const concepts = this.parseConceptPrivileges();
+    this.expect(TokenKind.RBrace);
+    return { kind: DeclKind.Contribution, baseRole: baseTok.value, concepts, span: this.spanFrom(start), baseRoleSpan: tokenSpan(baseTok, this.uri) };
+  }
+
+  /** `profile <Name> { <Concept>.<field> : <right>, …; … }`. Namespace scope only. */
+  private parseProfile(start: Token): ProfileDecl
+  {
+    this.expectKeyword(Parser.ProfileKeyword);
+    const nameTok = this.expect(TokenKind.Identifier);
+    const entries: ProfileEntry[] = [];
+    this.expect(TokenKind.LBrace);
+    this.parseBodyMembers(() =>
+    {
+      const entryStart = this.current();
+      const segments = this.parseDottedTokens();
+      if (segments.length < 2) throw this.error(Parser.ExpectedConceptFieldMessage);
+      const fieldTok = segments[segments.length - 1]!;
+      const conceptEndTok = segments[segments.length - 2]!;
+      this.expect(TokenKind.Colon);
+      const rights: string[] = [];
+      do
+      {
+        rights.push(this.expect(TokenKind.Identifier).value);
+      }
+      while (this.match(TokenKind.Comma));
+      this.expect(TokenKind.Semicolon);
+      entries.push({
+        concept: segments.slice(0, -1).map((t) => t.value).join("."), field: fieldTok.value, rights, span: this.spanFrom(entryStart),
+        conceptSpan: this.spanBetween(entryStart, conceptEndTok),
+        fieldSpan: tokenSpan(fieldTok, this.uri),
+      });
+    });
+    this.expect(TokenKind.RBrace);
+    return { kind: DeclKind.Profile, name: nameTok.value, entries, span: this.spanFrom(start), nameSpan: tokenSpan(nameTok, this.uri) };
+  }
+
   /** `merge <Concept> { prefer source "x" for f; prefer latest for g; }` —
    *  attribute survivorship rules for entity resolution. Namespace scope only. */
   private parseMerge(start: Token): MergeDecl
@@ -800,54 +906,6 @@ class Parser
     const decl: MergeDecl = { kind: DeclKind.Merge, concept, rules, span: this.spanFrom(start) };
     decl.conceptSpan = conceptSpan;
     return decl;
-  }
-
-  /** `policy <Concept> { allow|deny read|write when <expr>; ... }` — entity-level
-   *  access rules. Each predicate is captured as a raw token slice. Namespace scope only. */
-  private parsePolicy(start: Token): PolicyDecl
-  {
-    this.expectKeyword("policy");
-    const conceptStart = this.current();
-    const concept = this.parseDottedPath();
-    const conceptSpan = this.spanFrom(conceptStart);
-    const rules: PolicyRule[] = [];
-    this.expect(TokenKind.LBrace);
-    this.parseBodyMembers(() =>
-    {
-      const ruleStart = this.current();
-      const effect = this.parseEffect();
-      const action = this.parseAction();
-      this.expectKeyword("when");
-      const predicate = this.collectUntilSemicolon();
-      this.expect(TokenKind.Semicolon);
-      rules.push({ effect, action, predicate, span: this.spanFrom(ruleStart) });
-    });
-    this.expect(TokenKind.RBrace);
-    const decl: PolicyDecl = { kind: DeclKind.Policy, concept, rules, span: this.spanFrom(start) };
-    decl.conceptSpan = conceptSpan;
-    return decl;
-  }
-
-  private parseEffect(): PolicyEffect
-  {
-    if (this.checkKeyword("allow"))
-    {
-      this.advance();
-      return PolicyEffect.Allow;
-    }
-    this.expectKeyword("deny");
-    return PolicyEffect.Deny;
-  }
-
-  private parseAction(): PolicyAction
-  {
-    if (this.checkKeyword("read"))
-    {
-      this.advance();
-      return PolicyAction.Read;
-    }
-    this.expectKeyword("write");
-    return PolicyAction.Write;
   }
 
   /** Consume an identifier optionally extended by directly-adjacent `-ident`
@@ -1399,8 +1457,14 @@ class Parser
     }
     else
     {
+      let securedTok: Token | undefined;
+      if (this.checkKeyword(Parser.SecuredKeyword) && this.peekKind(1) === TokenKind.Identifier) securedTok = this.advance();
       const nameTok = this.expect(TokenKind.Identifier);
       const memberName = nameTok.value;
+      if (securedTok !== undefined && !this.check(TokenKind.Colon))
+      {
+        throw new ParseError(Parser.SecuredNonFieldMessage, securedTok);
+      }
       if (this.match(TokenKind.Colon))
       {
         const typeStart = this.current();
@@ -1411,6 +1475,7 @@ class Parser
         body.fields.push({
           name: memberName, type: typeName, cardinality,
           nameSpan: tokenSpan(nameTok, this.uri), typeSpan,
+          ...(securedTok === undefined ? {} : { secured: true, securedSpan: tokenSpan(securedTok, this.uri) }),
         });
       }
       else if (this.match(TokenKind.Equals))
@@ -1592,6 +1657,17 @@ class Parser
       return Cardinality.Many;
     }
     return Cardinality.One;
+  }
+
+  /** The identifier tokens of a dotted path `a.b.c`, in order (the dots are consumed, not returned). */
+  private parseDottedTokens(): Token[]
+  {
+    const parts = [this.expect(TokenKind.Identifier)];
+    while (this.match(TokenKind.Dot))
+    {
+      parts.push(this.expect(TokenKind.Identifier));
+    }
+    return parts;
   }
 
   /** Read a dotted name `a.b.c` and return it joined with `.`. Accepts a single

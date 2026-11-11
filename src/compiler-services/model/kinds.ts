@@ -21,10 +21,15 @@ export enum MetaKind
   Merge = "merge",
   Connector = "connector",
   Population = "population",
-  Policy = "policy",
   Aspect = "aspect",
   /** A concept's handle `<concept>.<member>` on an inherited/contributed member; hosts member annotations (R6). */
   MemberTarget = "member-target",
+  /** A package role: `<ns>.<name>@role`, carrying its privileges. */
+  Role = "role",
+  /** A package's privileges added to a platform base role: `<ns>.<baseRole>@contribution`. */
+  RoleContribution = "role-contribution",
+  /** A named set of field rights: `<ns>.<name>@profile`. */
+  FieldProfile = "field-profile",
 }
 
 /** Reserved id of the singleton package node that hosts package-level annotations. */

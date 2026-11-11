@@ -6,7 +6,7 @@
  * reuses the same first-wins `mergeBases` dedup the compiler uses.
  */
 import { mergeBases } from "../compiler-services/api.js";
-import { preludeDocument } from "../compiler-services/stdlib/prelude.js";
+import { CompileFoundation, FoundationKind } from "../compiler-services/stdlib/compile-foundation.js";
 import { ResolutionPass } from "../compiler-services/resolution/resolution-pass.js";
 import { Repository } from "../compiler-services/model/model.js";
 import { MetaKind } from "../compiler-services/model/kinds.js";
@@ -32,7 +32,7 @@ export class Graph
 
   private compose(): Repository
   {
-    const repository = new Repository(mergeBases([preludeDocument(), ...this.documents]));
+    const repository = new Repository(mergeBases([...CompileFoundation.Documents(FoundationKind.PreludeAndSystem), ...this.documents]));
     new ResolutionPass(repository).Resolve();
     return repository;
   }
