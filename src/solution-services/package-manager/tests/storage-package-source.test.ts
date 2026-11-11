@@ -149,3 +149,12 @@ describe("StoragePackageSource — end-to-end compose through Domain", () => {
     assert.equal(mirror.field("label")?.value, "Hi");
   });
 });
+
+describe("StoragePackageSource — Document (IPackageDocumentSource)", () => {
+  test("serves the persisted own-only document and rejects an absent version", async () => {
+    const storage = await published();
+    const source = new StoragePackageSource(storage);
+    assert.deepEqual(await source.Document({ model: "shop", version: "1.0.0" }), toJSON(buildRepo()));
+    await assert.rejects(source.Document({ model: "shop", version: "9.9.9" }));
+  });
+});

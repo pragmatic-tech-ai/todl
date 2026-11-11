@@ -61,6 +61,7 @@ import { MatchRuleNormalizer } from "./match-rule-normalizer.js";
 import { ApplicationRootPass } from "./application-root-pass.js";
 import { Repository } from "../model/model.js";
 import { Builder, type TermInput } from "../model/builder.js";
+import { ConnectorDeclaration } from "../connectors/connector-declaration.js";
 import { type ConnectionPolicy, ConnectionPolicies } from "../connectors/connection-policy.js";
 import type { Expr } from "../predicate/ast.js";
 import {
@@ -192,6 +193,10 @@ export function load(sources: SourceFile[], idGenerator: IdGenerator = new Snowf
 // a prior compile — see checkAgainst). Same 3-pass pipeline as a fresh load. A
 // reference that resolves to a node already in `model` is not reported undefined.
 // Returns the accumulated diagnostics; the caller owns the model.
+// Invariant: `provenance` maps a node id to the file that CREATED the node in this load, and nothing else. A
+// node that already existed (a base node a source merely redeclares identically) is never recorded there, since
+// the solution graph strips a file's provenance-owned nodes when the file is edited. Identical datasource
+// redeclarations are reported through `redeclaredConnectors` instead (ruling P16).
 export function loadInto(
   model: Repository,
   sources: SourceFile[],
@@ -199,6 +204,7 @@ export function loadInto(
   idGenerator: IdGenerator = new SnowflakeIdGenerator(),
   provenance?: Map<string, string>,
   policy: ConnectionPolicy = ConnectionPolicies.Default,
+  redeclaredConnectors?: Set<string>,
 ): Diagnostic[]
 {
   const diagnostics: Diagnostic[] = [];
@@ -1007,16 +1013,44 @@ export function loadInto(
   // The deployment `policy` rejects inline config / a model `provider` here.
   const connectorBuilder = model.builder();
   const connectorReservedKeys = new Set<string>([Builder.ConnectorKindAttr, Builder.ConnectorConnectionAttr, Builder.ConnectorSecretAttr, Builder.ConnectorProviderAttr]);
+  const stagedConnectors = new Map<string, Record<string, unknown>>();
   for (const { ns, uri, decl: declaration } of units)
   {
     if (declaration.kind !== DeclKind.Connector) continue;
     connectorBuilder.setNamespace(ns);
     if (rec !== undefined) rec.current = uri;
     const connectorId = `${ns}@connector:${declaration.name}`;
-    if (model.has(connectorId)) continue;
     const config: Record<string, string> = {};
     for (const a of declaration.assignments) if (!connectorReservedKeys.has(a.name) && !(a.name in config)) config[a.name] = a.value;
     const find = (key: string) => declaration.assignments.find((a) => a.name === key)?.value ?? null;
+    const declared: Record<string, unknown> = { [Builder.ConnectorNameAttr]: declaration.name, [Builder.ConnectorConfigAttr]: JSON.stringify(config) };
+    for (const key of [Builder.ConnectorKindAttr, Builder.ConnectorConnectionAttr, Builder.ConnectorSecretAttr, Builder.ConnectorProviderAttr])
+    {
+      const value = find(key);
+      if (value !== null) declared[key] = value;
+    }
+    const baseConnector = model.resolve(connectorId);
+    const existingConnector = stagedConnectors.get(connectorId) ?? (baseConnector === undefined ? undefined : Object.fromEntries(baseConnector.attrs));
+    if (existingConnector !== undefined)
+    {
+      // A base or an earlier declaration already holds this namespace-scoped id: identical is one connector, a
+      // different declaration is reported instead of silently keeping the first.
+      if (!ConnectorDeclaration.Same(existingConnector, declared))
+      {
+        diagnostics.push({
+          code: DiagnosticCode.ConnectorConflictingDeclaration, severity: Severity.Error,
+          message: ConnectorDeclaration.Redeclared(declaration.name, connectorId),
+          span: declaration.nameSpan ?? declaration.span, node: connectorId, path: null,
+        });
+      }
+      else if (baseConnector !== undefined && !stagedConnectors.has(connectorId))
+      {
+        // Ruling P16: an identical redeclaration of a base datasource is reported (not homed: provenance means
+        // "created here"), so the package's own-only document keeps it and compose can detect a changed dependency.
+        redeclaredConnectors?.add(connectorId);
+      }
+      continue;
+    }
     const kindValue = find(Builder.ConnectorKindAttr);
     if (kindValue === null || !CONNECTOR_KINDS.has(kindValue))
     {
@@ -1045,6 +1079,7 @@ export function loadInto(
         span: declaration.nameSpan ?? declaration.span, node: connectorId, path: null,
       });
     }
+    stagedConnectors.set(connectorId, declared);
     connectorBuilder.defineConnector(
       connectorId, declaration.name, find(Builder.ConnectorKindAttr), JSON.stringify(config),
       find(Builder.ConnectorConnectionAttr), find(Builder.ConnectorSecretAttr), providerValue);

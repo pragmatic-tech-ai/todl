@@ -113,6 +113,8 @@ export enum DiagnosticCode
   ConnectorWriteConflict = "connector.write-conflict",
   ConnectorWriteFailed = "connector.write-failed",
   ConnectorRefreshDropped = "connector.refresh-dropped",
+  // Two declarations of one namespace-scoped datasource id (in two bases, or a source over a base) that differ.
+  ConnectorConflictingDeclaration = "connector.conflicting-declaration",
   ResolutionUnmergedConflict = "resolution.unmerged-conflict",
   // Solution composition phase (SPEC-06): a member/dependency package could not
   // be resolved or loaded into the composed Domain.

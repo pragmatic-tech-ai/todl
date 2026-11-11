@@ -16,6 +16,22 @@ export enum EngineBridgeErrorCode
      * `DiagnosticCode.SavedModelSolutionCollision`, not an error. Kept so later values are never renumbered.
      */
     SolutionModelCollision,
+    /** An external source row holds a value that does not fit its member type, or a key or resume token is malformed. */
+    ExternalRowInvalid,
+    /** An external write batch reported per-operation failures. */
+    ExternalWriteFailed,
+    /** Compensating an applied external write failed. */
+    CompensationFailed,
+    /** A change targets an external binding that is not writable. */
+    NotWritable,
+    /** An external change the binding or adapter cannot express. */
+    UnsupportedExternalChange,
+    /** More than one external binding fits a concept, so none can be chosen. */
+    AmbiguousExternalBinding,
+    /** A concept has no home model in the environment, so an engine node of it has no owner. */
+    NoHomeModel,
+    /** A connector plan binding that its ExternalIdentity does not hold, so its public ids could never parse. */
+    UnknownExternalBinding,
 }
 
 /** Failure raised by the TODL-on-engine bridge; Code identifies the category. */

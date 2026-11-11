@@ -5,7 +5,7 @@
 // the generated app code.
 
 import type { JsonEdge, JsonNode, TodlDocument } from "../../compiler-services/emit/json.js";
-import { CypherCellCodec } from "../../cypher/cell-codec.js";
+import { CypherCellCodec } from "../wire/index.js";
 import { ModelShardExtractor } from "../../model-data/model-shard-extractor.js";
 
 export interface TenantFieldCell

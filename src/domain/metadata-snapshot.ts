@@ -96,6 +96,8 @@ export class MetadataSnapshot implements ManifestHost
      */
     private readonly homeSeed = new Map<string, HomeSeed>();
     private readonly nodes = new Heap();
+    /** identity → the identities of the manifests it was loaded over (its declared package dependencies). */
+    private readonly dependencies = new Map<string, readonly string[]>();
 
     /** The `model@version` identity used for dedup / attribution. */
     static Identity(ref: { model: string; version: string }): string
@@ -148,12 +150,40 @@ export class MetadataSnapshot implements ManifestHost
         this.order.push(manifest);
     }
 
+    /** Records the identities of the manifests `identity` was loaded over (its package dependencies), for DependsOn. */
+    RecordDependencies(identity: string, dependencies: readonly string[]): void
+    {
+        this.dependencies.set(identity, [...dependencies]);
+    }
+
+    /**
+     * True when `dependent` was loaded over `dependency`, directly or transitively (RecordDependencies). A dependent
+     * manifest carries copies of its dependencies' types, so a type in both is the dependency's declaration, not a
+     * second one; a snapshot assembled without recorded dependencies has none.
+     */
+    DependsOn(dependent: Manifest, dependency: Manifest): boolean
+    {
+        const target = MetadataSnapshot.Identity({ model: dependency.model, version: dependency.version });
+        const seen = new Set<string>();
+        const queue = [...(this.dependencies.get(MetadataSnapshot.Identity({ model: dependent.model, version: dependent.version })) ?? [])];
+        while (queue.length > 0)
+        {
+            const next = queue.shift()!;
+            if (next === target) return true;
+            if (seen.has(next)) continue;
+            seen.add(next);
+            queue.push(...(this.dependencies.get(next) ?? []));
+        }
+        return false;
+    }
+
     /** Remove a manifest from the registry and clear its host back-link. */
     Deregister(identity: string): void
     {
         const manifest = this.byIdentity.get(identity);
         if (manifest === undefined) return;
         this.byIdentity.delete(identity);
+        this.dependencies.delete(identity);
         const idx = this.order.indexOf(manifest);
         if (idx >= 0) this.order.splice(idx, 1);
         manifest.setHost(undefined);

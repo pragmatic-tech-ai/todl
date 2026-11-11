@@ -4,8 +4,6 @@ import { FakeStorage, FileChangeKind } from '@pragmatic-tech-ai/todl-runtime';
 import { ProjectContentStore } from '../project-content-store.js';
 import { ContentAdded, type ContentChange } from '../content-change.js';
 
-const tick = () => new Promise((r) => setTimeout(r, 5));
-
 function names(seen: ContentChange[]): string[]
 {
     return seen.filter((c): c is ContentAdded => c instanceof ContentAdded).map((c) => c.Node.Name).sort();
@@ -40,7 +38,7 @@ test('re-subscribe after collapse re-lists (new file seen) and restarts the watc
     assert.deepEqual(names(second), ['a.todl', 'b.todl']);     // re-list caught the new file
     await s.WriteText('c.todl', '');
     s.EmitFileChange('c.todl', FileChangeKind.Added, false);   // watcher restarted → live add flows
-    await tick();
+    await store.WhenIdle();
     assert.ok(second.some((c) => c instanceof ContentAdded && c.Node.Name === 'c.todl'));
 });
 
@@ -65,12 +63,12 @@ test('deleting an expanded folder recursively drops descendant nodes and dispose
 
     await s.Delete('sub');
     s.EmitFileChange('sub', FileChangeKind.Removed, true);
-    await tick();
+    await store.WhenIdle();
     assert.equal(store.NodeById(deepId), undefined);           // descendant folder node gone
     assert.equal(store.NodeById(xId), undefined);              // grandchild node gone
     const before = deepSeen.length;
     s.EmitFileChange('sub/deep/y.todl', FileChangeKind.Added, false);   // late change into gone subtree
-    await tick();
+    await store.WhenIdle();
     assert.equal(deepSeen.length, before);                     // its watcher was disposed
 });
 
@@ -91,13 +89,13 @@ test('renaming an expanded folder rewrites descendant paths and keeps the watche
     await s.Rename('src', 'lib');
     s.EmitFileChange('lib', FileChangeKind.Added, true);       // rename target (dir)
     s.EmitFileChange('src', FileChangeKind.Removed, true);     // rename source (dir)
-    await tick();
+    await store.WhenIdle();
     assert.equal(store.NodeById(srcId)!.Path, 'lib');          // folder path updated (same id)
     assert.equal(store.NodeById(mainId)!.Path, 'lib/main.todl'); // descendant path rewritten
 
     const before = srcSeen.length;
     await s.WriteText('lib/new.todl', '');
     s.EmitFileChange('lib/new.todl', FileChangeKind.Added, false);   // watcher live on the new path
-    await tick();
+    await store.WhenIdle();
     assert.ok(srcSeen.some((c) => c instanceof ContentAdded && c.Node.Name === 'new.todl'));
 });

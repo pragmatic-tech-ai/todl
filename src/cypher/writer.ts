@@ -1,14 +1,8 @@
 import type { Scalar } from "../manifest/logical.js";
 import type { ICypherGraph } from "./graph.js";
+import type { CypherWriteStatsDto } from "../graph-api/wire/index.js";
 
-export interface CypherWriteStatsDto
-{
-    NodesCreated: number;
-    NodesDeleted: number;
-    RelationshipsCreated: number;
-    RelationshipsDeleted: number;
-    PropertiesSet: number;
-}
+export type { CypherWriteStatsDto } from "../graph-api/wire/index.js";
 
 export class CypherWriteStats
 {

@@ -441,6 +441,28 @@ files; recompiling them, describing and calling `GraphEngine.Upgrade` is then a
 data no-op (same node values, link order and owners), and an instance that moved
 to another package is re-owned (`DevLoop.test.ts`).
 
+**Runtime on the engine (0.54.0, M2.2).** The same subpath carries the runtime
+surface; the old runtime paths are untouched until M2.3.
+
+- `DataSourceConnector` / `DataSourceTransaction` / `ChangeBatcher` /
+  `FetchTranslator` / `ResumeToken` / `ExternalIdentity`: an engine
+  `IExternalConnector` over the `IDataSourceAdapter` family (reads, push-down,
+  paging, batched writes with before-images and compensation;
+  `ExternalWriteError` carries per-operation failures).
+- `EnvironmentCatalogComposer` composes an environment's deliveries
+  (`IPackageDelivery`, `DeliveryChannel`) into an `IEnvironmentCatalog`:
+  version unification (`PackageVersionUnifier`, `UnifiedPackageSource`),
+  conflicting-definition rejection, the always-present `todl.system` package
+  (`SystemPackage`, `ShareGrants`, `ShareGrantScope`) and
+  `EnvironmentNodePlacement` for creates. Failures are
+  `EnvironmentCatalogError`.
+- `PolicyScopeCompiler.FromRules` compiles runtime policy rules with typed
+  value semantics; a `MalformedPolicy` diagnostic means the concept failed
+  closed and should be treated as fatal by the host.
+- `CypherWire` (root export) is the engine-free wire codec.
+- `IDescribeOptions.EmitExternalBindings` defaults to `false` (dev keeps M1
+  behaviour).
+
 ---
 
 ## 8. Publish and packages

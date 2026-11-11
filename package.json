@@ -1,6 +1,6 @@
 {
   "name": "@pragmatic-tech-ai/todl",
-  "version": "0.53.1",
+  "version": "0.54.0",
   "description": "Typed substrate for authoring and reasoning over ontologies and taxonomies",
   "type": "module",
   "main": "dist/index.js",
@@ -122,12 +122,13 @@
     "typecheck": "tsc --noEmit",
     "typecheck:demos": "tsc -p cli/tsconfig.json --noEmit",
     "gen:prelude": "node scripts/gen-prelude.mjs",
+    "gen:system-package": "tsx --conditions=development scripts/gen-system-package.mts",
     "gen:scaffold": "node scripts/gen-scaffold.mjs",
     "compile:mu": "node scripts/compile-mu.mjs",
     "gen:corpus": "node scripts/gen-corpus.mjs",
     "gen:goldens": "tsx --conditions=development examples/tools/update-goldens.mts && npm run gen:corpus",
     "cli": "tsx --conditions=development cli/src/main.ts",
-    "build": "npm run gen:prelude && npm run gen:scaffold && npm run compile:mu && tsc -p tsconfig.build.json",
+    "build": "npm run gen:prelude && npm run gen:system-package && npm run gen:scaffold && npm run compile:mu && tsc -p tsconfig.build.json",
     "clean": "rimraf dist",
     "clean:smoke": "rimraf --glob \"user-smoke-tests/*/\"",
     "prepublishOnly": "npm run clean && npm run build",
@@ -147,7 +148,7 @@
     "vscode-languageserver-types": "3.17.5"
   },
   "peerDependencies": {
-    "@pragmatic-tech-ai/graph": "^0.1.2"
+    "@pragmatic-tech-ai/graph": "^0.2.0"
   },
   "peerDependenciesMeta": {
     "@pragmatic-tech-ai/graph": {
@@ -155,7 +156,7 @@
     }
   },
   "devDependencies": {
-    "@pragmatic-tech-ai/graph": "^0.1.2",
+    "@pragmatic-tech-ai/graph": "^0.2.0",
     "@types/node": "^22.10.0",
     "esbuild": "^0.24.2",
     "playwright": "^1.63.0",
