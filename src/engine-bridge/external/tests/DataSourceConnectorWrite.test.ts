@@ -57,7 +57,7 @@ class EngineHarness
         const plan = Fx.Plan(binding);
         const identity = Fx.Identity(plan);
         const catalog = new DataSourceAdapterCatalog().Register(new RecordingAdapterFactory(adapter));
-        const connector = await DataSourceConnector.Open(plan, catalog, new ServiceProvider(), identity, Fx.Description());
+        const connector = await DataSourceConnector.Open(plan, catalog, new ServiceProvider(), identity);
         const engine = await EngineFixture.Open({ Description: Fx.Description(), External: new Set(), Diagnostics: [] }, { Connectors: [connector] });
         return new EngineHarness(adapter, plan, identity, engine, catalog);
     }
@@ -92,6 +92,8 @@ class WriteHarness
     public static readonly S8 = '8';
     public static readonly S9 = '9';
     public static readonly NewName = 'N';
+    public static readonly Unsafe = '9007199254740993';
+    public static readonly Padded = '007';
     public static readonly Other = 'Other';
     public static readonly Beta = 'Beta';
     public static readonly Owner = 'other.Model';
@@ -108,7 +110,7 @@ class WriteHarness
         Adapter.PartialUpserts = true;
         this.Plan = Fx.Plan(binding);
         this.Identity = Fx.Identity(this.Plan);
-        this.Connector = new DataSourceConnector(this.Plan, new VersionBumpingAdapter(Adapter), this.Identity, Fx.Description());
+        this.Connector = new DataSourceConnector(this.Plan, new VersionBumpingAdapter(Adapter), this.Identity);
     }
 
     public static Over(records: ExternalRecord[] = [], overrides: Partial<ConnectorBinding> = {}): WriteHarness
@@ -241,6 +243,16 @@ describe('DataSourceConnector write side', () =>
         const txn = await h.Connector.Begin();
         await WriteHarness.Rejects(txn.Apply(WriteHarness.Changes(WriteHarness.Create(h.Id(randomUUID())))), EngineBridgeErrorCode.UnsupportedExternalChange);
         assert.equal(h.Adapter.Calls, 0);
+    });
+
+    test('an Int64 id beyond 2^53 is created by its decimal text; a non-canonical numeric key is refused', () =>
+    {
+        const h = WriteHarness.Over();
+        const big = h.Id(WriteHarness.Unsafe);
+        assert.deepEqual(h.Operations(WriteHarness.Create(big), WriteHarness.Set(big, Fx.Id, BigInt(WriteHarness.Unsafe))), [
+            { Kind: WriteOperationKind.Upsert, Key: WriteHarness.Unsafe, Fields: { [Fx.IdKey]: WriteHarness.Unsafe } },
+        ]);
+        WriteHarness.Throws(() => h.Operations(WriteHarness.Create(h.Id(WriteHarness.Padded))), EngineBridgeErrorCode.UnsupportedExternalChange);
     });
 
     test('unlink clears the foreign key', () =>

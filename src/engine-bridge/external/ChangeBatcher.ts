@@ -85,7 +85,8 @@ class PendingWrite
  *
  * A change it cannot express throws: a public id that is not one of `connector`'s (ForeignId), a binding that is not
  * Writable (NotWritable), and as UnsupportedExternalChange a SetOwner, a create of another concept than the binding's,
- * a create with a numeric id member whose key is not numeric (no id value was given), an unmapped member, a change to
+ * a create with a numeric id member whose key is not numeric (no id value was given) or not canonical decimal text (an
+ * Int64 id beyond 2^53 is sent as its decimal text), an unmapped member, a change to
  * the id member of a node the set did not create (or a value of it that differs from the minted key), link properties,
  * a temporal value, and any change after a Delete of the same id.
  */
@@ -102,6 +103,9 @@ export class ChangeBatcher
     private static readonly ErrLinkProperties = 'An external foreign key cannot carry link properties: ';
     private static readonly ErrAfterDelete = 'An external node cannot be changed after it was deleted: ';
     private static readonly ErrNumericKey = 'An external create with a numeric id member needs a numeric id value; the source cannot hold a generated key: ';
+    private static readonly ErrNonCanonicalKey = 'An external create with a numeric id member needs the id in canonical decimal form: ';
+    private static readonly CanonicalInteger = /^(0|-?[1-9]\d*)$/;
+    private static readonly NumericText = /^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/;
     private static readonly ErrDuplicate = 'An external node is created twice: ';
     private static readonly MemberSeparator = '.';
 
@@ -216,12 +220,7 @@ export class ChangeBatcher
         {
             throw new EngineBridgeError(EngineBridgeErrorCode.UnsupportedExternalChange, ChangeBatcher.ErrConcept + concept + ChangeBatcher.ErrIdSeparator + publicId);
         }
-        // A numeric id column cannot hold a generated text key (owner question Q3): the create must give the id value.
-        const idType = identity.IdMemberType(write.Binding);
-        if ((idType === ValueType.Int64 || idType === ValueType.Float64) && typeof write.Key !== 'number')
-        {
-            throw new EngineBridgeError(EngineBridgeErrorCode.UnsupportedExternalChange, ChangeBatcher.ErrNumericKey + publicId);
-        }
+        ChangeBatcher.RequireNumericKey(write, publicId, identity);
         if (write.Created)
         {
             throw new EngineBridgeError(EngineBridgeErrorCode.UnsupportedExternalChange, ChangeBatcher.ErrDuplicate + publicId);
@@ -232,6 +231,26 @@ export class ChangeBatcher
         write.Created = true;
         write.Fields.clear();
         write.Fields.set(write.Binding.Binding.IdKey, write.Key);
+    }
+
+    /**
+     * A numeric id column cannot hold a generated text key (owner question Q3): the create must give the id value. An
+     * Int64 id beyond 2^53 has a canonical decimal text key and is sent as that text (as reads and updates already do);
+     * a non-canonical numeric text ('007') would change the id on the round trip and is refused with its own message.
+     */
+    private static RequireNumericKey(write: PendingWrite, publicId: string, identity: ExternalIdentity): void
+    {
+        const idType = identity.IdMemberType(write.Binding);
+        if ((idType !== ValueType.Int64 && idType !== ValueType.Float64) || typeof write.Key === 'number')
+        {
+            return;
+        }
+        if (idType === ValueType.Int64 && ChangeBatcher.CanonicalInteger.test(write.StorageId))
+        {
+            return;
+        }
+        const message = ChangeBatcher.NumericText.test(write.StorageId) ? ChangeBatcher.ErrNonCanonicalKey : ChangeBatcher.ErrNumericKey;
+        throw new EngineBridgeError(EngineBridgeErrorCode.UnsupportedExternalChange, message + publicId);
     }
 
     private static SetProperty(write: PendingWrite, op: ISetPropertyOp, identity: ExternalIdentity): void
