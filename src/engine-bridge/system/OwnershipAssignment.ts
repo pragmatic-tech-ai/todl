@@ -17,6 +17,7 @@ export class OwnershipAssignment
     private static readonly InvisibleMessage = 'Assign: the record does not exist or is not visible to the caller.';
     private static readonly NotOwnedMessage = 'Assign: the concept of the record is not an owned concept.';
     private static readonly EmptyMessage = 'Assign: the owner id and the business unit id must be non-empty.';
+    private static readonly EmptyText = '';
 
     public constructor(private readonly owned: ReadonlySet<string>)
     {
@@ -38,7 +39,7 @@ export class OwnershipAssignment
         {
             throw new EngineBridgeError(EngineBridgeErrorCode.NotOwned, OwnershipAssignment.NotOwnedMessage);
         }
-        if (owner.OwnerId === '' || owner.BusinessUnitId === '')
+        if (owner.OwnerId === OwnershipAssignment.EmptyText || owner.BusinessUnitId === OwnershipAssignment.EmptyText)
         {
             throw new EngineBridgeError(EngineBridgeErrorCode.UnsupportedValue, OwnershipAssignment.EmptyMessage);
         }

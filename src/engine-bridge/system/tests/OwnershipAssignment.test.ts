@@ -67,7 +67,7 @@ class AssignFx
 
 describe('OwnershipAssignment', () =>
 {
-    test('assign changes owner and owning BU and nothing else', () => AssignFx.With(async (fx) =>
+    test('assign changes owner and owning BU and keeps the name', () => AssignFx.With(async (fx) =>
     {
         const t = await fx.Engine.Begin(AccessScope.System);
         await fx.Assigner().Assign(t, AssignFx.EmployeeId, AssignFx.NewOwner);

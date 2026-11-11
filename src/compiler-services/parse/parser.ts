@@ -343,11 +343,16 @@ class Parser
    * been consumed yet), so the span covers exactly the tokens the production ate. */
   private spanFrom(start: Token): SourceSpan
   {
-    const last = this.tokens[this.pos > 0 ? this.pos - 1 : 0] ?? start;
+    return this.spanBetween(start, this.tokens[this.pos > 0 ? this.pos - 1 : 0] ?? start);
+  }
+
+  /** Span from the start of `start` through the end of `end` (both already consumed). */
+  private spanBetween(start: Token, end: Token): SourceSpan
+  {
     return {
       uri: this.uri,
       start: { line: start.line, column: start.column },
-      end: { line: last.endLine, column: last.endColumn },
+      end: { line: end.endLine, column: end.endColumn },
     };
   }
 
@@ -837,11 +842,10 @@ class Parser
     this.parseBodyMembers(() =>
     {
       const entryStart = this.current();
-      const path = this.parseDottedPath();
-      const fieldTok = this.tokens[this.pos - 1]!;
-      const conceptEndTok = this.tokens[this.pos - 3] ?? entryStart;   // token before the final `.`
-      const dot = path.lastIndexOf(".");
-      if (dot < 0) throw this.error(Parser.ExpectedConceptFieldMessage);
+      const segments = this.parseDottedTokens();
+      if (segments.length < 2) throw this.error(Parser.ExpectedConceptFieldMessage);
+      const fieldTok = segments[segments.length - 1]!;
+      const conceptEndTok = segments[segments.length - 2]!;
       this.expect(TokenKind.Colon);
       const rights: string[] = [];
       do
@@ -851,12 +855,8 @@ class Parser
       while (this.match(TokenKind.Comma));
       this.expect(TokenKind.Semicolon);
       entries.push({
-        concept: path.slice(0, dot), field: path.slice(dot + 1), rights, span: this.spanFrom(entryStart),
-        conceptSpan: {
-          uri: this.uri,
-          start: { line: entryStart.line, column: entryStart.column },
-          end: { line: conceptEndTok.endLine, column: conceptEndTok.endColumn },
-        },
+        concept: segments.slice(0, -1).map((t) => t.value).join("."), field: fieldTok.value, rights, span: this.spanFrom(entryStart),
+        conceptSpan: this.spanBetween(entryStart, conceptEndTok),
         fieldSpan: tokenSpan(fieldTok, this.uri),
       });
     });
@@ -1662,6 +1662,17 @@ class Parser
   /** Read a dotted name `a.b.c` and return it joined with `.`. Accepts a single
    * bare identifier (a one-segment path), so every namespace-qualifiable position
    * can call this uniformly whether or not the author qualified the name. */
+  /** The identifier tokens of a dotted path `a.b.c`, in order (the dots are consumed, not returned). */
+  private parseDottedTokens(): Token[]
+  {
+    const parts = [this.expect(TokenKind.Identifier)];
+    while (this.match(TokenKind.Dot))
+    {
+      parts.push(this.expect(TokenKind.Identifier));
+    }
+    return parts;
+  }
+
   private parseDottedPath(): string
   {
     const parts = [this.expectIdentifier()];

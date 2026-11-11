@@ -21,6 +21,8 @@ export interface ReadClientOptions
   importSpecifier?: string;
   /** Omit the file header + import lines (the caller emits its own). Default false. */
   omitHeader?: boolean;
+  /** The `todl.system` ids the model never uses (CompileFoundation.UnusedSystemIds), when the caller already has them. */
+  unusedSystemIds?: ReadonlySet<string>;
 }
 
 /** True when `typeId` names a concept or taxonomy (→ reference); false for a primitive. */
@@ -64,7 +66,7 @@ export function generateReadClient(repo: Repository, options: ReadClientOptions)
   const importSpecifier = options.importSpecifier ?? "@pragmatic-tech-ai/todl";
 
   // `todl.system` nodes the compile seeded but the model never uses get no generated surface.
-  const unused = CompileFoundation.UnusedSystemIds(FoundationKind.PreludeAndSystem, toJSON(repo));
+  const unused = options.unusedSystemIds ?? CompileFoundation.UnusedSystemIds(FoundationKind.PreludeAndSystem, toJSON(repo));
   const concepts = repo
     .allNodes()
     .filter((n) => n.metaKind === MetaKind.Concept && !unused.has(n.id))

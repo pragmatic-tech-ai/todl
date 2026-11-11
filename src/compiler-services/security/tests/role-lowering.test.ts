@@ -155,7 +155,7 @@ test("two operators binding Link to different members is security.edge-endpoints
 test("one action twice on one concept is security.duplicate-privilege", () =>
 {
     RoleFx.Rejects(`role R { Project { read = user; read = organization; } }`, DiagnosticCode.SecurityDuplicatePrivilege, "read");
-    // The same base-role privilege from two namespaces of one package is reported on the later entry.
+    // The same base-role privilege from two namespaces of one package is reported on the contribution later in node order.
     RoleFx.Rejects(`contribute BasicUser { Project { read = user; } }`, DiagnosticCode.SecurityDuplicatePrivilege, "read",
         [{ uri: "other.todl", text: "namespace other { import projects; contribute BasicUser { Project { read = organization; } } }" }]);
 });

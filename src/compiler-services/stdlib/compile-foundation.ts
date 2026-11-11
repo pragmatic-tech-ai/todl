@@ -50,12 +50,16 @@ export class CompileFoundation
     return CompileFoundation.systemIds;
   }
 
-  /** Does `document` (an own-only package document) reference a system node through an edge, a field type or a node type? */
+  /**
+   * Does a non-system node of `document` (an own-only package document or a compiled closure) reference a system node
+   * through an edge, a node type, a class or a field type? The system document itself references none.
+   */
   public static ReferencesSystem(document: TodlDocument): boolean
   {
     const ids = CompileFoundation.SystemIds();
-    return document.edges.some((e) => ids.has(e.to))
-      || document.nodes.some((n) => (n.type !== null && ids.has(n.type)) || n.fields.some((f) => ids.has(f.type)));
+    return document.edges.some((e) => !ids.has(e.from) && ids.has(e.to))
+      || document.nodes.some((n) => !ids.has(n.id)
+        && ((n.type !== null && ids.has(n.type)) || (n.class !== null && ids.has(n.class)) || n.fields.some((f) => ids.has(f.type))));
   }
 
   /**
@@ -78,17 +82,17 @@ export class CompileFoundation
     {
       return CompileFoundation.None;
     }
-    const ids = CompileFoundation.SystemIds();
-    const referenced = document.edges.some((e) => !ids.has(e.from) && ids.has(e.to))
-      || document.nodes.some((n) => !ids.has(n.id)
-        && ((n.type !== null && ids.has(n.type)) || (n.class !== null && ids.has(n.class)) || n.fields.some((f) => ids.has(f.type))));
-    return referenced ? CompileFoundation.None : ids;
+    return CompileFoundation.ReferencesSystem(document) ? CompileFoundation.None : CompileFoundation.SystemIds();
   }
 
-  /** `document` without the system nodes (and their edges) it carries only because the foundation seeded them. */
-  public static WithoutUnusedSystem(kind: FoundationKind, document: TodlDocument): TodlDocument
+  /**
+   * `document` without the system nodes (and their edges) it carries only because the foundation seeded them. This is
+   * all-or-nothing: every system node goes when nothing references one, and all of them stay when anything does.
+   * `unused` is UnusedSystemIds(kind, document), passed when the caller already computed it.
+   */
+  public static WithoutUnusedSystem(kind: FoundationKind, document: TodlDocument,
+    unused: ReadonlySet<string> = CompileFoundation.UnusedSystemIds(kind, document)): TodlDocument
   {
-    const unused = CompileFoundation.UnusedSystemIds(kind, document);
     if (unused.size === 0)
     {
       return document;

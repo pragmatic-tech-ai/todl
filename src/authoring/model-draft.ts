@@ -75,7 +75,7 @@ export class ModelDraft
   private blockConforms = new Map<string, Map<string, string>>();
 
   private constructor(
-    /** The frozen bases as documents: [prelude, ...bases]. */
+    /** The frozen bases as documents: [...CompileFoundation.Documents(PreludeAndSystem), ...bases]. */
     private readonly baseDocs: readonly TodlDocument[],
     readonly namespace: string,
   )

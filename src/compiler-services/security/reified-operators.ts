@@ -10,6 +10,9 @@ import type { IEdgeConcept } from './package-security.js';
  */
 export class ReifiedOperators
 {
+    /** The `to` member of an operator node that records none. */
+    private static readonly NoMember = '';
+
     private constructor()
     {
     }
@@ -65,7 +68,7 @@ export class ReifiedOperators
         {
             return undefined;
         }
-        return { Concept: concept, From: String(node.attrs.get(Builder.OperatorFromAttr)), To: String(node.attrs.get(Builder.OperatorToAttr) ?? '') };
+        return { Concept: concept, From: String(node.attrs.get(Builder.OperatorFromAttr)), To: String(node.attrs.get(Builder.OperatorToAttr) ?? ReifiedOperators.NoMember) };
     }
 
     private static Compare(a: string, b: string): number

@@ -42,21 +42,26 @@ export class PrivilegeRules implements ISecurityRule
         {
             if ((node.metaKind === MetaKind.Role || node.metaKind === MetaKind.RoleContribution) && !this.seededIds.has(node.id))
             {
+                const privileges = JSON.parse(String(node.attrs.get(Builder.RolePrivilegesAttr))) as ISecurityPrivilege[];
                 if (node.metaKind === MetaKind.RoleContribution)
                 {
-                    this.ValidateCrossNamespace(node, contributed, sink);
+                    this.ValidateCrossNamespace(node, privileges, contributed, sink);
                 }
-                this.ValidateOwner(node.id, JSON.parse(String(node.attrs.get(Builder.RolePrivilegesAttr))) as ISecurityPrivilege[], sink);
+                this.ValidateOwner(node.id, privileges, sink);
             }
         }
         this.ValidateEndpoints(sink);
     }
 
-    /** A (base role, concept, action) contributed from two namespaces of one package is reported on the later entry, so the merged list is unique. */
-    private ValidateCrossNamespace(node: { id: string; attrs: ReadonlyMap<string, unknown> }, contributed: Set<string>, sink: Diagnostic[]): void
+    /**
+     * A (base role, concept, action) contributed from two namespaces of one package is reported on the contribution that
+     * comes later in node order (Repository.allNodes), so the merged list is unique.
+     */
+    private ValidateCrossNamespace(node: { id: string; attrs: ReadonlyMap<string, unknown> }, privileges: readonly ISecurityPrivilege[],
+        contributed: Set<string>, sink: Diagnostic[]): void
     {
         const baseRole = String(node.attrs.get(Builder.ContributionRoleAttr));
-        for (const privilege of JSON.parse(String(node.attrs.get(Builder.RolePrivilegesAttr))) as ISecurityPrivilege[])
+        for (const privilege of privileges)
         {
             const key = [baseRole, privilege.Concept, privilege.Action].join(PrivilegeRules.KeySeparator);
             if (!contributed.has(key))

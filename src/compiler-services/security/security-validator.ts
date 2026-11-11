@@ -12,7 +12,8 @@ export interface ISecurityRule
 
 /**
  * Validates a compile's security surface after load, over the lowered nodes. `seededIds` are the ids of the merged
- * foundation and bases: an "own concept" is a `MetaKind.Concept` node whose id is not among them.
+ * foundation and bases: an "own concept" is a `MetaKind.Concept` node whose id is not among them. It runs only in
+ * checkAgainst (build and publish), so its diagnostics are build-only: the LSP SolutionGraph does not show them live.
  */
 export class SecurityValidator
 {

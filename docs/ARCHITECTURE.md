@@ -784,12 +784,23 @@ bridge places and guards the system-owned fields.
 
 - `EnvironmentSecurity` composes the per-package `IPackageSecurity` of an
   environment's deliveries into an `IEnvironmentSecurity` (roles, contributions,
-  secured fields, profiles and `EdgeConcepts`) alongside the catalog.
+  secured fields, profiles and `EdgeConcepts`) alongside the catalog. Each
+  package's security stays as compiled; the environment's effective owned set
+  (`OwnedConcepts()`) and the secured-external check are judged over the composed
+  description, so a subconcept inherits ownership and secured fields from its
+  parent as unified, not as compiled.
 - `EnvironmentNodePlacement` places the `todl.system.Owned` owner fields on
-  created nodes; `SystemFieldGuard` rejects any write to a system-maintained
-  field in every runtime scope; `OwnershipAssignment` is the only writer of
-  those fields. `SystemFirstPackageSource` serves `todl.system` ahead of every
-  other source so the foundation is always resolved first.
+  created nodes; `SystemFieldGuard` is a scope transform that makes those fields
+  read-only, and hosts MUST apply it to every runtime read-write scope (placement
+  defaults on create are exempt); `OwnershipAssignment` is the only later writer
+  of those fields.
+- `SystemPackage` and `SystemFirstPackageSource` live in
+  `solution-services/package-manager` (engine-free; `./engine` re-exports them):
+  they serve `todl.system` from the embedded package, unrelated to resolution
+  order. `StoragePackageSource` serves it the same way, so the engine-free
+  `Domain` route loads a package that uses `Owned`.
+- `SecurityValidator` runs only in `checkAgainst` (build and publish): security
+  diagnostics are build-only and the LSP `SolutionGraph` does not show them live.
 - Forwarding the caller's `ConnectorContext` to connectors is pending (Task 11,
   PR12) and is not part of this surface.
 

@@ -26,6 +26,8 @@ export class SystemFieldGuard
             Update: SystemFieldGuard.Union(existing?.ReadOnly?.Update),
         };
         writes.set(SystemNames.Owned, { ...existing, ReadOnly: readOnly });
+        // AccessScope exposes no options object to copy whole, so the scope is rebuilt field by field. S2's engine bump
+        // adds the PR4 Endpoints option: add `Endpoints: scope.Endpoints` here in that bump, or the guard drops it.
         return AccessScope.Build({ Default: scope.Default, Rows: scope.Rows, Hidden: scope.Hidden, HiddenExact: scope.HiddenExact, Writes: writes });
     }
 

@@ -101,17 +101,18 @@ describe('OwnedPlacement', () =>
         assert.equal(await fx.Read(SystemNames.Owner), OwnedFx.Principal.Id);
     }));
 
-    for (const [name, text] of <readonly (readonly [string, string])[]>[
-        ['CREATE then SET owner under a guarded scope', "CREATE (n:hr.Employee {name: 'Ann'}) SET n.owner = 'x'"],
-        ['MERGE ON CREATE SET owner under a guarded scope', "MERGE (n:hr.Employee {name: 'Ann'}) ON CREATE SET n.owner = 'x'"],
-        ['CREATE then SET owningBusinessUnit on a dependent-package concept', "CREATE (n:hrext.Contractor {name: 'Cy'}) SET n.owningBusinessUnit = 'bu-x'"],
+    for (const [name, text, member] of <readonly (readonly [string, string, string])[]>[
+        ['CREATE then SET owner under a guarded scope', "CREATE (n:hr.Employee {name: 'Ann'}) SET n.owner = 'x'", SystemNames.Owner],
+        ['MERGE ON CREATE SET owner under a guarded scope', "MERGE (n:hr.Employee {name: 'Ann'}) ON CREATE SET n.owner = 'x'", SystemNames.Owner],
+        ['CREATE then SET owningBusinessUnit on a dependent-package concept', "CREATE (n:hrext.Contractor {name: 'Cy'}) SET n.owningBusinessUnit = 'bu-x'",
+            SystemNames.OwningBusinessUnit],
     ])
     {
         test(`${name} is MemberReadOnly and stores nothing`, () => OwnedFx.With([SecFx.Hr, SecFx.HrExt], async (fx) =>
         {
             await assert.rejects(OwnedFx.Run(fx, SystemFieldGuard.Guard(AccessScope.System), text),
                 (e: unknown) => e instanceof Cypher.CypherWriteError && e.cause instanceof AccessError && e.cause.Code === AccessErrorCode.MemberReadOnly);
-            assert.equal(await fx.Read(SystemNames.Owner), undefined);
+            assert.equal(await fx.Read(member), undefined);
         }));
     }
 

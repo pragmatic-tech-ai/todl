@@ -15,7 +15,11 @@ export interface IPackageRole
     readonly Privileges: readonly ISecurityPrivilege[];
 }
 
-/** A field-level secured field. */
+/**
+ * A field-level secured field. `Concept` names the concept that declares the field; the field stays secured on every
+ * subconcept, which is not listed again. Contrast IPackageSecurity.OwnedConcepts, which is the effective set (subconcepts
+ * included) as of the package's own compile; an environment's effective owned set is EnvironmentSecurity.OwnedConcepts().
+ */
 export interface ISecuredField
 {
     readonly Concept: string;
@@ -50,9 +54,11 @@ export interface IEdgeConcept
 /** The compiled security surface of a package. */
 export interface IPackageSecurity
 {
+    /** Every own concept that IsA todl.system.Owned when the package compiled (the effective set, subconcepts included). */
     readonly OwnedConcepts: readonly string[];
     readonly Roles: readonly IPackageRole[];
     readonly BaseRoleContributions: readonly IPackageRole[];
+    /** The secured fields by declaring concept (see ISecuredField). */
     readonly SecuredFields: readonly ISecuredField[];
     readonly FieldProfiles: readonly IFieldProfile[];
     readonly EdgeConcepts: readonly IEdgeConcept[];
