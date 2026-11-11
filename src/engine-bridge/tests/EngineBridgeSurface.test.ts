@@ -86,6 +86,9 @@ class SurfaceExpectations
     ];
 
     public static readonly RootCypherWire = 'CypherWire';
+    public static readonly RootCypher = 'Cypher';
+    public static readonly CellCodec = 'CypherCellCodec';
+    public static readonly FunctionType = 'function';
     public static readonly NoHomeModel = 'NoHomeModel';
     public static readonly UnknownConnector = 'UnknownConnector';
     public static readonly RootLeak = 'root must not export ';
@@ -109,5 +112,13 @@ describe('EngineBridgeSurface', () =>
         {
             assert.equal(root[name], undefined, SurfaceExpectations.RootLeak + name);
         }
+    });
+
+    test('root has no Cypher namespace', () =>
+    {
+        const root = Root as unknown as Record<string, unknown>;
+        assert.equal(SurfaceExpectations.RootCypher in root, false);
+        const wire = root[SurfaceExpectations.RootCypherWire] as Record<string, unknown>;
+        assert.equal(typeof wire[SurfaceExpectations.CellCodec], SurfaceExpectations.FunctionType);
     });
 });

@@ -2,7 +2,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Cypher, CypherWire } from '../../../index.js';
 import { ImportClosureWalker } from '../../../tests/support/ImportClosureWalker.js';
 
 /** The wire module must reach neither the engine nor any file under a `cypher` directory or named cypher. */
@@ -23,11 +22,6 @@ class WireTestPaths
     public static readonly WireIndex = path.join(WireTestPaths.GraphApi, 'wire', 'index.ts');
     public static readonly Assembler = path.join(WireTestPaths.GraphApi, 'browser', 'tenant-document-assembler.ts');
 }
-
-test('wire codec is the Cypher codec', () =>
-{
-    assert.equal(CypherWire.CypherCellCodec, Cypher.CypherCellCodec);
-});
 
 test('wire module is engine- and cypher-free', () =>
 {

@@ -61,7 +61,6 @@ export class ExternalCatalogDescriber
         const described = SnapshotDescriber.Describe(snapshot, {
             DefaultConnector: options.DefaultConnector,
             ConnectorPlans: merged.Plans,
-            EmitExternalBindings: true,
         });
         const conflicting = described.Diagnostics.some((d) => d.Code === DescribeDiagnosticCode.ConflictingDefinition);
         const invalid = described.Diagnostics.find((d) => d.Code === DescribeDiagnosticCode.InvalidBinding);

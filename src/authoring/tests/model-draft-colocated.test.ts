@@ -2,22 +2,8 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { check } from "../../compiler-services/api.js";
 import { Severity } from "../../compiler-services/diagnostics/diagnostic.js";
-import type { IdGenerator } from "../../compiler-services/model/id-generator.js";
 import { ModelDraft } from "../model-draft.js";
 import { AnnotationFreezer } from "../annotation-freezer.js";
-import { DraftCypherHarness, DraftTestWriter } from "./draft-cypher-harness.js";
-
-// Mints C-like ids (as production Snowflake ids are), so a created instance re-parses after the round-trip.
-class CLikeIdGenerator implements IdGenerator
-{
-    private static readonly Prefix = "w";
-    private n = 0;
-
-    public next(): string
-    {
-        return `${CLikeIdGenerator.Prefix}${this.n++}`;
-    }
-}
 
 // A member whose own source declares its schema beside its instances. The round-trip must keep every schema
 // declaration (and its comments/formatting) and only regenerate the model block.
@@ -104,16 +90,6 @@ describe("ModelDraft over a member with co-located schema", () =>
         const again = CoLocatedFixture.Reopen(new Map([[CoLocatedFixture.Uri, text]]));
         assert.deepEqual(CoLocatedFixture.InstanceIds(again), []);
         assert.ok(again.model.resolve("acme.Widget") !== undefined);
-    });
-
-    test("a Cypher CREATE applied to the draft persists without corrupting the schema", () =>
-    {
-        const d = CoLocatedFixture.Open();
-        DraftCypherHarness.Engine(d, new DraftTestWriter(d, new CLikeIdGenerator())).Execute("CREATE (:acme.Widget {label: 'zeta'})");
-        const files = d.toTodlByFile();
-        assert.ok(files.get(CoLocatedFixture.Uri)!.includes(CoLocatedFixture.ConceptLine));
-        const labels = CoLocatedFixture.Reopen(files).ownInstances().map((e) => e.field("label")).sort();
-        assert.deepEqual(labels, ["alpha", "zeta"]);
     });
 
     test("the single-file toTodl() path keeps co-located schema too", () =>

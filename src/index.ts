@@ -75,7 +75,6 @@ export { PopulationBuilder } from './model-data/population-builder.js';
 export { ConnectorWorkingCopy } from './model-data/connector-working-copy.js';
 export type { FlushOutcome } from './model-data/connector-working-copy.js';
 export { FederatedModelDataConnector, type IConnectorQueryFilterProvider } from './model-data/federated-model-data-connector.js';
-export { ConjunctiveQueryFilterProvider } from './model-data/conjunctive-query-filter-provider.js';
 export { QueryFilterEvaluator } from './model-data/query-filter-evaluator.js';
 export { VersionBumpingAdapter } from './model-data/version-bumping-adapter.js';
 export { QueryFilterTranslator, UnmappedFilterFieldError } from './model-data/query-filter-translator.js';
@@ -492,11 +491,7 @@ export { BuildService, type PublishOutcome as BuildPublishOutcome } from './solu
 export { InMemoryBuildStorage } from './solution-services/todl-build-system/in-memory-build-storage.js';
 export { ScopeFlatteningStorage } from './solution-services/todl-build-system/scope-flattening-storage.js';
 
-export * as Cypher from './cypher/index.js';
 export * as CypherWire from './graph-api/wire/index.js';
-export { ConnectorMirrorMapper } from './model-data/connector-mirror-mapper.js';
-export { ConnectorPrefetch, type INodeReflector } from './model-data/connector-prefetch.js';
-export { ConnectorRuntimeGraphQuery } from './graph-api/connector-runtime-graph-query.js';
 
 export { SecurityAction, SecurityDepth, BaseRoleName, FieldProfileRight, SecurityTerms } from './compiler-services/security/security-terms.js';
 export { PackageSecurityCompiler } from './compiler-services/security/package-security-compiler.js';

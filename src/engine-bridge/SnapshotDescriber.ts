@@ -119,7 +119,7 @@ class CanonicalJson
 /**
  * Turns a compiled TODL metadata snapshot into the graph engine's schema description: one definition per concept and
  * aspect under the reserved `todl.Element` root, `todl.Term` for taxonomy terms, a seed node per heap node and term,
- * the `.todl` connector bindings (every plan binding under `EmitExternalBindings`), and a content-derived version.
+ * every plan binding (external ones included, their field maps checked), and a content-derived version.
  * Problems in the data become diagnostics, never exceptions; only a field type of a kind no member can hold throws
  * (`UnsupportedFieldType`).
  *
@@ -838,15 +838,8 @@ export class SnapshotDescriber
                 {
                     external.add(binding.Concept);
                 }
-                if (this.options.EmitExternalBindings === true)
-                {
-                    out.push({ Model: plan.Model, Concept: binding.Concept, Connector: binding.Connector });
-                    if (isExternal) this.CheckFieldMap(plan.Model, binding);
-                }
-                else if (binding.Connector === TodlNames.FileConnector)
-                {
-                    out.push({ Model: plan.Model, Concept: binding.Concept, Connector: binding.Connector });
-                }
+                out.push({ Model: plan.Model, Concept: binding.Concept, Connector: binding.Connector });
+                if (isExternal) this.CheckFieldMap(plan.Model, binding);
             }
         }
         return out;
