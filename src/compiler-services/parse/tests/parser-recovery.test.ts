@@ -65,3 +65,10 @@ test("an error inside a taxonomy term body does not swallow later declarations (
   // One syntax error (the hyphen in the term id), not a cascade.
   assert.equal(diagnostics.filter((d) => d.code.startsWith("syntax.")).length, 1);
 });
+
+test("'policy' is no longer a declaration keyword", () =>
+{
+    const result = parse(`namespace n { concept C { } policy C { allow read when true; } }`);
+    assert.ok(result.diagnostics.length > 0);
+    assert.ok(!result.namespace.declarations.some((d) => (d as { kind: unknown }).kind === "policy"));
+});

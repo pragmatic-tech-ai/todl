@@ -491,24 +491,6 @@ export { BuildService, type PublishOutcome as BuildPublishOutcome } from './solu
 export { InMemoryBuildStorage } from './solution-services/todl-build-system/in-memory-build-storage.js';
 export { ScopeFlatteningStorage } from './solution-services/todl-build-system/scope-flattening-storage.js';
 
-// Policy predicate surface (consumed by the identity bridge)
-export {
-  PolicyNodeKind,
-  PolicyRefRoot,
-  PolicyBoolOp,
-  PolicyCompareOp,
-  PolicyPredicateMembers,
-  type PolicyPredicate,
-  type PolicyRef,
-  type PolicyLiteral,
-  type PolicyOperand,
-  type PolicyCompare,
-  type PolicyMembership,
-  type PolicyBool,
-  type PolicyNot,
-} from './compiler-services/policy/policy-predicate.js';
-export { PolicyPredicateCodec } from './compiler-services/policy/policy-predicate-codec.js';
-export { parsePolicyPredicate, PolicyParseError } from './compiler-services/policy/policy-predicate-parser.js';
 export * as Cypher from './cypher/index.js';
 export * as CypherWire from './graph-api/wire/index.js';
 export { ConnectorMirrorMapper } from './model-data/connector-mirror-mapper.js';

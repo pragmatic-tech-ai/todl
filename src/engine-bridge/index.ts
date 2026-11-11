@@ -3,7 +3,6 @@ export { SnapshotDescriber } from './SnapshotDescriber.js';
 export { DescribeDiagnosticCode, type IDescribeDiagnostic, type IDescribeOptions, type ISnapshotDescription } from './SnapshotDescription.js';
 export { TodlNames } from './TodlNames.js';
 export { type IPrincipalFacts } from './PrincipalFacts.js';
-export { PolicyScopeCompiler, PolicyDiagnosticCode, type IPolicyDiagnostic, type IPolicyRuleSource } from './PolicyScopeCompiler.js';
 export { type ITodlDraftSession, type ITodlModelWorkspace } from './TodlModelWorkspace.js';
 export { TodlFileConnector } from './TodlFileConnector.js';
 export { TodlNodePlacement } from './TodlNodePlacement.js';

@@ -415,17 +415,6 @@ in the engine or its native `lmdb` storage. A host that imports
   root, taxonomy terms as `todl.Term` nodes, one seed node per instance (Owner = the
   package whose own sources declare it), bindings with `DefaultConnector`.
   Problems become `DescribeDiagnosticCode` diagnostics, never throws.
-- `PolicyScopeCompiler` compiles a model's policies into an engine `AccessScope`
-  for an `IPrincipalFacts`; leaves the engine cannot express compile fail-closed
-  with a `PolicyDiagnosticCode` diagnostic.
-  Numeric members mirror the identity evaluator's raw-text `===`: a fact or
-  literal in the canonical text of a number (`2`, `-3`, `2.5`, `1e+21`) matches
-  that number, a JS number never matches (TODL holds entity numbers as decimal
-  text), and a non-canonical string (`02`, `+2`, `2.0`, `0x10`, `1e1`, `.5`)
-  fails closed with a `ValueTypeMismatch` diagnostic. Residual: the engine stores
-  entity values typed, so a non-canonical value seeded from a `.todl` file
-  (`count = "02"`) is held as its number and matches the canonical claim `"2"`,
-  where the evaluator would compare the raw texts and not match.
 - `TodlFileConnector` (connector name `TodlNames.FileConnector` = `todl-file`) is
   the engine connector that writes committed changes back into each owning
   model's `.todl` files through an `ITodlModelWorkspace` / `ITodlDraftSession`
@@ -456,9 +445,6 @@ surface; the old runtime paths are untouched until M2.3.
   (`SystemPackage`, `ShareGrants`, `ShareGrantScope`) and
   `EnvironmentNodePlacement` for creates. Failures are
   `EnvironmentCatalogError`.
-- `PolicyScopeCompiler.FromRules` compiles runtime policy rules with typed
-  value semantics; a `MalformedPolicy` diagnostic means the concept failed
-  closed and should be treated as fatal by the host.
 - `CypherWire` (root export) is the engine-free wire codec.
 - `IDescribeOptions.EmitExternalBindings` defaults to `false` (dev keeps M1
   behaviour).

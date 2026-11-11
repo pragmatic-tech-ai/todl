@@ -56,7 +56,6 @@ export enum DeclKind
   Match,
   Merge,
   Connector,
-  Policy,
   Aspect,
 }
 
@@ -321,40 +320,6 @@ export interface MatchDecl
   kind: DeclKind.Match;
   concept: string;
   rules: MatchRule[];
-  span: SourceSpan;
-  conceptSpan?: SourceSpan;
-}
-
-/** Effect of one policy rule. */
-export enum PolicyEffect
-{
-  Allow = "allow",
-  Deny = "deny",
-}
-
-/** Action a policy rule governs. */
-export enum PolicyAction
-{
-  Read = "read",
-  Write = "write",
-}
-
-/** One `allow|deny read|write when <expr>;` clause of a policy block. The predicate
- * is the raw token slice between `when` and `;`. */
-export interface PolicyRule
-{
-  effect: PolicyEffect;
-  action: PolicyAction;
-  predicate: Token[];
-  span: SourceSpan;
-}
-
-/** A `policy <Concept> { ... }` declaration — entity-level access rules. */
-export interface PolicyDecl
-{
-  kind: DeclKind.Policy;
-  concept: string;
-  rules: PolicyRule[];
   span: SourceSpan;
   conceptSpan?: SourceSpan;
 }
@@ -647,7 +612,7 @@ export interface PrimitiveDecl
  * {@link DeclKind}). This is what a {@link NamespaceNode} holds. */
 export type Declaration =
   | ConceptDecl | TaxonomyDecl | ViewpointDecl | PrimitiveDecl | InstanceDecl | ModelDecl
-  | AnnotationDecl | PackageDecl | OperatorDecl | IdentityDecl | MatchDecl | MergeDecl | ConnectorDecl | PolicyDecl | AspectDecl;
+  | AnnotationDecl | PackageDecl | OperatorDecl | IdentityDecl | MatchDecl | MergeDecl | ConnectorDecl | AspectDecl;
 
 // ═══════════════════════════════ FILE ROOT ════════════════════════════════════
 

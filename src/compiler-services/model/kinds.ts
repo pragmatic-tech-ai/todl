@@ -21,7 +21,6 @@ export enum MetaKind
   Merge = "merge",
   Connector = "connector",
   Population = "population",
-  Policy = "policy",
   Aspect = "aspect",
   /** A concept's handle `<concept>.<member>` on an inherited/contributed member; hosts member annotations (R6). */
   MemberTarget = "member-target",
