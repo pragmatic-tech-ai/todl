@@ -30,6 +30,7 @@ interface INodeState
 class DevLoopFx
 {
     public static readonly RetiredPolicyNames: readonly string[] = ['PolicyScopeCompiler', 'PolicyDiagnosticCode'];
+    public static readonly SecurityNames: readonly string[] = ['EnvironmentSecurity', 'SystemFieldGuard', 'OwnershipAssignment', 'SystemFirstPackageSource'];
     public static readonly Model = 'shop.p';
     public static readonly Namespace = 'shop';
     public static readonly Version = '1.0.0';
@@ -385,6 +386,10 @@ describe('dev loop end to end', () =>
         for (const name of DevLoopFx.RetiredPolicyNames)
         {
             assert.ok(!keys.includes(name), name);
+        }
+        for (const name of DevLoopFx.SecurityNames)
+        {
+            assert.ok(keys.includes(name), name);
         }
     });
 });

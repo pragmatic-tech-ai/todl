@@ -115,7 +115,7 @@ are the demo/corpus suite and are **not** published (`files: ["dist", "README.md
 | `src/authoring/` | The write path: `ModelDraft` stages instances over frozen bases and serialises back to `.todl`. |
 | `src/publish/` | Pure compile-and-persist spine: `compilePackage`, `CompiledPackage`, package stores. |
 | `src/domain/` | The multi-manifest runtime host (`Domain`, `MetadataSnapshot`) for versioned, cross-package reflection. |
-| `src/engine-bridge/` | TODL on the `@pragmatic-tech-ai/graph` engine (export `./engine`): describes a compiled snapshot as an engine schema + seed, compiles policies into access scopes, persists engine writes back into `.todl` files. The only folder that imports the engine. |
+| `src/engine-bridge/` | TODL on the `@pragmatic-tech-ai/graph` engine (export `./engine`): describes a compiled snapshot as an engine schema + seed, persists engine writes back into `.todl` files. The only folder that imports the engine. |
 | `src/graph-api/` | Read-only query surface (`GraphQuery`, `Snapshot`) and, under `browser/`, the app bootstrap. |
 | `src/solution-services/` | The build systems, package sources/registries, project types, and multi-project solution builder. |
 | `src/application/` | Composition/host layer (`ApplicationBootstrapper`, `MuralHost`); the generic model-browser view here is legacy. |
@@ -779,6 +779,20 @@ The build output `index.html` is fully self-contained. At runtime:
   cardinality → `?`/`[]`/`[+]`, `enum{}` → `taxonomy{}`); `recase.ts` handles the
   kebab → C-like identifier convention.
 
+**Package security (0.55.0, S1).** Packages declare their own security; the engine
+bridge places and guards the system-owned fields.
+
+- `EnvironmentSecurity` composes the per-package `IPackageSecurity` of an
+  environment's deliveries into an `IEnvironmentSecurity` (roles, contributions,
+  secured fields, profiles and `EdgeConcepts`) alongside the catalog.
+- `EnvironmentNodePlacement` places the `todl.system.Owned` owner fields on
+  created nodes; `SystemFieldGuard` rejects any write to a system-maintained
+  field in every runtime scope; `OwnershipAssignment` is the only writer of
+  those fields. `SystemFirstPackageSource` serves `todl.system` ahead of every
+  other source so the foundation is always resolved first.
+- Forwarding the caller's `ConnectorContext` to connectors is pending (Task 11,
+  PR12) and is not part of this surface.
+
 ---
 
 ## 13. Package surface and dependencies
@@ -789,7 +803,8 @@ parse, migrate, and the solution-services surface). Beyond the root, the package
 exposes focused subpath exports: `./solution-services/lsp`, `./language-server`,
 `./package-manager` (+ `/connections`), `./build-system-core`,
 `./todl-build-system`, `./project-system`, `./domain`, `./graph-api`, and
-`./engine` (the engine bridge, see §7).
+`./engine` (the engine bridge, see §7; also `EnvironmentSecurity`,
+`SystemFieldGuard`, `OwnershipAssignment`, `SystemFirstPackageSource`).
 
 Every subpath's `import` has two conditions: **`development`** → raw `./src/**/*.ts`
 and **`default`** → compiled `./dist/**/*.js`. In-repo tooling and tests run with

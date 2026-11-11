@@ -499,6 +499,8 @@ export { ConnectorRuntimeGraphQuery } from './graph-api/connector-runtime-graph-
 
 export { SecurityAction, SecurityDepth, BaseRoleName, FieldProfileRight, SecurityTerms } from './compiler-services/security/security-terms.js';
 export { PackageSecurityCompiler } from './compiler-services/security/package-security-compiler.js';
+export { SecurityNames } from './compiler-services/security/security-names.js';
+export { ReifiedOperators } from './compiler-services/security/reified-operators.js';
 export {
     PackageSecurity, type IPackageSecurity, type IPackageRole, type ISecurityPrivilege, type ISecuredField,
     type IFieldProfile, type IFieldProfileEntry, type IEdgeConcept,
