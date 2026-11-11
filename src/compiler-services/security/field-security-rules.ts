@@ -28,6 +28,7 @@ export class FieldSecurityRules implements ISecurityRule
     private static readonly WriteWithoutReadMessage = 'profile "{0}" grants update or create on "{1}.{2}" without read; a write needs read on the field';
 
     private readonly scope: PackageScope;
+    private securedNames: Set<string> | undefined;
 
     public constructor(
         private readonly model: Repository,
@@ -124,12 +125,32 @@ export class FieldSecurityRules implements ISecurityRule
         }
     }
 
-    /** A derive leaks a secured member when its expression text names one as an identifier token. */
+    /** The names of every secured field of any concept in the model, collected once. */
+    private SecuredNames(): ReadonlySet<string>
+    {
+        if (this.securedNames === undefined)
+        {
+            const names = new Set<string>();
+            for (const node of this.model.allNodes())
+            {
+                if (node.metaKind === MetaKind.Concept)
+                {
+                    node.fields.filter((f) => f.secured === true).forEach((f) => names.add(f.name));
+                }
+            }
+            this.securedNames = names;
+        }
+        return this.securedNames;
+    }
+
+    /** A derive leaks a secured member when its expression names one as an identifier token, or after a `.` navigation (any concept's secured field). */
     private ValidateDerives(concept: string, sink: Diagnostic[]): void
     {
         for (const derive of this.model.DerivesOf(concept))
         {
-            const leaked = tokenize(derive.expression).find((token) => token.kind === TokenKind.Identifier && this.IsSecured(concept, token.value));
+            const tokens = tokenize(derive.expression);
+            const leaked = tokens.find((token, i) => token.kind === TokenKind.Identifier
+                && (this.IsSecured(concept, token.value) || (i > 0 && tokens[i - 1]!.kind === TokenKind.Dot && this.SecuredNames().has(token.value))));
             if (leaked !== undefined)
             {
                 this.Report(sink, DiagnosticCode.SecuritySecuredInDerive, MessageTemplate.Format(FieldSecurityRules.SecuredInDeriveMessage, derive.member, concept, leaked.value),
@@ -144,14 +165,14 @@ export class FieldSecurityRules implements ISecurityRule
         const entries = JSON.parse(String(node.attrs.get(Builder.ProfileFieldsAttr))) as IFieldProfileEntry[];
         for (const entry of entries)
         {
+            if (this.scope.ReportIfForeign(entry.Concept, this.model.spanOf(SecurityLowering.ProfileConceptSpanKey(node.id, entry.Concept, entry.Field)), node.id, sink))
+            {
+                continue;
+            }
             if (!this.IsSecured(entry.Concept, entry.Field))
             {
                 this.Report(sink, DiagnosticCode.SecurityProfileFieldNotSecured, MessageTemplate.Format(FieldSecurityRules.FieldNotSecuredMessage, name, entry.Concept, entry.Field),
                     this.model.spanOf(SecurityLowering.ProfileFieldSpanKey(node.id, entry.Concept, entry.Field)), node.id, entry.Field);
-                continue;
-            }
-            if (this.scope.ReportIfForeign(entry.Concept, this.model.spanOf(SecurityLowering.ProfileConceptSpanKey(node.id, entry.Concept, entry.Field)), node.id, sink))
-            {
                 continue;
             }
             if ((entry.Update || entry.Create) && !entry.Read)

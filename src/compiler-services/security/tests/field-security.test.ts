@@ -94,6 +94,8 @@ test("security rejections", () =>
         [`match Employee { same when a.NationalId == b.NationalId; }`, DiagnosticCode.SecuritySecuredMatchMember],
         // derive over a secured member
         [`aspect Banded { Band2 : string?; } concept Graded : Banded { secured Salary : string?; derive Band2 = Salary; }`, DiagnosticCode.SecuritySecuredInDerive],
+        // derive navigating to another concept's secured field
+        [`aspect Banded { Boss : string?; } concept Graded : Banded { mgr : Employee; derive Boss = mgr.Salary; }`, DiagnosticCode.SecuritySecuredInDerive],
         // profile on unsecured Name
         [`profile P { Employee.Name : read; }`, DiagnosticCode.SecurityProfileFieldNotSecured],
         // profile on a missing field
