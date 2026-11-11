@@ -36,6 +36,8 @@ class ReadHarness
     public static readonly Beta = 'Beta';
     public static readonly TeamB = 'b';
     public static readonly TokenEncoding = 'base64url';
+    public static readonly OtherSource = 'clients';
+    public static readonly Nul = 'a\u0000b';
 
     public readonly Plan = Fx.Plan();
     public readonly Identity = Fx.Identity(this.Plan);
@@ -43,7 +45,7 @@ class ReadHarness
 
     public constructor(public readonly Adapter: RecordingAdapter)
     {
-        this.Connector = new DataSourceConnector(this.Plan, Adapter, this.Identity, Fx.Description());
+        this.Connector = new DataSourceConnector(this.Plan, Adapter, this.Identity);
     }
 
     public static Acme(): ExternalRecord
@@ -363,6 +365,31 @@ describe('DataSourceConnector read side', () =>
         await ReadHarness.Rejects(keyless.Connector.Fetch(ReadHarness.Request()), EngineBridgeErrorCode.ExternalRowInvalid);
         const long = ReadHarness.Over([Fx.Record('x'.repeat(400), Fx.Acme, null)]);
         await ReadHarness.Rejects(long.Connector.Fetch(ReadHarness.Request({ Members: [Fx.Name] })), EngineBridgeErrorCode.ExternalRowInvalid);
+        // Every id the source supplies (row key, link target) is checked with the engine's rule, under one code.
+        const nulKey = ReadHarness.Over([Fx.Record(ReadHarness.Nul, Fx.Acme, null)]);
+        await ReadHarness.Rejects(nulKey.Connector.Fetch(ReadHarness.Request()), EngineBridgeErrorCode.ExternalRowInvalid);
+        const nulLink = ReadHarness.Over([Fx.Record(7, Fx.Acme, ReadHarness.Nul)]);
+        await ReadHarness.Rejects(nulLink.Connector.Fetch(ReadHarness.Request()), EngineBridgeErrorCode.ExternalRowInvalid);
+        const longLink = ReadHarness.Over([Fx.Record(7, Fx.Acme, 'x'.repeat(401))]);
+        await ReadHarness.Rejects(longLink.Connector.Fetch(ReadHarness.Request()), EngineBridgeErrorCode.ExternalRowInvalid);
+    });
+
+    test('bindings pair with the identity by value, and an unknown binding is refused at construction', async () =>
+    {
+        // Plan and identity built separately (as after a recompose or a deserialized plan): equal, not identical, bindings.
+        const adapter = Fx.Adapter([ReadHarness.Acme()]);
+        const plan = Fx.Plan();
+        const identity = Fx.Identity(Fx.Plan());
+        assert.notEqual(plan.Bindings[0], identity.Bindings()[0]);
+        const connector = new DataSourceConnector(plan, adapter, identity);
+        const key = identity.Mint(plan.Bindings[0]!, String(7));
+        const page = await connector.Fetch(ReadHarness.Request({ Keys: [key] }));
+        assert.deepEqual(page.Rows.map(r => r.PublicId), [key]);
+        assert.equal(adapter.Calls, 1);
+
+        const elsewhere = Fx.Identity(Fx.Plan(Fx.BindingWith({ Source: ReadHarness.OtherSource })));
+        assert.throws(() => new DataSourceConnector(plan, adapter, elsewhere),
+            (e: unknown) => e instanceof EngineBridgeError && e.Code === EngineBridgeErrorCode.UnknownExternalBinding);
     });
 
     test('engine round trip', async () =>
@@ -370,7 +397,7 @@ describe('DataSourceConnector read side', () =>
         const adapter = Fx.Adapter([ReadHarness.Acme()]);
         const plan = Fx.Plan();
         const catalog = new DataSourceAdapterCatalog().Register(new RecordingAdapterFactory(adapter));
-        const connector = await DataSourceConnector.Open(plan, catalog, new ServiceProvider(), Fx.Identity(plan), Fx.Description());
+        const connector = await DataSourceConnector.Open(plan, catalog, new ServiceProvider(), Fx.Identity(plan));
         const engine = await EngineFixture.Open({ Description: Fx.Description(), External: new Set(), Diagnostics: [] }, { Connectors: [connector] });
         try
         {

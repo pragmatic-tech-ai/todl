@@ -103,7 +103,7 @@ export class ExternalIdentity
         if (candidates.length === 1)
         {
             const parsed = this.Parse(targetId);
-            if (parsed !== undefined && parsed.Binding === candidates[0])
+            if (parsed !== undefined && ExternalIdentity.SameBinding(parsed.Binding, candidates[0]!))
             {
                 return this.StorageKey(parsed.Binding, parsed.StorageId);
             }
@@ -123,7 +123,23 @@ export class ExternalIdentity
         return matches[0];
     }
 
-    private static Prefix(binding: IExternalBinding): string
+    /**
+     * True when `a` and `b` are one binding by value: one model, connector, concept and source. Bindings are compared by
+     * value, never by object identity, so a plan and an identity built separately over equal bindings still agree.
+     */
+    public static SameBinding(a: IExternalBinding, b: IExternalBinding): boolean
+    {
+        return ExternalIdentity.BindingKey(a) === ExternalIdentity.BindingKey(b);
+    }
+
+    /** True when one of this identity's bindings is `binding` by value (SameBinding). */
+    public Knows(binding: IExternalBinding): boolean
+    {
+        return this.all.some(b => ExternalIdentity.SameBinding(b, binding));
+    }
+
+    /** The prefix every public id minted under `binding` starts with: `Concept#Connector.Source#`. */
+    public static Prefix(binding: IExternalBinding): string
     {
         return binding.Binding.Concept + ExternalIdentity.Separator + binding.Connector + ExternalIdentity.SourceSeparator
             + binding.Binding.Source + ExternalIdentity.Separator;
@@ -199,6 +215,11 @@ export class ExternalIdentity
         }
         seen.add(concept);
         return ExternalIdentity.Supers(definition).some(p => this.IsAIn(p, ancestor, seen));
+    }
+
+    private static BindingKey(binding: IExternalBinding): string
+    {
+        return JSON.stringify([binding.Model, binding.Connector, binding.Binding.Concept, binding.Binding.Source]);
     }
 
     private static Supers(definition: IDefinitionDescription): readonly string[]

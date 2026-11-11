@@ -91,6 +91,17 @@ class ComposeFx
     public static readonly BaseUpgrade = '1.3.0';
     public static readonly Nowhere = 'nowhere';
     public static readonly NewOrder = 'order-new';
+    /** One package whose two models populate crm.Customer from two different datasources (I2). */
+    public static readonly CrmTwoSources = `namespace crm
+{
+    concept Customer { name : string?; }
+    datasource crm { kind = sql; connection = "crm-db"; }
+    datasource erp { kind = sql; connection = "erp-db"; }
+    model A : crm { connect crm; populate Customer key cust_id { name = "full_name"; } }
+    model B : crm { connect erp; populate Customer key cust_id { name = "full_name"; } }
+}`;
+    public static readonly ShopId = 'shop';
+    public static readonly ErpConnector = 'crm@connector:erp';
 
     public readonly Storage = new CompiledOnlyStorage();
     private readonly documents = new Map<string, PackageDocument>();
@@ -397,6 +408,15 @@ describe('EnvironmentCatalogComposer', () =>
         ComposeFx.NamesDeliveries(error, ComposeFx.AppA, ComposeFx.AppC);
     });
 
+    test('one package binding a concept to two connectors is a duplicate binding, never first-wins (I2)', async () =>
+    {
+        const fx = await new ComposeFx().Add(ComposeFx.ShopId, ComposeFx.CrmTwoSources);
+        const error = await fx.Rejects(EnvironmentCatalogErrorCode.DuplicateBinding, fx.Deploy(ComposeFx.AppA, ComposeFx.ShopId));
+        assert.equal(error.Subject, ComposeFx.Customer);
+        assert.ok(error.message.includes(ComposeFx.CrmConnector) && error.message.includes(ComposeFx.ErpConnector), error.message);
+        ComposeFx.NamesDeliveries(error, ComposeFx.AppA);
+    });
+
     test('reserved connector name is rejected', () =>
     {
         for (const name of [BindingTable.EngineStorage, TodlNames.FileConnector])
@@ -443,7 +463,7 @@ describe('EnvironmentCatalogComposer', () =>
         const catalog = await fx.Compose(fx.Deploy(ComposeFx.AppA, 'crm.p', 'shop.a'));
         const adapter = new RecordingAdapter();
         adapter.Inner.Seed(ComposeFx.CustomerSource, [{ [ComposeFx.CustomerKey]: '42', [ComposeFx.NameField]: ComposeFx.CustomerName }]);
-        const connectors = catalog.Connectors.map((plan) => new DataSourceConnector(plan, adapter, catalog.Identity, catalog.Description));
+        const connectors = catalog.Connectors.map((plan) => new DataSourceConnector(plan, adapter, catalog.Identity));
         const engine = await GraphEngine.Open({ Description: catalog.Description, Storage: { Kind: StorageKind.Memory }, Connectors: connectors });
         try
         {

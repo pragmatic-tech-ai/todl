@@ -30,6 +30,8 @@ export enum EngineBridgeErrorCode
     AmbiguousExternalBinding,
     /** A concept has no home model in the environment, so an engine node of it has no owner. */
     NoHomeModel,
+    /** A connector plan binding that its ExternalIdentity does not hold, so its public ids could never parse. */
+    UnknownExternalBinding,
 }
 
 /** Failure raised by the TODL-on-engine bridge; Code identifies the category. */

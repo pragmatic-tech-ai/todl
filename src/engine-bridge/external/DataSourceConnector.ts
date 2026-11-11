@@ -9,7 +9,6 @@ import {
     type IFetchedRow,
     type IFetchPage,
     type IFetchRequest,
-    type ISchemaDescription,
 } from '@pragmatic-tech-ai/graph';
 import type { IServiceProvider } from '@pragmatic-tech-ai/todl-runtime';
 import { QueryCompareOp, type ExternalRecord, type QueryComparison, type QueryRequest } from '../../model-data/connector-plan.js';
@@ -17,7 +16,7 @@ import type { DataSourceAdapterCatalog } from '../../model-data/data-source-adap
 import type { IDataSourceAdapter } from '../../model-data/data-source-adapter.js';
 import { EngineBridgeError, EngineBridgeErrorCode } from '../EngineBridgeError.js';
 import type { IExternalBinding, IExternalConnectorPlan } from './ExternalBinding.js';
-import type { ExternalIdentity } from './ExternalIdentity.js';
+import { ExternalIdentity } from './ExternalIdentity.js';
 import { DataSourceTransaction } from './DataSourceTransaction.js';
 import { ExternalValues } from './ExternalValues.js';
 import { FetchTranslator, MappedMembers, type IMappedProperty } from './FetchTranslator.js';
@@ -89,6 +88,10 @@ class ImmutableSet<T> extends Set<T>
  * REST and GraphQL never transact and compensate only. Compensation restores before-images last-write-wins, so a
  * concurrent change to the same rows during the window can be overwritten: the far side is the connector's best effort
  * (spec §6), and a failed compensation surfaces as CompensationFailed.
+ *
+ * Superseded design note: spec §11.2 (engine 0.3.0 / 0.4.0 plans) replaces this write model with read-time optimistic
+ * locking and immediate external writes that take source-assigned keys; the deferred-to-commit behavior above is M2.2's
+ * (see DataSourceTransaction).
  */
 export class DataSourceConnector implements IExternalConnector
 {
@@ -98,6 +101,12 @@ export class DataSourceConnector implements IExternalConnector
     private static readonly ErrNoKey = 'External row has no key: ';
     private static readonly ErrLongId = 'External public id exceeds the UTF-8 byte limit (';
     private static readonly ErrLongIdEnd = '): ';
+    private static readonly ErrEmptyId = 'External public id is empty: ';
+    private static readonly ErrNulId = 'External public id contains U+0000: ';
+    private static readonly ErrUnknownBinding = 'The connector plan binds a source its identity does not hold: ';
+    private static readonly ErrModelOpen = ' (model ';
+    private static readonly ErrModelClose = ')';
+    private static readonly Nul = '\u0000';
     private static readonly ErrUnpagedResume = 'A resume token was given to a connector whose source does not page: ';
     private static readonly Empty: IFetchPage = Object.freeze({ Rows: Object.freeze([]) });
     private static readonly PushDown: ReadonlySet<PredicateKind> = new ImmutableSet([
@@ -115,17 +124,25 @@ export class DataSourceConnector implements IExternalConnector
 
     private readonly shapes = new Map<string, IBindingShape>();
 
-    /** Member lookups go through `identity`, which is built over the same `description`. */
+    /**
+     * Member lookups go through `identity`. Every binding of `plan` must be one of `identity`'s bindings (compared by
+     * value: model, connector, concept, source); otherwise its rows could never be found by key and the connector
+     * throws UnknownExternalBinding rather than serve empty pages.
+     */
     public constructor(
         plan: IExternalConnectorPlan,
         private readonly adapter: IDataSourceAdapter,
         private readonly identity: ExternalIdentity,
-        _description: ISchemaDescription,
     )
     {
         this.Name = plan.Name;
         for (const binding of plan.Bindings)
         {
+            if (!identity.Knows(binding))
+            {
+                throw new EngineBridgeError(EngineBridgeErrorCode.UnknownExternalBinding, DataSourceConnector.ErrUnknownBinding + ExternalIdentity.Prefix(binding)
+                    + DataSourceConnector.ErrModelOpen + binding.Model + DataSourceConnector.ErrModelClose);
+            }
             this.shapes.set(DataSourceConnector.ShapeKey(binding.Model, binding.Binding.Concept), this.Shape(binding));
         }
     }
@@ -136,10 +153,9 @@ export class DataSourceConnector implements IExternalConnector
         adapters: DataSourceAdapterCatalog,
         services: IServiceProvider,
         identity: ExternalIdentity,
-        description: ISchemaDescription,
     ): Promise<DataSourceConnector>
     {
-        return new DataSourceConnector(plan, await adapters.Open(plan.Spec, services), identity, description);
+        return new DataSourceConnector(plan, await adapters.Open(plan.Spec, services), identity);
     }
 
     /** Opens the write side of one engine transaction (ruling T9; see the class comment for compensation). */
@@ -233,11 +249,7 @@ export class DataSourceConnector implements IExternalConnector
         {
             throw new EngineBridgeError(EngineBridgeErrorCode.ExternalRowInvalid, DataSourceConnector.ErrNoKey + concept);
         }
-        const publicId = this.identity.Mint(binding, String(key));
-        if (Buffer.byteLength(publicId) > DataSourceConnector.MaxIdBytes)
-        {
-            throw new EngineBridgeError(EngineBridgeErrorCode.ExternalRowInvalid, DataSourceConnector.ErrLongId + DataSourceConnector.MaxIdBytes + DataSourceConnector.ErrLongIdEnd + concept);
-        }
+        const publicId = DataSourceConnector.RequireId(this.identity.Mint(binding, String(key)), concept);
         const values = new Map<string, CellValue>();
         for (const member of members)
         {
@@ -251,10 +263,31 @@ export class DataSourceConnector implements IExternalConnector
             const target = this.identity.LinkTarget(binding, relationship, record[field] ?? null);
             if (target !== undefined)
             {
-                links.set(relationship, [target]);
+                links.set(relationship, [DataSourceConnector.RequireId(target, publicId + DataSourceConnector.MemberSeparator + relationship)]);
             }
         }
         return { PublicId: publicId, Concept: concept, Values: values, Links: links };
+    }
+
+    /**
+     * `id` when it is a valid engine public id (1..400 UTF-8 bytes, no U+0000, the engine's rule); otherwise
+     * ExternalRowInvalid naming `subject`, so every bad id from the source fails with one code.
+     */
+    private static RequireId(id: string, subject: string): string
+    {
+        if (id.length === 0)
+        {
+            throw new EngineBridgeError(EngineBridgeErrorCode.ExternalRowInvalid, DataSourceConnector.ErrEmptyId + subject);
+        }
+        if (Buffer.byteLength(id) > DataSourceConnector.MaxIdBytes)
+        {
+            throw new EngineBridgeError(EngineBridgeErrorCode.ExternalRowInvalid, DataSourceConnector.ErrLongId + DataSourceConnector.MaxIdBytes + DataSourceConnector.ErrLongIdEnd + subject);
+        }
+        if (id.includes(DataSourceConnector.Nul))
+        {
+            throw new EngineBridgeError(EngineBridgeErrorCode.ExternalRowInvalid, DataSourceConnector.ErrNulId + subject);
+        }
+        return id;
     }
 
     /** IdKey, the field of each requested mapped property, and the field of each mapped relationship (T5). */

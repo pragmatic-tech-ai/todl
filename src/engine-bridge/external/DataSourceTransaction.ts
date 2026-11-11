@@ -77,6 +77,10 @@ interface IAttemptedBatch
  * concurrent change since the commit makes the compensation fail (CompensationFailed) instead of being overwritten.
  * Without a reported version (a source that reports none, an explicitly written version member, an adapter call that
  * threw) the before-image is restored last-write-wins, version field included.
+ *
+ * Superseded design note: spec §11.2 (engine 0.3.0 / 0.4.0 plans) replaces the commit-window guard (Q1), the
+ * no-source-assigned-keys rule (Q3) and the deferred-to-commit writes described here with read-time optimistic locking
+ * and immediate external writes that take source-assigned keys.
  */
 export class DataSourceTransaction implements IConnectorTransaction
 {

@@ -1,7 +1,7 @@
 import { CompareOp, MemberKind, PredicateKind, ValueType, type And, type CellValue, type Compare, type IdIn, type In, type IsNull, type Not, type Predicate } from '@pragmatic-tech-ai/graph';
 import { QueryCompareOp, type ExternalFieldValue, type QueryComparison, type QueryFilter } from '../../model-data/connector-plan.js';
 import type { IExternalBinding } from './ExternalBinding.js';
-import type { ExternalIdentity } from './ExternalIdentity.js';
+import { ExternalIdentity } from './ExternalIdentity.js';
 
 /** A field-mapped, typed property member of a binding: its source field and engine type. */
 export interface IMappedProperty
@@ -146,7 +146,7 @@ export class FetchTranslator
         for (const id of ids)
         {
             const parsed = identity.Parse(id);
-            if (parsed !== undefined && parsed.Binding === binding)
+            if (parsed !== undefined && ExternalIdentity.SameBinding(parsed.Binding, binding))
             {
                 keys.push(identity.StorageKey(binding, parsed.StorageId));
             }
