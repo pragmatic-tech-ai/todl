@@ -11,6 +11,9 @@ package.json.prepack-bak
 # Verdaccio auth (contains local registry token) — never commit
 .npmrc
 
+# Transient VM modules emitted by the concept-crud-view-model-generator tests
+.tmp-customer-vm.*.ts
+
 # SDD scratch workspace
 .superpowers/
 

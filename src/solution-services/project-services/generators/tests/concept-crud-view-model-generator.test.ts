@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { writeFile, rm } from "node:fs/promises";
+import { writeFile, rm, readdir, stat } from "node:fs/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 import { FakeStorage, Signal } from "@pragmatic-tech-ai/todl-runtime";
@@ -74,6 +74,11 @@ class FakeModel
 /** An emitted, dynamically-imported VM module plus the behavioural drivers the tests need. */
 class VmHarness
 {
+    private static readonly TempPrefix = ".tmp-customer-vm.";
+    private static readonly TempSuffix = ".ts";
+    private static readonly StaleAfterMs = 10 * 60 * 1000;
+    private static readonly Encoding = "utf8";
+
     private constructor(public readonly RowVm: new () => any, public readonly ListVm: new (model: unknown) => any, private readonly tempPath: string)
     {
     }
@@ -82,10 +87,45 @@ class VmHarness
     public static async Load(ts: string): Promise<VmHarness>
     {
         const here = dirname(fileURLToPath(import.meta.url));
-        const tempPath = join(here, `.tmp-customer-vm.${Date.now()}.${Math.random().toString(36).slice(2)}.ts`);
-        await writeFile(tempPath, ts, "utf8");
-        const mod = await import(pathToFileURL(tempPath).href);
-        return new VmHarness(mod.CustomerVM, mod.CustomerListVM, tempPath);
+        await VmHarness.SweepStale(here);
+        const tempPath = join(here, `${VmHarness.TempPrefix}${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}${VmHarness.TempSuffix}`);
+        await writeFile(tempPath, ts, VmHarness.Encoding);
+        try
+        {
+            const mod = await import(pathToFileURL(tempPath).href);
+            return new VmHarness(mod.CustomerVM, mod.CustomerListVM, tempPath);
+        }
+        catch (e)
+        {
+            // No harness is returned, so the caller's finally can never remove this file.
+            await rm(tempPath, { force: true });
+            throw e;
+        }
+    }
+
+    /** Remove temp modules orphaned by a killed run (a clean run removes its own in Dispose). */
+    private static async SweepStale(dir: string): Promise<void>
+    {
+        for (const name of await readdir(dir))
+        {
+            if (!name.startsWith(VmHarness.TempPrefix) || !name.endsWith(VmHarness.TempSuffix))
+            {
+                continue;
+            }
+            const path = join(dir, name);
+            try
+            {
+                const info = await stat(path);
+                if (Date.now() - info.mtimeMs > VmHarness.StaleAfterMs)
+                {
+                    await rm(path, { force: true });
+                }
+            }
+            catch
+            {
+                // Raced with another process removing it; nothing to do.
+            }
+        }
     }
 
     /** Let the awaited Apply continuation (RebuildItems + Selected reconcile) settle. */
