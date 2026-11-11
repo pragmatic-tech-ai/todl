@@ -34,6 +34,10 @@ export enum EngineBridgeErrorCode
     UnknownExternalBinding,
     /** A create sets a system field (owner, owningBusinessUnit) the engine places itself on an owned concept (spec C3). */
     SystemFieldWrite,
+    /** An assignment targets a record whose concept is not owned. */
+    NotOwned,
+    /** An assignment targets a record that is missing or hidden from the caller. */
+    InvisibleRecord,
 }
 
 /** Failure raised by the TODL-on-engine bridge; Code identifies the category. */
