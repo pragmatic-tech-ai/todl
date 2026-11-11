@@ -19,3 +19,17 @@ test("outlines concepts with their fields and relationships as children", () =>
     assert.equal(dog.kind, SymbolKind.Class);
     assert.deepEqual(dog.children?.map((c) => c.name).sort(), ["name", "owner"]);
 });
+
+test("document symbols list roles, contributions and profiles", () =>
+{
+    const { analysis, uri } = MarkedSource.Fixture("s.todl", [
+        "namespace demo {",
+        "  concept Project { secured budget : number?; }",
+        "  role Manager { Project { read = user; } }",
+        "  contribute BasicUser { Project { read = user; } }",
+        "  profile Finance { Project.budget : read; }",
+        "}",
+    ].join("\n"));
+    const names = new DocumentSymbolProvider().Of(analysis, uri).map((s) => s.name).sort();
+    assert.deepEqual(names, ["BasicUser", "Finance", "Manager", "Project"]);
+});

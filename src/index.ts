@@ -496,3 +496,9 @@ export * as CypherWire from './graph-api/wire/index.js';
 export { ConnectorMirrorMapper } from './model-data/connector-mirror-mapper.js';
 export { ConnectorPrefetch, type INodeReflector } from './model-data/connector-prefetch.js';
 export { ConnectorRuntimeGraphQuery } from './graph-api/connector-runtime-graph-query.js';
+
+export { SecurityAction, SecurityDepth, BaseRoleName, FieldProfileRight, SecurityTerms } from './compiler-services/security/security-terms.js';
+export {
+    PackageSecurity, type IPackageSecurity, type IPackageRole, type ISecurityPrivilege, type ISecuredField,
+    type IFieldProfile, type IFieldProfileEntry, type IEdgeConcept,
+} from './compiler-services/security/package-security.js';

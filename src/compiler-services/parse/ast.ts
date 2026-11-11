@@ -57,6 +57,9 @@ export enum DeclKind
   Merge,
   Connector,
   Aspect,
+  Role,
+  Contribution,
+  Profile,
 }
 
 /** The kind of an authored VALUE (the right-hand side of `name = …`, an array
@@ -434,6 +437,9 @@ export interface FieldDecl
   cardinality: Cardinality;
   nameSpan?: SourceSpan;
   typeSpan?: SourceSpan;
+  /** `secured <name> : <type>;` — the field is field-level secured. */
+  secured?: boolean;
+  securedSpan?: SourceSpan;
 }
 
 /** A `->` relationship member — `<name> -> <T1>, <T2> …` (with cardinality). Always
@@ -608,11 +614,30 @@ export interface PrimitiveDecl
   nameSpan?: SourceSpan;
 }
 
+/** One `<action> = <depth>;` entry in a role or contribution; both kept as authored text. */
+export interface PrivilegeEntry { action: string; depth: string; span: SourceSpan; actionSpan?: SourceSpan; depthSpan?: SourceSpan; }
+
+/** A `<Concept> { <action> = <depth>; … }` block inside a role or contribution. */
+export interface ConceptPrivileges { concept: string; entries: PrivilegeEntry[]; span: SourceSpan; conceptSpan?: SourceSpan; }
+
+/** A `role <Name> { <Concept> { … } … }` declaration. */
+export interface RoleDecl { kind: DeclKind.Role; name: string; concepts: ConceptPrivileges[]; span: SourceSpan; nameSpan?: SourceSpan; }
+
+/** A `contribute <BaseRole> { <Concept> { … } … }` declaration. */
+export interface ContributionDecl { kind: DeclKind.Contribution; baseRole: string; concepts: ConceptPrivileges[]; span: SourceSpan; baseRoleSpan?: SourceSpan; }
+
+/** One `<Concept>.<field> : <right>, …;` entry in a field profile; rights kept as authored text. */
+export interface ProfileEntry { concept: string; field: string; rights: string[]; span: SourceSpan; fieldSpan?: SourceSpan; }
+
+/** A `profile <Name> { … }` declaration. */
+export interface ProfileDecl { kind: DeclKind.Profile; name: string; entries: ProfileEntry[]; span: SourceSpan; nameSpan?: SourceSpan; }
+
 /** The union of every top-level declaration; discriminate on `.kind` (a
  * {@link DeclKind}). This is what a {@link NamespaceNode} holds. */
 export type Declaration =
   | ConceptDecl | TaxonomyDecl | ViewpointDecl | PrimitiveDecl | InstanceDecl | ModelDecl
-  | AnnotationDecl | PackageDecl | OperatorDecl | IdentityDecl | MatchDecl | MergeDecl | ConnectorDecl | AspectDecl;
+  | AnnotationDecl | PackageDecl | OperatorDecl | IdentityDecl | MatchDecl | MergeDecl | ConnectorDecl | AspectDecl
+  | RoleDecl | ContributionDecl | ProfileDecl;
 
 // ═══════════════════════════════ FILE ROOT ════════════════════════════════════
 
