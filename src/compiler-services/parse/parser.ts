@@ -1659,9 +1659,6 @@ class Parser
     return Cardinality.One;
   }
 
-  /** Read a dotted name `a.b.c` and return it joined with `.`. Accepts a single
-   * bare identifier (a one-segment path), so every namespace-qualifiable position
-   * can call this uniformly whether or not the author qualified the name. */
   /** The identifier tokens of a dotted path `a.b.c`, in order (the dots are consumed, not returned). */
   private parseDottedTokens(): Token[]
   {
@@ -1673,6 +1670,9 @@ class Parser
     return parts;
   }
 
+  /** Read a dotted name `a.b.c` and return it joined with `.`. Accepts a single
+   * bare identifier (a one-segment path), so every namespace-qualifiable position
+   * can call this uniformly whether or not the author qualified the name. */
   private parseDottedPath(): string
   {
     const parts = [this.expectIdentifier()];
