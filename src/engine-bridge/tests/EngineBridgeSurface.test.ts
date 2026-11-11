@@ -63,6 +63,7 @@ class SurfaceExpectations
         'EnvironmentNodePlacement',
         'ExternalIdentity',
         'ExternalValues',
+        'ExternalVersionConflict',
         'ExternalWriteError',
         'FetchTranslator',
         'PolicyDiagnosticCode',

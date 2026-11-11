@@ -89,9 +89,11 @@ class ImmutableSet<T> extends Set<T>
  * concurrent change to the same rows during the window can be overwritten: the far side is the connector's best effort
  * (spec §6), and a failed compensation surfaces as CompensationFailed.
  *
- * Superseded design note: spec §11.2 (engine 0.3.0 / 0.4.0 plans) replaces this write model with read-time optimistic
- * locking and immediate external writes that take source-assigned keys; the deferred-to-commit behavior above is M2.2's
- * (see DataSourceTransaction).
+ * Each fetched row carries its version-field value as IFetchedRow.Version (ruling R119 V1); the version field is read
+ * whether or not it was requested, and an Optimistic write is guarded with the version the transaction read.
+ *
+ * Superseded design note: spec §11.2 (engine 0.4.0 plan) replaces this write model with immediate external writes that
+ * take source-assigned keys; the deferred-to-commit behavior above is M2.2's (see DataSourceTransaction).
  */
 export class DataSourceConnector implements IExternalConnector
 {
@@ -266,7 +268,13 @@ export class DataSourceConnector implements IExternalConnector
                 links.set(relationship, [DataSourceConnector.RequireId(target, publicId + DataSourceConnector.MemberSeparator + relationship)]);
             }
         }
-        return { PublicId: publicId, Concept: concept, Values: values, Links: links };
+        const versionField = binding.Binding.VersionField;
+        const version = versionField === undefined
+            ? undefined
+            : ExternalValues.ToVersion(record[versionField] ?? null, publicId + DataSourceConnector.MemberSeparator + versionField);
+        return version === undefined
+            ? { PublicId: publicId, Concept: concept, Values: values, Links: links }
+            : { PublicId: publicId, Concept: concept, Values: values, Links: links, Version: version };
     }
 
     /**
@@ -290,10 +298,17 @@ export class DataSourceConnector implements IExternalConnector
         return id;
     }
 
-    /** IdKey, the field of each requested mapped property, and the field of each mapped relationship (T5). */
+    /**
+     * IdKey, the version field (always: the row carries its version, R119 V1), the field of each requested mapped
+     * property, and the field of each mapped relationship (T5).
+     */
     private static Fields(shape: IBindingShape, request: IFetchRequest): string[]
     {
         const fields = new Set<string>([shape.Binding.Binding.IdKey]);
+        if (shape.Binding.Binding.VersionField !== undefined)
+        {
+            fields.add(shape.Binding.Binding.VersionField);
+        }
         for (const member of request.Members)
         {
             const property = shape.Properties.get(member);

@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { ServiceProvider } from '@pragmatic-tech-ai/todl-runtime';
 import {
     AccessScope,
+    ConflictError,
     ConnectorChangeSet,
     ConnectorError,
     Cypher,
@@ -12,6 +13,7 @@ import {
     type ConnectorChange,
     type GraphEngine,
     type IConnectorTransaction,
+    type RowVersion,
 } from '@pragmatic-tech-ai/graph';
 import {
     QueryCompareOp,
@@ -23,6 +25,8 @@ import {
     type ExternalRecord,
 } from '../../../model-data/connector-plan.js';
 import { DataSourceAdapterCatalog } from '../../../model-data/data-source-adapter-catalog.js';
+import { SqlAdapter } from '../../../model-data/sql-adapter.js';
+import { RecordingSqlSession } from '../../../model-data/tests/sql-fakes.js';
 import { VersionBumpingAdapter } from '../../../model-data/version-bumping-adapter.js';
 import { EngineBridgeError, EngineBridgeErrorCode } from '../../EngineBridgeError.js';
 import { EnvironmentNodePlacement } from '../../environment/EnvironmentNodePlacement.js';
@@ -31,6 +35,7 @@ import { ChangeBatcher } from '../ChangeBatcher.js';
 import type { IExternalBinding, IExternalConnectorPlan } from '../ExternalBinding.js';
 import type { ExternalIdentity } from '../ExternalIdentity.js';
 import { DataSourceConnector } from '../DataSourceConnector.js';
+import { ExternalVersionConflict } from '../ExternalVersionConflict.js';
 import { ExternalWriteError } from '../ExternalWriteError.js';
 import { ExternalFixture as Fx, RecordingAdapter, RecordingAdapterFactory } from './ExternalFixture.js';
 
@@ -83,11 +88,45 @@ class EngineHarness
 }
 
 /**
+ * A connector over the Optimistic customers binding and the real SqlAdapter on a RecordingSqlSession: every read answers
+ * `rows` (customer 7 at version 3 by default) and every statement reports `affected` rows.
+ */
+class SqlHarness
+{
+    public readonly Plan = Fx.Plan(Fx.OptimisticBinding());
+    public readonly Identity = Fx.Identity(this.Plan);
+    public readonly Connector: DataSourceConnector;
+
+    private constructor(public readonly Session: RecordingSqlSession)
+    {
+        this.Connector = new DataSourceConnector(this.Plan, new SqlAdapter(Session), this.Identity);
+    }
+
+    public static Over(affected: number, rows: ExternalRecord[] = [{ ...Fx.Record(7, Fx.Acme, Fx.TeamA), [Fx.RevField]: 3 }]): SqlHarness
+    {
+        return new SqlHarness(new RecordingSqlSession(rows, affected));
+    }
+
+    public Id(storageId: string): string
+    {
+        return this.Identity.Mint(this.Plan.Bindings[0]!, storageId);
+    }
+
+    public async Applied(...changes: ConnectorChange[]): Promise<IConnectorTransaction>
+    {
+        const txn = await this.Connector.Begin();
+        await txn.Apply(WriteHarness.Changes(...changes));
+        return txn;
+    }
+}
+
+/**
  * A connector over a customers binding and a recording adapter in partial-update mode, wrapped in VersionBumpingAdapter
  * as DataSourceAdapterCatalog wraps every adapter; with change builders.
  */
 class WriteHarness
 {
+    public static readonly S3 = '3';
     public static readonly S7 = '7';
     public static readonly S8 = '8';
     public static readonly S9 = '9';
@@ -101,6 +140,8 @@ class WriteHarness
     public static readonly Owner = 'other.Model';
     public static readonly Unmapped = 'unmapped';
     public static readonly Since = 'since';
+    public static readonly DeleteFrom = 'DELETE FROM ';
+    public static readonly GuardedDelete = 'DELETE FROM "customers" WHERE "cust_id" = $1 AND "rev" = $2';
     public static readonly Uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
     public readonly Plan: IExternalConnectorPlan;
@@ -155,6 +196,21 @@ class WriteHarness
     public static Delete(id: string): ConnectorChange
     {
         return { Op: WriteOp.DeleteNode, PublicId: id, Concept: Fx.Customer, Owner: Fx.Model };
+    }
+
+    /** `change` as the engine routes it after the transaction fetched its row at `version` (R119 V2). */
+    public static Read(change: ConnectorChange, version: RowVersion): ConnectorChange
+    {
+        return { ...change, ExpectedVersion: version };
+    }
+
+    /** Moves customer 7's version on to `version`, as another writer would. */
+    public async Bump(version: number): Promise<void>
+    {
+        await this.Adapter.Inner.Apply({
+            Source: Fx.Source, IdKey: Fx.IdKey, Concurrency: WriteConcurrency.LastWriteWins, Atomicity: WriteAtomicity.Sequential,
+            Operations: [{ Kind: WriteOperationKind.Upsert, Key: 7, Fields: { ...Fx.Record(7, Fx.Acme, Fx.TeamA), [Fx.RevField]: version } }],
+        });
     }
 
     public static Changes(...changes: ConnectorChange[]): ConnectorChangeSet
@@ -516,6 +572,87 @@ describe('DataSourceConnector write side', () =>
         });
         await WriteHarness.Rejects(second.Revert(), EngineBridgeErrorCode.CompensationFailed);
         assert.equal((await raced.Rows())[0]![Fx.NameField], WriteHarness.Other);
+    });
+
+    test('optimistic write uses the expected version', async () =>
+    {
+        const h = WriteHarness.Optimistic();
+        const change = WriteHarness.Read(WriteHarness.Set(h.Id(WriteHarness.S7), Fx.Name, WriteHarness.NewName), 3n);
+        const batch = ChangeBatcher.Batches(WriteHarness.Changes(change), h.Identity, Fx.Connector)[0]!;
+        assert.equal(batch.Expected.get(batch.Batch.Operations[0]!), 3);
+        // The read version '3' passes the text pre-check against the before-image's 3, and is what guards the write.
+        const sql = SqlHarness.Over(1);
+        const txn = await sql.Applied(WriteHarness.Read(WriteHarness.Set(sql.Id(WriteHarness.S7), Fx.Name, WriteHarness.NewName), WriteHarness.S3));
+        await txn.Commit();
+        const upsert = sql.Session.calls[sql.Session.calls.length - 1]!;
+        assert.equal(upsert.params[upsert.params.length - 1], WriteHarness.S3);
+    });
+
+    test('optimistic write after a concurrent change fails with a version conflict', async () =>
+    {
+        const h = WriteHarness.Optimistic();
+        // The transaction read version 3; another writer moved the row on to 4 before the write.
+        await h.Bump(4);
+        const txn = await h.Applied(WriteHarness.Read(WriteHarness.Set(h.Id(WriteHarness.S7), Fx.Name, WriteHarness.NewName), 3));
+        await assert.rejects(txn.Commit(), (e: unknown) => e instanceof ExternalVersionConflict && e instanceof ConflictError
+            && e.Binding === h.Plan.Bindings[0] && e.Failures[0]!.Kind === WriteFailureKind.Conflict);
+        assert.equal(h.Adapter.Batches.length, 0);
+        assert.equal((await h.Rows())[0]![Fx.NameField], Fx.Acme);
+    });
+
+    test('adapter conflict is a version conflict', async () =>
+    {
+        const h = WriteHarness.Optimistic();
+        h.Adapter.FailAfter = 0;
+        h.Adapter.FailKind = WriteFailureKind.Conflict;
+        const txn = await h.Applied(WriteHarness.Read(WriteHarness.Set(h.Id(WriteHarness.S7), Fx.Name, WriteHarness.NewName), 3));
+        await assert.rejects(txn.Commit(), (e: unknown) => e instanceof ExternalVersionConflict);
+        assert.equal(h.Adapter.Batches.length, 1);
+    });
+
+    test('no expected version falls back to the before-image', async () =>
+    {
+        // V3: a write with nothing read (System scope) is guarded with the before-image; deletes carry it too (G1). A
+        // delete of a row the before-image does not hold is dropped: nothing to delete, and no unretryable Conflict.
+        const sql = SqlHarness.Over(1);
+        const txn = await sql.Applied(WriteHarness.Delete(sql.Id(WriteHarness.S7)), WriteHarness.Delete(sql.Id(WriteHarness.S9)));
+        await txn.Commit();
+        const deletes = sql.Session.calls.filter(c => c.sql.startsWith(WriteHarness.DeleteFrom));
+        assert.deepEqual(deletes.map(c => [c.sql, c.params]), [[WriteHarness.GuardedDelete, [7, 3]]]);
+        // Only an absent row, nothing read: the commit succeeds after the before-image read alone.
+        const absent = SqlHarness.Over(0, []);
+        const gone = await absent.Applied(WriteHarness.Delete(absent.Id(WriteHarness.S9)));
+        await gone.Commit();
+        assert.equal(absent.Session.calls.length, 1);
+    });
+
+    test('last-write-wins ignores expected versions', async () =>
+    {
+        const h = WriteHarness.Over(WriteHarness.Existing());
+        const txn = await h.Applied(WriteHarness.Read(WriteHarness.Set(h.Id(WriteHarness.S7), Fx.Name, WriteHarness.NewName), 99));
+        await txn.Commit();
+        assert.equal(h.Adapter.Batches[0]!.Operations[0]!.Version, undefined);
+        assert.equal((await h.Rows())[0]![Fx.NameField], WriteHarness.NewName);
+    });
+
+    test('optimistic delete with a stale version conflicts', async () =>
+    {
+        // Pre-check: the transaction read version 2, the before-image holds 3; nothing is sent and the row remains.
+        const stale = WriteHarness.Optimistic();
+        const txn = await stale.Applied(WriteHarness.Read(WriteHarness.Delete(stale.Id(WriteHarness.S7)), 2));
+        await assert.rejects(txn.Commit(), (e: unknown) => e instanceof ExternalVersionConflict);
+        assert.equal(stale.Adapter.Batches.length, 0);
+        assert.equal((await stale.Rows()).length, 1);
+        // A row read at a version and gone by the write is a conflict too.
+        const gone = await stale.Applied(WriteHarness.Read(WriteHarness.Delete(stale.Id(WriteHarness.S9)), 2));
+        await assert.rejects(gone.Commit(), (e: unknown) => e instanceof ExternalVersionConflict);
+        // SQL: the pre-check passed (before-image at 3), but the row changed before the guarded DELETE matched it.
+        const sql = SqlHarness.Over(0);
+        const sqlTxn = await sql.Applied(WriteHarness.Read(WriteHarness.Delete(sql.Id(WriteHarness.S7)), 3));
+        await assert.rejects(sqlTxn.Commit(), (e: unknown) => e instanceof ExternalVersionConflict);
+        const deleted = sql.Session.calls[sql.Session.calls.length - 1]!;
+        assert.equal(deleted.sql, WriteHarness.GuardedDelete);
+        assert.deepEqual(deleted.params, [7, 3]);
     });
 
     test('failed compensation throws CompensationFailed', async () =>

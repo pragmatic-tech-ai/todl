@@ -1,6 +1,6 @@
 import { QueryFilterEvaluator } from "../query-filter-evaluator.js";
 import { QueryCompareOp, WriteConcurrency, WriteFailureKind, WriteOperationKind } from "../connector-plan.js";
-import type { DataSourceKind, ExternalRecord, QueryRequest, ResolvedConnection, WriteBatch, WriteFailure, WriteResult } from "../connector-plan.js";
+import type { DataSourceKind, ExternalRecord, QueryRequest, ResolvedConnection, WriteBatch, WriteFailure, WriteOperation, WriteResult } from "../connector-plan.js";
 import type { AdapterResolutionRequest, IDataSourceAdapter, IDataSourceAdapterFactory, IDataSourceAdapterProvider } from "../data-source-adapter.js";
 
 export class InMemoryAdapter implements IDataSourceAdapter
@@ -30,7 +30,8 @@ export class InMemoryAdapter implements IDataSourceAdapter
         });
     }
 
-    // Delete is UNCONDITIONAL in v1: the optimistic version guard applies to Upsert only (a delete-guard is a follow-on).
+    // Mirrors SqlAdapter: in Optimistic mode (with a VersionField) an upsert of an existing row and every delete are
+    // version-guarded (ruling R122 G1); a guarded delete of a missing row, or of a row at another version, is a Conflict.
     public async Apply(batch: WriteBatch): Promise<WriteResult>
     {
         const rows = this.sources.get(batch.Source) ?? [];
@@ -42,6 +43,12 @@ export class InMemoryAdapter implements IDataSourceAdapter
             const index = rows.findIndex(row => row[batch.IdKey] === op.Key);
             if (op.Kind === WriteOperationKind.Delete)
             {
+                if (batch.Concurrency === WriteConcurrency.Optimistic && batch.VersionField !== undefined
+                    && (index < 0 || !InMemoryAdapter.VersionMatches(rows[index]!, batch.VersionField, op.Version)))
+                {
+                    failures.push({ Key: op.Key, Kind: WriteFailureKind.Conflict, Reason: `${InMemoryAdapter.StaleVersionMessage} ${batch.VersionField}` });
+                    continue;
+                }
                 if (index >= 0)
                 {
                     rows.splice(index, 1);
@@ -56,8 +63,7 @@ export class InMemoryAdapter implements IDataSourceAdapter
                 // Fail-closed like SqlAdapter's "version = ?" guard: a NULL stored version never matches
                 // (NULL = NULL is UNKNOWN), so a present-but-unversioned row is a Conflict even when
                 // op.Version is also null. Only a non-null stored version equal to op.Version writes.
-                const stored = rows[index]![batch.VersionField] ?? null;
-                if (stored === null || stored !== (op.Version ?? null))
+                if (!InMemoryAdapter.VersionMatches(rows[index]!, batch.VersionField, op.Version))
                 {
                     failures.push({ Key: op.Key, Kind: WriteFailureKind.Conflict, Reason: `${InMemoryAdapter.StaleVersionMessage} ${batch.VersionField}` });
                     continue;
@@ -73,6 +79,13 @@ export class InMemoryAdapter implements IDataSourceAdapter
 
     public async Dispose(): Promise<void>
     {
+    }
+
+    /** True when `row` holds a non-null version equal to `version` (SQL's `version = $n`: NULL never matches). */
+    private static VersionMatches(row: ExternalRecord, versionField: string, version: WriteOperation["Version"]): boolean
+    {
+        const stored = row[versionField] ?? null;
+        return stored !== null && stored === (version ?? null);
     }
 }
 

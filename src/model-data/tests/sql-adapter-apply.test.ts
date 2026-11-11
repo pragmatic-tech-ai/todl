@@ -10,6 +10,7 @@ class ApplyFixtures
     public static readonly UpsertSql = 'INSERT INTO "order" ("order_id", "display_name", "created_at") VALUES ($1, $2, $3) '
         + 'ON CONFLICT ("order_id") DO UPDATE SET "display_name" = EXCLUDED."display_name", "created_at" = EXCLUDED."created_at"';
     public static readonly VersionGuard = ' WHERE "order"."version" = $4';
+    public static readonly GuardedDeleteSql = 'DELETE FROM "order" WHERE "order_id" = $1 AND "version" = $2';
     public static readonly DriverErrorMessage = "connection reset by peer";
     // Mirrors SqlAdapter.VersionConflictReason (private); kept in lock-step by this assertion.
     public static readonly VersionConflictReason = "version mismatch";
@@ -65,6 +66,21 @@ test("SqlAdapter delete emits a parameterized DELETE", async () =>
     assert.equal(session.calls[0]!.sql, 'DELETE FROM "order" WHERE "order_id" = $1');
     assert.deepEqual(session.calls[0]!.params, ["O-1007"]);
     assert.equal(result.Applied, 1);
+});
+
+test("Optimistic delete is guarded by the version; rowcount 0 is a Conflict failure", async () =>
+{
+    const op: WriteOperation = { Kind: WriteOperationKind.Delete, Key: "O-1007", Fields: {}, Version: 3 };
+    const match = new RecordingSqlSession([], 1);
+    const applied = await new SqlAdapter(match).Apply(ApplyFixtures.Batch(op, "version", WriteConcurrency.Optimistic));
+    assert.equal(match.calls[0]!.sql, ApplyFixtures.GuardedDeleteSql);
+    assert.deepEqual(match.calls[0]!.params, ["O-1007", 3]);
+    assert.equal(applied.Applied, 1);
+
+    const stale = new RecordingSqlSession([], 0);
+    const conflicted = await new SqlAdapter(stale).Apply(ApplyFixtures.Batch(op, "version", WriteConcurrency.Optimistic));
+    assert.equal(conflicted.Applied, 0);
+    assert.deepEqual(conflicted.Failures, [{ Key: "O-1007", Kind: WriteFailureKind.Conflict, Reason: ApplyFixtures.VersionConflictReason }]);
 });
 
 test("LastWriteWins upsert overwrites regardless of stored version", async () =>

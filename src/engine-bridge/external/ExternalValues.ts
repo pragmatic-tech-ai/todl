@@ -1,4 +1,4 @@
-import { DateTimeValue, DateValue, DurationValue, type CellValue, type ValueType } from '@pragmatic-tech-ai/graph';
+import { DateTimeValue, DateValue, DurationValue, type CellValue, type RowVersion, type ValueType } from '@pragmatic-tech-ai/graph';
 import type { ExternalFieldValue } from '../../model-data/connector-plan.js';
 import { CellConverter } from '../CellConversion.js';
 import { EngineBridgeError, EngineBridgeErrorCode } from '../EngineBridgeError.js';
@@ -11,6 +11,7 @@ export class ExternalValues
     private static readonly ErrTemporal = 'A temporal value cannot be written to an external source: ';
     private static readonly ReasonStart = ' (';
     private static readonly ReasonEnd = ')';
+    private static readonly ErrVersion = 'External row version is not a string or a finite number: ';
 
     /** The engine cell for an external value; null stays null. Throws ExternalRowInvalid naming `subject`. */
     public static ToCell(type: ValueType, value: ExternalFieldValue, subject: string): CellValue
@@ -42,5 +43,33 @@ export class ExternalValues
             throw new EngineBridgeError(EngineBridgeErrorCode.UnsupportedExternalChange, ExternalValues.ErrTemporal + subject);
         }
         return value as ExternalFieldValue;
+    }
+
+    /**
+     * The row version of a source's version-field value (ruling R119 V1): a string or a finite number passes, null is
+     * absent, anything else (a boolean, a non-finite number) is ExternalRowInvalid naming `subject`.
+     */
+    public static ToVersion(value: ExternalFieldValue, subject: string): RowVersion | undefined
+    {
+        if (value === null)
+        {
+            return undefined;
+        }
+        if (typeof value === 'string' || (typeof value === 'number' && Number.isFinite(value)))
+        {
+            return value;
+        }
+        throw new EngineBridgeError(EngineBridgeErrorCode.ExternalRowInvalid, ExternalValues.ErrVersion + subject);
+    }
+
+    /** The source value of a row version: a string or number as is, a bigint as ToExternal sends it. */
+    public static FromVersion(version: RowVersion): ExternalFieldValue
+    {
+        if (typeof version === 'bigint')
+        {
+            const asNumber = Number(version);
+            return Number.isSafeInteger(asNumber) ? asNumber : version.toString();
+        }
+        return version;
     }
 }
