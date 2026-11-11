@@ -25,6 +25,8 @@ import { DataSourceAdapterCatalog } from '../../../model-data/data-source-adapte
 import { EngineBridgeError, EngineBridgeErrorCode } from '../../EngineBridgeError.js';
 import { EngineFixture } from '../../tests/EngineFixture.js';
 import { DataSourceConnector } from '../DataSourceConnector.js';
+import type { IExternalBinding, IExternalConnectorPlan } from '../ExternalBinding.js';
+import type { ExternalIdentity } from '../ExternalIdentity.js';
 import { ResumeToken } from '../ResumeToken.js';
 import { ExternalFixture as Fx, RecordingAdapter, RecordingAdapterFactory } from './ExternalFixture.js';
 
@@ -37,15 +39,25 @@ class ReadHarness
     public static readonly TeamB = 'b';
     public static readonly TokenEncoding = 'base64url';
     public static readonly OtherSource = 'clients';
+    public static readonly Etag = 'W/"4"';
+    public static readonly VersionKey = 'Version';
     public static readonly Nul = 'a\u0000b';
 
-    public readonly Plan = Fx.Plan();
-    public readonly Identity = Fx.Identity(this.Plan);
+    public readonly Plan: IExternalConnectorPlan;
+    public readonly Identity: ExternalIdentity;
     public readonly Connector: DataSourceConnector;
 
-    public constructor(public readonly Adapter: RecordingAdapter)
+    public constructor(public readonly Adapter: RecordingAdapter, binding: IExternalBinding = Fx.Binding())
     {
+        this.Plan = Fx.Plan(binding);
+        this.Identity = Fx.Identity(this.Plan);
         this.Connector = new DataSourceConnector(this.Plan, Adapter, this.Identity);
+    }
+
+    /** Customer 7 (Acme) whose version column holds `version`, under the Optimistic binding. */
+    public static Versioned(version: ExternalRecord[string]): ReadHarness
+    {
+        return new ReadHarness(Fx.Adapter([{ ...ReadHarness.Acme(), [Fx.RevField]: version }]), Fx.OptimisticBinding());
     }
 
     public static Acme(): ExternalRecord
@@ -357,6 +369,39 @@ describe('DataSourceConnector read side', () =>
         await ReadHarness.Rejects(text.Connector.Fetch(ReadHarness.Request()), EngineBridgeErrorCode.ExternalRowInvalid);
         const number = ReadHarness.Over([Fx.Record(7, 5, null)]);
         await ReadHarness.Rejects(number.Connector.Fetch(ReadHarness.Request()), EngineBridgeErrorCode.ExternalRowInvalid);
+    });
+
+    test('fetched row carries the source version', async () =>
+    {
+        const h = ReadHarness.Versioned(4);
+        const rows = (await h.Connector.Fetch(ReadHarness.Request())).Rows;
+        assert.equal(rows[0]!.Version, 4);
+    });
+
+    test('version field is fetched even when not requested', async () =>
+    {
+        const h = ReadHarness.Versioned(ReadHarness.Etag);
+        const rows = (await h.Connector.Fetch(ReadHarness.Request({ Members: [Fx.Name] }))).Rows;
+        assert.ok(h.Adapter.Queries[0]!.Fields.includes(Fx.RevField));
+        assert.equal(rows[0]!.Version, ReadHarness.Etag);
+        assert.equal(rows[0]!.Values.has(Fx.Revision), false);
+    });
+
+    test('boolean version is invalid', async () =>
+    {
+        const h = ReadHarness.Versioned(true);
+        await ReadHarness.Rejects(h.Connector.Fetch(ReadHarness.Request()), EngineBridgeErrorCode.ExternalRowInvalid);
+    });
+
+    test('no version field, no version', async () =>
+    {
+        const h = ReadHarness.Over([{ ...ReadHarness.Acme(), [Fx.RevField]: 4 }]);
+        const rows = (await h.Connector.Fetch(ReadHarness.Request())).Rows;
+        assert.equal(Object.hasOwn(rows[0]!, ReadHarness.VersionKey), false);
+        assert.equal(h.Adapter.Queries[0]!.Fields.includes(Fx.RevField), false);
+        // A null version reads as absent.
+        const unversioned = ReadHarness.Versioned(null);
+        assert.equal((await unversioned.Connector.Fetch(ReadHarness.Request())).Rows[0]!.Version, undefined);
     });
 
     test('a row without a key, or with an over-long id, fails the fetch', async () =>

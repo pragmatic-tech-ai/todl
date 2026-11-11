@@ -179,6 +179,8 @@ export class SqlAdapter implements IDataSourceAdapter
     private static readonly SpacedOpenParen = " (";
     private static readonly CloseParen = ")";
     private static readonly FirstParamIndex = "1";
+    private static readonly SecondParamIndex = "2";
+    private static readonly And = " AND ";
     private static readonly VersionConflictReason = "version mismatch";
     private static readonly AtomicUnsupportedReason = "atomic write not supported by this connector";
 
@@ -329,9 +331,11 @@ export class SqlAdapter implements IDataSourceAdapter
         {
             if (op.Kind === WriteOperationKind.Delete)
             {
-                // Delete is unconditional in v1: no version guard.
-                await session.Execute(SqlAdapter.DeleteSql(batch), [op.Key]);
-                return undefined;
+                if (await this.ApplyDelete(session, batch, op))
+                {
+                    return undefined;
+                }
+                return { Key: op.Key, Kind: WriteFailureKind.Conflict, Reason: SqlAdapter.VersionConflictReason };
             }
             if (await this.ApplyUpsert(session, batch, op))
             {
@@ -398,10 +402,23 @@ export class SqlAdapter implements IDataSourceAdapter
         return error instanceof Error ? error.message : String(error);
     }
 
-    private static DeleteSql(batch: WriteBatch): string
+    /**
+     * Runs one delete (ruling R122 G1). LastWriteWins: unconditional, a missing row is not a failure. Optimistic with a
+     * VersionField: guarded with `AND versionField = $2`, and false when no row matched (a stale version or a row
+     * already gone). As for upserts, a missing op.Version binds NULL and never matches (fail-closed).
+     */
+    private async ApplyDelete(session: ISqlSession, batch: WriteBatch, op: WriteOperation): Promise<boolean>
     {
-        return SqlAdapter.DeleteFrom + SqlQueryTranslator.QuoteIdent(batch.Source)
+        const sql = SqlAdapter.DeleteFrom + SqlQueryTranslator.QuoteIdent(batch.Source)
             + SqlAdapter.Where + SqlQueryTranslator.QuoteIdent(batch.IdKey)
             + SqlAdapter.Equals + SqlAdapter.Placeholder + SqlAdapter.FirstParamIndex;
+        if (batch.Concurrency === WriteConcurrency.Optimistic && batch.VersionField !== undefined)
+        {
+            const guarded = sql + SqlAdapter.And + SqlQueryTranslator.QuoteIdent(batch.VersionField)
+                + SqlAdapter.Equals + SqlAdapter.Placeholder + SqlAdapter.SecondParamIndex;
+            return (await session.Execute(guarded, [op.Key, op.Version ?? null])) > 0;
+        }
+        await session.Execute(sql, [op.Key]);
+        return true;
     }
 }
