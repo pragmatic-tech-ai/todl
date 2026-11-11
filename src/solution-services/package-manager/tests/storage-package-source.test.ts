@@ -1,4 +1,3 @@
-import { PackageSecurity } from "../../../compiler-services/security/package-security.js";
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { FakeStorage, type IStorage } from "@pragmatic-tech-ai/todl-runtime";
@@ -11,6 +10,7 @@ import { Domain } from "../../../domain/domain.js";
 import { Manifest } from "../../../manifest/reflection/reflection.js";
 import type { ManifestJson } from "../../../manifest/records.js";
 import { StoragePackageSource } from "../storage-package-source.js";
+import { PackageSecurity } from "../../../compiler-services/security/package-security.js";
 
 // ── fixtures ──────────────────────────────────────────────────────────────
 

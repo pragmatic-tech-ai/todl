@@ -21,6 +21,8 @@ export class PrivilegeRules implements ISecurityRule
     private static readonly OwnerScopedDepths: ReadonlySet<SecurityDepth> = new Set([SecurityDepth.User, SecurityDepth.BusinessUnit, SecurityDepth.BusinessUnitAndChildren]);
     private static readonly DepthRequiresOwnershipMessage = 'depth "{0}" needs an owned concept; "{1}" does not carry {2}, so it takes organization or none only';
     private static readonly EdgeConceptPrivilegeMessage = '"{0}" is a reified edge concept; edges carry no privileges';
+    private static readonly DuplicateContributionMessage = '"{0}" on "{1}" is already contributed to {2} in another namespace';
+    private static readonly KeySeparator = '|';
     private static readonly EdgeEndpointsConflictMessage = 'operator "{0}" binds edge concept "{1}" to ({2}, {3}), but another operator binds it to ({4}, {5}); an edge concept has one endpoint pair';
 
     private readonly scope: PackageScope;
@@ -35,14 +37,39 @@ export class PrivilegeRules implements ISecurityRule
 
     public Validate(sink: Diagnostic[]): void
     {
+        const contributed = new Set<string>();
         for (const node of this.model.allNodes())
         {
             if ((node.metaKind === MetaKind.Role || node.metaKind === MetaKind.RoleContribution) && !this.seededIds.has(node.id))
             {
+                if (node.metaKind === MetaKind.RoleContribution)
+                {
+                    this.ValidateCrossNamespace(node, contributed, sink);
+                }
                 this.ValidateOwner(node.id, JSON.parse(String(node.attrs.get(Builder.RolePrivilegesAttr))) as ISecurityPrivilege[], sink);
             }
         }
         this.ValidateEndpoints(sink);
+    }
+
+    /** A (base role, concept, action) contributed from two namespaces of one package is reported on the later entry, so the merged list is unique. */
+    private ValidateCrossNamespace(node: { id: string; attrs: ReadonlyMap<string, unknown> }, contributed: Set<string>, sink: Diagnostic[]): void
+    {
+        const baseRole = String(node.attrs.get(Builder.ContributionRoleAttr));
+        for (const privilege of JSON.parse(String(node.attrs.get(Builder.RolePrivilegesAttr))) as ISecurityPrivilege[])
+        {
+            const key = [baseRole, privilege.Concept, privilege.Action].join(PrivilegeRules.KeySeparator);
+            if (!contributed.has(key))
+            {
+                contributed.add(key);
+                continue;
+            }
+            sink.push({
+                code: DiagnosticCode.SecurityDuplicatePrivilege, severity: Severity.Error,
+                message: MessageTemplate.Format(PrivilegeRules.DuplicateContributionMessage, privilege.Action, privilege.Concept, baseRole),
+                span: this.model.spanOf(SecurityLowering.ActionSpanKey(node.id, privilege.Concept, privilege.Action)), node: node.id, path: privilege.Concept,
+            });
+        }
     }
 
     private ValidateOwner(owner: string, privileges: readonly ISecurityPrivilege[], sink: Diagnostic[]): void

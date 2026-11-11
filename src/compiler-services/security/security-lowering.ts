@@ -140,6 +140,7 @@ export class SecurityLowering
     private static readonly SpanKeyTemplate = '{0}#privilege:{1}:{2}:{3}';
     private static readonly ConceptPart = 'concept';
     private static readonly DepthPart = 'depth';
+    private static readonly ActionPart = 'action';
     private static readonly UnknownConceptMessage = 'security privilege references unknown concept "{0}"';
     private static readonly UnknownActionMessage = '"{0}" is not a security action';
     private static readonly UnknownDepthMessage = '"{0}" is not a security depth';
@@ -174,6 +175,12 @@ export class SecurityLowering
     public static ConceptSpanKey(owner: string, concept: string, action: string): string
     {
         return MessageTemplate.Format(SecurityLowering.SpanKeyTemplate, owner, concept, action, SecurityLowering.ConceptPart);
+    }
+
+    /** The span key of a lowered privilege's action word. */
+    public static ActionSpanKey(owner: string, concept: string, action: string): string
+    {
+        return MessageTemplate.Format(SecurityLowering.SpanKeyTemplate, owner, concept, action, SecurityLowering.ActionPart);
     }
 
     /** The span key of a lowered privilege's depth word. */
@@ -344,6 +351,7 @@ export class SecurityLowering
             return;
         }
         this.model.recordSpan(SecurityLowering.ConceptSpanKey(owner.Id, concept, action), block.conceptSpan ?? block.span);
+        this.model.recordSpan(SecurityLowering.ActionSpanKey(owner.Id, concept, action), entry.actionSpan ?? entry.span);
         this.model.recordSpan(SecurityLowering.DepthSpanKey(owner.Id, concept, action), entry.depthSpan ?? entry.span);
     }
 

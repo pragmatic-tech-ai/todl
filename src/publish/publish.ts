@@ -138,7 +138,8 @@ export function compilePackage(
   }
 
   const security = PackageSecurityCompiler.Compile(model, ownIds, identity.id);
-  if (!PackageSecurityCompiler.IsEmpty(security))
+  const hasSecurity = !PackageSecurityCompiler.IsEmpty(security);
+  if (hasSecurity)
   {
     document.security = security;
   }
@@ -149,7 +150,7 @@ export function compilePackage(
     fullDocument,
     sources,
     classes: deriveClasses(document, fullDocument),
-    Security: PackageSecurityCompiler.IsEmpty(security) ? PackageSecurity.Empty : security,
+    Security: hasSecurity ? security : PackageSecurity.Empty,
   };
   if (resources !== undefined && resources.length > 0)
   {

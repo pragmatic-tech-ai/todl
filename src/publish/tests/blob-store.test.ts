@@ -1,8 +1,8 @@
-import { PackageSecurity } from "../../compiler-services/security/package-security.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { CompiledPackage } from "../publish.js";
 import { BlobPackageStore, type PackageSink } from "../stores.js";
+import { PackageSecurity } from "../../compiler-services/security/package-security.js";
 
 function fakeSink()
 {

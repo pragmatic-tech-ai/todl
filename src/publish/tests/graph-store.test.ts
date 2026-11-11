@@ -1,9 +1,9 @@
-import { PackageSecurity } from "../../compiler-services/security/package-security.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { InMemoryGraphStore } from "../../compiler-services/model/graph-store.js";
 import type { CompiledPackage } from "../publish.js";
 import { GraphPackageStore } from "../stores.js";
+import { PackageSecurity } from "../../compiler-services/security/package-security.js";
 
 function pkg(): CompiledPackage
 {
