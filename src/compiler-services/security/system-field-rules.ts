@@ -55,6 +55,8 @@ export class SystemFieldRules implements ISecurityRule
                 case MetaKind.Concept:
                     this.ValidateType(node, sink);
                     this.ValidateDerives(node, sink);
+                    break;
+                case MetaKind.Operator:
                     this.ValidateEdgeConcept(node, sink);
                     break;
                 case MetaKind.Aspect:
@@ -101,7 +103,13 @@ export class SystemFieldRules implements ISecurityRule
         const contributors = node.metaKind === MetaKind.Concept
             ? [...this.model.supertypesOf(node.id), ...this.model.AspectsOf(node.id)]
             : this.model.closure(node.id, EdgeKind.IncludesAspect, Direction.Out, false);
-        for (const contributor of new Set(contributors))
+        const distinct = new Set(contributors);
+        // The type that first gains Owned carries the shadow error; its descendants inherit the same root cause.
+        if ([...distinct].some((c) => c !== node.id && c !== SecurityNames.OwnedAspect && this.IsOwned(c)))
+        {
+            return;
+        }
+        for (const contributor of distinct)
         {
             if (contributor === node.id || this.IsOwned(contributor))
             {
@@ -132,26 +140,28 @@ export class SystemFieldRules implements ISecurityRule
         }
     }
 
+    /** A reified operator whose edge concept carries Owned (own or seeded): an edge concept is never owned. */
     private ValidateEdgeConcept(node: Node, sink: Diagnostic[]): void
     {
-        if (!this.IsOwned(node.id))
+        const edge = ReifiedOperators.EdgeOf(this.model, node.id);
+        if (edge === undefined || !this.IsOwned(edge.Concept))
         {
             return;
         }
-        const glyph = ReifiedOperators.Targeting(this.model, node.id)[0];
-        if (glyph !== undefined)
-        {
-            this.Report(sink, DiagnosticCode.SecurityOwnedEdgeConcept, MessageTemplate.Format(SystemFieldRules.OwnedEdgeMessage, node.id, glyph, SecurityNames.OwnedAspect),
-                this.model.spanOf(glyph) ?? this.model.spanOf(node.id), node.id, glyph);
-        }
+        this.Report(sink, DiagnosticCode.SecurityOwnedEdgeConcept, MessageTemplate.Format(SystemFieldRules.OwnedEdgeMessage, edge.Concept, node.id, SecurityNames.OwnedAspect),
+            this.model.spanOf(node.id), edge.Concept, node.id);
     }
 
     /** A `member owner { annotate … }` block: the member target of an owned type naming a system field. */
     private ValidateMemberTarget(node: Node, sink: Diagnostic[]): void
     {
         const name = String(node.attrs.get(Builder.MemberTargetNameAttr));
+        if (!SecurityNames.IsSystemField(name))
+        {
+            return;
+        }
         const owner = Builder.MemberTargetOwner(node.id, name);
-        if (!SecurityNames.IsSystemField(name) || !this.IsOwned(owner))
+        if (!this.IsOwned(owner))
         {
             return;
         }
