@@ -6,7 +6,7 @@ import { Builder } from '../../compiler-services/model/builder.js';
 import { MetaKind } from '../../compiler-services/model/kinds.js';
 import { Domain, type IPackageDocumentSource, type PackageRef, type PackageSource, type ResolvedPackage } from '../../domain/domain.js';
 import type { MetadataSnapshot } from '../../domain/metadata-snapshot.js';
-import type { ConnectorSpec, ModelConnectorPlan } from '../../model-data/connector-plan.js';
+import type { ConnectorBinding, ConnectorSpec, ModelConnectorPlan } from '../../model-data/connector-plan.js';
 import { ModelShardExtractor } from '../../model-data/model-shard-extractor.js';
 import type { PackageDocument } from '../../publish/publish.js';
 import type { IExternalBinding, IExternalConnectorPlan } from '../external/ExternalBinding.js';
@@ -53,7 +53,9 @@ class SystemFirstPackageSource implements PackageSource, IPackageDocumentSource
 {
     private readonly system = new SystemPackage();
 
-    public constructor(private readonly inner: PackageSource & IPackageDocumentSource) {}
+    public constructor(private readonly inner: PackageSource & IPackageDocumentSource)
+    {
+    }
 
     public resolve(ref: PackageRef): Promise<ResolvedPackage>
     {
@@ -85,12 +87,18 @@ class SystemFirstPackageSource implements PackageSource, IPackageDocumentSource
 export class EnvironmentCatalogComposer
 {
     private static readonly ConflictingMessage = 'the deliveries cannot share one environment{0}: {1}';
-    private static readonly UnknownConnectorMessage = 'package "{0}"{1} populates "{2}" from connector "{3}", which neither it nor its dependencies declare';
+    private static readonly DuplicateBindingMessage = 'package "{0}"{1} populates "{2}" from both {3} and {4}; one concept has one source per package';
+    private static readonly InvalidBindingMessage = 'package "{0}"{1} has a binding the environment cannot describe: {2}';
+    private static readonly BindingTarget = 'connector "{0}" source "{1}"';
     private static readonly ConflictingConnectorMessage = 'datasource "{0}" is declared differently by packages "{1}" and "{2}"{3}, and package "{4}" sees both';
     private static readonly ConflictingOwnConnectorMessage = 'package "{1}" declares datasource "{0}" and its dependency "{2}" declares it differently{3}';
     private static readonly SystemDelivery = SystemNames.Model;
+    private static readonly ListSeparator = ', ';
+    private static readonly KeySeparator = '#';
 
-    private constructor() {}
+    private constructor()
+    {
+    }
 
     public static async Compose(input: IComposeInput): Promise<IEnvironmentCatalog>
     {
@@ -107,6 +115,7 @@ export class EnvironmentCatalogComposer
         }
         const plans = packages.map((ref) => EnvironmentCatalogComposer.PlanOf(ref, documents, unified.Deliveries));
         const merged = ConnectorPlanMerge.Merge(plans, unified.Deliveries);
+        EnvironmentCatalogComposer.RejectDuplicateBindings(merged.Plans, unified.Deliveries);
         const described = SnapshotDescriber.Describe(domain.Snapshot, {
             DefaultConnector: BindingTable.EngineStorage,
             ConnectorPlans: merged.Plans,
@@ -120,6 +129,15 @@ export class EnvironmentCatalogComposer
             throw new EnvironmentCatalogError(EnvironmentCatalogErrorCode.ConflictingDefinition, conflict.Subject, deliveries,
                 MessageFormat.Format(EnvironmentCatalogComposer.ConflictingMessage, EnvironmentCatalogError.DeliveredBy(deliveries), conflict.Message));
         }
+        const invalid = described.Diagnostics.find((d) => d.Code === DescribeDiagnosticCode.InvalidBinding);
+        if (invalid !== undefined)
+        {
+            const binders = merged.Plans.filter((p) => p.Bindings.some((b) => b.Concept === invalid.Subject)).map((p) => p.Model);
+            const deliveries = [...new Set(binders.flatMap((m) => unified.Deliveries.get(m) ?? []))].sort();
+            throw new EnvironmentCatalogError(EnvironmentCatalogErrorCode.InvalidBinding, invalid.Subject, deliveries,
+                MessageFormat.Format(EnvironmentCatalogComposer.InvalidBindingMessage, binders.join(EnvironmentCatalogComposer.ListSeparator),
+                    EnvironmentCatalogError.DeliveredBy(deliveries), invalid.Message));
+        }
         const description = described.Description;
         const external = EnvironmentCatalogComposer.Described(description, merged.External);
         return {
@@ -128,7 +146,7 @@ export class EnvironmentCatalogComposer
             Snapshot: domain.Snapshot,
             Connectors: EnvironmentCatalogComposer.Connectors(external, merged.Specs),
             Identity: new ExternalIdentity(description, external),
-            HomeModels: EnvironmentCatalogComposer.HomeModels(documents),
+            HomeModels: EnvironmentCatalogComposer.HomeModels(documents, domain.Snapshot),
             Diagnostics: described.Diagnostics,
         };
     }
@@ -152,7 +170,7 @@ export class EnvironmentCatalogComposer
             if (!connectors.has(connector))
             {
                 throw new EnvironmentCatalogError(EnvironmentCatalogErrorCode.UnknownConnector, connector, deliveries,
-                    MessageFormat.Format(EnvironmentCatalogComposer.UnknownConnectorMessage, ref.model, EnvironmentCatalogError.DeliveredBy(deliveries),
+                    MessageFormat.Format(ConnectorPlanMerge.UnknownMessage, ref.model, EnvironmentCatalogError.DeliveredBy(deliveries),
                         String(node.attrs[Builder.BindingConceptAttr]), connector));
             }
         }
@@ -239,18 +257,65 @@ export class EnvironmentCatalogComposer
         return out;
     }
 
-    /** Concept → the first package (by model) whose own document declares it. */
-    private static HomeModels(documents: ReadonlyMap<string, PackageDocument>): Map<string, string>
+    /**
+     * Concept → its home package: the snapshot's rule (`MetadataSnapshot.HomeModelOf`, the first package to bind it in
+     * deps-first load order), the same one the describer uses for seed owners, so seeds and creates agree. When two
+     * packages that do not depend on each other declare one concept identically (ruling T12), the home is the one loaded
+     * first; the Domain loads chosen packages sorted by model id, so that is the lower model id. Should that package
+     * leave the environment, the concept moves to the remaining declarer at the next Compose, while nodes created before
+     * keep the owner they were given.
+     */
+    private static HomeModels(documents: ReadonlyMap<string, PackageDocument>, snapshot: MetadataSnapshot): Map<string, string>
     {
         const homes = new Map<string, string>();
         for (const [model, doc] of documents)
         {
             for (const node of doc.nodes)
             {
-                if (node.metaKind === MetaKind.Concept && !homes.has(node.id)) homes.set(node.id, model);
+                if (node.metaKind === MetaKind.Concept && !homes.has(node.id)) homes.set(node.id, snapshot.HomeModelOf(node.id) ?? model);
             }
         }
         return homes;
+    }
+
+    /**
+     * One package binds each concept once (I2, T12, P12): two different bindings of one concept in one package (two of
+     * its models populate it from different connectors or sources, or one of them leaves it to engine storage) are
+     * DuplicateBinding, never resolved first-wins. Identical repeats are one binding.
+     */
+    private static RejectDuplicateBindings(plans: readonly ModelConnectorPlan[], deliveriesOf: ReadonlyMap<string, readonly string[]>): void
+    {
+        for (const plan of plans)
+        {
+            const first = new Map<string, ConnectorBinding>();
+            for (const binding of plan.Bindings)
+            {
+                const previous = first.get(binding.Concept);
+                if (previous === undefined)
+                {
+                    first.set(binding.Concept, binding);
+                    continue;
+                }
+                if (EnvironmentCatalogComposer.SameBinding(previous, binding)) continue;
+                const deliveries = [...(deliveriesOf.get(plan.Model) ?? [])].sort();
+                throw new EnvironmentCatalogError(EnvironmentCatalogErrorCode.DuplicateBinding, binding.Concept, deliveries,
+                    MessageFormat.Format(EnvironmentCatalogComposer.DuplicateBindingMessage, plan.Model, EnvironmentCatalogError.DeliveredBy(deliveries), binding.Concept,
+                        MessageFormat.Format(EnvironmentCatalogComposer.BindingTarget, previous.Connector, previous.Source),
+                        MessageFormat.Format(EnvironmentCatalogComposer.BindingTarget, binding.Connector, binding.Source)));
+            }
+        }
+    }
+
+    private static SameBinding(a: ConnectorBinding, b: ConnectorBinding): boolean
+    {
+        return EnvironmentCatalogComposer.BindingKey(a) === EnvironmentCatalogComposer.BindingKey(b);
+    }
+
+    private static BindingKey(binding: ConnectorBinding): string
+    {
+        const fields = Object.entries(binding.FieldMap).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+            .map(([member, field]) => member + EnvironmentCatalogComposer.KeySeparator + field);
+        return JSON.stringify([binding.Connector, binding.Source, binding.IdKey, fields, binding.Writable, binding.VersionField ?? null, binding.Concurrency, binding.Atomicity]);
     }
 
     private static Declares(doc: PackageDocument, fullName: string): boolean

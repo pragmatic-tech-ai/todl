@@ -69,7 +69,9 @@ export class PackageVersionUnifier
     /** `model@version` + delivery pairs already walked. */
     private readonly walked = new Set<string>();
 
-    private constructor(private readonly source: PackageSource) {}
+    private constructor(private readonly source: PackageSource)
+    {
+    }
 
     public static async Unify(roots: readonly IPackageDelivery[], source: PackageSource): Promise<ReadonlyMap<string, string>>
     {

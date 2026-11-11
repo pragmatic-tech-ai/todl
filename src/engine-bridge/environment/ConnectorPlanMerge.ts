@@ -1,6 +1,7 @@
 import { BindingTable } from '@pragmatic-tech-ai/graph';
 import { DataSourceKind, type ConnectorBinding, type ConnectorSpec, type ModelConnectorPlan } from '../../model-data/connector-plan.js';
 import type { IExternalBinding } from '../external/ExternalBinding.js';
+import { ExternalIdentity } from '../external/ExternalIdentity.js';
 import { MessageFormat } from '../MessageFormat.js';
 import { TodlNames } from '../TodlNames.js';
 import { EnvironmentCatalogError, EnvironmentCatalogErrorCode } from './EnvironmentCatalogError.js';
@@ -22,7 +23,8 @@ export interface IMergedConnectors
  * that are not the same spec are ConflictingConnector. A binding links to its spec by `ConnectorId ?? Connector`;
  * one to a builtin-kind spec or to `todl-file` becomes engine storage, every other one takes its engine name (T3), and
  * one whose spec is absent is UnknownConnector (ruling P12: a binding never falls back to engine storage silently). Two
- * external bindings of different models with one (concept, connector, source) are DuplicateExternalSource (T4).
+ * external bindings of different models whose public ids share one minted prefix (`Concept#Connector.Source#`) are
+ * DuplicateExternalSource (T4).
  * Errors name the deliveries that brought the packages in (`deliveries`: package model → delivery names).
  */
 export class ConnectorPlanMerge
@@ -31,17 +33,19 @@ export class ConnectorPlanMerge
     private static readonly ReservedMessage = 'connector "{0}" of package "{1}"{2} uses a reserved connector name';
     private static readonly ConflictMessage = 'connector "{0}" is declared differently by packages "{1}" and "{2}"{3}';
     private static readonly DuplicateSourceMessage = 'packages "{0}" and "{1}"{2} both bind "{3}" to source "{4}" of connector "{5}"; their ids would collide';
-    private static readonly UnknownMessage = '"{0}" in package "{1}"{2} is bound to connector "{3}", which no visible datasource declares';
+    /** The one UnknownConnector message (EnvironmentCatalogComposer raises it too): package, deliveries, concept, connector. */
+    public static readonly UnknownMessage = 'package "{0}"{1} populates "{2}" from connector "{3}", which neither it nor its dependencies declare';
     private static readonly SourceSubject = '{0}#{1}.{2}';
-    private static readonly KeySeparator = '\u0000';
 
     /** Engine name → the spec and the package that first declared it. */
     private readonly specs = new Map<string, { readonly Spec: ConnectorSpec; readonly Model: string }>();
-    /** (concept, connector, source) → the package model whose binding holds it. */
+    /** Minted public-id prefix (concept, connector, source) → the package model whose binding holds it. */
     private readonly sources = new Map<string, string>();
     private readonly external: IExternalBinding[] = [];
 
-    private constructor(private readonly deliveries: ReadonlyMap<string, readonly string[]>) {}
+    private constructor(private readonly deliveries: ReadonlyMap<string, readonly string[]>)
+    {
+    }
 
     public static Merge(plans: readonly ModelConnectorPlan[], deliveries: ReadonlyMap<string, readonly string[]>): IMergedConnectors
     {
@@ -109,11 +113,15 @@ export class ConnectorPlanMerge
         }
         if (spec === undefined)
         {
+            // Defensive: EnvironmentCatalogComposer.PlanOf already rejects a population whose connector is not visible, so
+            // a composed plan never reaches here; a direct caller of Merge still gets the same error, never a fallback.
             const deliveries = this.DeliveriesOf(model);
             throw new EnvironmentCatalogError(EnvironmentCatalogErrorCode.UnknownConnector, name, deliveries,
-                MessageFormat.Format(ConnectorPlanMerge.UnknownMessage, binding.Concept, model, EnvironmentCatalogError.DeliveredBy(deliveries), name));
+                MessageFormat.Format(ConnectorPlanMerge.UnknownMessage, model, EnvironmentCatalogError.DeliveredBy(deliveries), binding.Concept, name));
         }
-        const key = [binding.Concept, name, binding.Source].join(ConnectorPlanMerge.KeySeparator);
+        const external: IExternalBinding = { Model: model, Connector: name, Binding: binding };
+        // Keyed by the minted prefix itself, so two different tuples that mint one prefix (a `.` in a name) collide too.
+        const key = ExternalIdentity.Prefix(external);
         const holder = this.sources.get(key);
         if (holder !== undefined && holder !== model)
         {
@@ -123,7 +131,7 @@ export class ConnectorPlanMerge
                 MessageFormat.Format(ConnectorPlanMerge.DuplicateSourceMessage, holder, model, EnvironmentCatalogError.DeliveredBy(deliveries), binding.Concept, binding.Source, name));
         }
         this.sources.set(key, model);
-        this.external.push({ Model: model, Connector: name, Binding: binding });
+        this.external.push(external);
         return { ...binding, Connector: name };
     }
 

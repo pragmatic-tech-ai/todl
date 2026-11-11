@@ -14,6 +14,11 @@ export enum EnvironmentCatalogErrorCode
     /** A binding whose connector the environment cannot resolve: no spec of that name is visible to the package that
      *  binds it (controller ruling P12; a binding never falls back to engine storage silently). */
     UnknownConnector,
+    /** One package binds one concept twice, differently (two connectors, two sources, or one external and one engine
+     *  storage); the environment never picks one first-wins. */
+    DuplicateBinding,
+    /** A binding the environment cannot describe (its concept is unknown or an aspect, or its model is empty). */
+    InvalidBinding,
 }
 
 /**

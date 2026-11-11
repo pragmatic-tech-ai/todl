@@ -7,7 +7,9 @@ import type { PackageRef, PackageSource, ResolvedPackage } from '../../domain/do
  */
 export class UnifiedPackageSource implements PackageSource
 {
-    public constructor(private readonly inner: PackageSource, private readonly chosen: ReadonlyMap<string, string>) {}
+    public constructor(private readonly inner: PackageSource, private readonly chosen: ReadonlyMap<string, string>)
+    {
+    }
 
     public async resolve(ref: PackageRef): Promise<ResolvedPackage>
     {
