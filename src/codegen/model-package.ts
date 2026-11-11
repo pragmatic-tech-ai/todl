@@ -6,6 +6,7 @@
 
 import { Repository } from "../compiler-services/model/model.js";
 import { toJSON } from "../compiler-services/emit/json.js";
+import { CompileFoundation, FoundationKind } from "../compiler-services/stdlib/compile-foundation.js";
 import type { NodeId } from "../compiler-services/model/graph.js";
 import { ApplicationModelData } from "./application-model-data.js";
 import { generateReadClient } from "./read-client.js";
@@ -36,7 +37,7 @@ export class ModelPackageGenerator
         const registryClass = options.registryClassName ?? ModelPackageGenerator.DefaultRegistryClassName;
         const accessorClass = pascalCase(options.name);
 
-        const { root: rootId, shards } = ApplicationModelData.Strict(toJSON(repo));
+        const { root: rootId, shards } = ApplicationModelData.Strict(CompileFoundation.WithoutUnusedSystem(FoundationKind.PreludeAndSystem, toJSON(repo)));
         const models = [...shards.keys()].sort();
 
         const plans = new Map<NodeId, ModelConnectorPlan>();

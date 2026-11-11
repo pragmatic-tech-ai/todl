@@ -2,6 +2,7 @@ import type { TodlDocument } from "../emit/json.js";
 import type { Repository } from "../model/model.js";
 import { preludeDocument } from "./prelude.js";
 import { SystemPackageDocument } from "./system/system-package.generated.js";
+import { SecurityNames } from "../security/security-names.js";
 
 /** Which implicit documents seed a compile. */
 export enum FoundationKind
@@ -23,6 +24,7 @@ export class CompileFoundation
   private static readonly Placeholder = "{0}";
   private static system: TodlDocument | undefined;
   private static systemIds: ReadonlySet<string> | undefined;
+  private static readonly None: ReadonlySet<string> = new Set();
   private static readonly documents = new Map<FoundationKind, readonly TodlDocument[]>();
 
   private constructor()
@@ -54,6 +56,48 @@ export class CompileFoundation
     const ids = CompileFoundation.SystemIds();
     return document.edges.some((e) => ids.has(e.to))
       || document.nodes.some((n) => (n.type !== null && ids.has(n.type)) || n.fields.some((f) => ids.has(f.type)));
+  }
+
+  /**
+   * Is the package dependency `id` satisfied by the implicit foundation (the seeded `todl.system`), so a resolver
+   * must not fetch it as a base?
+   */
+  public static ProvidesDependency(id: string): boolean
+  {
+    return id === SecurityNames.SystemModel;
+  }
+
+  /**
+   * The system node ids a compiled closure carries only because the foundation seeded them: every system node when no
+   * non-system node of `document` references one (through an edge, a node type, a class or a field type), otherwise
+   * none. Under `PreludeOnly` the system nodes are the package's own, so none are unused.
+   */
+  public static UnusedSystemIds(kind: FoundationKind, document: TodlDocument): ReadonlySet<string>
+  {
+    if (kind === FoundationKind.PreludeOnly)
+    {
+      return CompileFoundation.None;
+    }
+    const ids = CompileFoundation.SystemIds();
+    const referenced = document.edges.some((e) => !ids.has(e.from) && ids.has(e.to))
+      || document.nodes.some((n) => !ids.has(n.id)
+        && ((n.type !== null && ids.has(n.type)) || (n.class !== null && ids.has(n.class)) || n.fields.some((f) => ids.has(f.type))));
+    return referenced ? CompileFoundation.None : ids;
+  }
+
+  /** `document` without the system nodes (and their edges) it carries only because the foundation seeded them. */
+  public static WithoutUnusedSystem(kind: FoundationKind, document: TodlDocument): TodlDocument
+  {
+    const unused = CompileFoundation.UnusedSystemIds(kind, document);
+    if (unused.size === 0)
+    {
+      return document;
+    }
+    return {
+      ...document,
+      nodes: document.nodes.filter((n) => !unused.has(n.id)),
+      edges: document.edges.filter((e) => !unused.has(e.from) && !unused.has(e.to)),
+    };
   }
 
   /** Is `id` a system node already seeded into `model` (so a source declaring it redeclares a system name)? */

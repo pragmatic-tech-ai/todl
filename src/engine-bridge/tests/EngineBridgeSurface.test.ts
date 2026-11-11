@@ -70,6 +70,7 @@ class SurfaceExpectations
         'ShareRight',
         'ShareSubject',
         'SnapshotDescriber',
+        'SystemFirstPackageSource',
         'SystemNames',
         'SystemPackage',
         'TodlFileConnector',

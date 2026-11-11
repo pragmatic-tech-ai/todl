@@ -119,7 +119,9 @@ export function compilePackage(
   // that later changes it instead of silently re-pointing this package.
   const ownIds = new Set(model.allNodes().filter((n) => !baseIds.has(n.id) || ConnectorDeclaration.IsOwnRedeclaration(n, redeclaredConnectors)).map((n) => n.id));
 
-  const fullDocument = toJSON(model, emit);
+  // The closure drops the seeded system nodes unless something in it uses them, so an unrelated package's resolved
+  // description is unchanged by the foundation.
+  const fullDocument = CompileFoundation.WithoutUnusedSystem(foundation, toJSON(model, emit));
   const document: PackageDocument = toJSONOwn(model, ownIds, emit);
   const recorded = [...(dependencies ?? [])];
   if (foundation === FoundationKind.PreludeAndSystem && CompileFoundation.ReferencesSystem(document) && !recorded.some((d) => d.id === SecurityNames.SystemModel))
