@@ -246,6 +246,12 @@ export class Builder
     return `${owner}${Builder.MemberTargetSeparator}${member}`;
   }
 
+  /** The owner of the member target `memberTarget` hosting `member`: the inverse of {@link Builder.MemberTargetId}. */
+  public static MemberTargetOwner(memberTarget: NodeId, member: string): NodeId
+  {
+    return memberTarget.slice(0, memberTarget.length - member.length - Builder.MemberTargetSeparator.length);
+  }
+
   /** Stage an annotation application on an inherited/contributed member of `owner`
    *  (`member <name> { annotate … }`, R6). The application hangs off the member target
    *  {@link Builder.MemberTargetId} (a {@link MetaKind.MemberTarget} node, staged once),

@@ -2,6 +2,7 @@ import type { Repository } from '../model/model.js';
 import type { Diagnostic } from '../diagnostics/diagnostic.js';
 import { FieldSecurityRules } from './field-security-rules.js';
 import { PrivilegeRules } from './privilege-rules.js';
+import { SystemFieldRules } from './system-field-rules.js';
 
 /** One family of whole-model security rules. */
 export interface ISecurityRule
@@ -22,6 +23,7 @@ export class SecurityValidator
         this.rules = [
             new PrivilegeRules(model, seededIds),
             new FieldSecurityRules(model, seededIds),
+            new SystemFieldRules(model, seededIds),
         ];
     }
 

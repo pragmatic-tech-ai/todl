@@ -103,6 +103,13 @@ export enum DiagnosticCode
   SecurityProfileFieldNotSecured = "security.profile-field-not-secured",
   SecurityUnknownProfileRight = "security.unknown-profile-right",
   SecurityWriteWithoutRead = "security.write-without-read",
+  // System ownership fields of owned concepts (all Error).
+  SecuritySystemFieldDeclared = "security.system-field-declared",
+  SecuritySystemFieldDerived = "security.system-field-derived",
+  SecuritySystemFieldAnnotated = "security.system-field-annotated",
+  SecuritySystemFieldWritten = "security.system-field-written",
+  SecurityOwnedEdgeConcept = "security.owned-edge-concept",
+  SecurityExternalConcept = "security.external-concept",
   // Annotation phase.
   AnnotationDuplicate = "annotation.duplicate",
   AnnotationUnknownParam = "annotation.unknown-param",
