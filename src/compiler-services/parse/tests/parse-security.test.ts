@@ -56,3 +56,24 @@ test("qualified concept in a role", () =>
   const role = SecurityParseHarness.Decls(`namespace t { role R { acme.core.Thing { read = organization; } } }`)[0] as RoleDecl;
   assert.equal(role.concepts[0]!.concept, "acme.core.Thing");
 });
+
+test("profile entry spans separate concept and field", () =>
+{
+  const profile = SecurityParseHarness.Decls(`namespace t { profile P { acme.Thing.cost : read; } }`)[0] as ProfileDecl;
+  const entry = profile.entries[0]!;
+  assert.equal(entry.concept, "acme.Thing");
+  const text = "namespace t { profile P { acme.Thing.cost : read; } }";
+  const conceptStart = text.indexOf("acme") + 1;
+  assert.equal(entry.conceptSpan!.start.column, conceptStart);
+  assert.equal(entry.conceptSpan!.end.column, conceptStart + "acme.Thing".length);
+  assert.equal(entry.fieldSpan!.start.column, conceptStart + "acme.Thing.".length);
+  assert.equal(entry.fieldSpan!.end.column, conceptStart + "acme.Thing.cost".length);
+});
+
+test("secured on a non-field member is a diagnostic spanned on the keyword", () =>
+{
+  const text = `namespace t { concept C { secured note = "x"; } }`;
+  const { diagnostics } = parse(text, "t.todl");
+  assert.equal(diagnostics.length, 1);
+  assert.equal(diagnostics[0]!.span!.start.column, text.indexOf("secured") + 1);
+});

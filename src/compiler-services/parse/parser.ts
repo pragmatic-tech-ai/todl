@@ -145,6 +145,8 @@ class Parser
   private static readonly ContributeKeyword = "contribute";
   private static readonly ProfileKeyword = "profile";
   private static readonly SecuredKeyword = "secured";
+  private static readonly ExpectedConceptFieldMessage = "expected <Concept>.<field>";
+  private static readonly SecuredNonFieldMessage = "\"secured\" applies only to a field declaration (`secured <name> : <type>;`)";
   private static readonly DescriptionMember = "description";
   private static readonly ReadOnlyMember = "read-only";
   private static readonly VersionMember = "version";
@@ -836,9 +838,10 @@ class Parser
     {
       const entryStart = this.current();
       const path = this.parseDottedPath();
-      const pathSpan = this.spanFrom(entryStart);
+      const fieldTok = this.tokens[this.pos - 1]!;
+      const conceptEndTok = this.tokens[this.pos - 3] ?? entryStart;   // token before the final `.`
       const dot = path.lastIndexOf(".");
-      if (dot < 0) throw this.error("expected <Concept>.<field>");
+      if (dot < 0) throw this.error(Parser.ExpectedConceptFieldMessage);
       this.expect(TokenKind.Colon);
       const rights: string[] = [];
       do
@@ -847,7 +850,15 @@ class Parser
       }
       while (this.match(TokenKind.Comma));
       this.expect(TokenKind.Semicolon);
-      entries.push({ concept: path.slice(0, dot), field: path.slice(dot + 1), rights, span: this.spanFrom(entryStart), fieldSpan: pathSpan });
+      entries.push({
+        concept: path.slice(0, dot), field: path.slice(dot + 1), rights, span: this.spanFrom(entryStart),
+        conceptSpan: {
+          uri: this.uri,
+          start: { line: entryStart.line, column: entryStart.column },
+          end: { line: conceptEndTok.endLine, column: conceptEndTok.endColumn },
+        },
+        fieldSpan: tokenSpan(fieldTok, this.uri),
+      });
     });
     this.expect(TokenKind.RBrace);
     return { kind: DeclKind.Profile, name: nameTok.value, entries, span: this.spanFrom(start), nameSpan: tokenSpan(nameTok, this.uri) };
@@ -1450,6 +1461,10 @@ class Parser
       if (this.checkKeyword(Parser.SecuredKeyword) && this.peekKind(1) === TokenKind.Identifier) securedTok = this.advance();
       const nameTok = this.expect(TokenKind.Identifier);
       const memberName = nameTok.value;
+      if (securedTok !== undefined && !this.check(TokenKind.Colon))
+      {
+        throw new ParseError(Parser.SecuredNonFieldMessage, securedTok);
+      }
       if (this.match(TokenKind.Colon))
       {
         const typeStart = this.current();

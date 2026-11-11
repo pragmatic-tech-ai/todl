@@ -615,22 +615,66 @@ export interface PrimitiveDecl
 }
 
 /** One `<action> = <depth>;` entry in a role or contribution; both kept as authored text. */
-export interface PrivilegeEntry { action: string; depth: string; span: SourceSpan; actionSpan?: SourceSpan; depthSpan?: SourceSpan; }
+export interface PrivilegeEntry
+{
+  action: string;
+  depth: string;
+  span: SourceSpan;
+  actionSpan?: SourceSpan;
+  depthSpan?: SourceSpan;
+}
 
 /** A `<Concept> { <action> = <depth>; … }` block inside a role or contribution. */
-export interface ConceptPrivileges { concept: string; entries: PrivilegeEntry[]; span: SourceSpan; conceptSpan?: SourceSpan; }
+export interface ConceptPrivileges
+{
+  concept: string;
+  entries: PrivilegeEntry[];
+  span: SourceSpan;
+  conceptSpan?: SourceSpan;
+}
 
 /** A `role <Name> { <Concept> { … } … }` declaration. */
-export interface RoleDecl { kind: DeclKind.Role; name: string; concepts: ConceptPrivileges[]; span: SourceSpan; nameSpan?: SourceSpan; }
+export interface RoleDecl
+{
+  kind: DeclKind.Role;
+  name: string;
+  concepts: ConceptPrivileges[];
+  span: SourceSpan;
+  nameSpan?: SourceSpan;
+}
 
 /** A `contribute <BaseRole> { <Concept> { … } … }` declaration. */
-export interface ContributionDecl { kind: DeclKind.Contribution; baseRole: string; concepts: ConceptPrivileges[]; span: SourceSpan; baseRoleSpan?: SourceSpan; }
+export interface ContributionDecl
+{
+  kind: DeclKind.Contribution;
+  baseRole: string;
+  concepts: ConceptPrivileges[];
+  span: SourceSpan;
+  baseRoleSpan?: SourceSpan;
+}
 
 /** One `<Concept>.<field> : <right>, …;` entry in a field profile; rights kept as authored text. */
-export interface ProfileEntry { concept: string; field: string; rights: string[]; span: SourceSpan; fieldSpan?: SourceSpan; }
+export interface ProfileEntry
+{
+  concept: string;
+  field: string;
+  rights: string[];
+  span: SourceSpan;
+  /** Span of the concept path only (`Concept` in `Concept.field`). */
+  conceptSpan?: SourceSpan;
+  /** Span of the field name only (`field` in `Concept.field`). */
+  fieldSpan?: SourceSpan;
+}
 
 /** A `profile <Name> { … }` declaration. */
-export interface ProfileDecl { kind: DeclKind.Profile; name: string; entries: ProfileEntry[]; span: SourceSpan; nameSpan?: SourceSpan; }
+export interface ProfileDecl
+{
+  kind: DeclKind.Profile;
+  name: string;
+  entries: ProfileEntry[];
+  span: SourceSpan;
+  nameSpan?: SourceSpan;
+}
 
 /** The union of every top-level declaration; discriminate on `.kind` (a
  * {@link DeclKind}). This is what a {@link NamespaceNode} holds. */
