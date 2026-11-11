@@ -8,7 +8,9 @@ import {
 import { type ResourceSource } from "../../domain/resource-source.js";
 import { type ResourceContent } from "../../domain/contributor.js";
 import { MimeTypes } from "../../domain/mime-types.js";
-import { ManifestEmitter } from "../../compiler-services/emit/manifest.js";
+import { ManifestEmitter, type DataGraph } from "../../compiler-services/emit/manifest.js";
+import { type LogicalManifest } from "../../manifest/logical.js";
+import { SystemPackage } from "./system-package.js";
 import { ManifestWriter } from "../../manifest/manifest-writer.js";
 import { PackageManifestBridge } from "./package-manifest-bridge.js";
 import { type PackageDocument } from "../../publish/publish.js";
@@ -23,42 +25,94 @@ import { MessageTemplate } from "../../compiler-services/diagnostics/message-tem
 // (ManifestEmitter), lowers the logical manifest to the SPEC-04 ManifestJson
 // (ManifestWriter), and carries the instance graph as the package seed. Because
 // publish persists own-only documents that record their base deps, the recorded
-// dependencies flow through as domain-tier refs for transitive composition.
+// dependencies flow through as domain-tier refs for transitive composition. The
+// emitted manifest and seed carry only the package's own nodes (and the prelude):
+// the dependency closure is seeded so the document's edges resolve, not re-emitted.
+// `todl.system`, which the compile foundation records as a dependency and storage
+// never holds, is served from the embedded SystemPackage, so the engine-free Domain
+// route loads a package that uses Owned.
 export class StoragePackageSource implements PackageSource, IPackageDocumentSource, ResourceSource
 {
     private static readonly NotFoundMessage = 'package "{0}@{1}" not found in storage';
     private static readonly VersionSeparator = '@';
 
+    private readonly system = new SystemPackage();
+
     constructor(private readonly storage: IStorage) {}
 
     public async resolve(ref: PackageRef): Promise<ResolvedPackage>
     {
+        if (CompileFoundation.ProvidesDependency(ref.model)) return this.system.resolve(ref);
         const version = ref.version ?? (await this.latest(ref.model));
         if (version === undefined) throw new Error(`no versions of package "${ref.model}" in storage`);
 
         const doc = await this.Document({ model: ref.model, version });
-        const repository = PackageManifestBridge.repositoryOf(doc, await this.DependencyDocuments(doc));
-        const { manifest: logical, graph } = new ManifestEmitter(repository, ref.model, version).emit();
-        const manifest = ManifestWriter.fromLogical(logical).toJSON();
+        const dependencyDocuments = await this.DependencyDocuments(doc);
+        const repository = PackageManifestBridge.repositoryOf(doc, dependencyDocuments);
+        const foreign = StoragePackageSource.ForeignIds(doc, dependencyDocuments);
+        const emitted = new ManifestEmitter(repository, ref.model, version).emit();
+        const manifest = ManifestWriter.fromLogical(StoragePackageSource.OwnManifest(emitted.manifest, foreign)).toJSON();
         const dependencies = (doc.dependencies ?? []).map((d) => ({ model: d.id, version: d.version }));
 
         const resolved: ResolvedPackage = { ref: { model: ref.model, version }, manifest, dependencies };
-        const seed = PackageManifestBridge.seedOf(graph);
+        const seed = PackageManifestBridge.seedOf(StoragePackageSource.OwnGraph(emitted.graph, foreign));
         if (seed.nodes.length > 0) resolved.seed = seed;
         return resolved;
     }
 
     // The pinned package's persisted own-only document (`<model>/<version>/model.json`); rejects when absent.
+    // `todl.system` is the embedded system document.
     public async Document(ref: Required<PackageRef>): Promise<PackageDocument>
     {
-        const path = StoragePackageSource.modelPath(ref.model, ref.version);
-        if (!(await this.storage.Exists(path))) throw new Error(MessageTemplate.Format(StoragePackageSource.NotFoundMessage, ref.model, ref.version));
-        return JSON.parse(await this.storage.ReadText(path)) as PackageDocument;
+        if (CompileFoundation.ProvidesDependency(ref.model)) return this.system.Document(ref);
+        const document = await this.TryDocument(ref.model, ref.version);
+        if (document === undefined) throw new Error(MessageTemplate.Format(StoragePackageSource.NotFoundMessage, ref.model, ref.version));
+        return document;
+    }
+
+    // The persisted document at `<model>/<version>/model.json` in one read, or undefined when storage cannot read it
+    // (absent); a document that is present but not JSON still throws.
+    private async TryDocument(model: string, version: string): Promise<PackageDocument | undefined>
+    {
+        let text: string;
+        try
+        {
+            text = await this.storage.ReadText(StoragePackageSource.modelPath(model, version));
+        }
+        catch
+        {
+            return undefined;
+        }
+        return JSON.parse(text) as PackageDocument;
+    }
+
+    // The ids resolve seeds but must not emit as the package's own: every dependency node and every system node the
+    // document does not itself carry (their own packages' manifests and seeds carry them).
+    private static ForeignIds(doc: PackageDocument, dependencies: readonly PackageDocument[]): Set<string>
+    {
+        const foreign = new Set([...dependencies.flatMap((d) => d.nodes.map((n) => n.id)), ...CompileFoundation.SystemIds()]);
+        for (const node of doc.nodes) foreign.delete(node.id);
+        return foreign;
+    }
+
+    // `manifest` without the definitions of `foreign` ids.
+    private static OwnManifest(manifest: LogicalManifest, foreign: ReadonlySet<string>): LogicalManifest
+    {
+        const keep = <T>(defs: Record<string, T>): Record<string, T> => Object.fromEntries(Object.entries(defs).filter(([id]) => !foreign.has(id)));
+        const own: LogicalManifest = { ...manifest, concepts: keep(manifest.concepts), classes: keep(manifest.classes), taxonomies: keep(manifest.taxonomies) };
+        if (manifest.aspects !== undefined) own.aspects = keep(manifest.aspects);
+        return own;
+    }
+
+    // `graph` without the instances of `foreign` ids and the edges from them.
+    private static OwnGraph(graph: DataGraph, foreign: ReadonlySet<string>): DataGraph
+    {
+        return { ...graph, nodes: graph.nodes.filter((n) => !foreign.has(n.id)), edges: graph.edges.filter((e) => !foreign.has(e.from)) };
     }
 
     // The persisted documents of `doc`'s recorded dependency closure, at their recorded versions (order is immaterial:
-    // mergeBases keys by node id). A dependency the compile foundation provides (`todl.system`) is not in
-    // storage and is seeded by repositoryOf instead; one storage does not hold is skipped here (resolve still lists it,
+    // mergeBases keys by node id). A dependency the compile foundation provides (`todl.system`) is seeded by
+    // repositoryOf instead; one storage does not hold is skipped here (resolve still lists it,
     // and the Domain reports it when it loads that dependency).
     private async DependencyDocuments(doc: PackageDocument): Promise<PackageDocument[]>
     {
@@ -71,8 +125,8 @@ export class StoragePackageSource implements PackageSource, IPackageDocumentSour
             const key = next.id + StoragePackageSource.VersionSeparator + next.version;
             if (seen.has(key) || CompileFoundation.ProvidesDependency(next.id)) continue;
             seen.add(key);
-            if (!(await this.storage.Exists(StoragePackageSource.modelPath(next.id, next.version)))) continue;
-            const dependency = await this.Document({ model: next.id, version: next.version });
+            const dependency = await this.TryDocument(next.id, next.version);
+            if (dependency === undefined) continue;
             out.push(dependency);
             queue.push(...(dependency.dependencies ?? []));
         }
@@ -92,6 +146,7 @@ export class StoragePackageSource implements PackageSource, IPackageDocumentSour
     // absent from storage lists as empty (List returns [] for a missing directory).
     public async versions(model: string): Promise<readonly string[]>
     {
+        if (CompileFoundation.ProvidesDependency(model)) return this.system.versions(model);
         const entries = await this.storage.List(model);
         return entries.filter((e) => e.IsDirectory).map((e) => e.Name);
     }

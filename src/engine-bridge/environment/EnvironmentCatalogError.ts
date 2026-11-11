@@ -26,6 +26,8 @@ export enum EnvironmentCatalogErrorCode
     ForeignSecurityConcept,
     /** An owned concept, or one with a secured field, is bound to an external connector by some package (spec §6). */
     SecuredExternalConcept,
+    /** Two packages reify one edge concept with different endpoint pairs (T12 co-declarers that disagree on its operator). */
+    ConflictingEdgeConcept,
 }
 
 /**

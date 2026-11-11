@@ -16,8 +16,8 @@ import { MessageFormat } from '../MessageFormat.js';
 import { SnapshotDescriber } from '../SnapshotDescriber.js';
 import { DescribeDiagnosticCode, type IDescribeDiagnostic } from '../SnapshotDescription.js';
 import { SystemNames } from '../system/SystemNames.js';
-import { SystemFirstPackageSource } from '../system/SystemFirstPackageSource.js';
-import { SystemPackage } from '../system/SystemPackage.js';
+import { SystemFirstPackageSource } from '../../solution-services/package-manager/system-first-package-source.js';
+import { SystemPackage } from '../../solution-services/package-manager/system-package.js';
 import { TodlNames } from '../TodlNames.js';
 import { ConnectorPlanMerge } from './ConnectorPlanMerge.js';
 import { DeliveryChannel, type IPackageDelivery } from './PackageDelivery.js';
@@ -129,7 +129,7 @@ export class EnvironmentCatalogComposer
             Identity: new ExternalIdentity(description, external),
             HomeModels: homes,
             Diagnostics: described.Diagnostics,
-            Security: EnvironmentSecurity.Compose(documents, homes, external, unified.Deliveries),
+            Security: EnvironmentSecurity.Compose(documents, homes, description, external, unified.Deliveries),
         };
     }
 

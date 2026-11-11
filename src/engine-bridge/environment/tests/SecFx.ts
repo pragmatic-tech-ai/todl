@@ -64,6 +64,8 @@ export class SecFx
     /** hr upgraded to the owned, secured Employee, which the environment unifies hrfeed's dependency onto. */
     public static readonly HrOwnedUpgrade: ISecPackage = { ...SecFx.Hr, Version: SecFx.NextVersion };
     public static readonly HrExt: ISecPackage = { ...SecFx.Named('hrext', SecFx.HrExtSource), Dependencies: [SecFx.Hr] };
+    /** hrext compiled against the plain hr, which the environment unifies onto HrOwnedUpgrade. */
+    public static readonly HrExtOverPlain: ISecPackage = { ...SecFx.Named('hrext', SecFx.HrExtSource), Dependencies: [SecFx.HrPlain] };
     public static readonly HrFeed: ISecPackage = { ...SecFx.Named('hrfeed', SecFx.HrFeedSource), Dependencies: [SecFx.HrPlain] };
 
     public static Named(id: string, text: string): ISecPackage

@@ -51,6 +51,13 @@ describe('EnvironmentSecurity', () =>
         assert.ok(catalog.Security.OwnedConcepts().has('hrext.Contractor'));
     });
 
+    test('a subconcept compiled against a plain parent is owned once the environment unifies onto the owned parent', async () =>
+    {
+        const catalog = await SecFx.Compose([SecFx.HrExtOverPlain, SecFx.HrOwnedUpgrade], undefined, [SecFx.HrPlain, SecFx.HrExtOverPlain, SecFx.HrOwnedUpgrade]);
+        assert.deepEqual(catalog.Security.Packages.get('hrext')!.OwnedConcepts, []);
+        assert.ok(catalog.Security.OwnedConcepts().has('hrext.Contractor'));
+    });
+
     test('re-composing after an upgrade replaces the security with the catalog', async () =>
     {
         const v1 = await SecFx.Compose([SecFx.Hr]);

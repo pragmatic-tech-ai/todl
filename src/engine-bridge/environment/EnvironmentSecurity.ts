@@ -1,3 +1,4 @@
+import type { IDefinitionDescription, ISchemaDescription } from '@pragmatic-tech-ai/graph';
 import { MetaKind } from '../../compiler-services/model/kinds.js';
 import { PackageSecurity, type IEdgeConcept, type IPackageSecurity } from '../../compiler-services/security/package-security.js';
 import type { PackageDocument } from '../../publish/publish.js';
@@ -9,41 +10,54 @@ import { EnvironmentCatalogError, EnvironmentCatalogErrorCode } from './Environm
 /** One environment's security surface: every chosen package's compiled security, read from its document. */
 export interface IEnvironmentSecurity
 {
-    /** Package model id → its security (`todl.system`, and a document without `security`, → PackageSecurity.Empty). */
+    /** Package model id → its security as compiled (`todl.system`, and a document without `security`, → PackageSecurity.Empty). */
     readonly Packages: ReadonlyMap<string, IPackageSecurity>;
     /** The union of every package's EdgeConcepts, sorted by Concept. */
     readonly EdgeConcepts: readonly IEdgeConcept[];
+    /**
+     * The environment's effective owned set: every concept of the composed description that IsA todl.system.Owned. It
+     * is recomputed by every Compose, so a dependent package unified onto a newer dependency is judged by the dependency
+     * it now runs against, not the one it compiled against (each package's own OwnedConcepts stay as compiled).
+     */
+    OwnedConcepts(): ReadonlySet<string>;
 }
 
 /**
  * The environment's security, composed from the same documents as the catalog that carries it (spec §9.4: a host that
  * swaps the catalog swaps the security in the same step). Compose rejects a package whose security names a concept
- * another package is home to and it does not declare itself (ForeignSecurityConcept: a hand-made or stale document) and an owned or field-secured
- * concept that any package binds to an external connector (SecuredExternalConcept, spec §6).
+ * another package is home to and it does not declare itself (ForeignSecurityConcept: a hand-made or stale document), an
+ * owned or field-secured concept that any package binds to an external connector (SecuredExternalConcept, spec §6), and
+ * one edge concept reified with two different endpoint pairs (ConflictingEdgeConcept). Ownership and secured fields are
+ * judged over the composed description: a concept inherits both from its ancestors as unified, not as compiled.
  */
 export class EnvironmentSecurity implements IEnvironmentSecurity
 {
     /** Fired only when the named concept is neither homed to the package nor declared in its own document (ruling T12). */
-    private static readonly ForeignMessage = 'the security of package "{0}"{1} names "{2}", which {3} declares and package "{0}" does not; a package may secure only concepts it declares';
-    private static readonly UnknownHome = 'no package';
-    private static readonly HomePackage = 'package "{0}"';
+    private static readonly ForeignMessage = 'the security of package "{0}"{1} names "{2}", which package "{3}" declares and package "{0}" does not; a package may secure only concepts it declares';
+    /** The ForeignSecurityConcept message when no package in the environment declares the named concept. */
+    private static readonly UndeclaredMessage = 'the security of package "{0}"{1} names "{2}", which no package in the environment declares; a package may secure only concepts it declares';
     private static readonly ExternalMessage = 'package "{0}"{1} binds "{2}" to connector "{3}", but package "{4}" owns it or secures a field of it; connector data cannot carry ownership or secured fields';
+    private static readonly ConflictingEdgeMessage = 'edge concept "{0}"{1} is reified with different endpoints by packages {2}; one edge concept has one endpoint pair';
+    private static readonly QuotedModel = '"{0}"';
+    private static readonly ListSeparator = ', ';
 
     public readonly Packages: ReadonlyMap<string, IPackageSecurity>;
     public readonly EdgeConcepts: readonly IEdgeConcept[];
+    private readonly owned: ReadonlySet<string>;
 
-    private constructor(packages: ReadonlyMap<string, IPackageSecurity>)
+    private constructor(packages: ReadonlyMap<string, IPackageSecurity>, edgeConcepts: readonly IEdgeConcept[], owned: ReadonlySet<string>)
     {
         this.Packages = packages;
-        this.EdgeConcepts = Object.freeze(EnvironmentSecurity.UnionEdgeConcepts(packages));
+        this.EdgeConcepts = Object.freeze([...edgeConcepts]);
+        this.owned = owned;
     }
 
     /**
      * The security of every package in `documents` (model id → its chosen document), validated against `homeModels`
-     * (concept → home model id) and the described `external` bindings; `deliveries` (model → delivery names) names
-     * the deliveries in an error.
+     * (concept → home model id), the composed `description` (the inheritance the environment runs) and the described
+     * `external` bindings; `deliveries` (model → delivery names) names the deliveries in an error.
      */
-    public static Compose(documents: ReadonlyMap<string, PackageDocument>, homeModels: ReadonlyMap<string, string>,
+    public static Compose(documents: ReadonlyMap<string, PackageDocument>, homeModels: ReadonlyMap<string, string>, description: ISchemaDescription,
         external: readonly IExternalBinding[], deliveries: ReadonlyMap<string, readonly string[]>): EnvironmentSecurity
     {
         const packages = new Map<string, IPackageSecurity>();
@@ -53,14 +67,40 @@ export class EnvironmentSecurity implements IEnvironmentSecurity
             EnvironmentSecurity.RejectForeign(model, doc, security, homeModels, deliveries);
             packages.set(model, security);
         }
-        EnvironmentSecurity.RejectExternal(packages, external, deliveries);
-        return new EnvironmentSecurity(packages);
+        const ancestry = EnvironmentSecurity.Ancestry(description);
+        const owned = new Set([...ancestry].filter(([, ancestors]) => ancestors.has(SystemNames.Owned)).map(([concept]) => concept));
+        EnvironmentSecurity.RejectExternal(packages, ancestry, owned, external, deliveries);
+        return new EnvironmentSecurity(packages, EnvironmentSecurity.UnionEdgeConcepts(packages, deliveries), owned);
     }
 
-    /** The union of every package's OwnedConcepts. */
     public OwnedConcepts(): ReadonlySet<string>
     {
-        return new Set([...this.Packages.values()].flatMap((s) => s.OwnedConcepts));
+        return this.owned;
+    }
+
+    /** Every described concept → itself and every ancestor it reaches through its parent and aspects, transitively. */
+    private static Ancestry(description: ISchemaDescription): Map<string, Set<string>>
+    {
+        const byName = new Map<string, IDefinitionDescription>(description.Definitions.map((d) => [d.Name, d]));
+        const ancestry = new Map<string, Set<string>>();
+        for (const definition of description.Definitions)
+        {
+            if (definition.IsAspect) continue;
+            const reached = new Set<string>();
+            const pending = [definition.Name];
+            while (pending.length > 0)
+            {
+                const name = pending.pop()!;
+                if (reached.has(name)) continue;
+                reached.add(name);
+                const current = byName.get(name);
+                if (current === undefined) continue;
+                if (current.Parent !== null) pending.push(current.Parent);
+                pending.push(...current.Aspects);
+            }
+            ancestry.set(definition.Name, reached);
+        }
+        return ancestry;
     }
 
     /** Every concept a package's security names: owned, privileged, secured, profiled or reified as an edge. */
@@ -88,39 +128,69 @@ export class EnvironmentSecurity implements IEnvironmentSecurity
             const home = homeModels.get(concept);
             if (home === model || declared.has(concept)) continue;
             const deliveries = [...(deliveriesOf.get(model) ?? [])].sort();
-            throw new EnvironmentCatalogError(EnvironmentCatalogErrorCode.ForeignSecurityConcept, concept, deliveries,
-                MessageFormat.Format(EnvironmentSecurity.ForeignMessage, model, EnvironmentCatalogError.DeliveredBy(deliveries), concept,
-                    home === undefined ? EnvironmentSecurity.UnknownHome : MessageFormat.Format(EnvironmentSecurity.HomePackage, home)));
+            const deliveredBy = EnvironmentCatalogError.DeliveredBy(deliveries);
+            throw new EnvironmentCatalogError(EnvironmentCatalogErrorCode.ForeignSecurityConcept, concept, deliveries, home === undefined
+                ? MessageFormat.Format(EnvironmentSecurity.UndeclaredMessage, model, deliveredBy, concept)
+                : MessageFormat.Format(EnvironmentSecurity.ForeignMessage, model, deliveredBy, concept, home));
         }
     }
 
-    private static RejectExternal(packages: ReadonlyMap<string, IPackageSecurity>, external: readonly IExternalBinding[],
-        deliveriesOf: ReadonlyMap<string, readonly string[]>): void
+    /**
+     * Rejects an external binding of a concept that is owned in the composed description, or that has a secured field
+     * declared on itself or on any ancestor (spec §6). The securer the error names is the lowest model id whose compiled
+     * security owns or secures the concept or one of its ancestors (several T12 co-declarers may secure one concept);
+     * todl.system when none does.
+     */
+    private static RejectExternal(packages: ReadonlyMap<string, IPackageSecurity>, ancestry: ReadonlyMap<string, ReadonlySet<string>>,
+        owned: ReadonlySet<string>, external: readonly IExternalBinding[], deliveriesOf: ReadonlyMap<string, readonly string[]>): void
     {
-        // Several T12 co-declarers may secure one concept; the error names the lowest model id among them, so packages are
-        // walked in descending id order and the last write wins.
+        const fieldSecured = new Set<string>();
         const securedBy = new Map<string, string>();
         for (const model of [...packages.keys()].sort().reverse())
         {
             const security = packages.get(model)!;
+            for (const field of security.SecuredFields) fieldSecured.add(field.Concept);
             for (const concept of [...security.OwnedConcepts, ...security.SecuredFields.map((f) => f.Concept)]) securedBy.set(concept, model);
         }
         for (const binding of external)
         {
-            const securer = securedBy.get(binding.Binding.Concept);
-            if (securer === undefined) continue;
+            const concept = binding.Binding.Concept;
+            const ancestors = [...(ancestry.get(concept) ?? [concept])];
+            if (!owned.has(concept) && !ancestors.some((a) => fieldSecured.has(a))) continue;
+            const securer = ancestors.map((a) => securedBy.get(a)).filter((m): m is string => m !== undefined).sort()[0] ?? SystemNames.Model;
             const deliveries = [...new Set([binding.Model, securer].flatMap((m) => deliveriesOf.get(m) ?? []))].sort();
-            throw new EnvironmentCatalogError(EnvironmentCatalogErrorCode.SecuredExternalConcept, binding.Binding.Concept, deliveries,
+            throw new EnvironmentCatalogError(EnvironmentCatalogErrorCode.SecuredExternalConcept, concept, deliveries,
                 MessageFormat.Format(EnvironmentSecurity.ExternalMessage, binding.Model, EnvironmentCatalogError.DeliveredBy(deliveries),
-                    binding.Binding.Concept, binding.Connector, securer));
+                    concept, binding.Connector, securer));
         }
     }
 
-    /** Every package's edge concepts, sorted by Concept; identical T12 co-declarations of one edge concept appear once. */
-    private static UnionEdgeConcepts(packages: ReadonlyMap<string, IPackageSecurity>): IEdgeConcept[]
+    /**
+     * Every package's edge concepts, sorted by Concept; identical T12 co-declarations of one edge concept appear once,
+     * and two different endpoint pairs for one edge concept are ConflictingEdgeConcept.
+     */
+    private static UnionEdgeConcepts(packages: ReadonlyMap<string, IPackageSecurity>, deliveriesOf: ReadonlyMap<string, readonly string[]>): IEdgeConcept[]
     {
         const unique = new Map<string, IEdgeConcept>();
-        for (const edge of [...packages.values()].flatMap((s) => s.EdgeConcepts)) unique.set(JSON.stringify([edge.Concept, edge.From, edge.To]), edge);
+        const declarers = new Map<string, string[]>();
+        for (const [model, security] of packages)
+        {
+            for (const edge of security.EdgeConcepts)
+            {
+                const models = declarers.get(edge.Concept) ?? [];
+                models.push(model);
+                declarers.set(edge.Concept, models);
+                const previous = unique.get(edge.Concept);
+                if (previous !== undefined && (previous.From !== edge.From || previous.To !== edge.To))
+                {
+                    const deliveries = [...new Set(models.flatMap((m) => deliveriesOf.get(m) ?? []))].sort();
+                    const named = models.map((m) => MessageFormat.Format(EnvironmentSecurity.QuotedModel, m)).join(EnvironmentSecurity.ListSeparator);
+                    throw new EnvironmentCatalogError(EnvironmentCatalogErrorCode.ConflictingEdgeConcept, edge.Concept, deliveries,
+                        MessageFormat.Format(EnvironmentSecurity.ConflictingEdgeMessage, edge.Concept, EnvironmentCatalogError.DeliveredBy(deliveries), named));
+                }
+                unique.set(edge.Concept, edge);
+            }
+        }
         return [...unique.values()].sort((a, b) => (a.Concept < b.Concept ? -1 : a.Concept > b.Concept ? 1 : 0));
     }
 }
