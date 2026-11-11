@@ -52,8 +52,6 @@ export interface Resolver
   reachable(id: string, home: Home): boolean;
   /** Resolve a reference name (bare or qualified) from `home`. */
   resolveRef(name: string, home: Home): Resolved;
-  /** True if `id` is declared by the sources being loaded (not seeded by a base or the foundation). */
-  Defines(id: string): boolean;
 }
 
 export function makeResolver(
@@ -129,6 +127,5 @@ export function makeResolver(
     if (unreachableNs !== null) return { kind: "unreachable", ns: unreachableNs };
     return { kind: "undefined" };
   };
-  const Defines = (id: string): boolean => defined.has(id);
-  return { nsOf, exists, reachable, resolveRef, Defines };
+  return { nsOf, exists, reachable, resolveRef };
 }

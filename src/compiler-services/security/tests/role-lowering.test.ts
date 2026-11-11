@@ -31,14 +31,14 @@ class RoleFx
     }
 
     /** Compile `body` inside `namespace projects { import crm; … }` against the base, plus `extra` sources. */
-    public static Check(body: string, extra: readonly SourceFile[] = []): { model: Repository; diagnostics: Diagnostic[]; texts: Map<string, string> }
+    public static Check(body: string, extra: readonly SourceFile[] = [], bases: readonly TodlDocument[] = [RoleFx.Base()]): { model: Repository; diagnostics: Diagnostic[]; texts: Map<string, string> }
     {
         const sources: SourceFile[] = [
             { uri: RoleFx.ProjectsUri, text: RoleFx.Projects },
             { uri: RoleFx.RolesUri, text: `namespace projects\n{\n    import crm;\n    ${body}\n}` },
             ...extra,
         ];
-        const { model, diagnostics } = checkAgainst([RoleFx.Base()], sources);
+        const { model, diagnostics } = checkAgainst([...bases], sources);
         return { model, diagnostics, texts: new Map(sources.map((s) => [s.uri, s.text])) };
     }
 
@@ -56,9 +56,9 @@ class RoleFx
     }
 
     /** Assert exactly one error, with `code`, whose span covers `word`. */
-    public static Rejects(body: string, code: DiagnosticCode, word: string, extra: readonly SourceFile[] = []): void
+    public static Rejects(body: string, code: DiagnosticCode, word: string, extra: readonly SourceFile[] = [], bases?: readonly TodlDocument[]): void
     {
-        const { diagnostics, texts } = RoleFx.Check(body, extra);
+        const { diagnostics, texts } = RoleFx.Check(body, extra, bases);
         const matching = diagnostics.filter((d) => d.code === code);
         assert.equal(matching.length, 1, `${code}: ${JSON.stringify(diagnostics)}`);
         assert.equal(matching[0]!.severity, Severity.Error);
@@ -146,6 +146,10 @@ test("two operators binding Link to different members is security.edge-endpoints
 {
     RoleFx.Rejects(``, DiagnosticCode.SecurityEdgeEndpointsConflict, "<--",
         [{ uri: "reverse.todl", text: "namespace projects { operator <-- : Link (to, from); }" }]);
+    // A base's operator fixes the pair: the own operator is reported even though its glyph sorts first.
+    const linked = toJSON(check([{ uri: "crm.todl", text: "namespace crm { concept Account { name : string; } concept Tie { a : Account; b : Account; } operator ~~> : Tie (b, a); }" }]).model);
+    RoleFx.Rejects(``, DiagnosticCode.SecurityEdgeEndpointsConflict, "<~~",
+        [{ uri: "tie.todl", text: "namespace projects { import crm; operator <~~ : Tie (a, b); }" }], [linked]);
 });
 
 test("one action twice on one concept is security.duplicate-privilege", () =>

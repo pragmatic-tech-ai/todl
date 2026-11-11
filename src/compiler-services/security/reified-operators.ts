@@ -38,6 +38,7 @@ export class ReifiedOperators
             || ReifiedOperators.Compare(a.To, b.To));
     }
 
+    /** True when some reified operator targets `concept`. */
     public static IsEdgeConcept(model: Repository, concept: string): boolean
     {
         return ReifiedOperators.Targeting(model, concept).length > 0;

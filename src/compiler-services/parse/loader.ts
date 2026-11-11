@@ -950,7 +950,8 @@ export function loadInto(
 
   // ═══════════════════════ SECURITY declarations (roles, contributions, profiles) ═══════════════════════
   // `role` / `contribute` lower to `<ns>.<name>@role` / `<ns>.<baseRole>@contribution` nodes; concept references
-  // resolve here (unknown and foreign concepts are diagnosed and dropped). Whole-model rules run in SecurityValidator.
+  // resolve here (unknown concepts are diagnosed and dropped). Whole-model rules, package scope included, run in
+  // SecurityValidator against the compile's seeded ids.
   const securityUnits: ISecurityUnit[] = [];
   for (const unit of units)
   {
