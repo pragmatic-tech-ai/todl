@@ -20,7 +20,6 @@ export class EnvironmentNodePlacement implements Cypher.INodePlacement
     private static readonly ErrBadId = 'The id member of an external create must be a non-empty string, a bigint or a finite number: ';
     private static readonly EmptyText = '';
     private static readonly ErrSystemField = 'A create of owned concept {0} may not set system field {1}; the engine places it';
-    private static readonly SystemFields: readonly string[] = [SystemNames.Owner, SystemNames.OwningBusinessUnit];
 
     public constructor(
         private readonly identity: ExternalIdentity,
@@ -75,7 +74,7 @@ export class EnvironmentNodePlacement implements Cypher.INodePlacement
 
     private static RejectSystemFields(concept: string, properties: ReadonlyMap<string, CellValue>): void
     {
-        const field = EnvironmentNodePlacement.SystemFields.find((f) => properties.has(f));
+        const field = [...SystemNames.SystemFields].find((f) => properties.has(f));
         if (field !== undefined)
         {
             throw new EngineBridgeError(EngineBridgeErrorCode.SystemFieldWrite, MessageFormat.Format(EnvironmentNodePlacement.ErrSystemField, concept, field));

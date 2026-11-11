@@ -13,6 +13,8 @@ export class SystemNames
     public static readonly Owner = SecurityNames.Owner;
     /** Owned property: the owning business unit id. */
     public static readonly OwningBusinessUnit = SecurityNames.OwningBusinessUnit;
+    /** Both Owned system fields (owner, owningBusinessUnit). */
+    public static readonly SystemFields: ReadonlySet<string> = SecurityNames.SystemFields;
     /** The concept of one share of one record with one subject. */
     public static readonly ShareGrant = 'todl.system.ShareGrant';
     /** ShareGrant relationship: the shared record (any element; an external record is linked through its stub). */
