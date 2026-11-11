@@ -43,7 +43,8 @@
 - **`TypeInfo`** (`src/manifest/reflection/reflection.ts:293`) — the reflected type handle. ⚠ **Known wart:** `ManifestWriter` folds a concept's namespace into `TypeInfo.name` (so `acme.Service` has `name="acme.Service"`, empty `namespace`). The retired TODL Cypher adapter worked around this with simple-name resolution; a proper fix is filed as a Feature.
 - **`Repository`** (`src/compiler-services/model/model.ts:75`) — the COMPILE-side runtime façade over `Graph` (resolve/instancesOf/related/closure + `Builder` staging + `ReactiveNode`). Distinct from the domain/graph-api read path. This is the type the server's `ModelView` hands back.
 
-### Cypher wire (`src/graph-api/wire/`) — TODL's Cypher engine is retired (M2.3)
+### Cypher wire, and the retired TODL Cypher engine (M2.3)
+- **Location:** `src/graph-api/wire/` (root `export * as CypherWire`).
 - **Retired in M2.3 (0.57.0):** `src/cypher/**` and the root `export * as Cypher` (`CypherEngine`, `GraphQueryAdapter`, `CypherPushDown`, `ICypherWriter`/`WriteOverlay`, parser/planner/operators); `ConnectorRuntimeGraphQuery`; `ConnectorPrefetch`, `ConnectorMirrorMapper`, `ConjunctiveQueryFilterProvider`; `IDescribeOptions.EmitExternalBindings`. Cypher runs on the graph engine (`Cypher` from `@pragmatic-tech-ai/graph`) over the `./engine` bridge; `src/cypher` is no longer a server path, and offline Plexus did not use it (M2.3 Step 0 guard).
 - **`CypherCellCodec`** (`cypher-cell-codec.ts`) — result-cell encoding: a node is `{ "$node": MirrorSnapshot }`; a map whose sole key is `$node`/`$map` is escaped as `{ "$map": … }`, so no user map can pass for a node. Decode with `AsNode`/`AsMap`.
 - **`CypherResultDto`/`CypherValueDto`/`NodeCellDto`/`CypherWriteStatsDto`** (`cypher-wire-dto.ts`) — the wire shapes `EngineCellMapper` produces. Root re-export `export * as CypherWire`; the module imports neither the engine nor any `cypher` file (`graph-api/wire/tests/cypher-wire.test.ts`).

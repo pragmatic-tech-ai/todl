@@ -16,8 +16,8 @@ export interface IDescribeOptions
 export interface ISnapshotDescription
 {
     readonly Description: ISchemaDescription;
-    /** Concepts bound to a connector other than the `.todl` file connector and engine storage (no data in M1; the host
-     *  denies writes). */
+    /** Concepts bound to a connector other than the `.todl` file connector and engine storage. Their bindings are always
+     *  in `Description.Bindings` (R118); the host serves them through a `DataSourceConnector` per external plan. */
     readonly External: ReadonlySet<string>;
     readonly Diagnostics: readonly IDescribeDiagnostic[];
 }

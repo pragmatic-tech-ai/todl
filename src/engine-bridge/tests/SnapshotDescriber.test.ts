@@ -653,30 +653,13 @@ class ExternalDescribeFx
     {
         return { Model: DescribeFixture.Model, Version: DescribeFixture.Version, Connectors: [], Bindings: bindings };
     }
-
-    public static Emit(snapshot: MetadataSnapshot, plan: ModelConnectorPlan): ISnapshotDescription
-    {
-        return SnapshotDescriber.Describe(snapshot, { DefaultConnector: BindingTable.EngineStorage, ConnectorPlans: [plan] });
-    }
 }
 
 describe('SnapshotDescriber external bindings and conflicting definitions (M2.2)', () =>
 {
-    test('external bindings are emitted beside file bindings', async () =>
-    {
-        const snapshot = await DescribeFixture.ShopSnapshot();
-        const plan = ExternalDescribeFx.Plan(DescribeFixture.Binding('shop.Loc', ExternalDescribeFx.Crm), DescribeFixture.Binding('shop.Widget', TodlNames.FileConnector));
-        const emitted = ExternalDescribeFx.Emit(snapshot, plan);
-        assert.deepEqual(emitted.Description.Bindings, [
-            { Model: DescribeFixture.Model, Concept: 'shop.Loc', Connector: ExternalDescribeFx.Crm },
-            { Model: DescribeFixture.Model, Concept: 'shop.Widget', Connector: TodlNames.FileConnector },
-        ]);
-        assert.deepEqual([...emitted.External], ['shop.Loc']);
-    });
-
     test('an engine-storage binding is emitted but is not external', async () =>
     {
-        const emitted = ExternalDescribeFx.Emit(await DescribeFixture.ShopSnapshot(), ExternalDescribeFx.Plan(DescribeFixture.Binding('shop.Loc', BindingTable.EngineStorage)));
+        const emitted = DescribeFixture.Describe(await DescribeFixture.ShopSnapshot(), [ExternalDescribeFx.Plan(DescribeFixture.Binding('shop.Loc', BindingTable.EngineStorage))]);
         assert.deepEqual(emitted.Description.Bindings, [{ Model: DescribeFixture.Model, Concept: 'shop.Loc', Connector: BindingTable.EngineStorage }]);
         assert.deepEqual([...emitted.External], []);
         await DescribeFixture.Opens(emitted.Description);
@@ -685,7 +668,7 @@ describe('SnapshotDescriber external bindings and conflicting definitions (M2.2)
     test('a many-valued relationship in a field map is reported unmappable', async () =>
     {
         const binding = { ...DescribeFixture.Binding('shop.Widget', ExternalDescribeFx.Crm), FieldMap: { id: 'id', name: 'name', home: 'home_id', parts: 'part_ids' } };
-        const emitted = ExternalDescribeFx.Emit(await DescribeFixture.ShopSnapshot(), ExternalDescribeFx.Plan(binding));
+        const emitted = DescribeFixture.Describe(await DescribeFixture.ShopSnapshot(), [ExternalDescribeFx.Plan(binding)]);
         assert.deepEqual(emitted.Diagnostics.map((d) => [d.Code, d.Subject]), [[DescribeDiagnosticCode.UnmappableRelationship, 'shop.Widget.parts']]);
     });
 
