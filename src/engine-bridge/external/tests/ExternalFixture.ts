@@ -17,7 +17,7 @@ import {
     type WriteResult,
     WriteFailureKind,
 } from '../../../model-data/connector-plan.js';
-import type { IDataSourceAdapter, IDataSourceAdapterFactory, PageQuery, PageSlice } from '../../../model-data/data-source-adapter.js';
+import type { IDataSourceAdapter, IDataSourceAdapterFactory, IDataSourceContext, PageQuery, PageSlice } from '../../../model-data/data-source-adapter.js';
 import { InMemoryAdapter } from '../../../model-data/tests/fakes.js';
 import type { IExternalBinding, IExternalConnectorPlan } from '../ExternalBinding.js';
 import type { IPrincipalFacts } from '../../PrincipalFacts.js';
@@ -40,6 +40,10 @@ export class RecordingAdapter implements IDataSourceAdapter
     public readonly Queries: QueryRequest[] = [];
     public readonly Pages: PageQuery[] = [];
     public readonly Batches: WriteBatch[] = [];
+    /** The context of each Query/QueryPage call, index-aligned with Queries. */
+    public readonly QueryContexts: (IDataSourceContext | undefined)[] = [];
+    /** The context of each Apply call, index-aligned with Batches. */
+    public readonly BatchContexts: (IDataSourceContext | undefined)[] = [];
     public CanPage = false;
     public CanTransact = false;
     public IgnoreWhere = false;
@@ -55,17 +59,19 @@ export class RecordingAdapter implements IDataSourceAdapter
         return this.calls;
     }
 
-    public async Query(request: QueryRequest): Promise<readonly ExternalRecord[]>
+    public async Query(request: QueryRequest, context?: IDataSourceContext): Promise<readonly ExternalRecord[]>
     {
         this.Count();
         this.Queries.push(request);
+        this.QueryContexts.push(context);
         return this.Inner.Query(this.Effective(request));
     }
 
-    public async QueryPage(request: QueryRequest, page: PageQuery): Promise<PageSlice>
+    public async QueryPage(request: QueryRequest, page: PageQuery, context?: IDataSourceContext): Promise<PageSlice>
     {
         this.Count();
         this.Queries.push(request);
+        this.QueryContexts.push(context);
         this.Pages.push(page);
         const key = request.OrderKey ?? request.Fields[0]!;
         const rows = [...await this.Inner.Query(this.Effective(request))]
@@ -77,10 +83,11 @@ export class RecordingAdapter implements IDataSourceAdapter
             : { Records: records };
     }
 
-    public async Apply(batch: WriteBatch): Promise<WriteResult>
+    public async Apply(batch: WriteBatch, context?: IDataSourceContext): Promise<WriteResult>
     {
         this.Count();
         this.Batches.push(batch);
+        this.BatchContexts.push(context);
         const written = this.PartialUpserts ? await this.Merged(batch) : batch;
         const throwAfter = this.ThrowAfter;
         if (throwAfter !== undefined)

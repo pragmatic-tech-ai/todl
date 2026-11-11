@@ -1,11 +1,15 @@
 import type { QueryRequest, ExternalRecord, WriteBatch, WriteResult } from "./connector-plan.js";
-import type { IDataSourceAdapter, PageQuery, PageSlice } from "./data-source-adapter.js";
+import type { IDataSourceAdapter, IDataSourceContext, PageQuery, PageSlice } from "./data-source-adapter.js";
 import { ConnectionFailureKind, ConnectionRetryBackoff } from "./connection-reconnect.js";
 import type { ConnectionRetryPolicy, IReconnectObserver } from "./connection-reconnect.js";
 
 /** Wraps a data-source adapter so transient failures retry with backoff and dead/auth failures
  *  evict-and-reopen (re-resolving credentials via the reopen closure). Driver-agnostic: it asks the
- *  inner adapter to classify each thrown error (absent classifier -> Permanent, i.e. no retry). */
+ *  inner adapter to classify each thrown error (absent classifier -> Permanent, i.e. no retry).
+ *  Every attempt of Query, QueryPage and Apply, retries and reopened inners included, runs on the
+ *  caller's context. An Auth/Dead failure classification evicts and reopens the one shared inner adapter for every
+ *  caller, so an adapter acting as the caller must keep per-user connection/token handling inside itself, keyed by
+ *  the context's Key, and must not classify a per-user token failure as Auth/Dead. */
 export class ReconnectingAdapter implements IDataSourceAdapter
 {
     private static readonly PagingUnsupportedMessage = "inner adapter does not support paged reads";
@@ -52,12 +56,12 @@ export class ReconnectingAdapter implements IDataSourceAdapter
         return this.inner.CanPage ?? false;
     }
 
-    public Query(request: QueryRequest): Promise<readonly ExternalRecord[]>
+    public Query(request: QueryRequest, context?: IDataSourceContext): Promise<readonly ExternalRecord[]>
     {
-        return this.Run((adapter) => adapter.Query(request));
+        return this.Run((adapter) => adapter.Query(request, context));
     }
 
-    public QueryPage(request: QueryRequest, page: PageQuery): Promise<PageSlice>
+    public QueryPage(request: QueryRequest, page: PageQuery, context?: IDataSourceContext): Promise<PageSlice>
     {
         return this.Run((adapter) =>
         {
@@ -65,13 +69,13 @@ export class ReconnectingAdapter implements IDataSourceAdapter
             {
                 throw new Error(ReconnectingAdapter.PagingUnsupportedMessage);
             }
-            return adapter.QueryPage(request, page);
+            return adapter.QueryPage(request, page, context);
         });
     }
 
-    public Apply(batch: WriteBatch): Promise<WriteResult>
+    public Apply(batch: WriteBatch, context?: IDataSourceContext): Promise<WriteResult>
     {
-        return this.Run((adapter) => adapter.Apply(batch));
+        return this.Run((adapter) => adapter.Apply(batch, context));
     }
 
     public async Dispose(): Promise<void>

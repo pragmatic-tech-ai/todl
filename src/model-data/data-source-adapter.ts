@@ -17,11 +17,26 @@ export interface PageSlice
     NextAfter?: ExternalFieldValue;
 }
 
-/** A live connection to one external data source. */
+/**
+ * On whose behalf a data-source call runs: the engine's opaque ConnectorContext, forwarded as-is (spec §6, PR12).
+ * Structural, so model-data never imports the engine; TODL forwards it and never interprets it.
+ */
+export interface IDataSourceContext
+{
+    /** Opaque key; '' is the anonymous context. Adapters with dedicated credentials ignore it. */
+    readonly Key: string;
+}
+
+/**
+ * A live connection to one external data source. Every call takes an optional trailing `context`: the engine-driven
+ * paths (DataSourceConnector, DataSourceTransaction) pass the caller's; the federated, prefetch and working-copy paths
+ * have no caller and pass none. An adapter that does not act as the caller ignores it. An absent context (undefined)
+ * means the anonymous context, the same as Key ''.
+ */
 export interface IDataSourceAdapter
 {
-    Query(request: QueryRequest): Promise<readonly ExternalRecord[]>;
-    Apply(batch: WriteBatch): Promise<WriteResult>;
+    Query(request: QueryRequest, context?: IDataSourceContext): Promise<readonly ExternalRecord[]>;
+    Apply(batch: WriteBatch, context?: IDataSourceContext): Promise<WriteResult>;
     /** Releases any driver connection/pool held by this adapter. Idempotent. */
     Dispose(): Promise<void>;
     /** Whether this adapter can run a batch inside a backend transaction. Optional so existing
@@ -39,7 +54,7 @@ export interface IDataSourceAdapter
     /** Whether this adapter can serve keyset-paged reads (QueryPage). Optional; absent -> false. */
     readonly CanPage?: boolean;
     /** Keyset page: rows with OrderKey > page.After, sorted by OrderKey asc, at most page.Limit. Optional. */
-    QueryPage?(request: QueryRequest, page: PageQuery): Promise<PageSlice>;
+    QueryPage?(request: QueryRequest, page: PageQuery, context?: IDataSourceContext): Promise<PageSlice>;
 }
 
 /** Opens adapters for one kind of data source. */

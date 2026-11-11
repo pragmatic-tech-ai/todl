@@ -108,6 +108,7 @@ export {
 export {
   ConnectionResolverKey,
   type IDataSourceAdapter,
+  type IDataSourceContext,
   type IDataSourceAdapterFactory,
   type PageQuery,
   type PageSlice,

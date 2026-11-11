@@ -6,6 +6,7 @@ import {
     AccessScope,
     ConflictError,
     ConnectorChangeSet,
+    ConnectorContext,
     ConnectorError,
     Cypher,
     WriteOp,
@@ -114,7 +115,7 @@ class SqlHarness
 
     public async Applied(...changes: ConnectorChange[]): Promise<IConnectorTransaction>
     {
-        const txn = await this.Connector.Begin();
+        const txn = await this.Connector.Begin(ConnectorContext.Anonymous);
         await txn.Apply(WriteHarness.Changes(...changes));
         return txn;
     }
@@ -142,6 +143,8 @@ class WriteHarness
     public static readonly Since = 'since';
     public static readonly DeleteFrom = 'DELETE FROM ';
     public static readonly GuardedDelete = 'DELETE FROM "customers" WHERE "cust_id" = $1 AND "rev" = $2';
+    public static readonly Alice = 'alice';
+    public static readonly Bob = 'bob';
     public static readonly Uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
     public readonly Plan: IExternalConnectorPlan;
@@ -226,12 +229,24 @@ class WriteHarness
         return batches[0]!.Batch.Operations;
     }
 
-    /** A transaction with `changes` applied. */
-    public async Applied(...changes: ConnectorChange[]): Promise<IConnectorTransaction>
+    /** A transaction with `changes` applied, on the anonymous context. */
+    public Applied(...changes: ConnectorChange[]): Promise<IConnectorTransaction>
     {
-        const txn = await this.Connector.Begin();
+        return this.AppliedAs(ConnectorContext.Anonymous, ...changes);
+    }
+
+    /** A transaction begun on `context` with `changes` applied. */
+    public async AppliedAs(context: ConnectorContext, ...changes: ConnectorChange[]): Promise<IConnectorTransaction>
+    {
+        const txn = await this.Connector.Begin(context);
         await txn.Apply(WriteHarness.Changes(...changes));
         return txn;
+    }
+
+    /** The key of the row a recorded before-image read asks for. */
+    public QueriedKey(index: number): unknown
+    {
+        return this.Adapter.Queries[index]!.Where?.All[0]?.Values?.[0];
     }
 
     public static async Rejects(promise: Promise<unknown>, code: EngineBridgeErrorCode): Promise<unknown>
@@ -298,7 +313,7 @@ describe('DataSourceConnector write side', () =>
     test('a create with a numeric id member needs a numeric key', async () =>
     {
         const h = WriteHarness.Over();
-        const txn = await h.Connector.Begin();
+        const txn = await h.Connector.Begin(ConnectorContext.Anonymous);
         await WriteHarness.Rejects(txn.Apply(WriteHarness.Changes(WriteHarness.Create(h.Id(randomUUID())))), EngineBridgeErrorCode.UnsupportedExternalChange);
         assert.equal(h.Adapter.Calls, 0);
     });
@@ -318,7 +333,7 @@ describe('DataSourceConnector write side', () =>
         const h = WriteHarness.Over();
         const max = h.Id(WriteHarness.Int64Max);
         assert.deepEqual(h.Operations(WriteHarness.Create(max)), [{ Kind: WriteOperationKind.Upsert, Key: WriteHarness.Int64Max, Fields: { [Fx.IdKey]: WriteHarness.Int64Max } }]);
-        const txn = await h.Connector.Begin();
+        const txn = await h.Connector.Begin(ConnectorContext.Anonymous);
         await WriteHarness.Rejects(txn.Apply(WriteHarness.Changes(WriteHarness.Create(h.Id(WriteHarness.BeyondInt64)))), EngineBridgeErrorCode.UnsupportedExternalChange);
         assert.equal(h.Adapter.Calls, 0);
     });
@@ -412,11 +427,11 @@ describe('DataSourceConnector write side', () =>
         ];
         for (const [change, code] of refused)
         {
-            const txn = await h.Connector.Begin();
+            const txn = await h.Connector.Begin(ConnectorContext.Anonymous);
             await WriteHarness.Rejects(txn.Apply(WriteHarness.Changes(change)), code);
         }
         const readOnly = WriteHarness.Over([], { Writable: false });
-        const txn = await readOnly.Connector.Begin();
+        const txn = await readOnly.Connector.Begin(ConnectorContext.Anonymous);
         await WriteHarness.Rejects(txn.Apply(WriteHarness.Changes(WriteHarness.Set(readOnly.Id(WriteHarness.S7), Fx.Name, WriteHarness.NewName))), EngineBridgeErrorCode.NotWritable);
         // Apply alone touched nothing: it only translates and validates.
         assert.equal(h.Adapter.Calls + readOnly.Adapter.Calls, 0);
@@ -425,7 +440,7 @@ describe('DataSourceConnector write side', () =>
     test('transactional binding needs a transacting adapter', async () =>
     {
         const h = WriteHarness.Over([], { Atomicity: WriteAtomicity.Transactional });
-        const txn = await h.Connector.Begin();
+        const txn = await h.Connector.Begin(ConnectorContext.Anonymous);
         await WriteHarness.Rejects(txn.Apply(WriteHarness.Changes(WriteHarness.Set(h.Id(WriteHarness.S7), Fx.Name, WriteHarness.NewName))), EngineBridgeErrorCode.UnsupportedExternalChange);
         h.Adapter.CanTransact = true;
         const ok = await h.Applied(WriteHarness.Set(h.Id(WriteHarness.S7), Fx.Name, WriteHarness.NewName));
@@ -653,6 +668,42 @@ describe('DataSourceConnector write side', () =>
         const deleted = sql.Session.calls[sql.Session.calls.length - 1]!;
         assert.equal(deleted.sql, WriteHarness.GuardedDelete);
         assert.deepEqual(deleted.params, [7, 3]);
+    });
+
+    test('a transaction forwards its Begin context to the before-image read and Apply', async () =>
+    {
+        const h = WriteHarness.Over(WriteHarness.Existing());
+        const alice = ConnectorContext.For(WriteHarness.Alice);
+        const txn = await h.AppliedAs(alice, WriteHarness.Set(h.Id(WriteHarness.S7), Fx.Name, WriteHarness.NewName));
+        await txn.Commit();
+        assert.deepEqual([h.Adapter.QueryContexts, h.Adapter.BatchContexts], [[alice], [alice]]);
+    });
+
+    test('compensation runs on the transaction context', async () =>
+    {
+        const h = WriteHarness.Over(WriteHarness.Existing());
+        h.Adapter.FailAfter = 2;
+        const txn = await h.AppliedAs(ConnectorContext.For(WriteHarness.Alice), ...h.NewAndTwoExisting());
+        await WriteHarness.Rejects(txn.Commit(), EngineBridgeErrorCode.ExternalWriteFailed);
+        await txn.Revert();
+        // The failing batch, then its compensation: both on the transaction's context.
+        assert.equal(h.Adapter.BatchContexts.length, 2);
+        assert.deepEqual(h.Adapter.BatchContexts.map(c => c?.Key), [WriteHarness.Alice, WriteHarness.Alice]);
+    });
+
+    test('two transactions keep their contexts apart', async () =>
+    {
+        const h = WriteHarness.Over(WriteHarness.Existing());
+        const owners = new Map<unknown, string>([[7, WriteHarness.Alice], [8, WriteHarness.Bob]]);
+        const [alice, bob] = await Promise.all([
+            h.AppliedAs(ConnectorContext.For(WriteHarness.Alice), WriteHarness.Set(h.Id(WriteHarness.S7), Fx.Name, WriteHarness.NewName)),
+            h.AppliedAs(ConnectorContext.For(WriteHarness.Bob), WriteHarness.Set(h.Id(WriteHarness.S8), Fx.Name, WriteHarness.NewName)),
+        ]);
+        await Promise.all([alice.Commit(), bob.Commit()]);
+        assert.equal(h.Adapter.Batches.length, 2);
+        h.Adapter.Batches.forEach((b, i) => assert.equal(h.Adapter.BatchContexts[i]?.Key, owners.get(b.Operations[0]!.Key)));
+        h.Adapter.QueryContexts.forEach((c, i) => assert.equal(c?.Key, owners.get(h.QueriedKey(i))));
+        assert.equal(h.Adapter.QueryContexts.length, 2);
     });
 
     test('failed compensation throws CompensationFailed', async () =>

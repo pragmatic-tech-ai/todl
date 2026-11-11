@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { AccessError, AccessErrorCode, AccessScope, Cypher, GraphEngine, StorageKind, type CellValue } from '@pragmatic-tech-ai/graph';
+import { AccessDefault, AccessError, AccessErrorCode, AccessScope, Cypher, GraphEngine, Predicate, StorageKind, type CellValue } from '@pragmatic-tech-ai/graph';
 import type { IPrincipalFacts } from '../../PrincipalFacts.js';
 import { EngineBridgeError, EngineBridgeErrorCode } from '../../EngineBridgeError.js';
 import { SystemFieldGuard } from '../../system/SystemFieldGuard.js';
@@ -13,6 +13,10 @@ import { SecFx, type ISecPackage } from './SecFx.js';
 class OwnedFx
 {
     public static readonly NewId = 'e-1';
+    public static readonly EdgeConcept = 'hr.Assignment';
+    public static readonly FromMember = 'employee';
+    public static readonly ToMember = 'project';
+    public static readonly Employee = 'hr.Employee';
     public static readonly Principal: IPrincipalFacts = { Id: 'u-alice', HomeBusinessUnitId: 'bu-sales' };
 
     private constructor(
@@ -129,4 +133,22 @@ describe('OwnedPlacement', () =>
     }));
 
     test('Guard(System) still reads unrestricted', () => assert.equal(SystemFieldGuard.Guard(AccessScope.System).ReadsUnrestricted, true));
+
+    test('Guard keeps the Endpoints and the Append/AppendTo rules of every Writes entry', () =>
+    {
+        const append = Predicate.True;
+        const appendTo = Predicate.False;
+        const scope = AccessScope.Build({
+            Default: AccessDefault.Allow,
+            Endpoints: new Map([[OwnedFx.EdgeConcept, { From: OwnedFx.FromMember, To: OwnedFx.ToMember }]]),
+            Writes: new Map([[SystemNames.Owned, { Append: append, AppendTo: appendTo }], [OwnedFx.Employee, { AppendTo: appendTo }]]),
+        });
+        const guarded = SystemFieldGuard.Guard(scope);
+        assert.deepEqual(guarded.Endpoints.get(OwnedFx.EdgeConcept), { From: OwnedFx.FromMember, To: OwnedFx.ToMember });
+        const owned = guarded.Writes.get(SystemNames.Owned)!;
+        assert.equal(owned.Append, append);
+        assert.equal(owned.AppendTo, appendTo);
+        assert.deepEqual(owned.ReadOnly?.Update, new Set(SystemNames.SystemFields));
+        assert.equal(guarded.Writes.get(OwnedFx.Employee)!.AppendTo, appendTo);
+    });
 });

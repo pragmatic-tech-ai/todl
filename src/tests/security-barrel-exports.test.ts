@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import type { IEdgeConcept } from "../index.js";
+import type { IDataSourceContext, IEdgeConcept } from "../index.js";
 
 class SecurityBarrel
 {
@@ -23,7 +23,7 @@ describe("security barrel exports", () =>
 
     it("resolves the type-only exports", () =>
     {
-        const types: [IEdgeConcept?] = [];
+        const types: [IEdgeConcept?, IDataSourceContext?] = [];
         assert.equal(types.length, 0);
     });
 });
