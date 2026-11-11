@@ -59,7 +59,9 @@ interface IAttemptedBatch
  * the before-image only: a row another writer inserts between that read and adapter.Apply is still upserted (the same
  * commit-window limit as Q1). Otherwise it sets each operation's Version from the before-image for an Optimistic
  * binding (owner question Q1: this guards the commit window only), then calls adapter.Apply. Per-operation failures
- * throw ExternalWriteError (ExternalWriteFailed) and stop the commit. A thrown adapter error propagates as it is.
+ * throw ExternalWriteError (ExternalWriteFailed) and stop the commit. An error raised by the transaction itself
+ * (e.g., a constraint checked only at COMMIT, a serialization failure, a lost connection) and the adapters'
+ * identifier guards propagate as the adapter's error (the engine reports them as ConnectorError).
  *
  * Revert before Commit discards. After Commit, or after a Commit that stopped partway, it compensates every operation
  * that applied, in reverse order: a key without a before-image is deleted, every other key is upserted back to its

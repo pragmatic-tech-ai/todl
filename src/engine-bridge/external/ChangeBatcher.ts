@@ -78,8 +78,10 @@ class PendingWrite
  * operations in order of first appearance of their ids.
  *
  * Delete then Create nulls every mapped column the set did not write, rather than keeping the deleted row's values. A
- * source with a NOT NULL column among them rejects that upsert, which surfaces at Commit as ExternalWriteFailed; the
- * old value is never kept silently.
+ * source that rejects that upsert per statement (a NOT NULL column among them) reports it as a per-operation failure,
+ * which surfaces at Commit as ExternalWriteFailed; an error raised by the transaction itself (e.g., a constraint
+ * checked only at COMMIT, a serialization failure, a lost connection) and the adapters' identifier guards propagate as
+ * the adapter's error (the engine reports them as ConnectorError). The old value is never kept silently.
  *
  * A change it cannot express throws: a public id that is not one of `connector`'s (ForeignId), a binding that is not
  * Writable (NotWritable), and as UnsupportedExternalChange a SetOwner, a create of another concept than the binding's,
