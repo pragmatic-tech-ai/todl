@@ -13,7 +13,7 @@ import { SystemNames } from './SystemNames.js';
 export class SystemFieldGuard
 {
     /**
-     * `scope` with owner/owningBusinessUnit read-only (Create and Update stages) on todl.system.Owned; every other rule unchanged.
+     * `scope` with owner/owningBusinessUnit read-only (Create and Update stages) on todl.system.Owned; every other rule and the Endpoints unchanged.
      * Precondition: the scope opens on a catalog containing todl.system.Owned (every composed environment has it through the
      * system package; ScopeValidator rejects the scope otherwise).
      */
@@ -25,10 +25,18 @@ export class SystemFieldGuard
             Create: SystemFieldGuard.Union(existing?.ReadOnly?.Create),
             Update: SystemFieldGuard.Union(existing?.ReadOnly?.Update),
         };
+        // The spread keeps every other rule of the Owned entry (Create/Update/Delete, Append/AppendTo, ReadOnlyExact).
         writes.set(SystemNames.Owned, { ...existing, ReadOnly: readOnly });
-        // AccessScope exposes no options object to copy whole, so the scope is rebuilt field by field. S2's engine bump
-        // adds the PR4 Endpoints option: add `Endpoints: scope.Endpoints` here in that bump, or the guard drops it.
-        return AccessScope.Build({ Default: scope.Default, Rows: scope.Rows, Hidden: scope.Hidden, HiddenExact: scope.HiddenExact, Writes: writes });
+        // AccessScope exposes no options object to copy whole, so the scope is rebuilt from every IAccessScopeOptions
+        // field (engine 0.4.0); an option a later engine adds must be carried here too, or the guard drops it.
+        return AccessScope.Build({
+            Default: scope.Default,
+            Rows: scope.Rows,
+            Hidden: scope.Hidden,
+            HiddenExact: scope.HiddenExact,
+            Writes: writes,
+            Endpoints: scope.Endpoints,
+        });
     }
 
     /** `members` plus the system fields. */

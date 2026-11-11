@@ -1,4 +1,4 @@
-import { ConnectorChangeSet, type ConnectorChange, type IConnectorTransaction } from '@pragmatic-tech-ai/graph';
+import { ConnectorChangeSet, type ConnectorChange, type ConnectorContext, type IConnectorTransaction } from '@pragmatic-tech-ai/graph';
 import {
     QueryCompareOp,
     WriteAtomicity,
@@ -110,6 +110,8 @@ export class DataSourceTransaction implements IConnectorTransaction
         private readonly connector: string,
         private readonly adapter: IDataSourceAdapter,
         private readonly identity: ExternalIdentity,
+        /** The Begin caller (one per transaction, S2 E11): the before-image read, every Apply and every compensation run on it. */
+        private readonly context: ConnectorContext,
     )
     {
     }
@@ -180,7 +182,7 @@ export class DataSourceTransaction implements IConnectorTransaction
         let failures: readonly WriteFailure[];
         try
         {
-            const result = await this.adapter.Apply(batch);
+            const result = await this.adapter.Apply(batch, this.context);
             failures = result.Failures;
             attempt.Versions = new Map((result.Versions ?? []).map(v => [DataSourceTransaction.KeyText(v.Key), v.Version]));
         }
@@ -273,7 +275,7 @@ export class DataSourceTransaction implements IConnectorTransaction
             Source: b.Source,
             Fields: [...fields],
             Where: { All: [{ Field: b.IdKey, Op: QueryCompareOp.In, Value: null, Values: keys }] },
-        });
+        }, this.context);
         const before = new Map<string, ExternalRecord>();
         for (const row of rows)
         {
@@ -349,7 +351,7 @@ export class DataSourceTransaction implements IConnectorTransaction
         }
         try
         {
-            const result = await this.adapter.Apply(batch);
+            const result = await this.adapter.Apply(batch, this.context);
             return result.Failures.length === 0
                 ? undefined
                 : new ExternalWriteError(EngineBridgeErrorCode.CompensationFailed, message, binding, result.Failures);

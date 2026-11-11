@@ -1,7 +1,7 @@
 import { WriteConcurrency, WriteOperationKind } from "./connector-plan.js";
 import type { ExternalFieldValue, ExternalRecord, QueryRequest, WriteBatch, WriteOperation, WriteResult } from "./connector-plan.js";
 import type { ConnectionFailureKind } from "./connection-reconnect.js";
-import type { IDataSourceAdapter, PageQuery, PageSlice } from "./data-source-adapter.js";
+import type { IDataSourceAdapter, IDataSourceContext, PageQuery, PageSlice } from "./data-source-adapter.js";
 
 /**
  * Server-side version bumping for optimistic writes. An Optimistic upsert whose fields leave the version column absent
@@ -15,12 +15,12 @@ export class VersionBumpingAdapter implements IDataSourceAdapter
 {
     // Optional capabilities are present exactly when the wrapped adapter has them (absent stays absent).
     public readonly ClassifyFailure?: (error: unknown) => ConnectionFailureKind;
-    public readonly QueryPage?: (request: QueryRequest, page: PageQuery) => Promise<PageSlice>;
+    public readonly QueryPage?: (request: QueryRequest, page: PageQuery, context?: IDataSourceContext) => Promise<PageSlice>;
 
     constructor(private readonly inner: IDataSourceAdapter)
     {
         if (inner.ClassifyFailure !== undefined) this.ClassifyFailure = (error) => inner.ClassifyFailure!(error);
-        if (inner.QueryPage !== undefined) this.QueryPage = (request, page) => inner.QueryPage!(request, page);
+        if (inner.QueryPage !== undefined) this.QueryPage = (request, page, context) => inner.QueryPage!(request, page, context);
     }
 
     /** The batch as it will be written: each bumpable optimistic upsert carries its next version. */
@@ -54,9 +54,9 @@ export class VersionBumpingAdapter implements IDataSourceAdapter
         return this.inner.CanPage === true;
     }
 
-    public Query(request: QueryRequest): Promise<readonly ExternalRecord[]>
+    public Query(request: QueryRequest, context?: IDataSourceContext): Promise<readonly ExternalRecord[]>
     {
-        return this.inner.Query(request);
+        return this.inner.Query(request, context);
     }
 
     public get SourceManagesVersions(): boolean
@@ -64,12 +64,13 @@ export class VersionBumpingAdapter implements IDataSourceAdapter
         return this.inner.SourceManagesVersions === true;
     }
 
-    public async Apply(batch: WriteBatch): Promise<WriteResult>
+    /** The caller's context reaches the inner Apply unchanged, bumped or not. */
+    public async Apply(batch: WriteBatch, context?: IDataSourceContext): Promise<WriteResult>
     {
         // A source that assigns its own versions (etag / server-side) is never second-guessed.
-        if (this.inner.SourceManagesVersions === true) return this.inner.Apply(batch);
+        if (this.inner.SourceManagesVersions === true) return this.inner.Apply(batch, context);
         const bumped = VersionBumpingAdapter.Bumped(batch);
-        const result = await this.inner.Apply(bumped);
+        const result = await this.inner.Apply(bumped, context);
         if (bumped === batch || result.Applied === 0) return result;
         const failed = new Set(result.Failures.map((f) => String(f.Key)));
         const versions: { Key: ExternalFieldValue; Version: ExternalFieldValue }[] = [];

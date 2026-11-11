@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DataSourceKind, WriteAtomicity, WriteConcurrency, WriteFailureKind, WriteOperationKind, type ResolvedConnection, type WriteBatch } from "../connector-plan.js";
+import type { IDataSourceAdapter, IDataSourceContext } from "../data-source-adapter.js";
 import { VersionBumpingAdapter } from "../version-bumping-adapter.js";
 import { InMemoryAdapterFactory } from "./fakes.js";
 
@@ -81,4 +82,23 @@ test("only ops the wrapper bumped are reported", async () =>
         { Kind: WriteOperationKind.Upsert, Key: "O2", Fields: { label: "y" }, Version: "etag-1" },
     ]));
     assert.deepEqual(result.Versions, [{ Key: "O1", Version: 8 }]);
+});
+
+test("the bumped Apply keeps its context", async () =>
+{
+    const seen: (IDataSourceContext | undefined)[] = [];
+    const inner: IDataSourceAdapter = {
+        Query: async (_request, context) => { seen.push(context); return []; },
+        QueryPage: async (_request, _page, context) => { seen.push(context); return { Records: [] }; },
+        Apply: async (_batch, context) => { seen.push(context); return { Applied: 1, Failures: [] }; },
+        Dispose: async () => {},
+    };
+    const caller: IDataSourceContext = { Key: "alice" };
+    const adapter = new VersionBumpingAdapter(inner);
+    const result = await adapter.Apply(BumpFixture.Batch([{ Kind: WriteOperationKind.Upsert, Key: "O1", Fields: { label: "x" }, Version: 7 }]), caller);
+    assert.deepEqual(result.Versions, [{ Key: "O1", Version: 8 }]);
+    await adapter.Query({ Source: "order", Fields: ["id"] }, caller);
+    await adapter.QueryPage!({ Source: "order", Fields: ["id"] }, { Limit: 1 }, caller);
+    assert.equal(seen.length, 3);
+    assert.ok(seen.every((c) => c === caller));
 });

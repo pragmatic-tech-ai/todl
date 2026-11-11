@@ -1,5 +1,5 @@
 import type { QueryRequest, ExternalRecord, WriteBatch, WriteResult } from "./connector-plan.js";
-import type { IDataSourceAdapter, PageQuery, PageSlice } from "./data-source-adapter.js";
+import type { IDataSourceAdapter, IDataSourceContext, PageQuery, PageSlice } from "./data-source-adapter.js";
 import { ConnectionFailureKind, ConnectionRetryBackoff } from "./connection-reconnect.js";
 import type { ConnectionRetryPolicy, IReconnectObserver } from "./connection-reconnect.js";
 
@@ -52,12 +52,13 @@ export class ReconnectingAdapter implements IDataSourceAdapter
         return this.inner.CanPage ?? false;
     }
 
-    public Query(request: QueryRequest): Promise<readonly ExternalRecord[]>
+    // Every attempt, retries and reopened inners included, runs on the caller's context.
+    public Query(request: QueryRequest, context?: IDataSourceContext): Promise<readonly ExternalRecord[]>
     {
-        return this.Run((adapter) => adapter.Query(request));
+        return this.Run((adapter) => adapter.Query(request, context));
     }
 
-    public QueryPage(request: QueryRequest, page: PageQuery): Promise<PageSlice>
+    public QueryPage(request: QueryRequest, page: PageQuery, context?: IDataSourceContext): Promise<PageSlice>
     {
         return this.Run((adapter) =>
         {
@@ -65,13 +66,13 @@ export class ReconnectingAdapter implements IDataSourceAdapter
             {
                 throw new Error(ReconnectingAdapter.PagingUnsupportedMessage);
             }
-            return adapter.QueryPage(request, page);
+            return adapter.QueryPage(request, page, context);
         });
     }
 
-    public Apply(batch: WriteBatch): Promise<WriteResult>
+    public Apply(batch: WriteBatch, context?: IDataSourceContext): Promise<WriteResult>
     {
-        return this.Run((adapter) => adapter.Apply(batch));
+        return this.Run((adapter) => adapter.Apply(batch, context));
     }
 
     public async Dispose(): Promise<void>

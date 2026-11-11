@@ -3,6 +3,7 @@ import {
     IdIn,
     PredicateKind,
     type CellValue,
+    type ConnectorContext,
     type IConnectorCapabilities,
     type IConnectorTransaction,
     type IExternalConnector,
@@ -160,10 +161,13 @@ export class DataSourceConnector implements IExternalConnector
         return new DataSourceConnector(plan, await adapters.Open(plan.Spec, services), identity);
     }
 
-    /** Opens the write side of one engine transaction (ruling T9; see the class comment for compensation). */
-    public Begin(): Promise<IConnectorTransaction>
+    /**
+     * Opens the write side of one engine transaction (ruling T9; see the class comment for compensation). `context` is
+     * the transaction's caller; every adapter call of the transaction, compensation included, carries it (PR12).
+     */
+    public Begin(context: ConnectorContext): Promise<IConnectorTransaction>
     {
-        return Promise.resolve(new DataSourceTransaction(this.Name, this.adapter, this.identity));
+        return Promise.resolve(new DataSourceTransaction(this.Name, this.adapter, this.identity, context));
     }
 
     public async Fetch(request: IFetchRequest): Promise<IFetchPage>
@@ -202,6 +206,7 @@ export class DataSourceConnector implements IExternalConnector
         return request.Reverse === undefined ? page : DataSourceConnector.Linking(page, request.Reverse.Relationship, request.Reverse.Target);
     }
 
+    /** Reads one page; the adapter call carries `request.Context`, the reader's or transaction's caller (PR12). */
     private async Read(shape: IBindingShape, request: IFetchRequest, query: QueryRequest): Promise<IFetchPage>
     {
         const after = request.Resume === undefined ? undefined : { After: ResumeToken.Decode(request.Resume) };
@@ -211,11 +216,11 @@ export class DataSourceConnector implements IExternalConnector
             {
                 throw new EngineBridgeError(EngineBridgeErrorCode.ExternalRowInvalid, DataSourceConnector.ErrUnpagedResume + request.Resume);
             }
-            return { Rows: this.Rows(shape, request, await this.adapter.Query(query)) };
+            return { Rows: this.Rows(shape, request, await this.adapter.Query(query, request.Context)) };
         }
         query.OrderKey = shape.Binding.Binding.IdKey;
         const limit = request.Limit ?? DataSourceConnector.DefaultLimit;
-        const slice = await this.adapter.QueryPage(query, after === undefined ? { Limit: limit } : { ...after, Limit: limit });
+        const slice = await this.adapter.QueryPage(query, after === undefined ? { Limit: limit } : { ...after, Limit: limit }, request.Context);
         const rows = this.Rows(shape, request, slice.Records);
         return slice.NextAfter === undefined ? { Rows: rows } : { Rows: rows, Resume: ResumeToken.Encode(slice.NextAfter) };
     }

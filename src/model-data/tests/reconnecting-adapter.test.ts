@@ -4,7 +4,7 @@ import { ConnectionFailureKind } from "../connection-reconnect.js";
 import type { ConnectionRetryPolicy, IReconnectObserver, ReconnectEvent } from "../connection-reconnect.js";
 import { WriteFailureKind } from "../connector-plan.js";
 import type { ExternalRecord, QueryRequest, WriteBatch, WriteResult } from "../connector-plan.js";
-import type { IDataSourceAdapter, PageQuery, PageSlice } from "../data-source-adapter.js";
+import type { IDataSourceAdapter, IDataSourceContext, PageQuery, PageSlice } from "../data-source-adapter.js";
 import { ReconnectingAdapter } from "../reconnecting-adapter.js";
 
 class TaggedError extends Error
@@ -29,6 +29,8 @@ class ScriptedAdapter implements IDataSourceAdapter
     public DisposeCount = 0;
     public CanTransact = false;
     public CanVersion = false;
+    /** The context each call received, in call order. */
+    public readonly Contexts: (IDataSourceContext | undefined)[] = [];
     private readonly actions: ScriptedAction[];
     private readonly repeatLast: boolean;
 
@@ -38,13 +40,15 @@ class ScriptedAdapter implements IDataSourceAdapter
         this.repeatLast = repeatLast;
     }
 
-    public async Query(_request: QueryRequest): Promise<readonly ExternalRecord[]>
+    public async Query(_request: QueryRequest, context?: IDataSourceContext): Promise<readonly ExternalRecord[]>
     {
+        this.Contexts.push(context);
         return (await this.Next()) as readonly ExternalRecord[];
     }
 
-    public async Apply(_batch: WriteBatch): Promise<WriteResult>
+    public async Apply(_batch: WriteBatch, context?: IDataSourceContext): Promise<WriteResult>
     {
+        this.Contexts.push(context);
         return (await this.Next()) as WriteResult;
     }
 
@@ -90,8 +94,9 @@ class PagingScriptedAdapter extends ScriptedAdapter
 {
     public CanPage = true;
 
-    public async QueryPage(_request: QueryRequest, _page: PageQuery): Promise<PageSlice>
+    public async QueryPage(_request: QueryRequest, _page: PageQuery, context?: IDataSourceContext): Promise<PageSlice>
     {
+        this.Contexts.push(context);
         return (await this.Next()) as PageSlice;
     }
 }
@@ -117,6 +122,7 @@ class ReconnectingAdapterFixture
     public static readonly CredentialUserInfo = "admin:s3cr3t";
     public static readonly ConflictKey = "a";
     public static readonly ConflictReason = "stale";
+    public static readonly Caller: IDataSourceContext = { Key: "alice" };
 
     public ReopenCount = 0;
     public ReopenGate: Promise<void> | undefined;
@@ -444,4 +450,25 @@ test("QueryPage over an inner without QueryPage throws the unsupported message",
     await assert.rejects(
         fixture.Build(new ScriptedAdapter([])).QueryPage(ReconnectingAdapterFixture.Request, { Limit: 1 }),
         { message: "inner adapter does not support paged reads" });
+});
+
+test("a retried call keeps its context", async () =>
+{
+    const slice: PageSlice = { Records: ReconnectingAdapterFixture.Rows };
+    const caller = ReconnectingAdapterFixture.Caller;
+    // Query, QueryPage and Apply each fail twice (the second failure reopens) and succeed on the fresh inner.
+    const transient = { Throw: ConnectionFailureKind.Transient };
+    const first = new PagingScriptedAdapter([transient, transient]);
+    const second = new PagingScriptedAdapter([{ Return: ReconnectingAdapterFixture.Rows }, transient, transient]);
+    const third = new PagingScriptedAdapter([{ Return: slice }, transient, transient]);
+    const fourth = new PagingScriptedAdapter([{ Return: ReconnectingAdapterFixture.Conflict() }]);
+    const fixture = new ReconnectingAdapterFixture([second, third, fourth]);
+    const wrapper = fixture.Build(first);
+    await wrapper.Query(ReconnectingAdapterFixture.Request, caller);
+    await wrapper.QueryPage(ReconnectingAdapterFixture.Request, { Limit: 1 }, caller);
+    await wrapper.Apply(ReconnectingAdapterFixture.Batch, caller);
+    assert.equal(fixture.ReopenCount, 3);
+    const seen = [first, second, third, fourth].flatMap((a) => a.Contexts);
+    assert.equal(seen.length, 9);
+    assert.ok(seen.every((c) => c === caller));
 });

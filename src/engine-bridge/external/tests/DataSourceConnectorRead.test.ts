@@ -6,6 +6,7 @@ import {
     And,
     Compare,
     CompareOp,
+    ConnectorContext,
     ConnectorResidency,
     Cypher,
     DateValue,
@@ -42,6 +43,7 @@ class ReadHarness
     public static readonly Etag = 'W/"4"';
     public static readonly VersionKey = 'Version';
     public static readonly Nul = 'a\u0000b';
+    public static readonly Alice = 'alice';
 
     public readonly Plan: IExternalConnectorPlan;
     public readonly Identity: ExternalIdentity;
@@ -72,7 +74,7 @@ class ReadHarness
 
     public static Request(extra: Partial<IFetchRequest> = {}): IFetchRequest
     {
-        return { Model: Fx.Model, Concept: Fx.Customer, Predicate: Predicate.True, Members: [Fx.Id, Fx.Name, Fx.TeamRel], ...extra };
+        return { Model: Fx.Model, Concept: Fx.Customer, Predicate: Predicate.True, Members: [Fx.Id, Fx.Name, Fx.TeamRel], Context: ConnectorContext.Anonymous, ...extra };
     }
 
     public Mint(storageId: string): string
@@ -342,6 +344,33 @@ describe('DataSourceConnector read side', () =>
         h.Adapter.CanPage = true;
         await h.Connector.Fetch(ReadHarness.Request());
         assert.deepEqual(h.Adapter.Pages[0], { Limit: 500 });
+    });
+
+    test('fetch forwards the request context to Query', async () =>
+    {
+        const h = ReadHarness.Over();
+        await h.Connector.Fetch(ReadHarness.Request({ Context: ConnectorContext.For(ReadHarness.Alice) }));
+        assert.deepEqual(h.Adapter.QueryContexts.map(c => c?.Key), [ReadHarness.Alice]);
+    });
+
+    test('a paged fetch forwards the context to QueryPage on every page', async () =>
+    {
+        const h = ReadHarness.Over([ReadHarness.Acme(), Fx.Record(8, 'B', null), Fx.Record(9, 'C', null)]);
+        h.Adapter.CanPage = true;
+        const alice = ConnectorContext.For(ReadHarness.Alice);
+        const first = await h.Connector.Fetch(ReadHarness.Request({ Limit: 2, Context: alice }));
+        await h.Connector.Fetch(ReadHarness.Request({ Limit: 2, Resume: first.Resume!, Context: alice }));
+        assert.equal(h.Adapter.Pages.length, 2);
+        assert.deepEqual(h.Adapter.QueryContexts, [alice, alice]);
+    });
+
+    test('an anonymous request is forwarded as anonymous', async () =>
+    {
+        const h = ReadHarness.Over();
+        await h.Connector.Fetch(ReadHarness.Request());
+        const recorded = h.Adapter.QueryContexts[0];
+        assert.ok(recorded instanceof ConnectorContext);
+        assert.equal(recorded.IsAnonymous, true);
     });
 
     test('malformed resume token fails', async () =>

@@ -801,8 +801,15 @@ bridge places and guards the system-owned fields.
   `Domain` route loads a package that uses `Owned`.
 - `SecurityValidator` runs only in `checkAgainst` (build and publish): security
   diagnostics are build-only and the LSP `SolutionGraph` does not show them live.
-- Forwarding the caller's `ConnectorContext` to connectors is pending (Task 11,
-  PR12) and is not part of this surface.
+- `DataSourceConnector` forwards the engine's `ConnectorContext` (PR12) and
+  never interprets it: `Fetch` passes `request.Context` to the adapter's
+  `Query`/`QueryPage` (continuations included), and `Begin(context)` hands the
+  `DataSourceTransaction` the context that its before-image read, every `Apply`
+  and every compensating `Apply` carry. Adapters see it as the structural
+  `IDataSourceContext` (`Key`; `''` is anonymous), an optional trailing
+  parameter, so `model-data` never imports the engine; `ReconnectingAdapter`
+  and `VersionBumpingAdapter` pass it through retries and bumps unchanged. The
+  federated, prefetch and working-copy paths have no caller and pass none.
 
 ---
 
