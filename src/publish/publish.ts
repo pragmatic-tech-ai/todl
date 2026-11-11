@@ -15,7 +15,8 @@ import { ConnectorDeclaration } from "../compiler-services/connectors/connector-
 import { toJSON, toJSONOwn, type TodlDocument, type EmitOptions } from "../compiler-services/emit/json.js";
 import { Severity, type Diagnostic } from "../compiler-services/diagnostics/diagnostic.js";
 import type { SourceFile } from "../compiler-services/diagnostics/span.js";
-import { preludeDocument } from "../compiler-services/stdlib/prelude.js";
+import { CompileFoundation, FoundationKind } from "../compiler-services/stdlib/compile-foundation.js";
+import { SecurityNames } from "../compiler-services/security/security-names.js";
 import { deriveClasses, type PublishedClass } from "./reflect.js";
 import type { PackageStore } from "./stores.js";
 
@@ -86,7 +87,9 @@ export interface PublishOutcome extends CompileOutcome
  *
  * `dependencies` names the base packages the caller resolved into `bases` (by
  * pinned id + version); it is recorded on the own-only `document` for transitive
- * resolution by consumers.
+ * resolution by consumers. Every package but `todl.system` itself compiles over
+ * the prelude plus `todl.system`; one that references a system node records
+ * `todl.system` as a dependency instead of carrying its nodes.
  */
 export function compilePackage(
   bases: readonly TodlDocument[],
@@ -97,28 +100,35 @@ export function compilePackage(
   resources?: readonly PackageResource[],
 ): CompileOutcome
 {
-  const { model, diagnostics, provenance, redeclaredConnectors } = checkAgainst([...bases], [...sources]);
+  const foundation = identity.id === SecurityNames.SystemModel ? FoundationKind.PreludeOnly : FoundationKind.PreludeAndSystem;
+  const { model, diagnostics, provenance, redeclaredConnectors } = checkAgainst([...bases], [...sources], undefined, undefined, foundation);
   const errors = diagnostics.filter((d) => d.severity === Severity.Error);
   if (errors.length > 0) return { ok: false, diagnostics, errors };
   // Debug emit reuses the compile's provenance for the `source` field.
   const emit: EmitOptions | undefined = options?.debug ? { debug: true, provenance } : undefined;
 
   // Own = every node the compile added beyond the seeded base graph. The seed is
-  // `mergeBases([prelude, ...bases])`, so its ids are the union of the prelude
-  // document and every base document. (`provenance` only homes instance/model
+  // `mergeBases([...foundation, ...bases])`, so its ids are the union of the
+  // foundation documents (prelude, and todl.system unless compiling it) and every
+  // base document. (`provenance` only homes instance/model
   // declarations, not taxonomies/concepts/annotations — so it is NOT the
   // own-set.)
   const baseIds = new Set<string>();
-  for (const b of [preludeDocument(), ...bases]) for (const n of b.nodes) baseIds.add(n.id);
+  for (const b of [...CompileFoundation.Documents(foundation), ...bases]) for (const n of b.nodes) baseIds.add(n.id);
   // A base datasource the sources redeclare identically is also own (ruling P16), so compose can detect a dependency
   // that later changes it instead of silently re-pointing this package.
   const ownIds = new Set(model.allNodes().filter((n) => !baseIds.has(n.id) || ConnectorDeclaration.IsOwnRedeclaration(n, redeclaredConnectors)).map((n) => n.id));
 
   const fullDocument = toJSON(model, emit);
   const document: PackageDocument = toJSONOwn(model, ownIds, emit);
-  if (dependencies !== undefined && dependencies.length > 0)
+  const recorded = [...(dependencies ?? [])];
+  if (foundation === FoundationKind.PreludeAndSystem && CompileFoundation.ReferencesSystem(document) && !recorded.some((d) => d.id === SecurityNames.SystemModel))
   {
-    document.dependencies = [...dependencies];
+    recorded.push({ kind: PackageKind.MetaModel, id: SecurityNames.SystemModel, version: SecurityNames.SystemVersion });
+  }
+  if (recorded.length > 0)
+  {
+    document.dependencies = recorded;
   }
 
   const pkg: CompiledPackage = {

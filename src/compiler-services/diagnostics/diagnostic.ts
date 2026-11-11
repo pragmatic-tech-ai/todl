@@ -78,6 +78,8 @@ export enum DiagnosticCode
   ConstructorOutOfScope = "constructor.out-of-scope",
   // Prelude (default library) phase.
   PreludeNameRedeclared = "prelude.name-redeclared",
+  // Security foundation: a source redeclares a name the implicit todl.system package provides (Error).
+  SecuritySystemNameRedeclared = "security.system-name-redeclared",
   // Annotation phase.
   AnnotationDuplicate = "annotation.duplicate",
   AnnotationUnknownParam = "annotation.unknown-param",

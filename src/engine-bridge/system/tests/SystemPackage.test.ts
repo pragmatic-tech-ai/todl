@@ -18,7 +18,7 @@ class SystemFx
 {
     public static readonly SourceUri = 'system.todl';
     public static readonly Utf8 = 'utf8';
-    public static readonly Source = readFileSync(fileURLToPath(new URL('../system.todl', import.meta.url)), SystemFx.Utf8);
+    public static readonly Source = readFileSync(fileURLToPath(new URL('../../../compiler-services/stdlib/system/system.todl', import.meta.url)), SystemFx.Utf8);
     public static readonly OtherModel = 'other';
     public static readonly OtherVersion = '2.0.0';
 
@@ -71,6 +71,19 @@ describe('SystemPackage (ruling T10)', () =>
             assert.equal(m?.Kind, MemberKind.Property, name);
             assert.equal(m.Kind === MemberKind.Property ? m.Type : undefined, ValueType.Boolean, name);
             assert.equal(m.Kind === MemberKind.Property ? m.Nullable : undefined, true, name);
+        }
+    });
+
+    test('describes the Owned aspect with two string properties', async () =>
+    {
+        const definitions = await SystemFx.Definitions(await new SystemPackage().resolve(SystemPackage.Ref));
+        const owned = definitions.find((d) => d.Name === SystemNames.Owned);
+        assert.ok(owned !== undefined);
+        assert.deepEqual(owned.Members.map((m) => m.Name), [SystemNames.Owner, SystemNames.OwningBusinessUnit]);
+        for (const m of owned.Members)
+        {
+            assert.equal(m.Kind, MemberKind.Property, m.Name);
+            assert.equal(m.Kind === MemberKind.Property ? m.Type : undefined, ValueType.String, m.Name);
         }
     });
 

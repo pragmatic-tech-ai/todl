@@ -8,7 +8,8 @@ import { Repository } from "./model/model.js";
 import type { TodlDocument } from "./emit/json.js";
 import type { SourceFile } from "./diagnostics/span.js";
 import type { Diagnostic } from "./diagnostics/diagnostic.js";
-import { preludeDocument, preludeNames } from "./stdlib/prelude.js";
+import { preludeNames } from "./stdlib/prelude.js";
+import { CompileFoundation, FoundationKind } from "./stdlib/compile-foundation.js";
 import { ConnectorDeclaration } from "./connectors/connector-declaration.js";
 
 /**
@@ -49,7 +50,9 @@ export function check(sources: SourceFile[], idGenerator?: IdGenerator, policy?:
  * Load + validate `sources` against already-compiled base models (published
  * meta-models / libraries, as TodlDocument JSON). Bases seed the graph so a
  * source reference resolves to a base node instead of being reported undefined.
- * `checkAgainst([], sources)` is equivalent to `check(sources)`.
+ * `checkAgainst([], sources)` is equivalent to `check(sources)`. `foundation` picks
+ * the implicit seed: the prelude plus `todl.system` by default, or the prelude
+ * alone (used to compile the system package itself).
  *
  * @example Split the architecture across a published meta-model and a downstream
  * model — the real deployment shape. The meta-model is compiled once to a
@@ -83,9 +86,10 @@ export function checkAgainst(
   sources: SourceFile[],
   idGenerator: IdGenerator = new SnowflakeIdGenerator(),
   policy: ConnectionPolicy = ConnectionPolicies.Default,
+  foundation: FoundationKind = FoundationKind.PreludeAndSystem,
 ): { model: Repository; diagnostics: Diagnostic[]; provenance: Map<string, string>; redeclaredConnectors: ReadonlySet<string> }
 {
-  const model = new Repository(mergeBases([preludeDocument(), ...bases]));
+  const model = new Repository(mergeBases([...CompileFoundation.Documents(foundation), ...bases]));
   const provenance = new Map<string, string>();
   const redeclaredConnectors = new Set<string>();
   const diagnostics = [...ConnectorDeclaration.BaseConflicts(bases), ...loadInto(model, sources, preludeNames(), idGenerator, provenance, policy, redeclaredConnectors)];

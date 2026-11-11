@@ -4,7 +4,7 @@ import { ConnectorDeclaration } from '../../compiler-services/connectors/connect
 import { fromJSON, type JsonNode } from '../../compiler-services/emit/json.js';
 import { Builder } from '../../compiler-services/model/builder.js';
 import { MetaKind } from '../../compiler-services/model/kinds.js';
-import { Domain, type IPackageDocumentSource, type PackageRef, type PackageSource, type ResolvedPackage } from '../../domain/domain.js';
+import { Domain, type IPackageDocumentSource, type PackageRef, type PackageSource } from '../../domain/domain.js';
 import type { MetadataSnapshot } from '../../domain/metadata-snapshot.js';
 import type { ConnectorBinding, ConnectorSpec, ModelConnectorPlan } from '../../model-data/connector-plan.js';
 import { ModelShardExtractor } from '../../model-data/model-shard-extractor.js';
@@ -15,6 +15,7 @@ import { MessageFormat } from '../MessageFormat.js';
 import { SnapshotDescriber } from '../SnapshotDescriber.js';
 import { DescribeDiagnosticCode, type IDescribeDiagnostic } from '../SnapshotDescription.js';
 import { SystemNames } from '../system/SystemNames.js';
+import { SystemFirstPackageSource } from '../system/SystemFirstPackageSource.js';
 import { SystemPackage } from '../system/SystemPackage.js';
 import { TodlNames } from '../TodlNames.js';
 import { ConnectorPlanMerge } from './ConnectorPlanMerge.js';
@@ -46,31 +47,6 @@ export interface IEnvironmentCatalog
     readonly HomeModels: ReadonlyMap<string, string>;
     /** The describer's diagnostics (none is ConflictingDefinition: that is an error). */
     readonly Diagnostics: readonly IDescribeDiagnostic[];
-}
-
-/** A package source that serves `todl.system` from SystemPackage and every other model from `inner`. */
-class SystemFirstPackageSource implements PackageSource, IPackageDocumentSource
-{
-    private readonly system = new SystemPackage();
-
-    public constructor(private readonly inner: PackageSource & IPackageDocumentSource)
-    {
-    }
-
-    public resolve(ref: PackageRef): Promise<ResolvedPackage>
-    {
-        return ref.model === SystemNames.Model ? this.system.resolve(ref) : this.inner.resolve(ref);
-    }
-
-    public async versions(model: string): Promise<readonly string[]>
-    {
-        return model === SystemNames.Model ? this.system.versions(model) : ((await this.inner.versions?.(model)) ?? []);
-    }
-
-    public Document(ref: Required<PackageRef>): Promise<PackageDocument>
-    {
-        return ref.model === SystemNames.Model ? this.system.Document(ref) : this.inner.Document(ref);
-    }
 }
 
 /**

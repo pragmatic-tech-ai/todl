@@ -2,6 +2,14 @@
 // system-package.generated.ts by scripts/gen-system-package.mts; runtime compiles nothing.
 namespace todl.system
 {
+    // A record owned by a principal and a business unit. The fields are optional because seed instances and
+    // pre-aspect records carry none until placed or backfilled; the engine bridge, not the package, maintains them.
+    aspect Owned
+    {
+        owner              : string?;
+        owningBusinessUnit : string?;
+    }
+
     // One share of one record with one subject (a principal or a team). The id is deterministic
     // (ShareGrants.PublicId), so re-sharing updates the grant. An unset right grants nothing.
     concept ShareGrant

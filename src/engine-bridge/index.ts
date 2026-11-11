@@ -20,6 +20,7 @@ export { ExternalWriteError } from './external/ExternalWriteError.js';
 export { FetchTranslator } from './external/FetchTranslator.js';
 export { ResumeToken } from './external/ResumeToken.js';
 export { SystemPackage } from './system/SystemPackage.js';
+export { SystemFirstPackageSource } from './system/SystemFirstPackageSource.js';
 export { SystemNames, ShareRight, ShareSubject } from './system/SystemNames.js';
 export { ShareGrants } from './system/ShareGrants.js';
 export { ShareGrantScope, type IShareSubjects } from './system/ShareGrantScope.js';

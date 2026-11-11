@@ -81,6 +81,7 @@ import { type IdGenerator, SnowflakeIdGenerator } from "../model/id-generator.js
 import { makeResolver, type Home, type Resolver } from "../resolve/resolver.js";
 import { collectDefinitions, visitReferences } from "./references.js";
 import { NodeIdQualifier } from "./node-id-qualifier.js";
+import { CompileFoundation } from "../stdlib/compile-foundation.js";
 import { BaseListClassifier } from "./base-list-classifier.js";
 import { DeriveSerializer } from "./derive-serializer.js";
 import { MemberAnnotationTarget } from "./member-annotation-target.js";
@@ -227,7 +228,7 @@ export function loadInto(
   // A source that redeclares a name the default library (prelude) already
   // provides is warned and DROPPED — the prelude wins (it is the foundation
   // base), and re-defining the same node id would otherwise make the builder
-  // throw on the duplicate. Named ontology declarations carry `.name` + `.span`.
+  // throw on the duplicate. A seeded `todl.system` name is an error, also dropped. Named ontology declarations carry `.name` + `.span`.
   const active = units.filter(({ ns, decl }) => {
     const named =
       decl.kind === DeclKind.Primitive ||
@@ -235,6 +236,20 @@ export function loadInto(
       decl.kind === DeclKind.Aspect ||
       decl.kind === DeclKind.Annotation ||
       decl.kind === DeclKind.Taxonomy;
+    // A name the seeded `todl.system` foundation provides is reserved outright: the
+    // security model depends on it, so redeclaring it is an error, not a warning.
+    if (named && CompileFoundation.IsSeededSystemName(model, NodeIdQualifier.Qualify(ns, decl.name)))
+    {
+      diagnostics.push({
+        code: DiagnosticCode.SecuritySystemNameRedeclared,
+        severity: Severity.Error,
+        message: CompileFoundation.SystemNameRedeclared(decl.name),
+        span: decl.span,
+        node: decl.name,
+        path: null,
+      });
+      return false;
+    }
     // `reserved` now holds the prelude's QUALIFIED ids (`todl.*`), so a redeclaration
     // only genuinely collides when the local name qualifies to the same id.
     if (reserved.size > 0 && named && reserved.has(NodeIdQualifier.Qualify(ns, decl.name)))

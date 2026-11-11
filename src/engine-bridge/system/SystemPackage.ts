@@ -2,7 +2,7 @@ import type { IPackageDocumentSource, PackageRef, PackageSource, ResolvedPackage
 import type { PackageDocument } from '../../publish/publish.js';
 import { PackageManifestBridge } from '../../solution-services/package-manager/package-manifest-bridge.js';
 import { MessageFormat } from '../MessageFormat.js';
-import { SystemPackageDocument } from './system-package.generated.js';
+import { SystemPackageDocument } from '../../compiler-services/stdlib/system/system-package.generated.js';
 import { SystemNames } from './SystemNames.js';
 
 /**
