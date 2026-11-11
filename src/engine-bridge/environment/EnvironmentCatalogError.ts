@@ -19,7 +19,10 @@ export enum EnvironmentCatalogErrorCode
     DuplicateBinding,
     /** A binding the environment cannot describe (its concept is unknown or an aspect, or its model is empty). */
     InvalidBinding,
-    /** A package's security names a concept that another package (or none) is home to: a hand-made or stale document. */
+    /**
+     * A package's security names a concept that it is not home to and its own document does not declare (another package,
+     * or none, is home to it): a hand-made or stale document. An identical T12 co-declaration may be secured.
+     */
     ForeignSecurityConcept,
     /** An owned concept, or one with a secured field, is bound to an external connector by some package (spec §6). */
     SecuredExternalConcept,

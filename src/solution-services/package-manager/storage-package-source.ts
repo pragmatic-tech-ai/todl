@@ -12,13 +12,14 @@ import { ManifestEmitter } from "../../compiler-services/emit/manifest.js";
 import { ManifestWriter } from "../../manifest/manifest-writer.js";
 import { PackageManifestBridge } from "./package-manifest-bridge.js";
 import { type PackageDocument } from "../../publish/publish.js";
+import { CompileFoundation } from "../../compiler-services/stdlib/compile-foundation.js";
 import { MessageTemplate } from "../../compiler-services/diagnostics/message-template.js";
 
 // The disk-backed PackageSource — the SPEC-06 `RegistryPackageSource` the Domain
 // comment deferred. It reads the BlobPackageStore on-disk layout
 // (`<model>/<version>/model.json`, a PackageDocument) from any IStorage and, on
 // resolve, bridges that graph JSON to what Domain.load consumes: it rebuilds a
-// Repository over the prelude (PackageManifestBridge.repositoryOf), emits the LOGICAL manifest + flattened data graph
+// Repository over the foundation and the recorded dependency documents (PackageManifestBridge.repositoryOf), emits the LOGICAL manifest + flattened data graph
 // (ManifestEmitter), lowers the logical manifest to the SPEC-04 ManifestJson
 // (ManifestWriter), and carries the instance graph as the package seed. Because
 // publish persists own-only documents that record their base deps, the recorded
@@ -26,6 +27,7 @@ import { MessageTemplate } from "../../compiler-services/diagnostics/message-tem
 export class StoragePackageSource implements PackageSource, IPackageDocumentSource, ResourceSource
 {
     private static readonly NotFoundMessage = 'package "{0}@{1}" not found in storage';
+    private static readonly VersionSeparator = '@';
 
     constructor(private readonly storage: IStorage) {}
 
@@ -35,7 +37,8 @@ export class StoragePackageSource implements PackageSource, IPackageDocumentSour
         if (version === undefined) throw new Error(`no versions of package "${ref.model}" in storage`);
 
         const doc = await this.Document({ model: ref.model, version });
-        const { manifest: logical, graph } = new ManifestEmitter(PackageManifestBridge.repositoryOf(doc), ref.model, version).emit();
+        const repository = PackageManifestBridge.repositoryOf(doc, await this.DependencyDocuments(doc));
+        const { manifest: logical, graph } = new ManifestEmitter(repository, ref.model, version).emit();
         const manifest = ManifestWriter.fromLogical(logical).toJSON();
         const dependencies = (doc.dependencies ?? []).map((d) => ({ model: d.id, version: d.version }));
 
@@ -51,6 +54,29 @@ export class StoragePackageSource implements PackageSource, IPackageDocumentSour
         const path = StoragePackageSource.modelPath(ref.model, ref.version);
         if (!(await this.storage.Exists(path))) throw new Error(MessageTemplate.Format(StoragePackageSource.NotFoundMessage, ref.model, ref.version));
         return JSON.parse(await this.storage.ReadText(path)) as PackageDocument;
+    }
+
+    // The persisted documents of `doc`'s recorded dependency closure, at their recorded versions (order is immaterial:
+    // mergeBases keys by node id). A dependency the compile foundation provides (`todl.system`) is not in
+    // storage and is seeded by repositoryOf instead; one storage does not hold is skipped here (resolve still lists it,
+    // and the Domain reports it when it loads that dependency).
+    private async DependencyDocuments(doc: PackageDocument): Promise<PackageDocument[]>
+    {
+        const out: PackageDocument[] = [];
+        const seen = new Set<string>();
+        const queue = [...(doc.dependencies ?? [])];
+        while (queue.length > 0)
+        {
+            const next = queue.shift()!;
+            const key = next.id + StoragePackageSource.VersionSeparator + next.version;
+            if (seen.has(key) || CompileFoundation.ProvidesDependency(next.id)) continue;
+            seen.add(key);
+            if (!(await this.storage.Exists(StoragePackageSource.modelPath(next.id, next.version)))) continue;
+            const dependency = await this.Document({ model: next.id, version: next.version });
+            out.push(dependency);
+            queue.push(...(dependency.dependencies ?? []));
+        }
+        return out;
     }
 
     // Read a package resource's bytes straight from the blob layout. `uri` is the

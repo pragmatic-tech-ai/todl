@@ -1,3 +1,4 @@
+import { MetaKind } from '../../compiler-services/model/kinds.js';
 import { PackageSecurity, type IEdgeConcept, type IPackageSecurity } from '../../compiler-services/security/package-security.js';
 import type { PackageDocument } from '../../publish/publish.js';
 import type { IExternalBinding } from '../external/ExternalBinding.js';
@@ -17,12 +18,13 @@ export interface IEnvironmentSecurity
 /**
  * The environment's security, composed from the same documents as the catalog that carries it (spec §9.4: a host that
  * swaps the catalog swaps the security in the same step). Compose rejects a package whose security names a concept
- * another package is home to (ForeignSecurityConcept: a hand-made or stale document) and an owned or field-secured
+ * another package is home to and it does not declare itself (ForeignSecurityConcept: a hand-made or stale document) and an owned or field-secured
  * concept that any package binds to an external connector (SecuredExternalConcept, spec §6).
  */
 export class EnvironmentSecurity implements IEnvironmentSecurity
 {
-    private static readonly ForeignMessage = 'the security of package "{0}"{1} names "{2}", which {3} declares; a package may secure only its own concepts';
+    /** Fired only when the named concept is neither homed to the package nor declared in its own document (ruling T12). */
+    private static readonly ForeignMessage = 'the security of package "{0}"{1} names "{2}", which {3} declares and package "{0}" does not; a package may secure only concepts it declares';
     private static readonly UnknownHome = 'no package';
     private static readonly HomePackage = 'package "{0}"';
     private static readonly ExternalMessage = 'package "{0}"{1} binds "{2}" to connector "{3}", but package "{4}" owns it or secures a field of it; connector data cannot carry ownership or secured fields';
@@ -48,7 +50,7 @@ export class EnvironmentSecurity implements IEnvironmentSecurity
         for (const [model, doc] of documents)
         {
             const security = model === SystemNames.Model ? PackageSecurity.Empty : (doc.security ?? PackageSecurity.Empty);
-            EnvironmentSecurity.RejectForeign(model, security, homeModels, deliveries);
+            EnvironmentSecurity.RejectForeign(model, doc, security, homeModels, deliveries);
             packages.set(model, security);
         }
         EnvironmentSecurity.RejectExternal(packages, external, deliveries);
@@ -73,13 +75,18 @@ export class EnvironmentSecurity implements IEnvironmentSecurity
         ]);
     }
 
-    private static RejectForeign(model: string, security: IPackageSecurity, homeModels: ReadonlyMap<string, string>,
+    /**
+     * A package may secure a concept it is home to, or one its own document declares too: under ruling T12 two packages
+     * that do not depend on each other may declare one concept identically, and only the lower model id is its home.
+     */
+    private static RejectForeign(model: string, doc: PackageDocument, security: IPackageSecurity, homeModels: ReadonlyMap<string, string>,
         deliveriesOf: ReadonlyMap<string, readonly string[]>): void
     {
+        const declared = new Set(doc.nodes.filter((n) => n.metaKind === MetaKind.Concept).map((n) => n.id));
         for (const concept of [...EnvironmentSecurity.Named(security)].sort())
         {
             const home = homeModels.get(concept);
-            if (home === model) continue;
+            if (home === model || declared.has(concept)) continue;
             const deliveries = [...(deliveriesOf.get(model) ?? [])].sort();
             throw new EnvironmentCatalogError(EnvironmentCatalogErrorCode.ForeignSecurityConcept, concept, deliveries,
                 MessageFormat.Format(EnvironmentSecurity.ForeignMessage, model, EnvironmentCatalogError.DeliveredBy(deliveries), concept,
@@ -90,13 +97,13 @@ export class EnvironmentSecurity implements IEnvironmentSecurity
     private static RejectExternal(packages: ReadonlyMap<string, IPackageSecurity>, external: readonly IExternalBinding[],
         deliveriesOf: ReadonlyMap<string, readonly string[]>): void
     {
+        // Several T12 co-declarers may secure one concept; the error names the lowest model id among them, so packages are
+        // walked in descending id order and the last write wins.
         const securedBy = new Map<string, string>();
-        for (const [model, security] of packages)
+        for (const model of [...packages.keys()].sort().reverse())
         {
-            for (const concept of [...security.OwnedConcepts, ...security.SecuredFields.map((f) => f.Concept)])
-            {
-                if (!securedBy.has(concept)) securedBy.set(concept, model);
-            }
+            const security = packages.get(model)!;
+            for (const concept of [...security.OwnedConcepts, ...security.SecuredFields.map((f) => f.Concept)]) securedBy.set(concept, model);
         }
         for (const binding of external)
         {
@@ -109,9 +116,11 @@ export class EnvironmentSecurity implements IEnvironmentSecurity
         }
     }
 
-    /** Every package's edge concepts, sorted by Concept (each concept once: RejectForeign keeps it to its home package). */
+    /** Every package's edge concepts, sorted by Concept; identical T12 co-declarations of one edge concept appear once. */
     private static UnionEdgeConcepts(packages: ReadonlyMap<string, IPackageSecurity>): IEdgeConcept[]
     {
-        return [...packages.values()].flatMap((s) => s.EdgeConcepts).sort((a, b) => (a.Concept < b.Concept ? -1 : a.Concept > b.Concept ? 1 : 0));
+        const unique = new Map<string, IEdgeConcept>();
+        for (const edge of [...packages.values()].flatMap((s) => s.EdgeConcepts)) unique.set(JSON.stringify([edge.Concept, edge.From, edge.To]), edge);
+        return [...unique.values()].sort((a, b) => (a.Concept < b.Concept ? -1 : a.Concept > b.Concept ? 1 : 0));
     }
 }

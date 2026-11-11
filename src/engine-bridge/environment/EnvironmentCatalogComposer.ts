@@ -138,7 +138,8 @@ export class EnvironmentCatalogComposer
      * may `connect` a datasource declared in a dependency, which the own-only document does not hold, so the plan is
      * built over the document plus the datasource nodes of its (unified) dependency closure. A population whose connector
      * is still not visible is UnknownConnector (PlanFor would skip it, and the concept would fall to engine storage).
-     * The repository is built over the compile foundation, so a document's edges to `todl.system` nodes resolve.
+     * The repository is built over the compile foundation and the chosen documents of the dependency closure, so the
+     * document's edges to `todl.system` nodes and to a dependency's concepts (`Contractor : hr.Employee`) resolve.
      */
     private static PlanOf(ref: Required<PackageRef>, documents: ReadonlyMap<string, PackageDocument>, deliveriesOf: ReadonlyMap<string, readonly string[]>): ModelConnectorPlan
     {
@@ -158,7 +159,8 @@ export class EnvironmentCatalogComposer
             }
         }
         const plan: ModelConnectorPlan = { Model: ref.model, Version: ref.version, Connectors: [], Bindings: [] };
-        const repository = PackageManifestBridge.repositoryOf(visible);
+        const closure = EnvironmentCatalogComposer.DependencyClosure(ref.model, documents).map((m) => documents.get(m)!);
+        const repository = PackageManifestBridge.repositoryOf(visible, closure);
         for (const model of ModelShardExtractor.ModelsOf(doc))
         {
             const part = ConnectorPlanEmitter.PlanFor(repository, model);
@@ -183,15 +185,9 @@ export class EnvironmentCatalogComposer
         {
             if (node.metaKind === MetaKind.Connector) declarers.set(node.id, { Node: node, Model: model });
         }
-        const seen = new Set<string>();
-        const queue = (doc.dependencies ?? []).map((d) => d.id);
-        while (queue.length > 0)
+        for (const next of EnvironmentCatalogComposer.DependencyClosure(model, documents))
         {
-            const next = queue.shift()!;
-            const dependency = documents.get(next);
-            if (seen.has(next) || dependency === undefined) continue;
-            seen.add(next);
-            for (const node of dependency.nodes)
+            for (const node of documents.get(next)!.nodes)
             {
                 if (node.metaKind !== MetaKind.Connector) continue;
                 const first = declarers.get(node.id);
@@ -210,9 +206,26 @@ export class EnvironmentCatalogComposer
                                 EnvironmentCatalogError.DeliveredBy(deliveries), model));
                 }
             }
-            queue.push(...(dependency.dependencies ?? []).map((d) => d.id));
         }
         return { ...doc, nodes };
+    }
+
+    /** The models package `model` depends on, transitively, breadth-first, each once; only chosen models (those in `documents`). */
+    private static DependencyClosure(model: string, documents: ReadonlyMap<string, PackageDocument>): string[]
+    {
+        const out: string[] = [];
+        const seen = new Set<string>();
+        const queue = (documents.get(model)!.dependencies ?? []).map((d) => d.id);
+        while (queue.length > 0)
+        {
+            const next = queue.shift()!;
+            const dependency = documents.get(next);
+            if (seen.has(next) || dependency === undefined) continue;
+            seen.add(next);
+            out.push(next);
+            queue.push(...(dependency.dependencies ?? []).map((d) => d.id));
+        }
+        return out;
     }
 
     /** The external bindings the description kept (the describer drops invalid and duplicate ones), in its order. */

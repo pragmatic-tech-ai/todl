@@ -17,16 +17,19 @@ import type { ResolvedPackage, PackageRef as DomainPackageRef, SeedGraph, Domain
 // target refs always resolve within one manifest.
 export class PackageManifestBridge
 {
-  // The repository a manifest is emitted from: the document over the prelude. A published (own-only) document
-  // carries no prelude, which is every package's implicit base; without it the virtual root Element and its
-  // members (label, description) vanish and parent-less concepts get no base. A full closure already holds the
-  // prelude, and mergeBases keeps the first copy of each node, so its repository is unchanged. A document that
-  // references a `todl.system` node (`: todl.system.Owned`) records the system package as a dependency instead of
-  // carrying its nodes, so the system document is seeded too, else its edges to those nodes cannot resolve.
-  static repositoryOf(doc: TodlDocument): Repository
+  // The repository a manifest is emitted from: the document over the compile foundation and its recorded dependency
+  // closure (this seeds the foundation and recorded dependencies, by design). A published (own-only) document carries
+  // neither the prelude, which is every package's implicit base (without it the virtual root Element and its members
+  // vanish and parent-less concepts get no base), nor its dependencies' nodes, so its edges to a dependency's concept
+  // (`concept Contractor : hr.Employee`) resolve only over `dependencies` (the caller reads them; [] when the document
+  // is a full closure). `todl.system` is seeded when the document or a dependency references a system node, since such
+  // a document records the system package instead of carrying its nodes. mergeBases keeps the first copy of each node,
+  // so a full closure's repository is unchanged.
+  static repositoryOf(doc: TodlDocument, dependencies: readonly TodlDocument[] = []): Repository
   {
-    const kind = CompileFoundation.ReferencesSystem(doc) ? FoundationKind.PreludeAndSystem : FoundationKind.PreludeOnly;
-    return new Repository(mergeBases([...CompileFoundation.Documents(kind), doc]));
+    const seeds = [...dependencies, doc];
+    const kind = seeds.some((d) => CompileFoundation.ReferencesSystem(d)) ? FoundationKind.PreludeAndSystem : FoundationKind.PreludeOnly;
+    return new Repository(mergeBases([...CompileFoundation.Documents(kind), ...seeds]));
   }
 
   // The logical manifest for a compiled Repository (schema tier only).

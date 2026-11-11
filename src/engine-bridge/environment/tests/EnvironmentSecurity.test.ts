@@ -54,6 +54,8 @@ class SecFx
     datasource feed { kind = sql; connection = "feed-db"; }
     model Feed : hrfeed { connect feed; populate hr.Employee key emp_id { name = "full_name"; } }
 }`;
+    /** A dependent package whose subconcept of hr's owned Employee is owned through its parent. */
+    public static readonly HrExtSource = 'namespace hrext { concept Contractor : hr.Employee { agency : string?; } }';
     public static readonly CreateGrant = "CREATE (:todl.system.ShareGrant {subjectKind: 'principal', subjectId: 'p1'})";
 
     public static readonly Hr = SecFx.Named('hr', SecFx.HrSource);
@@ -63,6 +65,7 @@ class SecFx
     public static readonly HrPlain = SecFx.Named('hr', SecFx.HrPlainSource);
     /** hr upgraded to the owned, secured Employee, which the environment unifies hrfeed's dependency onto. */
     public static readonly HrOwnedUpgrade: ISecPackage = { ...SecFx.Hr, Version: SecFx.NextVersion };
+    public static readonly HrExt: ISecPackage = { ...SecFx.Named('hrext', SecFx.HrExtSource), Dependencies: [SecFx.Hr] };
     public static readonly HrFeed: ISecPackage = { ...SecFx.Named('hrfeed', SecFx.HrFeedSource), Dependencies: [SecFx.HrPlain] };
 
     public static Named(id: string, text: string): ISecPackage
@@ -146,6 +149,13 @@ describe('EnvironmentSecurity', () =>
         {
             await engine.dispose();
         }
+    });
+
+    test("a dependent package's subconcept of an owned concept composes from storage and is owned", async () =>
+    {
+        const catalog = await SecFx.Compose([SecFx.Hr, SecFx.HrExt]);
+        assert.ok(catalog.Security.Packages.get('hrext')!.OwnedConcepts.includes('hrext.Contractor'));
+        assert.ok(catalog.Security.OwnedConcepts().has('hrext.Contractor'));
     });
 
     test('re-composing after an upgrade replaces the security with the catalog', async () =>
