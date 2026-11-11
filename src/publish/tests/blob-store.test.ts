@@ -1,3 +1,4 @@
+import { PackageSecurity } from "../../compiler-services/security/package-security.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { CompiledPackage } from "../publish.js";
@@ -36,6 +37,7 @@ function pkg(): CompiledPackage
     fullDocument: document, // no bases → the closure equals the own document
     sources: [{ uri: "ms.todl", text: "namespace ms {}" }],
     classes: [],
+    Security: PackageSecurity.Empty,
   };
 }
 

@@ -17,6 +17,8 @@ import { Severity, type Diagnostic } from "../compiler-services/diagnostics/diag
 import type { SourceFile } from "../compiler-services/diagnostics/span.js";
 import { CompileFoundation, FoundationKind } from "../compiler-services/stdlib/compile-foundation.js";
 import { SecurityNames } from "../compiler-services/security/security-names.js";
+import { PackageSecurityCompiler } from "../compiler-services/security/package-security-compiler.js";
+import { PackageSecurity, type IPackageSecurity } from "../compiler-services/security/package-security.js";
 import { deriveClasses, type PublishedClass } from "./reflect.js";
 import type { PackageStore } from "./stores.js";
 
@@ -49,6 +51,7 @@ export interface PackageIdentity
 export interface PackageDocument extends TodlDocument
 {
   dependencies?: PackageRef[];
+  security?: IPackageSecurity;       // present only when the package has a security surface
 }
 
 /** A verbatim package resource (icon svg, wiki md, binary asset): a package-relative path + bytes. */
@@ -64,6 +67,7 @@ export interface CompiledPackage extends PackageIdentity
   fullDocument: TodlDocument;        // the full compiled closure — for presentation/annotation baking
   sources: readonly SourceFile[];    // raw .todl passthrough (persisted under src/)
   classes: readonly PublishedClass[]; // instantiable palette classes (own-only)
+  Security: IPackageSecurity;        // the compiled security surface (PackageSecurity.Empty when none)
   resources?: readonly PackageResource[]; // verbatim asset bytes, persisted under <base>/<path>
 }
 
@@ -133,12 +137,19 @@ export function compilePackage(
     document.dependencies = recorded;
   }
 
+  const security = PackageSecurityCompiler.Compile(model, ownIds, identity.id);
+  if (!PackageSecurityCompiler.IsEmpty(security))
+  {
+    document.security = security;
+  }
+
   const pkg: CompiledPackage = {
     ...identity,
     document,
     fullDocument,
     sources,
     classes: deriveClasses(document, fullDocument),
+    Security: PackageSecurityCompiler.IsEmpty(security) ? PackageSecurity.Empty : security,
   };
   if (resources !== undefined && resources.length > 0)
   {

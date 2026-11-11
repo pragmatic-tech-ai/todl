@@ -1,3 +1,4 @@
+import { PackageSecurity } from "../../../compiler-services/security/package-security.js";
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { FakeStorage, type IStorage } from "@pragmatic-tech-ai/todl-runtime";
@@ -44,7 +45,7 @@ function sink(storage: IStorage): PackageSink
 
 function packageOf(doc: PackageDocument, id: string, version: string): CompiledPackage
 {
-  return { id, version, document: doc, fullDocument: doc, sources: [{ uri: `${id}.todl`, text: "" }], classes: [] };
+  return { id, version, document: doc, fullDocument: doc, sources: [{ uri: `${id}.todl`, text: "" }], classes: [], Security: PackageSecurity.Empty };
 }
 
 // Publish `buildRepo()` as `<id>/<version>/model.json` into a fresh FakeStorage.

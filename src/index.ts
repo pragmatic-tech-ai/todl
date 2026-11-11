@@ -498,6 +498,7 @@ export { ConnectorPrefetch, type INodeReflector } from './model-data/connector-p
 export { ConnectorRuntimeGraphQuery } from './graph-api/connector-runtime-graph-query.js';
 
 export { SecurityAction, SecurityDepth, BaseRoleName, FieldProfileRight, SecurityTerms } from './compiler-services/security/security-terms.js';
+export { PackageSecurityCompiler } from './compiler-services/security/package-security-compiler.js';
 export {
     PackageSecurity, type IPackageSecurity, type IPackageRole, type ISecurityPrivilege, type ISecuredField,
     type IFieldProfile, type IFieldProfileEntry, type IEdgeConcept,
