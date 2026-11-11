@@ -141,7 +141,7 @@ class WriteHarness
     public static readonly Unmapped = 'unmapped';
     public static readonly Since = 'since';
     public static readonly DeleteFrom = 'DELETE FROM ';
-    public static readonly GuardedDelete ='DELETE FROM "customers" WHERE "cust_id" = $1 AND "rev" = $2';
+    public static readonly GuardedDelete = 'DELETE FROM "customers" WHERE "cust_id" = $1 AND "rev" = $2';
     public static readonly Uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
     public readonly Plan: IExternalConnectorPlan;
