@@ -1,7 +1,7 @@
 import { QueryFilterEvaluator } from "../query-filter-evaluator.js";
 import { QueryCompareOp, WriteConcurrency, WriteFailureKind, WriteOperationKind } from "../connector-plan.js";
 import type { DataSourceKind, ExternalFieldValue, ExternalRecord, IAssignedKey, QueryRequest, ResolvedConnection, WriteBatch, WriteFailure, WriteOperation, WriteResult } from "../connector-plan.js";
-import type { AdapterResolutionRequest, IDataSourceAdapter, IDataSourceAdapterFactory, IDataSourceAdapterProvider } from "../data-source-adapter.js";
+import type { AdapterResolutionRequest, IAdapterWriteCapabilities, IDataSourceAdapter, IDataSourceAdapterFactory, IDataSourceAdapterProvider } from "../data-source-adapter.js";
 
 export class InMemoryAdapter implements IDataSourceAdapter
 {
@@ -129,6 +129,8 @@ export class InMemoryAdapter implements IDataSourceAdapter
 export class InMemoryAdapterFactory implements IDataSourceAdapterFactory
 {
     public readonly Adapter = new InMemoryAdapter();
+    /** Mirrors the opened InMemoryAdapter: assigns source keys, no transactions or versioning. */
+    public readonly WriteCapabilities: IAdapterWriteCapabilities = Object.freeze({ CanAssignKeys: true });
 
     public constructor(public readonly Kind: DataSourceKind)
     {
@@ -145,6 +147,8 @@ export class CountingAdapterFactory implements IDataSourceAdapterFactory
     private static readonly FailureMessage = "simulated query failure";
 
     public QueryCount = 0;
+    /** Mirrors the opened adapter, which declares no write capability. */
+    public readonly WriteCapabilities: IAdapterWriteCapabilities = Object.freeze({});
 
     private failNext = false;
 

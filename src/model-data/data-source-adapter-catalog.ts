@@ -3,11 +3,13 @@ import type { IServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
 import type { ConnectorSpec, DataSourceKind, ResolvedConnection } from "./connector-plan.js";
 import {
     ConnectionResolverKey,
+    type IAdapterWriteCapabilities,
     type IConnectionResolver,
     type IDataSourceAdapter,
     type IDataSourceAdapterFactory,
     type IDataSourceAdapterProvider,
 } from "./data-source-adapter.js";
+import { WriteCapability } from "./write-capability.js";
 import { ReconnectingAdapter } from "./reconnecting-adapter.js";
 import { VersionBumpingAdapter } from "./version-bumping-adapter.js";
 import { ReconnectObserverKey } from "./connection-reconnect.js";
@@ -123,6 +125,20 @@ export class DataSourceAdapterCatalog
                 // prevent the remaining adapters from being disposed.
             }
         }));
+    }
+
+    /** The declared write capabilities of the factory `spec` resolves to, WITHOUT opening (or memoizing) an adapter.
+     *  All-false when the factory declares none. */
+    public async DeclaredWriteCapabilities(spec: ConnectorSpec): Promise<IAdapterWriteCapabilities>
+    {
+        const factory = await this.ResolveFactory(spec);
+        const declared = factory.WriteCapabilities;
+        return {
+            CanTransact: WriteCapability.CanTransact(declared ?? {}),
+            CanAssignKeys: WriteCapability.CanAssignKeys(declared ?? {}),
+            CanVersion: WriteCapability.CanVersion(declared ?? {}),
+            SourceManagesVersions: WriteCapability.SourceManagesVersions(declared ?? {}),
+        };
     }
 
     private async OpenCore(spec: ConnectorSpec, services: IServiceProvider): Promise<IDataSourceAdapter>

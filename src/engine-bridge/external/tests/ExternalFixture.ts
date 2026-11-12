@@ -18,7 +18,7 @@ import {
     type WriteResult,
     WriteFailureKind,
 } from '../../../model-data/connector-plan.js';
-import type { IDataSourceAdapter, IDataSourceAdapterFactory, IDataSourceContext, PageQuery, PageSlice } from '../../../model-data/data-source-adapter.js';
+import type { IAdapterWriteCapabilities, IDataSourceAdapter, IDataSourceAdapterFactory, IDataSourceContext, PageQuery, PageSlice } from '../../../model-data/data-source-adapter.js';
 import { InMemoryAdapter } from '../../../model-data/tests/fakes.js';
 import type { IExternalBinding, IExternalConnectorPlan } from '../ExternalBinding.js';
 import type { IPrincipalFacts } from '../../PrincipalFacts.js';
@@ -155,6 +155,12 @@ export class RecordingAdapterFactory implements IDataSourceAdapterFactory
 
     public constructor(public readonly Adapter: RecordingAdapter)
     {
+    }
+
+    /** Always agrees with the adapter's current flags, so tests that toggle them on the adapter stay consistent. */
+    public get WriteCapabilities(): IAdapterWriteCapabilities
+    {
+        return { CanTransact: this.Adapter.CanTransact, CanAssignKeys: this.Adapter.CanAssignKeys };
     }
 
     public async Open(_connection: ResolvedConnection): Promise<IDataSourceAdapter>

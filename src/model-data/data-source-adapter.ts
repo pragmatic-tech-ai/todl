@@ -60,10 +60,23 @@ export interface IDataSourceAdapter
     QueryPage?(request: QueryRequest, page: PageQuery, context?: IDataSourceContext): Promise<PageSlice>;
 }
 
+/** The write capabilities a factory can declare before any adapter is opened. Same names and "absent -> false"
+ *  semantics as the matching IDataSourceAdapter flags, so a descriptor and an adapter share one vocabulary. */
+export interface IAdapterWriteCapabilities
+{
+    readonly CanTransact?: boolean;
+    readonly CanAssignKeys?: boolean;
+    readonly CanVersion?: boolean;
+    readonly SourceManagesVersions?: boolean;
+}
+
 /** Opens adapters for one kind of data source. */
 export interface IDataSourceAdapterFactory
 {
     readonly Kind: DataSourceKind;
+    /** Declared write capability of the adapters this factory opens, readable WITHOUT opening a read. Optional;
+     *  absent (or an absent flag) -> false. The opened adapter instance remains the runtime authority. */
+    readonly WriteCapabilities?: IAdapterWriteCapabilities | undefined;
     Open(connection: ResolvedConnection): Promise<IDataSourceAdapter>;
 }
 

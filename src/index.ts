@@ -112,6 +112,7 @@ export {
   type IDataSourceAdapter,
   type IDataSourceContext,
   type IDataSourceAdapterFactory,
+  type IAdapterWriteCapabilities,
   type PageQuery,
   type PageSlice,
   type IDataSourceAdapterProvider,

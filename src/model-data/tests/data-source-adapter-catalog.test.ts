@@ -10,10 +10,12 @@ import {
     type WriteResult,
 } from "../connector-plan.js";
 import { DataSourceAdapterCatalog } from "../data-source-adapter-catalog.js";
+import { WriteCapability } from "../write-capability.js";
 import {
     ConnectionResolverKey,
     type IConnectionResolver,
     type IDataSourceAdapter,
+    type IAdapterWriteCapabilities,
     type IDataSourceAdapterFactory,
     type IDataSourceAdapterProvider,
 } from "../data-source-adapter.js";
@@ -365,4 +367,42 @@ test("a registered reconnect observer is passed through to the wrapper", async (
     await adapter.Query({ Source: "t", Fields: ["secret"] });
     assert.ok(observer.Events.length >= 1);
     assert.equal(observer.Events[0]?.Connector, "pg");
+});
+
+class DeclaringFactory implements IDataSourceAdapterFactory
+{
+    public OpenCount = 0;
+
+    public constructor(public readonly Kind: DataSourceKind, public readonly WriteCapabilities?: IAdapterWriteCapabilities)
+    {
+    }
+
+    public async Open(): Promise<IDataSourceAdapter>
+    {
+        this.OpenCount++;
+        return new InMemoryAdapter();
+    }
+}
+
+test("catalog reports a factory's declared write capability without opening an adapter", async () =>
+{
+    const factory = new DeclaringFactory(DataSourceKind.Sql, { CanTransact: true, CanAssignKeys: true });
+    const catalog = new DataSourceAdapterCatalog().Register(factory);
+    const caps = await catalog.DeclaredWriteCapabilities({ Name: "pg", Kind: DataSourceKind.Sql, Config: {}, Connection: "crm" });
+    assert.equal(WriteCapability.CanTransact(caps), true);
+    assert.equal(WriteCapability.CanAssignKeys(caps), true);
+    assert.equal(WriteCapability.CanVersion(caps), false);
+    assert.equal(factory.OpenCount, 0);
+});
+
+test("catalog defaults an undeclared or omitted write capability to false", async () =>
+{
+    const spec = { Name: "pg", Kind: DataSourceKind.Sql, Config: {}, Connection: "crm" };
+    const none = await new DataSourceAdapterCatalog().Register(new DeclaringFactory(DataSourceKind.Sql)).DeclaredWriteCapabilities(spec);
+    assert.equal(WriteCapability.CanTransact(none), false);
+    assert.equal(WriteCapability.SourceManagesVersions(none), false);
+    const partial = await new DataSourceAdapterCatalog().Register(new DeclaringFactory(DataSourceKind.Sql, { CanVersion: true })).DeclaredWriteCapabilities(spec);
+    assert.equal(partial.CanTransact, false);
+    assert.equal(partial.CanVersion, true);
+    assert.equal(WriteCapability.CanTransact({}), false);
 });
