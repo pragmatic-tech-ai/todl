@@ -54,6 +54,11 @@ export class VersionBumpingAdapter implements IDataSourceAdapter
         return this.inner.CanPage === true;
     }
 
+    public get CanAssignKeys(): boolean
+    {
+        return this.inner.CanAssignKeys === true;
+    }
+
     public Query(request: QueryRequest, context?: IDataSourceContext): Promise<readonly ExternalRecord[]>
     {
         return this.inner.Query(request, context);

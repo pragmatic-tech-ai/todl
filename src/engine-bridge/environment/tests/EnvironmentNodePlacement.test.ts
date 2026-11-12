@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { MemberKind, ValueType, type ISchemaDescription, type MemberInput } from '@pragmatic-tech-ai/graph';
-import { WriteAtomicity, WriteConcurrency } from '../../../model-data/connector-plan.js';
+import { KeyAssignment, WriteAtomicity, WriteConcurrency } from '../../../model-data/connector-plan.js';
 import { EngineBridgeError, EngineBridgeErrorCode } from '../../EngineBridgeError.js';
 import type { IExternalBinding } from '../../external/ExternalBinding.js';
 import { ExternalIdentity } from '../../external/ExternalIdentity.js';
@@ -126,6 +126,32 @@ describe('EnvironmentNodePlacement', () =>
             () => PlacementFixture.Placement([customers]).Place('crm.Unknown', new Map()),
             (e: unknown) => e instanceof EngineBridgeError && e.Code === EngineBridgeErrorCode.NoHomeModel,
         );
+    });
+
+    const sourceKeyed = { ...customers, Binding: { ...customers.Binding, KeyAssignment: KeyAssignment.Source } };
+
+    test('source-keyed create without id is key-assigned', () =>
+    {
+        const place = PlacementFixture.Placement([sourceKeyed]).Place('crm.Customer', new Map());
+        assert.equal(place.KeyAssigned, true);
+        assert.equal(place.PublicId, '');
+        assert.equal(place.Owner, 'crm-pkg');
+        assert.equal(place.Defaults, undefined);
+    });
+
+    test('source-keyed create with id mints as today', () =>
+    {
+        const place = PlacementFixture.Placement([sourceKeyed]).Place('crm.Customer', new Map([['id', 9n]]));
+        assert.equal(place.KeyAssigned, undefined);
+        assert.equal(place.PublicId, 'crm.Customer#crm.customers#9');
+        assert.equal(place.Owner, 'crm-pkg');
+    });
+
+    test('client-keyed create unchanged', () =>
+    {
+        const place = PlacementFixture.Placement([customers]).Place('crm.Customer', new Map());
+        assert.equal(place.KeyAssigned, undefined);
+        assert.ok(place.PublicId.endsWith('#u1'));
     });
 
     test('empty or non-scalar id value is rejected', () =>

@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { ValueType, type CellValue, type Cypher } from '@pragmatic-tech-ai/graph';
+import { KeyAssignment } from '../../model-data/connector-plan.js';
 import { EngineBridgeError, EngineBridgeErrorCode } from '../EngineBridgeError.js';
-import type { ExternalIdentity } from '../external/ExternalIdentity.js';
+import { ExternalIdentity } from '../external/ExternalIdentity.js';
 import { MessageFormat } from '../MessageFormat.js';
 import type { IPrincipalFacts } from '../PrincipalFacts.js';
 import { SystemNames } from '../system/SystemNames.js';
@@ -52,7 +53,13 @@ export class EnvironmentNodePlacement implements Cypher.INodePlacement
         const value = idMember === undefined ? undefined : properties.get(idMember);
         if (value !== undefined && value !== null)
         {
+            // An explicit key is the caller's choice: mint it as today, whoever assigns keys for the binding.
             return { PublicId: this.identity.Mint(binding, EnvironmentNodePlacement.IdText(concept, value)), Owner: binding.Model };
+        }
+        if (ExternalIdentity.KeyAssignmentOf(binding) === KeyAssignment.Source)
+        {
+            // The source assigns the key (ruling R139 E9): CREATE goes through CreateAssigned, so no id is minted here.
+            return { PublicId: EnvironmentNodePlacement.EmptyText, Owner: binding.Model, KeyAssigned: true };
         }
         const key = this.ids();
         const publicId = this.identity.Mint(binding, key);

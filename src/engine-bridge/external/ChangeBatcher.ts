@@ -79,8 +79,10 @@ class PendingWrite
 }
 
 /**
- * Translates the change set an engine transaction hands a DataSourceConnector into source write batches (ruling T9).
- * It only translates and validates; it has no remote effect. The ops on one public id merge in order into one
+ * Translates the change set an engine transaction hands a DataSourceConnector into source write batches (rulings T9,
+ * R139 E9). It only translates and validates; it has no remote effect. Each write step stands alone: DataSourceTransaction
+ * calls Batches once per Apply with that step's change set, with no cross-Apply re-merge, so ops on one public id merge
+ * within the step only. The ops on one public id merge in order into one
  * WriteOperation: CreateNode, SetProperty and Link merge into an Upsert (a create also writes its key into IdKey, and a
  * create after a Delete of the id nulls every mapped field it does not set); a DeleteNode makes it a Delete, and a
  * CreateNode then DeleteNode in one set cancels out; an Unlink of a mapped foreign key sets it to null, unless the set

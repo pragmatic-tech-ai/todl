@@ -56,6 +56,11 @@ export class ReconnectingAdapter implements IDataSourceAdapter
         return this.inner.CanPage ?? false;
     }
 
+    public get CanAssignKeys(): boolean
+    {
+        return this.inner.CanAssignKeys ?? false;
+    }
+
     public Query(request: QueryRequest, context?: IDataSourceContext): Promise<readonly ExternalRecord[]>
     {
         return this.Run((adapter) => adapter.Query(request, context));

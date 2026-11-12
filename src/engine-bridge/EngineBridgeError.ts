@@ -38,6 +38,11 @@ export enum EngineBridgeErrorCode
     NotOwned,
     /** An assignment targets a record that is missing or hidden from the caller. */
     InvisibleRecord,
+    /**
+     * A source-keyed insert reported no key for a request's Ref (ruling R139 E9). The plan places this "after NoHomeModel",
+     * but the enum has grown since and is strictly append-only (never renumber), so it is appended at the end.
+     */
+    KeyNotAssigned,
 }
 
 /** Failure raised by the TODL-on-engine bridge; Code identifies the category. */

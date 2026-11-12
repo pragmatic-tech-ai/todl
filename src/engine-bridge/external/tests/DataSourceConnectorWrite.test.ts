@@ -13,6 +13,7 @@ import {
     type CellValue,
     type ConnectorChange,
     type GraphEngine,
+    type IAssignedCreate,
     type IConnectorTransaction,
     type RowVersion,
 } from '@pragmatic-tech-ai/graph';
@@ -24,9 +25,15 @@ import {
     WriteOperationKind,
     type ConnectorBinding,
     type ExternalRecord,
+    type IAssignedKey,
+    type QueryRequest,
+    type WriteBatch,
+    type WriteResult,
 } from '../../../model-data/connector-plan.js';
+import type { IDataSourceAdapter } from '../../../model-data/data-source-adapter.js';
 import { DataSourceAdapterCatalog } from '../../../model-data/data-source-adapter-catalog.js';
 import { SqlAdapter } from '../../../model-data/sql-adapter.js';
+import { InMemoryAdapter } from '../../../model-data/tests/fakes.js';
 import { RecordingSqlSession } from '../../../model-data/tests/sql-fakes.js';
 import { VersionBumpingAdapter } from '../../../model-data/version-bumping-adapter.js';
 import { EngineBridgeError, EngineBridgeErrorCode } from '../../EngineBridgeError.js';
@@ -386,8 +393,9 @@ describe('DataSourceConnector write side', () =>
         const h = WriteHarness.Over(WriteHarness.Existing());
         const before = await h.Rows();
         const x = h.Id(WriteHarness.S7);
-        const txn = await h.Applied(WriteHarness.Create(x), WriteHarness.Set(x, Fx.Name, WriteHarness.NewName));
-        const error = await WriteHarness.Rejects(txn.Commit(), EngineBridgeErrorCode.ExternalWriteFailed);
+        const txn = await h.Connector.Begin(ConnectorContext.Anonymous);
+        // Immediate: the create-conflict is caught at Apply, before any adapter write.
+        const error = await WriteHarness.Rejects(txn.Apply(WriteHarness.Changes(WriteHarness.Create(x), WriteHarness.Set(x, Fx.Name, WriteHarness.NewName))), EngineBridgeErrorCode.ExternalWriteFailed);
         assert.ok(error instanceof ExternalWriteError);
         assert.deepEqual(error.Failures.map(f => [f.Key, f.Kind]), [[7, WriteFailureKind.Conflict]]);
         assert.equal(h.Adapter.Batches.length, 0);
@@ -448,13 +456,38 @@ describe('DataSourceConnector write side', () =>
         assert.equal(h.Adapter.Batches.length, 1);
     });
 
+    test('apply executes the step', async () =>
+    {
+        // Apply runs adapter.Apply now and reports the reported versions, keyed by public id.
+        const h = WriteHarness.Optimistic();
+        const txn = await h.Connector.Begin(ConnectorContext.Anonymous);
+        const result = await txn.Apply(WriteHarness.Changes(WriteHarness.Read(WriteHarness.Set(h.Id(WriteHarness.S7), Fx.Name, WriteHarness.NewName), 3)));
+        assert.equal(h.Adapter.Batches.length, 1);
+        // VersionBumpingAdapter bumped rev 3 -> 4 and reported it, mapped back to the public id.
+        assert.equal((result as { Versions?: ReadonlyMap<string, RowVersion> }).Versions?.get(h.Id(WriteHarness.S7)), 4);
+    });
+
+    test('undo compensates only the latest step', async () =>
+    {
+        const h = WriteHarness.Over(WriteHarness.Existing());
+        const txn = await h.Connector.Begin(ConnectorContext.Anonymous);
+        await txn.Apply(WriteHarness.Changes(WriteHarness.Set(h.Id(WriteHarness.S7), Fx.Name, WriteHarness.NewName)));  // step 1
+        await txn.Apply(WriteHarness.Changes(WriteHarness.Set(h.Id(WriteHarness.S8), Fx.Name, WriteHarness.NewName)));  // step 2
+        const applyCalls = h.Adapter.Batches.length;
+        await txn.Undo!();  // undoes step 2 only
+        const rows = await h.Rows();
+        assert.equal(rows.find(r => r[Fx.IdKey] === 8)![Fx.NameField], WriteHarness.Beta);
+        assert.equal(rows.find(r => r[Fx.IdKey] === 7)![Fx.NameField], WriteHarness.NewName);
+        assert.equal(h.Adapter.Batches.length, applyCalls + 1);  // one compensation batch
+    });
+
     test('per-op failure throws ExternalWriteError', async () =>
     {
         const h = WriteHarness.Over(WriteHarness.Existing());
         h.Adapter.FailAfter = 0;
         h.Adapter.FailKind = WriteFailureKind.Conflict;
-        const txn = await h.Applied(WriteHarness.Set(h.Id(WriteHarness.S7), Fx.Name, WriteHarness.NewName));
-        const error = await WriteHarness.Rejects(txn.Commit(), EngineBridgeErrorCode.ExternalWriteFailed);
+        const txn = await h.Connector.Begin(ConnectorContext.Anonymous);
+        const error = await WriteHarness.Rejects(txn.Apply(WriteHarness.Changes(WriteHarness.Set(h.Id(WriteHarness.S7), Fx.Name, WriteHarness.NewName))), EngineBridgeErrorCode.ExternalWriteFailed);
         assert.ok(error instanceof ExternalWriteError);
         assert.equal(error.Binding, h.Plan.Bindings[0]);
         assert.equal(error.Failures[0]!.Key, 7);
@@ -466,9 +499,9 @@ describe('DataSourceConnector write side', () =>
         const h = WriteHarness.Over(WriteHarness.Existing());
         const before = await h.Rows();
         h.Adapter.FailAfter = 2;
-        // One new key (9) and two existing ones (7, 8); the source applies 9 and 7, then fails 8.
-        const txn = await h.Applied(...h.NewAndTwoExisting());
-        await WriteHarness.Rejects(txn.Commit(), EngineBridgeErrorCode.ExternalWriteFailed);
+        // One new key (9) and two existing ones (7, 8); the source applies 9 and 7, then fails 8, at Apply.
+        const txn = await h.Connector.Begin(ConnectorContext.Anonymous);
+        await WriteHarness.Rejects(txn.Apply(WriteHarness.Changes(...h.NewAndTwoExisting())), EngineBridgeErrorCode.ExternalWriteFailed);
         assert.equal((await h.Rows()).length, 3);
         await txn.Revert();
         assert.deepEqual(await h.Rows(), before);
@@ -482,8 +515,8 @@ describe('DataSourceConnector write side', () =>
         const h = WriteHarness.Over(WriteHarness.Existing());
         const before = await h.Rows();
         h.Adapter.ThrowAtCall = 2;
-        const txn = await h.Applied(WriteHarness.Create(h.Id(WriteHarness.S9)), WriteHarness.Set(h.Id(WriteHarness.S7), Fx.Name, WriteHarness.NewName));
-        await assert.rejects(txn.Commit());
+        const txn = await h.Connector.Begin(ConnectorContext.Anonymous);
+        await assert.rejects(txn.Apply(WriteHarness.Changes(WriteHarness.Create(h.Id(WriteHarness.S9)), WriteHarness.Set(h.Id(WriteHarness.S7), Fx.Name, WriteHarness.NewName))));
         await txn.Revert();
         assert.deepEqual(await h.Rows(), before);
     });
@@ -493,9 +526,9 @@ describe('DataSourceConnector write side', () =>
         const h = WriteHarness.Over(WriteHarness.Existing());
         const before = await h.Rows();
         h.Adapter.ThrowAfter = 2;
-        // 9 is created and 7 renamed, then the driver dies before 8.
-        const txn = await h.Applied(...h.NewAndTwoExisting());
-        await assert.rejects(txn.Commit());
+        // 9 is created and 7 renamed, then the driver dies before 8, at Apply.
+        const txn = await h.Connector.Begin(ConnectorContext.Anonymous);
+        await assert.rejects(txn.Apply(WriteHarness.Changes(...h.NewAndTwoExisting())));
         const midway = await h.Rows();
         assert.deepEqual(midway.map(r => [r[Fx.IdKey], r[Fx.NameField]]), [[7, WriteHarness.NewName], [8, WriteHarness.Beta], [9, WriteHarness.NewName]]);
         await txn.Revert();
@@ -505,38 +538,45 @@ describe('DataSourceConnector write side', () =>
         assert.deepEqual(compensation.map(o => [o.Kind, o.Key]), [[WriteOperationKind.Upsert, 8], [WriteOperationKind.Upsert, 7], [WriteOperationKind.Delete, 9]]);
     });
 
-    test('a failed transactional batch applied nothing, so nothing is compensated', async () =>
+    test('transactional binding is atomic per step', async () =>
     {
+        // A Transactional binding's failed step applied nothing (atomic), so its compensation issues no adapter call.
         const h = WriteHarness.Over(WriteHarness.Existing(), { Atomicity: WriteAtomicity.Transactional });
         h.Adapter.CanTransact = true;
         h.Adapter.FailAfter = 0;
-        const txn = await h.Applied(WriteHarness.Set(h.Id(WriteHarness.S7), Fx.Name, WriteHarness.NewName));
-        await WriteHarness.Rejects(txn.Commit(), EngineBridgeErrorCode.ExternalWriteFailed);
+        const txn = await h.Connector.Begin(ConnectorContext.Anonymous);
+        await WriteHarness.Rejects(txn.Apply(WriteHarness.Changes(WriteHarness.Set(h.Id(WriteHarness.S7), Fx.Name, WriteHarness.NewName))), EngineBridgeErrorCode.ExternalWriteFailed);
         const calls = h.Adapter.Calls;
         await txn.Revert();
         assert.equal(h.Adapter.Calls, calls);
     });
 
-    test('revert after commit compensates', async () =>
+    test('revert undoes every remaining step in reverse', async () =>
     {
         const h = WriteHarness.Over(WriteHarness.Existing());
         const before = await h.Rows();
-        const txn = await h.Applied(
-            WriteHarness.Create(h.Id(WriteHarness.S9)), WriteHarness.Set(h.Id(WriteHarness.S9), Fx.Name, WriteHarness.NewName),
-            WriteHarness.Set(h.Id(WriteHarness.S7), Fx.Name, WriteHarness.NewName), WriteHarness.Delete(h.Id(WriteHarness.S8)));
-        await txn.Commit();
-        assert.deepEqual((await h.Rows()).map(r => r[Fx.IdKey]), [7, 9]);
+        const txn = await h.Connector.Begin(ConnectorContext.Anonymous);
+        // Step 1 creates 9; step 2 renames 7.
+        await txn.Apply(WriteHarness.Changes(WriteHarness.Create(h.Id(WriteHarness.S9)), WriteHarness.Set(h.Id(WriteHarness.S9), Fx.Name, WriteHarness.NewName)));
+        await txn.Apply(WriteHarness.Changes(WriteHarness.Set(h.Id(WriteHarness.S7), Fx.Name, WriteHarness.NewName)));
+        assert.deepEqual((await h.Rows()).map(r => r[Fx.IdKey]), [7, 8, 9]);
         await txn.Revert();
         assert.deepEqual(await h.Rows(), before);
+        // Reverse: step 2's rename of 7 restored, then step 1's create of 9 deleted.
+        const compensation = h.Adapter.Batches.slice(2).flatMap(b => b.Operations);
+        assert.deepEqual(compensation.map(o => [o.Kind, o.Key]), [[WriteOperationKind.Upsert, 7], [WriteOperationKind.Delete, 9]]);
     });
 
-    test('revert before commit touches nothing', async () =>
+    test('commit only finalizes', async () =>
     {
         const h = WriteHarness.Over(WriteHarness.Existing());
         const txn = await h.Applied(WriteHarness.Set(h.Id(WriteHarness.S7), Fx.Name, WriteHarness.NewName));
-        await txn.Revert();
-        assert.equal(h.Adapter.Calls, 0);
-        await WriteHarness.Rejects(txn.Commit(), EngineBridgeErrorCode.TransactionClosed);
+        const calls = h.Adapter.Calls;
+        await txn.Commit();
+        // Finalize only: Commit makes no further adapter call; the write already happened at Apply.
+        assert.equal(h.Adapter.Calls, calls);
+        assert.equal((await h.Rows()).find(r => r[Fx.IdKey] === 7)![Fx.NameField], WriteHarness.NewName);
+        await WriteHarness.Rejects(txn.Apply(WriteHarness.Changes(WriteHarness.Set(h.Id(WriteHarness.S7), Fx.Name, Fx.Acme))), EngineBridgeErrorCode.TransactionClosed);
     });
 
     test('optimistic binding guards with the before-image version', async () =>
@@ -570,7 +610,6 @@ describe('DataSourceConnector write side', () =>
     {
         const h = WriteHarness.Optimistic();
         const txn = await h.Applied(WriteHarness.Set(h.Id(WriteHarness.S7), Fx.Name, WriteHarness.NewName));
-        await txn.Commit();
         await txn.Revert();
         const compensation = h.Adapter.Batches[1]!;
         assert.equal(compensation.Concurrency, WriteConcurrency.Optimistic);
@@ -579,8 +618,7 @@ describe('DataSourceConnector write side', () =>
 
         const raced = WriteHarness.Optimistic();
         const second = await raced.Applied(WriteHarness.Set(raced.Id(WriteHarness.S7), Fx.Name, WriteHarness.NewName));
-        await second.Commit();
-        // Another writer changes the row after the commit (its version moves on to 9).
+        // Another writer changes the row after the write (its version moves on to 9).
         await raced.Adapter.Inner.Apply({
             Source: Fx.Source, IdKey: Fx.IdKey, Concurrency: WriteConcurrency.LastWriteWins, Atomicity: WriteAtomicity.Sequential,
             Operations: [{ Kind: WriteOperationKind.Upsert, Key: 7, Fields: { ...Fx.Record(7, WriteHarness.Other, null), [Fx.RevField]: 9 } }],
@@ -608,8 +646,8 @@ describe('DataSourceConnector write side', () =>
         const h = WriteHarness.Optimistic();
         // The transaction read version 3; another writer moved the row on to 4 before the write.
         await h.Bump(4);
-        const txn = await h.Applied(WriteHarness.Read(WriteHarness.Set(h.Id(WriteHarness.S7), Fx.Name, WriteHarness.NewName), 3));
-        await assert.rejects(txn.Commit(), (e: unknown) => e instanceof ExternalVersionConflict && e instanceof ConflictError
+        const txn = await h.Connector.Begin(ConnectorContext.Anonymous);
+        await assert.rejects(txn.Apply(WriteHarness.Changes(WriteHarness.Read(WriteHarness.Set(h.Id(WriteHarness.S7), Fx.Name, WriteHarness.NewName), 3))), (e: unknown) => e instanceof ExternalVersionConflict && e instanceof ConflictError
             && e.Binding === h.Plan.Bindings[0] && e.Failures[0]!.Kind === WriteFailureKind.Conflict);
         assert.equal(h.Adapter.Batches.length, 0);
         assert.equal((await h.Rows())[0]![Fx.NameField], Fx.Acme);
@@ -620,8 +658,8 @@ describe('DataSourceConnector write side', () =>
         const h = WriteHarness.Optimistic();
         h.Adapter.FailAfter = 0;
         h.Adapter.FailKind = WriteFailureKind.Conflict;
-        const txn = await h.Applied(WriteHarness.Read(WriteHarness.Set(h.Id(WriteHarness.S7), Fx.Name, WriteHarness.NewName), 3));
-        await assert.rejects(txn.Commit(), (e: unknown) => e instanceof ExternalVersionConflict);
+        const txn = await h.Connector.Begin(ConnectorContext.Anonymous);
+        await assert.rejects(txn.Apply(WriteHarness.Changes(WriteHarness.Read(WriteHarness.Set(h.Id(WriteHarness.S7), Fx.Name, WriteHarness.NewName), 3))), (e: unknown) => e instanceof ExternalVersionConflict);
         assert.equal(h.Adapter.Batches.length, 1);
     });
 
@@ -654,17 +692,17 @@ describe('DataSourceConnector write side', () =>
     {
         // Pre-check: the transaction read version 2, the before-image holds 3; nothing is sent and the row remains.
         const stale = WriteHarness.Optimistic();
-        const txn = await stale.Applied(WriteHarness.Read(WriteHarness.Delete(stale.Id(WriteHarness.S7)), 2));
-        await assert.rejects(txn.Commit(), (e: unknown) => e instanceof ExternalVersionConflict);
+        const staleTxn = await stale.Connector.Begin(ConnectorContext.Anonymous);
+        await assert.rejects(staleTxn.Apply(WriteHarness.Changes(WriteHarness.Read(WriteHarness.Delete(stale.Id(WriteHarness.S7)), 2))), (e: unknown) => e instanceof ExternalVersionConflict);
         assert.equal(stale.Adapter.Batches.length, 0);
         assert.equal((await stale.Rows()).length, 1);
         // A row read at a version and gone by the write is a conflict too.
-        const gone = await stale.Applied(WriteHarness.Read(WriteHarness.Delete(stale.Id(WriteHarness.S9)), 2));
-        await assert.rejects(gone.Commit(), (e: unknown) => e instanceof ExternalVersionConflict);
+        const goneTxn = await stale.Connector.Begin(ConnectorContext.Anonymous);
+        await assert.rejects(goneTxn.Apply(WriteHarness.Changes(WriteHarness.Read(WriteHarness.Delete(stale.Id(WriteHarness.S9)), 2))), (e: unknown) => e instanceof ExternalVersionConflict);
         // SQL: the pre-check passed (before-image at 3), but the row changed before the guarded DELETE matched it.
         const sql = SqlHarness.Over(0);
-        const sqlTxn = await sql.Applied(WriteHarness.Read(WriteHarness.Delete(sql.Id(WriteHarness.S7)), 3));
-        await assert.rejects(sqlTxn.Commit(), (e: unknown) => e instanceof ExternalVersionConflict);
+        const sqlTxn = await sql.Connector.Begin(ConnectorContext.Anonymous);
+        await assert.rejects(sqlTxn.Apply(WriteHarness.Changes(WriteHarness.Read(WriteHarness.Delete(sql.Id(WriteHarness.S7)), 3))), (e: unknown) => e instanceof ExternalVersionConflict);
         const deleted = sql.Session.calls[sql.Session.calls.length - 1]!;
         assert.equal(deleted.sql, WriteHarness.GuardedDelete);
         assert.deepEqual(deleted.params, [7, 3]);
@@ -683,8 +721,8 @@ describe('DataSourceConnector write side', () =>
     {
         const h = WriteHarness.Over(WriteHarness.Existing());
         h.Adapter.FailAfter = 2;
-        const txn = await h.AppliedAs(ConnectorContext.For(WriteHarness.Alice), ...h.NewAndTwoExisting());
-        await WriteHarness.Rejects(txn.Commit(), EngineBridgeErrorCode.ExternalWriteFailed);
+        const txn = await h.Connector.Begin(ConnectorContext.For(WriteHarness.Alice));
+        await WriteHarness.Rejects(txn.Apply(WriteHarness.Changes(...h.NewAndTwoExisting())), EngineBridgeErrorCode.ExternalWriteFailed);
         await txn.Revert();
         // The failing batch, then its compensation: both on the transaction's context.
         assert.equal(h.Adapter.BatchContexts.length, 2);
@@ -709,9 +747,9 @@ describe('DataSourceConnector write side', () =>
     test('failed compensation throws CompensationFailed', async () =>
     {
         const h = WriteHarness.Over(WriteHarness.Existing());
+        // Apply executes now: call 1 before-image read, call 2 apply.
         const txn = await h.Applied(WriteHarness.Set(h.Id(WriteHarness.S7), Fx.Name, WriteHarness.NewName));
-        await txn.Commit();
-        // Calls: 1 before-image read, 2 apply, 3 the compensating apply.
+        // Call 3 is the compensating apply.
         h.Adapter.ThrowAtCall = 3;
         const error = await WriteHarness.Rejects(txn.Revert(), EngineBridgeErrorCode.CompensationFailed);
         assert.ok(error instanceof ExternalWriteError);
@@ -753,5 +791,169 @@ describe('DataSourceConnector write side', () =>
         {
             await keyless.dispose();
         }
+    });
+});
+
+/**
+ * A source-key-assigning adapter fake (ruling R139 E9): Apply records insert batches and reports a scripted Assigned
+ * (default serials 1.. in op order), and Query answers the re-read from `Rows`, keyed by IdKey text.
+ */
+class AssigningAdapter implements IDataSourceAdapter
+{
+    public readonly Batches: WriteBatch[] = [];
+    public readonly Queries: QueryRequest[] = [];
+    public CanAssignKeys = true;
+    public CanTransact = false;
+    /** The Assigned the next insert Apply reports, by Ref; undefined -> serials 1.. in op order. */
+    public Script: IAssignedKey[] | undefined;
+    public readonly Rows = new Map<string, ExternalRecord>();
+
+    public async Query(request: QueryRequest): Promise<readonly ExternalRecord[]>
+    {
+        this.Queries.push(request);
+        const values = request.Where?.All[0]?.Values ?? [];
+        return values.map(v => this.Rows.get(String(v))).filter((r): r is ExternalRecord => r !== undefined);
+    }
+
+    public async Apply(batch: WriteBatch): Promise<WriteResult>
+    {
+        this.Batches.push(batch);
+        if (batch.Operations[0]?.Kind === WriteOperationKind.Insert)
+        {
+            const assigned = this.Script ?? batch.Operations.map((op, i) => ({ Ref: op.Ref!, Key: i + 1 }));
+            return { Applied: assigned.length, Failures: [], Assigned: assigned };
+        }
+        return { Applied: batch.Operations.length, Failures: [] };
+    }
+
+    public async Dispose(): Promise<void>
+    {
+    }
+
+    /** Every Delete op issued across all Apply calls (the compensation), by key. */
+    public DeletedKeys(): unknown[]
+    {
+        return this.Batches.flatMap(b => b.Operations).filter(o => o.Kind === WriteOperationKind.Delete).map(o => o.Key);
+    }
+}
+
+/** A connector over a source-keyed binding and `adapter`, with request builders for source-keyed creates. */
+class CreateHarness
+{
+    public readonly Plan: IExternalConnectorPlan;
+    public readonly Identity: ExternalIdentity;
+    public readonly Connector: DataSourceConnector;
+
+    public constructor(public readonly Adapter: IDataSourceAdapter, binding: IExternalBinding)
+    {
+        this.Plan = Fx.Plan(binding);
+        this.Identity = Fx.Identity(this.Plan);
+        this.Connector = new DataSourceConnector(this.Plan, Adapter, this.Identity);
+    }
+
+    public Id(storageId: string): string
+    {
+        return this.Identity.Mint(this.Plan.Bindings[0]!, storageId);
+    }
+
+    public static Request(properties: Record<string, CellValue>): IAssignedCreate
+    {
+        return { Owner: Fx.Model, Concept: Fx.Customer, Properties: new Map(Object.entries(properties)), Links: [] };
+    }
+}
+
+describe('DataSourceConnector source-keyed creates', () =>
+{
+    test('create inserts and returns the re-read row', async () =>
+    {
+        const h = new CreateHarness(new InMemoryAdapter(), Fx.OptimisticSourceKeyed());
+        const txn = await h.Connector.Begin(ConnectorContext.Anonymous);
+        const outcomes = await txn.Create!([CreateHarness.Request({ [Fx.Name]: WriteHarness.NewName })]);
+        assert.equal(outcomes.length, 1);
+        const row = outcomes[0]!.Row!;
+        assert.equal(row.PublicId, h.Id('1'));
+        assert.equal(row.Values.get(Fx.Id), 1n);
+        assert.equal(row.Values.get(Fx.Name), WriteHarness.NewName);
+        assert.equal(row.Version, 1);
+    });
+
+    test('insert without a returned key fails with KeyNotAssigned and deletes nothing', async () =>
+    {
+        const adapter = new AssigningAdapter();
+        adapter.Script = [];
+        const h = new CreateHarness(adapter, Fx.SourceKeyed());
+        const txn = await h.Connector.Begin(ConnectorContext.Anonymous);
+        const outcomes = await txn.Create!([CreateHarness.Request({ [Fx.Name]: WriteHarness.NewName })]);
+        assert.equal(outcomes.length, 1);
+        assert.ok(outcomes[0]!.Error instanceof ExternalWriteError);
+        assert.equal((outcomes[0]!.Error as ExternalWriteError).Code, EngineBridgeErrorCode.KeyNotAssigned);
+        await txn.Undo!();
+        assert.deepEqual(adapter.DeletedKeys(), []);
+    });
+
+    test('source binding over an adapter without CanAssignKeys is unsupported', async () =>
+    {
+        const adapter = new AssigningAdapter();
+        adapter.CanAssignKeys = false;
+        const h = new CreateHarness(adapter, Fx.SourceKeyed());
+        const txn = await h.Connector.Begin(ConnectorContext.Anonymous);
+        await WriteHarness.Rejects(txn.Create!([CreateHarness.Request({ [Fx.Name]: WriteHarness.NewName })]), EngineBridgeErrorCode.UnsupportedExternalChange);
+    });
+
+    test('create undo deletes the assigned key', async () =>
+    {
+        const adapter = new AssigningAdapter();
+        adapter.Script = [{ Ref: '0', Key: 1 }];
+        adapter.Rows.set('1', { [Fx.IdKey]: 1, [Fx.NameField]: WriteHarness.NewName });
+        const h = new CreateHarness(adapter, Fx.SourceKeyed());
+        const txn = await h.Connector.Begin(ConnectorContext.Anonymous);
+        const outcomes = await txn.Create!([CreateHarness.Request({ [Fx.Name]: WriteHarness.NewName })]);
+        assert.ok(outcomes[0]!.Row);
+        await txn.Undo!();
+        assert.deepEqual(adapter.DeletedKeys(), [1]);
+    });
+
+    test('create maps outcomes by Ref', async () =>
+    {
+        const adapter = new AssigningAdapter();
+        // The source returns the assigned keys in reverse Ref order; outcomes stay index-aligned with the requests.
+        adapter.Script = [{ Ref: '2', Key: 3 }, { Ref: '1', Key: 2 }, { Ref: '0', Key: 1 }];
+        adapter.Rows.set('1', { [Fx.IdKey]: 1 });
+        adapter.Rows.set('2', { [Fx.IdKey]: 2 });
+        adapter.Rows.set('3', { [Fx.IdKey]: 3 });
+        const h = new CreateHarness(adapter, Fx.SourceKeyed());
+        const txn = await h.Connector.Begin(ConnectorContext.Anonymous);
+        const outcomes = await txn.Create!([
+            CreateHarness.Request({ [Fx.Name]: 'a' }), CreateHarness.Request({ [Fx.Name]: 'b' }), CreateHarness.Request({ [Fx.Name]: 'c' })]);
+        assert.deepEqual(outcomes.map(o => o.Row!.PublicId), [h.Id('1'), h.Id('2'), h.Id('3')]);
+    });
+
+    test('partial insert batch logs only applied refs', async () =>
+    {
+        const adapter = new AssigningAdapter();
+        // Sequential: ref 1 of 3 is not assigned (failed); refs 0 and 2 are.
+        adapter.Script = [{ Ref: '0', Key: 1 }, { Ref: '2', Key: 3 }];
+        adapter.Rows.set('1', { [Fx.IdKey]: 1 });
+        adapter.Rows.set('3', { [Fx.IdKey]: 3 });
+        const h = new CreateHarness(adapter, Fx.SourceKeyed());
+        const txn = await h.Connector.Begin(ConnectorContext.Anonymous);
+        const outcomes = await txn.Create!([
+            CreateHarness.Request({ [Fx.Name]: 'a' }), CreateHarness.Request({ [Fx.Name]: 'b' }), CreateHarness.Request({ [Fx.Name]: 'c' })]);
+        assert.deepEqual(outcomes.map(o => o.Row !== undefined), [true, false, true]);
+        assert.ok(outcomes[1]!.Error instanceof ExternalWriteError);
+        await txn.Undo!();
+        assert.deepEqual([...adapter.DeletedKeys()].sort(), [1, 3]);
+
+        // Transactional over a transacting adapter: nothing assigned, so all three are Error and Undo issues nothing.
+        const atomic = new AssigningAdapter();
+        atomic.CanTransact = true;
+        atomic.Script = [];
+        const th = new CreateHarness(atomic, Fx.SourceKeyed({ Atomicity: WriteAtomicity.Transactional }));
+        const ttxn = await th.Connector.Begin(ConnectorContext.Anonymous);
+        const touts = await ttxn.Create!([
+            CreateHarness.Request({ [Fx.Name]: 'a' }), CreateHarness.Request({ [Fx.Name]: 'b' }), CreateHarness.Request({ [Fx.Name]: 'c' })]);
+        assert.deepEqual(touts.map(o => o.Error !== undefined), [true, true, true]);
+        await ttxn.Undo!();
+        assert.deepEqual(atomic.DeletedKeys(), []);
     });
 });

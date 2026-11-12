@@ -1,6 +1,7 @@
 import { MemberKind, ValueType, type IDefinitionDescription, type ISchemaDescription, type MemberInput } from '@pragmatic-tech-ai/graph';
 import {
     DataSourceKind,
+    KeyAssignment,
     WriteAtomicity,
     WriteConcurrency,
     type ConnectorBinding,
@@ -46,6 +47,7 @@ export class RecordingAdapter implements IDataSourceAdapter
     public readonly BatchContexts: (IDataSourceContext | undefined)[] = [];
     public CanPage = false;
     public CanTransact = false;
+    public CanAssignKeys = false;
     public IgnoreWhere = false;
     public ThrowAtCall: number | undefined;
     public FailAfter: number | undefined;
@@ -243,6 +245,19 @@ export class ExternalFixture
             VersionField: ExternalFixture.RevField,
             FieldMap: { ...base.FieldMap, [ExternalFixture.Revision]: ExternalFixture.RevField },
         });
+    }
+
+    /** The customers binding as source-keyed (`keys source`), last-write-wins, with `overrides` applied. */
+    public static SourceKeyed(overrides: Partial<ConnectorBinding> = {}): IExternalBinding
+    {
+        return ExternalFixture.BindingWith({ KeyAssignment: KeyAssignment.Source, ...overrides });
+    }
+
+    /** The customers binding as source-keyed AND Optimistic (version column `rev`, member `revision`). */
+    public static OptimisticSourceKeyed(): IExternalBinding
+    {
+        const base = ExternalFixture.OptimisticBinding().Binding;
+        return ExternalFixture.BindingWith({ ...base, KeyAssignment: KeyAssignment.Source });
     }
 
     public static Spec(): ConnectorSpec

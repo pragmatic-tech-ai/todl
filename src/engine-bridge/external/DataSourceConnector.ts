@@ -18,7 +18,7 @@ import type { IDataSourceAdapter } from '../../model-data/data-source-adapter.js
 import { EngineBridgeError, EngineBridgeErrorCode } from '../EngineBridgeError.js';
 import type { IExternalBinding, IExternalConnectorPlan } from './ExternalBinding.js';
 import { ExternalIdentity } from './ExternalIdentity.js';
-import { DataSourceTransaction } from './DataSourceTransaction.js';
+import { DataSourceTransaction, type IExternalRowBuilder } from './DataSourceTransaction.js';
 import { ExternalValues } from './ExternalValues.js';
 import { FetchTranslator, MappedMembers, type IMappedProperty } from './FetchTranslator.js';
 import { ResumeToken } from './ResumeToken.js';
@@ -96,8 +96,10 @@ class ImmutableSet<T> extends Set<T>
  * Superseded design note: spec §11.2 (engine 0.4.0 plan) replaces this write model with immediate external writes that
  * take source-assigned keys; the deferred-to-commit behavior above is M2.2's (see DataSourceTransaction).
  */
-export class DataSourceConnector implements IExternalConnector
+export class DataSourceConnector implements IExternalConnector, IExternalRowBuilder
 {
+    private static readonly ErrNoShape = 'No binding shape is known for this model and concept: ';
+
     private static readonly DefaultLimit = 500;
     private static readonly MaxIdBytes = 400;
     private static readonly MemberSeparator = '.';
@@ -167,7 +169,23 @@ export class DataSourceConnector implements IExternalConnector
      */
     public Begin(context: ConnectorContext): Promise<IConnectorTransaction>
     {
-        return Promise.resolve(new DataSourceTransaction(this.Name, this.adapter, this.identity, context));
+        return Promise.resolve(new DataSourceTransaction(this.Name, this.adapter, this.identity, this, context));
+    }
+
+    /**
+     * The fetched row of a source record under `binding` (ruling R139 E9): the fetch side's row builder, over every
+     * mapped member, so a source-keyed Create can re-read and return what it inserted. The record must carry IdKey, the
+     * mapped fields and the version field.
+     */
+    public BuildRow(binding: IExternalBinding, record: ExternalRecord): IFetchedRow
+    {
+        const shape = this.shapes.get(DataSourceConnector.ShapeKey(binding.Model, binding.Binding.Concept));
+        if (shape === undefined)
+        {
+            throw new EngineBridgeError(EngineBridgeErrorCode.UnknownExternalBinding,
+                DataSourceConnector.ErrNoShape + binding.Model + DataSourceConnector.ErrModelClose);
+        }
+        return this.Row(shape, [...shape.Properties.keys()], record);
     }
 
     public async Fetch(request: IFetchRequest): Promise<IFetchPage>

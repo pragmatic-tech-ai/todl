@@ -1,10 +1,17 @@
 import { QueryCompareOp, WriteAtomicity, WriteConcurrency, WriteFailureKind, WriteOperationKind } from "./connector-plan.js";
-import type { ExternalFieldValue, ExternalRecord, QueryComparison, QueryRequest, WriteBatch, WriteFailure, WriteOperation, WriteResult } from "./connector-plan.js";
+import type { ExternalFieldValue, ExternalRecord, IAssignedKey, QueryComparison, QueryRequest, WriteBatch, WriteFailure, WriteOperation, WriteResult } from "./connector-plan.js";
 import { ConnectionFailureKind } from "./connection-reconnect.js";
 import type { IDataSourceAdapter, PageQuery, PageSlice } from "./data-source-adapter.js";
 import { RollbackSignal } from "./rollback-signal.js";
 import type { ISqlSession, SqlRow } from "./sql-session.js";
 import { WriteCapability } from "./write-capability.js";
+
+/** The result of applying one write op: a failure, or the source-assigned key of an insert; both absent means a plain success. */
+interface IOpOutcome
+{
+    readonly Failure?: WriteFailure;
+    readonly Assigned?: IAssignedKey;
+}
 
 /** Translates read requests into SQL SELECT statements run through an {@link ISqlSession}. */
 export class SqlQueryTranslator
@@ -181,8 +188,11 @@ export class SqlAdapter implements IDataSourceAdapter
     private static readonly FirstParamIndex = "1";
     private static readonly SecondParamIndex = "2";
     private static readonly And = " AND ";
+    private static readonly Returning = " RETURNING ";
+    private static readonly DefaultValues = " DEFAULT VALUES";
     private static readonly VersionConflictReason = "version mismatch";
     private static readonly AtomicUnsupportedReason = "atomic write not supported by this connector";
+    private static readonly MissingKeyReason = "insert returned no key";
 
     private readonly translator: SqlQueryTranslator;
 
@@ -220,6 +230,12 @@ export class SqlAdapter implements IDataSourceAdapter
         return true;
     }
 
+    /** Whether this adapter can execute source-keyed inserts (INSERT ... RETURNING the assigned key): true. */
+    public get CanAssignKeys(): boolean
+    {
+        return true;
+    }
+
     public QueryPage(request: QueryRequest, page: PageQuery): Promise<PageSlice>
     {
         return this.translator.QueryPage(request, page);
@@ -242,21 +258,32 @@ export class SqlAdapter implements IDataSourceAdapter
      */
     private async ApplySequential(batch: WriteBatch): Promise<WriteResult>
     {
+        return this.RunOps(this.session, batch);
+    }
+
+    /** Runs every op of `batch` in order against `session`, collecting failures and source-assigned keys. */
+    private async RunOps(session: ISqlSession, batch: WriteBatch): Promise<WriteResult>
+    {
         let applied = 0;
         const failures: WriteFailure[] = [];
+        const assigned: IAssignedKey[] = [];
         for (const op of batch.Operations)
         {
-            const failure = await this.ApplyOne(this.session, batch, op);
-            if (failure === undefined)
+            const outcome = await this.ApplyOne(session, batch, op);
+            if (outcome.Failure !== undefined)
             {
-                applied++;
+                failures.push(outcome.Failure);
             }
             else
             {
-                failures.push(failure);
+                applied++;
+                if (outcome.Assigned !== undefined)
+                {
+                    assigned.push(outcome.Assigned);
+                }
             }
         }
-        return { Applied: applied, Failures: failures };
+        return assigned.length === 0 ? { Applied: applied, Failures: failures } : { Applied: applied, Failures: failures, Assigned: assigned };
     }
 
     /**
@@ -282,26 +309,13 @@ export class SqlAdapter implements IDataSourceAdapter
         {
             return await this.session.Transaction!(async (tx) =>
             {
-                let applied = 0;
-                const failures: WriteFailure[] = [];
-                for (const op of batch.Operations)
-                {
-                    const failure = await this.ApplyOne(tx, batch, op);
-                    if (failure === undefined)
-                    {
-                        applied++;
-                    }
-                    else
-                    {
-                        failures.push(failure);
-                    }
-                }
-                if (failures.length > 0)
+                const result = await this.RunOps(tx, batch);
+                if (result.Failures.length > 0)
                 {
                     // Abort the backend transaction; the caller reports nothing as applied.
-                    throw new RollbackSignal({ Applied: 0, Failures: failures });
+                    throw new RollbackSignal({ Applied: 0, Failures: result.Failures });
                 }
-                return { Applied: applied, Failures: failures };
+                return result;
             });
         }
         catch (error)
@@ -325,28 +339,70 @@ export class SqlAdapter implements IDataSourceAdapter
      * returns undefined on success, or the WriteFailure (Conflict for a guarded no-op row, Error for
      * a thrown driver fault) otherwise.
      */
-    private async ApplyOne(session: ISqlSession, batch: WriteBatch, op: WriteOperation): Promise<WriteFailure | undefined>
+    private async ApplyOne(session: ISqlSession, batch: WriteBatch, op: WriteOperation): Promise<IOpOutcome>
     {
         try
         {
+            if (op.Kind === WriteOperationKind.Insert)
+            {
+                const assigned = await this.ApplyInsert(session, batch, op);
+                return assigned === undefined
+                    ? { Failure: { Key: op.Key, Kind: WriteFailureKind.Error, Reason: SqlAdapter.MissingKeyReason } }
+                    : { Assigned: assigned };
+            }
             if (op.Kind === WriteOperationKind.Delete)
             {
-                if (await this.ApplyDelete(session, batch, op))
-                {
-                    return undefined;
-                }
-                return { Key: op.Key, Kind: WriteFailureKind.Conflict, Reason: SqlAdapter.VersionConflictReason };
+                return await this.ApplyDelete(session, batch, op)
+                    ? {}
+                    : { Failure: { Key: op.Key, Kind: WriteFailureKind.Conflict, Reason: SqlAdapter.VersionConflictReason } };
             }
-            if (await this.ApplyUpsert(session, batch, op))
-            {
-                return undefined;
-            }
-            return { Key: op.Key, Kind: WriteFailureKind.Conflict, Reason: SqlAdapter.VersionConflictReason };
+            return await this.ApplyUpsert(session, batch, op)
+                ? {}
+                : { Failure: { Key: op.Key, Kind: WriteFailureKind.Conflict, Reason: SqlAdapter.VersionConflictReason } };
         }
         catch (error)
         {
-            return { Key: op.Key, Kind: WriteFailureKind.Error, Reason: SqlAdapter.ErrorReason(error) };
+            return { Failure: { Key: op.Key, Kind: WriteFailureKind.Error, Reason: SqlAdapter.ErrorReason(error) } };
         }
+    }
+
+    /**
+     * Runs one source-keyed insert (ruling R139 E9): `INSERT INTO src (fields) VALUES (...) RETURNING idKey[, versionField]`
+     * through `session.Query` (one statement per op, since multi-row RETURNING order is not guaranteed). Returns the
+     * assigned key under the op's Ref, with the source's version when the batch has a version field, or undefined when the
+     * statement returned no row.
+     */
+    private async ApplyInsert(session: ISqlSession, batch: WriteBatch, op: WriteOperation): Promise<IAssignedKey | undefined>
+    {
+        const fieldNames = Object.keys(op.Fields);
+        const params: unknown[] = fieldNames.map(name => op.Fields[name]);
+        const returning = [batch.IdKey, ...(batch.VersionField === undefined ? [] : [batch.VersionField])];
+        const values = fieldNames.length === 0
+            ? SqlAdapter.DefaultValues
+            : SqlAdapter.SpacedOpenParen + fieldNames.map(name => SqlQueryTranslator.QuoteIdent(name)).join(SqlAdapter.ListSeparator) + SqlAdapter.CloseParen
+                + SqlAdapter.Values + SqlAdapter.OpenParen + fieldNames.map((_, i) => SqlAdapter.Placeholder + (i + 1)).join(SqlAdapter.ListSeparator) + SqlAdapter.CloseParen;
+        const sql = SqlAdapter.InsertInto + SqlQueryTranslator.QuoteIdent(batch.Source) + values
+            + SqlAdapter.Returning + returning.map(name => SqlQueryTranslator.QuoteIdent(name)).join(SqlAdapter.ListSeparator);
+        const rows = await session.Query(sql, params);
+        const row = rows[0];
+        if (row === undefined || row[batch.IdKey] === undefined || row[batch.IdKey] === null)
+        {
+            return undefined;
+        }
+        const key = SqlAdapter.Cell(row[batch.IdKey]);
+        if (batch.VersionField === undefined)
+        {
+            return { Ref: op.Ref!, Key: key };
+        }
+        return { Ref: op.Ref!, Key: key, Version: SqlAdapter.Cell(row[batch.VersionField]) };
+    }
+
+    /** An external field value from a raw driver cell (string/number/boolean/null pass; anything else is its text). */
+    private static Cell(value: unknown): ExternalFieldValue
+    {
+        if (value === undefined || value === null) return null;
+        if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return value;
+        return String(value);
     }
 
     /** Runs one upsert against the given session; returns false when a version-guarded upsert updated no row. */

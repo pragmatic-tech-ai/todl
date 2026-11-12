@@ -1,5 +1,5 @@
 import { MemberKind, ValueType, type IDefinitionDescription, type ISchemaDescription, type MemberInput } from '@pragmatic-tech-ai/graph';
-import type { ExternalFieldValue } from '../../model-data/connector-plan.js';
+import { KeyAssignment, type ExternalFieldValue } from '../../model-data/connector-plan.js';
 import { EngineBridgeError, EngineBridgeErrorCode } from '../EngineBridgeError.js';
 import type { IExternalBinding, IParsedExternalId } from './ExternalBinding.js';
 
@@ -44,6 +44,12 @@ export class ExternalIdentity
     public Mint(binding: IExternalBinding, storageId: string): string
     {
         return ExternalIdentity.Prefix(binding) + storageId;
+    }
+
+    /** Who assigns a new row's key under `binding` (ruling R139 E9): the authored value, defaulting to Client. */
+    public static KeyAssignmentOf(binding: IExternalBinding): KeyAssignment
+    {
+        return binding.Binding.KeyAssignment ?? KeyAssignment.Client;
     }
 
     /** The binding whose prefix is the longest match of `publicId`, with the rest as the storage id; undefined for a foreign id. */

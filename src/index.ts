@@ -101,6 +101,7 @@ export {
   type WriteBatch,
   type WriteFailure,
   type WriteResult,
+  type IAssignedKey,
   WriteConcurrency,
   WriteAtomicity,
   KeyAssignment,

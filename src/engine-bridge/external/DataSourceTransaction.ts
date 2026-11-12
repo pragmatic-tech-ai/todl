@@ -1,5 +1,16 @@
-import { ConnectorChangeSet, type ConnectorChange, type ConnectorContext, type IConnectorTransaction } from '@pragmatic-tech-ai/graph';
 import {
+    ConnectorChangeSet,
+    type ConnectorChange,
+    type ConnectorContext,
+    type IAssignedCreate,
+    type IAssignedOutcome,
+    type IConnectorApplyResult,
+    type IConnectorTransaction,
+    type IFetchedRow,
+    type RowVersion,
+} from '@pragmatic-tech-ai/graph';
+import {
+    KeyAssignment,
     QueryCompareOp,
     WriteAtomicity,
     WriteConcurrency,
@@ -7,6 +18,7 @@ import {
     WriteOperationKind,
     type ExternalFieldValue,
     type ExternalRecord,
+    type IAssignedKey,
     type WriteBatch,
     type WriteFailure,
     type WriteOperation,
@@ -15,9 +27,17 @@ import type { IDataSourceAdapter } from '../../model-data/data-source-adapter.js
 import { EngineBridgeError, EngineBridgeErrorCode } from '../EngineBridgeError.js';
 import { ChangeBatcher, type IPendingBatch } from './ChangeBatcher.js';
 import type { IExternalBinding } from './ExternalBinding.js';
-import type { ExternalIdentity } from './ExternalIdentity.js';
+import { ExternalIdentity } from './ExternalIdentity.js';
+import { ExternalValues } from './ExternalValues.js';
 import { ExternalVersionConflict } from './ExternalVersionConflict.js';
 import { ExternalWriteError } from './ExternalWriteError.js';
+import { MappedMembers } from './FetchTranslator.js';
+
+/** Builds an IFetchedRow from a source record (the fetch side's row builder), so Create can re-read what it inserted. */
+export interface IExternalRowBuilder
+{
+    BuildRow(binding: IExternalBinding, record: ExternalRecord): IFetchedRow;
+}
 
 /** Consecutive compensating operations of one concurrency, sent as one sequential batch. */
 interface IUndoRun
@@ -29,63 +49,64 @@ interface IUndoRun
 /** Where a DataSourceTransaction is in its life. */
 enum TransactionState
 {
+    /** Taking steps (Apply / Create) and able to Commit / Undo / Revert. */
     Open = 1,
-    /** Commit started; it may have stopped partway (a batch failed). */
-    Committing,
+    /** Commit finalized the transaction; before-images dropped. */
     Committed,
+    /** Every remaining step compensated. */
     Reverted,
 }
 
-/** A batch Commit sent to the source: its before-image and the operations that (may have) applied. */
+/** A batch applied in a step: its before-image and the operations that (may have) applied, for compensation. */
 interface IAttemptedBatch
 {
     readonly Binding: IExternalBinding;
-    /** Before-image rows by key text; a key without one did not exist before the write. */
+    /** Before-image rows by key text; a key without one did not exist before the write (an insert has none). */
     readonly Before: ReadonlyMap<string, ExternalRecord>;
     Applied: readonly WriteOperation[];
     /** The version each applied upsert carries after the write, by key text, when the adapter reported it. */
     Versions: ReadonlyMap<string, ExternalFieldValue>;
 }
 
+/** One executed step: the batches it applied, compensated together (latest-first) by Undo / Revert. */
+type Step = IAttemptedBatch[];
+
+/** One request's place in the Create call: its binding, its global index (the Ref) and the insert built for it. */
+interface ICreatePlan
+{
+    readonly Index: number;
+    readonly Ref: string;
+    readonly Binding: IExternalBinding;
+    readonly Insert: WriteOperation;
+}
+
 /**
- * One engine transaction's writes to one DataSourceConnector (ruling T9).
+ * One engine transaction's writes to one DataSourceConnector (rulings T9, R139 E9). Immediate external writes: each
+ * Apply or Create is a write STEP that executes at the source now, so a created record has its real public id at once
+ * and a change is visible to others as soon as the source applies it. Only engine-stored data is transactional; an
+ * engine abort or commit failure compensates the executed steps in reverse (E6, driven by the engine's Compensator,
+ * which calls Undo per step, latest-first).
  *
- * Apply only translates and validates (ChangeBatcher), with no remote effect, and refuses a Transactional binding whose
- * adapter cannot transact (UnsupportedExternalChange). Changes of several Apply calls merge as one change set.
+ * Apply translates the step with ChangeBatcher (each step stands alone: no cross-Apply re-merge; ops on one id merge
+ * within the step) and executes its batches in order. Per batch: read the before-image (inserts excluded), run the
+ * create-conflict check (a create whose key the before-image holds is a Conflict, ExternalWriteFailed), run the
+ * Optimistic version pre-check (ExpectedVersion against the before-image; a mismatch is ExternalVersionConflict before
+ * any write), call adapter.Apply (deletes and upserts guarded with their version, R122 G1), and record the attempt
+ * under the current step. Apply resolves with { Versions } from WriteResult.Versions, keyed by public id. A
+ * Transactional binding whose adapter cannot transact is refused (UnsupportedExternalChange) before any remote effect.
  *
- * Commit writes the batches in order. For each it first reads a before-image (Query with IdKey in the batch keys, over
- * IdKey, every FieldMap field and the version field). A create of a new row (ChangeBatcher's Creates) whose key the
- * before-image holds is a conflict: the batch is not written and Commit throws ExternalWriteError (ExternalWriteFailed)
- * with a Conflict failure per such key, so a create never silently updates a row the before-image saw. The check covers
- * the before-image only: a row another writer inserts between that read and adapter.Apply is still upserted (the same
- * commit-window limit). For an Optimistic binding with a version field it then runs the version pre-check (rulings
- * R119 V2, R122 G1): an operation whose change carried an ExpectedVersion (the version the transaction read) conflicts
- * when its before-image row is gone or carries another version, and the batch throws ExternalVersionConflict (an engine
- * ConflictError) without calling adapter.Apply. Each operation, deletes included, is then guarded with its expected
- * version, else with the before-image's (V3: a write with nothing read cannot be stale), and adapter.Apply is called. A
- * Conflict failure the adapter reports for an Optimistic batch (the source's guard caught a change after the pre-check)
- * is an ExternalVersionConflict too; other per-operation failures throw ExternalWriteError (ExternalWriteFailed). Either
- * stops the commit. An error raised by the transaction itself
- * (e.g., a constraint checked only at COMMIT, a serialization failure, a lost connection) and the adapters'
- * identifier guards propagate as the adapter's error (the engine reports them as ConnectorError).
+ * Create executes source-keyed inserts as one step (E9): each request's binding is resolved from (Owner, Concept) and
+ * must be KeyAssignment.Source on an adapter with CanAssignKeys; one Insert per request (Key null, Ref the request
+ * index, fields from Properties, foreign keys from Links); one WriteBatch per binding; the source reports
+ * WriteResult.Assigned keyed by Ref; every assigned insert is logged for Undo (a Delete of its key) before the assigned
+ * rows are re-read (one Query per binding) and returned as IFetchedRows. Outcomes are index-aligned: a Row when the row
+ * came back, else an Error (KeyNotAssigned when no key names the Ref, a null/duplicate key, or an id over 400 bytes).
  *
- * Revert before Commit discards. After Commit, or after a Commit that stopped partway, it compensates every operation
- * that applied, in reverse order: a key without a before-image is deleted, every other key is upserted back to its
- * before-image, last-write-wins, one sequential batch per committed batch. An operation the source reported as failed
- * did not apply; when the adapter call threw, every operation of that batch counts as applied (compensating one that
- * did not is harmless). A batch of a Transactional binding over a transacting adapter that failed applied nothing.
- * A failed compensation throws ExternalWriteError (CompensationFailed) after every batch was tried. Before-images live
- * only as long as the transaction (spec §5.2, §12).
- *
- * Optimistic bindings: compensation is best effort. When the adapter reported the version a committed upsert left
- * (WriteResult.Versions, e.g. VersionBumpingAdapter), the compensating upsert is guarded with that version and leaves
- * the version field to the source, so the version moves forward rather than back to the before-image (no ABA), and a
- * concurrent change since the commit makes the compensation fail (CompensationFailed) instead of being overwritten.
- * Without a reported version (a source that reports none, an explicitly written version member, an adapter call that
- * threw) the before-image is restored last-write-wins, version field included.
- *
- * Superseded design note: spec §11.2 (engine 0.4.0 plan) replaces the no-source-assigned-keys rule (Q3) and the
- * deferred-to-commit writes described here with immediate external writes that take source-assigned keys.
+ * Undo compensates the latest executed step not yet undone; Revert compensates every remaining step in reverse. Commit
+ * only finalizes (state Committed, before-images dropped); it has no remote effect. A Transactional binding is atomic
+ * per step. Compensation restores before-images last-write-wins (an Optimistic upsert whose committed version the
+ * adapter reported is guarded with that version so the version moves forward, no ABA); a failed compensation throws
+ * ExternalWriteError (CompensationFailed). Before-images live only as long as the transaction (spec §5.2, §12).
  */
 export class DataSourceTransaction implements IConnectorTransaction
 {
@@ -97,32 +118,41 @@ export class DataSourceTransaction implements IConnectorTransaction
     private static readonly ErrStaleRow = 'The row changed since this transaction read it';
     private static readonly ErrGoneRow = 'The row was removed since this transaction read it';
     private static readonly ErrCompensate = 'Compensating an external write failed on ';
+    private static readonly ErrNoCreateBinding = 'No source-keyed binding is known for this owner and concept: ';
+    private static readonly ErrNotSourceKeyed = 'A source-keyed create needs a `keys source` binding on an adapter that assigns keys: ';
+    private static readonly ErrUnmappedMember = 'The create sets a member the external source does not map: ';
+    private static readonly ErrKeyNotAssigned = 'The source assigned no key for an inserted row: ';
+    private static readonly ErrNullKey = 'The source assigned a null key for an inserted row: ';
+    private static readonly ErrDuplicateKey = 'The source assigned one key to two inserted rows: ';
+    private static readonly ErrLongId = 'The minted public id of an inserted row exceeds the UTF-8 byte limit: ';
+    private static readonly ErrMissingRow = 'An inserted row could not be re-read from the source: ';
     private static readonly SourceSeparator = '.';
+    private static readonly MemberSeparator = '.';
+    private static readonly OwnerSeparator = '/';
     private static readonly CountOpen = ' (';
     private static readonly CountClose = ' failed)';
+    private static readonly MaxIdBytes = 400;
 
     private state = TransactionState.Open;
-    private readonly changes: ConnectorChange[] = [];
-    private pending: readonly IPendingBatch[] = [];
-    private readonly attempted: IAttemptedBatch[] = [];
+    /** The executed steps, oldest first; Undo pops the latest, Revert drains all in reverse. */
+    private readonly steps: Step[] = [];
 
     public constructor(
         private readonly connector: string,
         private readonly adapter: IDataSourceAdapter,
         private readonly identity: ExternalIdentity,
+        private readonly builder: IExternalRowBuilder,
         /** The Begin caller (one per transaction, S2 E11): the before-image read, every Apply and every compensation run on it. */
         private readonly context: ConnectorContext,
     )
     {
     }
 
-    public async Apply(changes: ConnectorChangeSet): Promise<void>
+    public async Apply(changes: ConnectorChangeSet): Promise<IConnectorApplyResult>
     {
         this.RequireState(TransactionState.Open);
-        // The engine calls Apply once per transaction. A further call re-merges the whole accumulated list, so the ops on
-        // one id still merge into one operation across calls.
-        const all = [...this.changes, ...changes.Changes];
-        const pending = ChangeBatcher.Batches(new ConnectorChangeSet(all), this.identity, this.connector);
+        // Each step stands alone (R139 E9): translate only this change set, so ops on one id merge within the step only.
+        const pending = ChangeBatcher.Batches(changes, this.identity, this.connector);
         for (const batch of pending)
         {
             if (batch.Binding.Binding.Atomicity === WriteAtomicity.Transactional && this.adapter.CanTransact !== true)
@@ -130,32 +160,103 @@ export class DataSourceTransaction implements IConnectorTransaction
                 throw new EngineBridgeError(EngineBridgeErrorCode.UnsupportedExternalChange, DataSourceTransaction.ErrNoTransact + DataSourceTransaction.Where(batch.Binding));
             }
         }
-        this.changes.push(...changes.Changes);
-        this.pending = pending;
+        const step: Step = [];
+        this.steps.push(step);
+        const versions = new Map<string, RowVersion>();
+        for (const batch of pending)
+        {
+            await this.Write(batch, step, versions);
+        }
+        return { Versions: versions };
+    }
+
+    public async Create(requests: readonly IAssignedCreate[]): Promise<readonly IAssignedOutcome[]>
+    {
+        this.RequireState(TransactionState.Open);
+        const plans = requests.map((request, index) => this.Plan(request, index));
+        const step: Step = [];
+        this.steps.push(step);
+        // Apply one batch per binding and collect what the source assigned, keyed by Ref.
+        const assigned = new Map<string, IAssignedKey>();
+        for (const [binding, group] of DataSourceTransaction.ByBinding(plans))
+        {
+            const batch = DataSourceTransaction.InsertBatch(binding, group.map(p => p.Insert));
+            const result = await this.adapter.Apply(batch, this.context);
+            for (const key of result.Assigned ?? [])
+            {
+                assigned.set(key.Ref, key);
+            }
+        }
+        // Log every assigned insert for Undo (a Delete of its key), grouped by binding, BEFORE building any outcome.
+        const seen = new Set<string>();
+        const reread = new Map<IExternalBinding, ExternalFieldValue[]>();
+        for (const [binding, group] of DataSourceTransaction.ByBinding(plans))
+        {
+            const applied: WriteOperation[] = [];
+            const keys: ExternalFieldValue[] = [];
+            for (const plan of group)
+            {
+                const key = assigned.get(plan.Ref);
+                if (key === undefined || key.Key === null || seen.has(DataSourceTransaction.KeyText(key.Key)))
+                {
+                    continue;
+                }
+                seen.add(DataSourceTransaction.KeyText(key.Key));
+                applied.push({ Kind: WriteOperationKind.Upsert, Key: key.Key, Fields: {} });
+                keys.push(key.Key);
+            }
+            if (applied.length > 0)
+            {
+                step.push({ Binding: binding, Before: new Map(), Applied: applied, Versions: new Map() });
+            }
+            reread.set(binding, keys);
+        }
+        return this.Outcomes(plans, assigned, await this.RereadAll(reread));
     }
 
     public async Commit(): Promise<void>
     {
         this.RequireState(TransactionState.Open);
-        this.state = TransactionState.Committing;
-        for (const pending of this.pending)
-        {
-            await this.Write(pending);
-        }
         this.state = TransactionState.Committed;
+        // Finalize only: no remote effect, and the before-images are no longer needed.
+        this.steps.length = 0;
+    }
+
+    /** Compensates the latest executed step not yet undone (the engine's Compensator calls this per step, latest-first). */
+    public async Undo(): Promise<void>
+    {
+        const step = this.steps.pop();
+        if (step === undefined)
+        {
+            return;
+        }
+        const failure = await this.CompensateStep(step);
+        if (failure !== undefined)
+        {
+            throw failure;
+        }
     }
 
     public async Revert(): Promise<void>
     {
-        const state = this.state;
-        this.state = TransactionState.Reverted;
-        if (state === TransactionState.Committing || state === TransactionState.Committed)
+        if (this.state === TransactionState.Reverted)
         {
-            await this.Compensate();
+            return;
+        }
+        this.state = TransactionState.Reverted;
+        let first: ExternalWriteError | undefined;
+        for (const step of this.steps.splice(0).reverse())
+        {
+            first ??= await this.CompensateStep(step);
+        }
+        if (first !== undefined)
+        {
+            throw first;
         }
     }
 
-    private async Write(pending: IPendingBatch): Promise<void>
+    /** Executes one Apply batch (before-image, create-conflict, version pre-check, adapter.Apply), recording its attempt under `step`. */
+    private async Write(pending: IPendingBatch, step: Step, versions: Map<string, RowVersion>): Promise<void>
     {
         const binding = pending.Binding;
         const before = await this.BeforeImage(binding, pending.Batch);
@@ -178,13 +279,22 @@ export class DataSourceTransaction implements IConnectorTransaction
         }
         const transacted = binding.Binding.Atomicity === WriteAtomicity.Transactional && this.adapter.CanTransact === true;
         const attempt: IAttemptedBatch = { Binding: binding, Before: before, Applied: batch.Operations, Versions: new Map() };
-        this.attempted.push(attempt);
+        step.push(attempt);
         let failures: readonly WriteFailure[];
         try
         {
             const result = await this.adapter.Apply(batch, this.context);
             failures = result.Failures;
             attempt.Versions = new Map((result.Versions ?? []).map(v => [DataSourceTransaction.KeyText(v.Key), v.Version]));
+            for (const v of result.Versions ?? [])
+            {
+                const publicId = this.identity.Mint(binding, String(v.Key));
+                const version = ExternalValues.ToVersion(v.Version, publicId);
+                if (version !== undefined)
+                {
+                    versions.set(publicId, version);
+                }
+            }
         }
         catch (error)
         {
@@ -202,6 +312,162 @@ export class DataSourceTransaction implements IConnectorTransaction
                 ? DataSourceTransaction.VersionConflict(binding, failures)
                 : DataSourceTransaction.WriteFailed(binding, failures);
         }
+    }
+
+    /** The binding, index and insert for one create request; throws when the request is not a source-keyed create it can express. */
+    private Plan(request: IAssignedCreate, index: number): ICreatePlan
+    {
+        const binding = this.identity.Bindings().find(b => b.Model === request.Owner && b.Binding.Concept === request.Concept);
+        if (binding === undefined)
+        {
+            throw new EngineBridgeError(EngineBridgeErrorCode.UnsupportedExternalChange,
+                DataSourceTransaction.ErrNoCreateBinding + request.Owner + DataSourceTransaction.OwnerSeparator + request.Concept);
+        }
+        if (ExternalIdentity.KeyAssignmentOf(binding) !== KeyAssignment.Source || this.adapter.CanAssignKeys !== true)
+        {
+            throw new EngineBridgeError(EngineBridgeErrorCode.UnsupportedExternalChange,
+                DataSourceTransaction.ErrNotSourceKeyed + request.Owner + DataSourceTransaction.OwnerSeparator + request.Concept);
+        }
+        return { Index: index, Ref: String(index), Binding: binding, Insert: this.Insert(binding, request, String(index)) };
+    }
+
+    /** One Insert op for a create request: key null, fields from Properties (id member excluded), foreign keys from Links. */
+    private Insert(binding: IExternalBinding, request: IAssignedCreate, ref: string): WriteOperation
+    {
+        const b = binding.Binding;
+        const idMember = this.identity.IdMemberName(binding);
+        const fields: Record<string, ExternalFieldValue> = {};
+        for (const [member, cell] of request.Properties)
+        {
+            if (member === idMember)
+            {
+                continue;
+            }
+            const field = Object.hasOwn(b.FieldMap, member) ? b.FieldMap[member] : undefined;
+            if (field === undefined)
+            {
+                throw new EngineBridgeError(EngineBridgeErrorCode.UnsupportedExternalChange,
+                    DataSourceTransaction.ErrUnmappedMember + request.Concept + DataSourceTransaction.MemberSeparator + member);
+            }
+            fields[field] = cell === null ? null : ExternalValues.ToExternal(cell, request.Concept + DataSourceTransaction.MemberSeparator + member);
+        }
+        for (const link of request.Links)
+        {
+            const field = MappedMembers.Link(binding, link.Relationship, this.identity);
+            if (field === undefined)
+            {
+                throw new EngineBridgeError(EngineBridgeErrorCode.UnsupportedExternalChange,
+                    DataSourceTransaction.ErrUnmappedMember + request.Concept + DataSourceTransaction.MemberSeparator + link.Relationship);
+            }
+            fields[field] = this.identity.ForeignKey(binding, link.Relationship, link.To);
+        }
+        return { Kind: WriteOperationKind.Insert, Key: null, Ref: ref, Fields: fields };
+    }
+
+    /** Re-reads each binding's assigned rows (IdKey in the keys, over IdKey, mapped fields and the version field). */
+    private async RereadAll(reread: ReadonlyMap<IExternalBinding, ExternalFieldValue[]>): Promise<Map<IExternalBinding, Map<string, ExternalRecord>>>
+    {
+        const rows = new Map<IExternalBinding, Map<string, ExternalRecord>>();
+        for (const [binding, keys] of reread)
+        {
+            rows.set(binding, keys.length === 0 ? new Map() : await this.Reread(binding, keys));
+        }
+        return rows;
+    }
+
+    private async Reread(binding: IExternalBinding, keys: readonly ExternalFieldValue[]): Promise<Map<string, ExternalRecord>>
+    {
+        const b = binding.Binding;
+        const fields = new Set<string>([b.IdKey, ...Object.values(b.FieldMap)]);
+        if (b.VersionField !== undefined)
+        {
+            fields.add(b.VersionField);
+        }
+        const records = await this.adapter.Query({
+            Source: b.Source,
+            Fields: [...fields],
+            Where: { All: [{ Field: b.IdKey, Op: QueryCompareOp.In, Value: null, Values: keys }] },
+        }, this.context);
+        const byKey = new Map<string, ExternalRecord>();
+        for (const record of records)
+        {
+            byKey.set(DataSourceTransaction.KeyText(record[b.IdKey] ?? null), record);
+        }
+        return byKey;
+    }
+
+    /** One outcome per request, index-aligned: a Row when the assigned row came back, else the Error that disqualified it. */
+    private Outcomes(plans: readonly ICreatePlan[], assigned: ReadonlyMap<string, IAssignedKey>, rows: ReadonlyMap<IExternalBinding, Map<string, ExternalRecord>>): IAssignedOutcome[]
+    {
+        const minted = new Set<string>();
+        return plans.map(plan =>
+        {
+            const key = assigned.get(plan.Ref);
+            if (key === undefined)
+            {
+                return { Error: this.WriteError(EngineBridgeErrorCode.KeyNotAssigned, DataSourceTransaction.ErrKeyNotAssigned + plan.Ref, plan.Binding) };
+            }
+            if (key.Key === null)
+            {
+                return { Error: this.WriteError(EngineBridgeErrorCode.KeyNotAssigned, DataSourceTransaction.ErrNullKey + plan.Ref, plan.Binding) };
+            }
+            const publicId = this.identity.Mint(plan.Binding, String(key.Key));
+            if (minted.has(publicId))
+            {
+                return { Error: this.Invalid(DataSourceTransaction.ErrDuplicateKey + publicId) };
+            }
+            minted.add(publicId);
+            if (Buffer.byteLength(publicId) > DataSourceTransaction.MaxIdBytes)
+            {
+                return { Error: this.Invalid(DataSourceTransaction.ErrLongId + publicId) };
+            }
+            const record = rows.get(plan.Binding)?.get(DataSourceTransaction.KeyText(key.Key));
+            if (record === undefined)
+            {
+                return { Error: this.Invalid(DataSourceTransaction.ErrMissingRow + publicId) };
+            }
+            return { Row: this.builder.BuildRow(plan.Binding, record) };
+        });
+    }
+
+    private WriteError(code: EngineBridgeErrorCode.KeyNotAssigned, message: string, binding: IExternalBinding): ExternalWriteError
+    {
+        return new ExternalWriteError(code, message, binding, []);
+    }
+
+    private Invalid(message: string): EngineBridgeError
+    {
+        return new EngineBridgeError(EngineBridgeErrorCode.ExternalRowInvalid, message);
+    }
+
+    /** Requests grouped by binding, in first-appearance order; the group keeps each request's plan. */
+    private static ByBinding(plans: readonly ICreatePlan[]): Map<IExternalBinding, ICreatePlan[]>
+    {
+        const groups = new Map<IExternalBinding, ICreatePlan[]>();
+        for (const plan of plans)
+        {
+            const group = groups.get(plan.Binding);
+            if (group === undefined)
+            {
+                groups.set(plan.Binding, [plan]);
+            }
+            else
+            {
+                group.push(plan);
+            }
+        }
+        return groups;
+    }
+
+    private static InsertBatch(binding: IExternalBinding, operations: readonly WriteOperation[]): WriteBatch
+    {
+        const b = binding.Binding;
+        const batch: WriteBatch = { Source: b.Source, IdKey: b.IdKey, Operations: operations, Concurrency: b.Concurrency, Atomicity: b.Atomicity };
+        if (b.VersionField !== undefined)
+        {
+            batch.VersionField = b.VersionField;
+        }
+        return batch;
     }
 
     private static VersionConflict(binding: IExternalBinding, failures: readonly WriteFailure[]): ExternalVersionConflict
@@ -261,7 +527,7 @@ export class DataSourceTransaction implements IConnectorTransaction
             failures);
     }
 
-    /** The current rows of the batch's keys, over IdKey, every FieldMap field and the version field. */
+    /** The current rows of the batch's keys (inserts excluded), over IdKey, every FieldMap field and the version field. */
     private async BeforeImage(binding: IExternalBinding, batch: WriteBatch): Promise<ReadonlyMap<string, ExternalRecord>>
     {
         const b = binding.Binding;
@@ -270,8 +536,8 @@ export class DataSourceTransaction implements IConnectorTransaction
         {
             fields.add(b.VersionField);
         }
-        const keys = batch.Operations.map(o => o.Key);
-        const rows = await this.adapter.Query({
+        const keys = batch.Operations.filter(o => o.Kind !== WriteOperationKind.Insert && o.Key !== null).map(o => o.Key);
+        const rows = keys.length === 0 ? [] : await this.adapter.Query({
             Source: b.Source,
             Fields: [...fields],
             Where: { All: [{ Field: b.IdKey, Op: QueryCompareOp.In, Value: null, Values: keys }] },
@@ -320,26 +586,22 @@ export class DataSourceTransaction implements IConnectorTransaction
         return { ...batch, Operations: operations };
     }
 
-    private async Compensate(): Promise<void>
+    /** Compensates one step's batches (latest-first); the first failure, else undefined. */
+    private async CompensateStep(step: Step): Promise<ExternalWriteError | undefined>
     {
         let first: ExternalWriteError | undefined;
-        for (const attempt of [...this.attempted].reverse())
+        for (const attempt of [...step].reverse())
         {
-            for (const run of DataSourceTransaction.Undo(attempt))
+            for (const run of DataSourceTransaction.UndoRuns(attempt))
             {
-                const failure = await this.Undo(attempt.Binding, run);
-                first ??= failure;
+                first ??= await this.UndoRun(attempt.Binding, run);
             }
         }
-        this.attempted.length = 0;
-        if (first !== undefined)
-        {
-            throw first;
-        }
+        return first;
     }
 
     /** Applies one run of compensating operations; the error describing a failure, else undefined. */
-    private async Undo(binding: IExternalBinding, run: IUndoRun): Promise<ExternalWriteError | undefined>
+    private async UndoRun(binding: IExternalBinding, run: IUndoRun): Promise<ExternalWriteError | undefined>
     {
         const b = binding.Binding;
         const message = DataSourceTransaction.ErrCompensate + DataSourceTransaction.Where(binding);
@@ -365,9 +627,10 @@ export class DataSourceTransaction implements IConnectorTransaction
     /**
      * The compensating operations of what applied, in reverse order, cut into runs of one concurrency. An upsert back to a
      * before-image whose committed version the adapter reported is guarded with that version and leaves out the version
-     * field (the source moves it on); everything else is last-write-wins.
+     * field (the source moves it on); everything else is last-write-wins. An op with no before-image (a create or an
+     * insert) compensates to a Delete of its key.
      */
-    private static Undo(attempt: IAttemptedBatch): IUndoRun[]
+    private static UndoRuns(attempt: IAttemptedBatch): IUndoRun[]
     {
         const versionField = attempt.Binding.Binding.VersionField;
         const optimistic = attempt.Binding.Binding.Concurrency === WriteConcurrency.Optimistic && versionField !== undefined;

@@ -1,10 +1,39 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { SqlAdapter } from "../sql-adapter.js";
-import { QueryCompareOp } from "../connector-plan.js";
+import { QueryCompareOp, WriteAtomicity, WriteConcurrency, WriteOperationKind } from "../connector-plan.js";
+import type { WriteBatch } from "../connector-plan.js";
 import { ConnectionFailureKind } from "../connection-reconnect.js";
 import { RecordingSqlSession } from "./sql-fakes.js";
 import type { ISqlSession, SqlRow } from "../sql-session.js";
+
+test("sql insert returns the assigned key", async () =>
+{
+    const session = new RecordingSqlSession([{ cust_id: 1 }]);
+    const batch: WriteBatch =
+    {
+        Source: "customers", IdKey: "cust_id", Concurrency: WriteConcurrency.LastWriteWins, Atomicity: WriteAtomicity.Sequential,
+        Operations: [{ Kind: WriteOperationKind.Insert, Key: null, Ref: "r1", Fields: { nm: "N" } }],
+    };
+    const result = await new SqlAdapter(session).Apply(batch);
+    assert.deepEqual(result.Assigned, [{ Ref: "r1", Key: 1 }]);
+    assert.equal(session.calls[0]!.sql, "INSERT INTO \"customers\" (\"nm\") VALUES ($1) RETURNING \"cust_id\"");
+    assert.deepEqual(session.calls[0]!.params, ["N"]);
+    assert.equal(new SqlAdapter(session).CanAssignKeys, true);
+});
+
+test("sql insert returns the version", async () =>
+{
+    const session = new RecordingSqlSession([{ cust_id: 1, rev: 5 }]);
+    const batch: WriteBatch =
+    {
+        Source: "customers", IdKey: "cust_id", VersionField: "rev", Concurrency: WriteConcurrency.Optimistic, Atomicity: WriteAtomicity.Sequential,
+        Operations: [{ Kind: WriteOperationKind.Insert, Key: null, Ref: "r1", Fields: { nm: "N" } }],
+    };
+    const result = await new SqlAdapter(session).Apply(batch);
+    assert.deepEqual(result.Assigned, [{ Ref: "r1", Key: 1, Version: 5 }]);
+    assert.equal(session.calls[0]!.sql, "INSERT INTO \"customers\" (\"nm\") VALUES ($1) RETURNING \"cust_id\", \"rev\"");
+});
 
 test("SqlAdapter.ClassifyFailure delegates to the session's classifier", () =>
 {

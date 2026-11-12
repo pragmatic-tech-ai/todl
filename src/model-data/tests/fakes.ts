@@ -1,6 +1,6 @@
 import { QueryFilterEvaluator } from "../query-filter-evaluator.js";
 import { QueryCompareOp, WriteConcurrency, WriteFailureKind, WriteOperationKind } from "../connector-plan.js";
-import type { DataSourceKind, ExternalRecord, QueryRequest, ResolvedConnection, WriteBatch, WriteFailure, WriteOperation, WriteResult } from "../connector-plan.js";
+import type { DataSourceKind, ExternalFieldValue, ExternalRecord, IAssignedKey, QueryRequest, ResolvedConnection, WriteBatch, WriteFailure, WriteOperation, WriteResult } from "../connector-plan.js";
 import type { AdapterResolutionRequest, IDataSourceAdapter, IDataSourceAdapterFactory, IDataSourceAdapterProvider } from "../data-source-adapter.js";
 
 export class InMemoryAdapter implements IDataSourceAdapter
@@ -37,9 +37,25 @@ export class InMemoryAdapter implements IDataSourceAdapter
         const rows = this.sources.get(batch.Source) ?? [];
         this.sources.set(batch.Source, rows);
         const failures: WriteFailure[] = [];
+        const assigned: IAssignedKey[] = [];
         let applied = 0;
         for (const op of batch.Operations)
         {
+            if (op.Kind === WriteOperationKind.Insert)
+            {
+                const key = InMemoryAdapter.NextKey(rows, batch.IdKey);
+                const row: { [field: string]: ExternalRecord[string] } = { ...op.Fields, [batch.IdKey]: key };
+                if (batch.VersionField !== undefined && row[batch.VersionField] === undefined)
+                {
+                    row[batch.VersionField] = 1;
+                }
+                rows.push(row);
+                applied++;
+                assigned.push(batch.VersionField === undefined
+                    ? { Ref: op.Ref!, Key: key }
+                    : { Ref: op.Ref!, Key: key, Version: row[batch.VersionField] ?? null });
+                continue;
+            }
             const index = rows.findIndex(row => row[batch.IdKey] === op.Key);
             if (op.Kind === WriteOperationKind.Delete)
             {
@@ -74,11 +90,32 @@ export class InMemoryAdapter implements IDataSourceAdapter
             else rows.push(row);
             applied++;
         }
-        return { Applied: applied, Failures: failures };
+        return assigned.length === 0 ? { Applied: applied, Failures: failures } : { Applied: applied, Failures: failures, Assigned: assigned };
     }
 
     public async Dispose(): Promise<void>
     {
+    }
+
+    /** This fake assigns source keys for Insert ops (serials). */
+    public get CanAssignKeys(): boolean
+    {
+        return true;
+    }
+
+    /** The next serial key for `source`: one past the largest numeric IdKey it holds (1 when empty). */
+    private static NextKey(rows: readonly ExternalRecord[], idKey: string): ExternalFieldValue
+    {
+        let max = 0;
+        for (const row of rows)
+        {
+            const value = Number(row[idKey]);
+            if (Number.isFinite(value) && value > max)
+            {
+                max = value;
+            }
+        }
+        return max + 1;
     }
 
     /** True when `row` holds a non-null version equal to `version` (SQL's `version = $n`: NULL never matches). */
