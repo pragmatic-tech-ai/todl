@@ -103,6 +103,7 @@ export {
   type WriteResult,
   WriteConcurrency,
   WriteAtomicity,
+  KeyAssignment,
   WriteFailureKind,
 } from './model-data/connector-plan.js';
 export {

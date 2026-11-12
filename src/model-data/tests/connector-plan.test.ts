@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DataSourceKind, ConnectorPlanProjection, ConnectorLookup, ConnectorPlanValidator, WriteConcurrency, WriteAtomicity, type ConnectorBinding, type ConnectorSpec, type ModelConnectorPlan } from "../connector-plan.js";
+import { DataSourceKind, ConnectorPlanProjection, ConnectorLookup, ConnectorPlanValidator, KeyAssignment, WriteConcurrency, WriteAtomicity, type ConnectorBinding, type ConnectorSpec, type ModelConnectorPlan } from "../connector-plan.js";
 
 test("Normalize sorts connectors, bindings, and field-map keys deterministically", () =>
 {
@@ -255,4 +255,16 @@ test("GraphQL upsertArgs / filterArgs / upsertKeyArg are validated at plan-build
     assert.throws(() => ConnectorPlanValidator.Validate(With({ upsertKeyArg: "orderId" })), /malformed/);
     assert.throws(() => ConnectorPlanValidator.Validate(With({ upsertArgs: "la bel=name:String" })), /malformed/);
     assert.doesNotThrow(() => ConnectorPlanValidator.Validate(With({ versionArg: "v", versionArgType: "Int " })));
+});
+
+test("keys source on a read-only binding is a plan error", () =>
+{
+    const binding: ConnectorBinding =
+    {
+        Concept: "a.Order", Connector: "pg", Source: "order", IdKey: "id",
+        FieldMap: { id: "id" }, Writable: false, KeyAssignment: KeyAssignment.Source,
+        Concurrency: WriteConcurrency.LastWriteWins, Atomicity: WriteAtomicity.Sequential,
+    };
+    assert.throws(() => ConnectorPlanValidator.Validate(ValidatorHarness.Plan(binding, ValidatorHarness.Sql)),
+        /keys source.*read-only/);
 });

@@ -11,6 +11,7 @@ import {
     ConnectorPlanValidator,
     DataSourceKind,
     WriteAtomicity,
+    KeyAssignment,
     WriteConcurrency,
     type ConnectorBinding,
     type ConnectorSpec,
@@ -45,6 +46,8 @@ export class ConnectorPlanEmitter
 
     private static readonly ConcurrencyTypeName = "WriteConcurrency";
     private static readonly AtomicityTypeName = "WriteAtomicity";
+    public static readonly KeyAssignmentTypeName = "KeyAssignment";
+    private static readonly KeyAssignmentSourceName = "Source";
 
     private static readonly ConcurrencyMembers: ReadonlyMap<string, WriteConcurrency> = new Map<string, WriteConcurrency>([
         [WriteConcurrency.LastWriteWins, WriteConcurrency.LastWriteWins],
@@ -118,6 +121,10 @@ export class ConnectorPlanEmitter
             {
                 binding.VersionField = versionField;
             }
+            if (ConnectorPlanEmitter.KeyAssignmentOf(attrs) === KeyAssignment.Source)
+            {
+                binding.KeyAssignment = KeyAssignment.Source;
+            }
             bindings.push(binding);
         }
         if (bindings.length === 0)
@@ -139,6 +146,14 @@ export class ConnectorPlanEmitter
     {
         return ConnectorPlanEmitter.ConcurrencyMembers.get(String(attrs.get(Builder.BindingConcurrencyAttr)))
             ?? WriteConcurrency.LastWriteWins;
+    }
+
+    /** The authored key assignment; Client (the default) when the source omits `keys`. */
+    private static KeyAssignmentOf(attrs: ReadonlyMap<string, unknown>): KeyAssignment
+    {
+        return attrs.get(Builder.BindingKeyAssignmentAttr) === KeyAssignment.Source
+            ? KeyAssignment.Source
+            : KeyAssignment.Client;
     }
 
     /** The authored atomicity axis, defaulting to sequential when the source omits it. */
@@ -261,6 +276,10 @@ export class ConnectorPlanEmitter
         lines.push(`${i3}Writable: ${b.Writable},`);
         lines.push(`${i3}Concurrency: ${ConnectorPlanEmitter.ConcurrencyTypeName}.${ConnectorPlanEmitter.ConcurrencyMemberNames.get(b.Concurrency)},`);
         lines.push(`${i3}Atomicity: ${ConnectorPlanEmitter.AtomicityTypeName}.${ConnectorPlanEmitter.AtomicityMemberNames.get(b.Atomicity)},`);
+        if (b.KeyAssignment === KeyAssignment.Source)
+        {
+            lines.push(`${i3}KeyAssignment: ${ConnectorPlanEmitter.KeyAssignmentTypeName}.${ConnectorPlanEmitter.KeyAssignmentSourceName},`);
+        }
         if (b.VersionField !== undefined)
         {
             lines.push(`${i3}VersionField: ${JSON.stringify(b.VersionField)},`);

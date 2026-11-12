@@ -53,6 +53,8 @@ export interface ConnectorBinding
     /** Atomicity axis for writes to this binding. Authored in TODL source (`atomicity ...`) and
      *  defaulted to {@link WriteAtomicity.Sequential} on plan-build when the source omits it. */
     Atomicity: WriteAtomicity;
+    /** Who assigns new rows' keys: absent = {@link KeyAssignment.Client}. Authored as `keys source;`. */
+    KeyAssignment?: KeyAssignment;
 }
 
 /** The datasource + bound source (table/endpoint) a connector-minted instance node came from. */
@@ -149,6 +151,13 @@ export enum WriteAtomicity
 {
     Sequential = "sequential",
     Transactional = "transactional",
+}
+
+/** Who assigns the key of a newly inserted row: the client (default) or the external source. */
+export enum KeyAssignment
+{
+    Client = "client",
+    Source = "source",
 }
 
 /** Why a single write did not persist. */
@@ -293,6 +302,8 @@ export class ConnectorPlanValidator
     private static readonly GraphQlTypePattern = /^\[?[_A-Za-z][_0-9A-Za-z]*!?\]?!?$/;
     private static readonly GraphQlStyleKey = "style";
     private static readonly GraphQlStyleValue = "graphql";
+    private static readonly SourceKeysPrefix = "binding for '";
+    private static readonly SourceKeysReadOnlySuffix = "' declares keys source but is read-only";
 
     // GraphQL write-config keys carried in ConnectorSpec.Config, mirrored from the host adapter's
     // GraphQlConnectionConfig (a higher layer we cannot import). An authored value that would make
@@ -335,6 +346,11 @@ export class ConnectorPlanValidator
         }
         for (const binding of plan.Bindings)
         {
+            if (binding.KeyAssignment === KeyAssignment.Source && !binding.Writable)
+            {
+                throw new Error(`${ConnectorPlanValidator.SourceKeysPrefix}${binding.Concept}`
+                    + ConnectorPlanValidator.SourceKeysReadOnlySuffix);
+            }
             if (binding.Concurrency === WriteConcurrency.Optimistic)
             {
                 ConnectorPlanValidator.ValidateOptimistic(plan.Connectors, binding);

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ConnectorPlanEmitter, MetaKind, WriteConcurrency, WriteAtomicity, check } from "@pragmatic-tech-ai/todl";
+import { ConnectorPlanEmitter, MetaKind, WriteConcurrency, WriteAtomicity, KeyAssignment, check } from "@pragmatic-tech-ai/todl";
 
 const META = `
 namespace shop {
@@ -130,4 +130,18 @@ test("an authored connector provider survives the plan and is rendered by Emit",
     assert.equal(plan!.Connectors[0]!.Provider, "pg-pack");
     const emitted = ConnectorPlanEmitter.Emit(plan!, "SHOP_PLAN");
     assert.ok(emitted.includes(`Provider: "pg-pack"`));
+});
+
+test("emits KeyAssignment.Source", () =>
+{
+    const sourceText = META_WITH_WRITE_MODE.replace("atomicity transactional;", "atomicity transactional; keys source;");
+    const { model, diagnostics } = check([{ uri: "shop.todl", text: sourceText }]);
+    assert.deepEqual(diagnostics, []);
+    const [modelId] = model.nodesOfMetaKind(MetaKind.Model);
+    const plan = ConnectorPlanEmitter.PlanFor(model, modelId!);
+    assert.equal(plan!.Bindings[0]!.KeyAssignment, KeyAssignment.Source);
+    assert.ok(ConnectorPlanEmitter.Emit(plan!, "SHOP_PLAN").includes("KeyAssignment: KeyAssignment.Source"));
+    const plain = ConnectorPlanEmitter.PlanFor(check([{ uri: "shop.todl", text: META_WITH_WRITE_MODE }]).model, modelId!);
+    assert.equal(plain!.Bindings[0]!.KeyAssignment, undefined);
+    assert.ok(!ConnectorPlanEmitter.Emit(plain!, "SHOP_PLAN").includes("KeyAssignment"));
 });

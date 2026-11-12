@@ -12,7 +12,7 @@ import { ApplicationModelData } from "./application-model-data.js";
 import { generateReadClient } from "./read-client.js";
 import { pascalCase } from "./naming.js";
 import { ConnectorPlanEmitter } from "./connector-plan-emitter.js";
-import type { ModelConnectorPlan } from "../model-data/connector-plan.js";
+import { KeyAssignment, type ModelConnectorPlan } from "../model-data/connector-plan.js";
 
 export interface ModelPackageOptions
 {
@@ -52,7 +52,7 @@ export class ModelPackageGenerator
             }
         }
 
-        const header = ModelPackageGenerator.EmitHeader(runtimeImport, plans.size > 0, plans.size < models.length);
+        const header = ModelPackageGenerator.EmitHeader(runtimeImport, plans.size > 0, plans.size < models.length, ModelPackageGenerator.UsesSourceKeys(plans));
         const body = generateReadClient(repo, { name: options.name, importSpecifier: runtimeImport, omitHeader: true, unusedSystemIds: unused });
         const shardsCode = models
             .map((m) => `const ${ModelPackageGenerator.SlugFor(m)}: TodlDocument = JSON.parse(${JSON.stringify(JSON.stringify(shards.get(m)))});`)
@@ -71,7 +71,13 @@ export class ModelPackageGenerator
         return sections.join("\n\n") + "\n";
     }
 
-    private static EmitHeader(runtimeImport: string, hasConnectors: boolean, hasBundled: boolean): string
+    /** True when any binding in the plans is source-assigned, so the emitted header must import KeyAssignment. */
+    private static UsesSourceKeys(plans: ReadonlyMap<NodeId, ModelConnectorPlan>): boolean
+    {
+        return [...plans.values()].some((plan) => plan.Bindings.some((b) => b.KeyAssignment === KeyAssignment.Source));
+    }
+
+    private static EmitHeader(runtimeImport: string, hasConnectors: boolean, hasBundled: boolean, usesSourceKeys: boolean): string
     {
         const values = ["ModelDataSource", "ReflectedEntity", "ModelRegistry"];
         if (hasBundled)
@@ -81,6 +87,10 @@ export class ModelPackageGenerator
         if (hasConnectors)
         {
             values.push("FederatedModelDataConnector", "DataSourceKind", "WriteConcurrency", "WriteAtomicity");
+            if (usesSourceKeys)
+            {
+                values.push(ConnectorPlanEmitter.KeyAssignmentTypeName);
+            }
         }
         const types = hasConnectors
             ? "EntityReader, IModelDataConnector, InstanceDescriptor, ModelConnectorPlan, NodeId, Scalar, TodlDocument"

@@ -47,3 +47,17 @@ test("model body parses connect and populate statements", () =>
     assert.deepEqual([s.concept, s.connector, s.source, s.readOnly, s.overrides.length], ["Shipment", "warehouse", "shipment_v", true, 0]);
     assert.equal(m.instances.length, 0);
 });
+
+test("parses keys source", () =>
+{
+    const src = `namespace n { model m : mm { populate Order key id { keys source; } populate Item; } }`;
+    const m = Harness.decls(src).find((d) => d.kind === DeclKind.Model) as ModelDecl;
+    assert.equal(m.populations[0]!.keyAssignment, "source");
+    assert.equal(m.populations[1]!.keyAssignment, null);
+});
+
+test("rejects unknown keys value", () =>
+{
+    const result = parse(`namespace n { model m : mm { populate Order key id { keys sideways; } } }`);
+    assert.ok(result.diagnostics.some((d) => d.message.includes("expected keys client or source")));
+});

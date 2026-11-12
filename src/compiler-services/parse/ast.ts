@@ -419,6 +419,8 @@ export interface PopulateDecl
   concurrency: string | null;
   /** `atomicity sequential|transactional` — raw authored value (mirrors `WriteAtomicity`). */
   atomicity: string | null;
+  /** `keys client|source` — raw authored value (mirrors `KeyAssignment`); null = absent (client). */
+  keyAssignment: string | null;
   span: SourceSpan;
   conceptSpan?: SourceSpan;
 }

@@ -152,17 +152,21 @@ class Parser
   private static readonly VersionMember = "version";
   private static readonly ConcurrencyMember = "concurrency";
   private static readonly AtomicityMember = "atomicity";
+  private static readonly KeysMember = "keys";
   // mirror WriteConcurrency / WriteAtomicity string values in model-data (cannot import upward across the layer boundary)
   private static readonly ConcurrencyValues: ReadonlySet<string> = new Set(["last-write-wins", "optimistic"]);
   private static readonly AtomicityValues: ReadonlySet<string> = new Set(["sequential", "transactional"]);
+  // mirrors KeyAssignment string values in model-data
+  private static readonly KeyAssignmentValues: ReadonlySet<string> = new Set(["client", "source"]);
   private static readonly WriteModeMembers: ReadonlySet<string> = new Set([
-    Parser.VersionMember, Parser.ConcurrencyMember, Parser.AtomicityMember,
+    Parser.VersionMember, Parser.ConcurrencyMember, Parser.AtomicityMember, Parser.KeysMember,
   ]);
   private static readonly Hyphen = "-";
   private static readonly ExpectedValueMessage = "expected a string or identifier value";
   private static readonly ExpectedFieldMessage = "expected a field name";
   private static readonly ExpectedConcurrencyMessage = "expected concurrency last-write-wins or optimistic";
   private static readonly ExpectedAtomicityMessage = "expected atomicity sequential or transactional";
+  private static readonly ExpectedKeysMessage = "expected keys client or source";
 
   /** Index of the next UNCONSUMED token — the whole parser's only mutable state. */
   private pos = 0;
@@ -1001,6 +1005,7 @@ class Parser
     let versionField: string | null = null;
     let concurrency: string | null = null;
     let atomicity: string | null = null;
+    let keyAssignment: string | null = null;
     if (this.check(TokenKind.LBrace))
     {
       this.advance();
@@ -1021,10 +1026,15 @@ class Parser
             if (!Parser.ConcurrencyValues.has(value)) throw this.error(Parser.ExpectedConcurrencyMessage);
             concurrency = value;
           }
-          else
+          else if (memberName === Parser.AtomicityMember)
           {
             if (!Parser.AtomicityValues.has(value)) throw this.error(Parser.ExpectedAtomicityMessage);
             atomicity = value;
+          }
+          else
+          {
+            if (!Parser.KeyAssignmentValues.has(value)) throw this.error(Parser.ExpectedKeysMessage);
+            keyAssignment = value;
           }
           return;
         }
@@ -1049,7 +1059,7 @@ class Parser
       this.expect(TokenKind.Semicolon);
     }
     const decl: PopulateDecl = {
-      concept, connector, source, idKey, overrides, readOnly, versionField, concurrency, atomicity,
+      concept, connector, source, idKey, overrides, readOnly, versionField, concurrency, atomicity, keyAssignment,
       span: this.spanFrom(start),
     };
     decl.conceptSpan = conceptSpan;

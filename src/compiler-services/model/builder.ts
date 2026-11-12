@@ -103,6 +103,7 @@ export class Builder
   public static readonly BindingVersionAttr = "versionField";
   public static readonly BindingConcurrencyAttr = "concurrency";
   public static readonly BindingAtomicityAttr = "atomicity";
+  public static readonly BindingKeyAssignmentAttr = "keyAssignment";
   public static readonly MatchLeftVar = "a";
   public static readonly MatchRightVar = "b";
 
@@ -465,6 +466,7 @@ export class Builder
     versionField: string | null = null,
     concurrency: string | null = null,
     atomicity: string | null = null,
+    keyAssignment: string | null = null,
   ): this
   {
     this.stagedNodes.push(this.makeNode(id, Tier.Ontology, { metaKind: MetaKind.Population }));
@@ -478,6 +480,7 @@ export class Builder
     if (versionField !== null) this.stagedAttrs.push({ id, name: Builder.BindingVersionAttr, value: versionField });
     if (concurrency !== null) this.stagedAttrs.push({ id, name: Builder.BindingConcurrencyAttr, value: concurrency });
     if (atomicity !== null) this.stagedAttrs.push({ id, name: Builder.BindingAtomicityAttr, value: atomicity });
+    if (keyAssignment !== null) this.stagedAttrs.push({ id, name: Builder.BindingKeyAssignmentAttr, value: keyAssignment });
     return this;
   }
 
