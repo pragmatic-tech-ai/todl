@@ -837,6 +837,37 @@ class AssigningAdapter implements IDataSourceAdapter
     }
 }
 
+/**
+ * A source-keyed adapter whose insert Apply really applies the rows (serials, into an inner InMemoryAdapter) and THEN
+ * throws, carrying on the error the keys it assigned — the production case of a driver that dies after inserting.
+ * Deletes (compensation) go through to the inner adapter.
+ */
+class ThrowingInsertAdapter implements IDataSourceAdapter
+{
+    public static readonly Boom = 'driver died after inserting';
+    public readonly Inner = new InMemoryAdapter();
+    public CanAssignKeys = true;
+
+    public Query(request: QueryRequest): Promise<readonly ExternalRecord[]>
+    {
+        return this.Inner.Query(request);
+    }
+
+    public async Apply(batch: WriteBatch): Promise<WriteResult>
+    {
+        if (batch.Operations[0]?.Kind === WriteOperationKind.Insert)
+        {
+            const result = await this.Inner.Apply(batch);
+            throw Object.assign(new Error(ThrowingInsertAdapter.Boom), { Assigned: result.Assigned });
+        }
+        return this.Inner.Apply(batch);
+    }
+
+    public async Dispose(): Promise<void>
+    {
+    }
+}
+
 /** A connector over a source-keyed binding and `adapter`, with request builders for source-keyed creates. */
 class CreateHarness
 {
@@ -955,5 +986,22 @@ describe('DataSourceConnector source-keyed creates', () =>
         assert.deepEqual(touts.map(o => o.Error !== undefined), [true, true, true]);
         await ttxn.Undo!();
         assert.deepEqual(atomic.DeletedKeys(), []);
+    });
+
+    test('create whose Apply throws after inserting still logs the applied rows for Undo', async () =>
+    {
+        // The production path: adapter.Apply inserts the rows, then the driver dies. The keys it assigned reach the
+        // step's log before the throw surfaces, so Undo compensates them and nothing orphans.
+        const adapter = new ThrowingInsertAdapter();
+        const h = new CreateHarness(adapter, Fx.SourceKeyed());
+        const txn = await h.Connector.Begin(ConnectorContext.Anonymous);
+        await assert.rejects(
+            txn.Create!([CreateHarness.Request({ [Fx.Name]: 'a' }), CreateHarness.Request({ [Fx.Name]: 'b' })]),
+            (e: unknown) => e instanceof Error && e.message === ThrowingInsertAdapter.Boom);
+        // Both rows were applied before the throw; they are now in the source.
+        assert.equal((await adapter.Inner.Query({ Source: Fx.Source, Fields: [Fx.IdKey] })).length, 2);
+        await txn.Undo!();
+        // Undo deleted exactly the applied rows: nothing orphans.
+        assert.deepEqual(await adapter.Inner.Query({ Source: Fx.Source, Fields: [Fx.IdKey] }), []);
     });
 });

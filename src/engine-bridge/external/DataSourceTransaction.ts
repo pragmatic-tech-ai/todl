@@ -176,40 +176,30 @@ export class DataSourceTransaction implements IConnectorTransaction
         const plans = requests.map((request, index) => this.Plan(request, index));
         const step: Step = [];
         this.steps.push(step);
-        // Apply one batch per binding and collect what the source assigned, keyed by Ref.
         const assigned = new Map<string, IAssignedKey>();
+        const reread = new Map<IExternalBinding, ExternalFieldValue[]>();
+        // One Apply per binding. Log what each binding assigned for Undo the moment its Apply settles, so a later
+        // binding's throw never orphans an earlier binding's rows, and so a throwing Apply that reports what it applied
+        // before dying (IAssignedKey[] on the error) is still logged and compensable (ruling R139 E9, spec §5.3 E3).
+        const seen = new Set<string>();
         for (const [binding, group] of DataSourceTransaction.ByBinding(plans))
         {
             const batch = DataSourceTransaction.InsertBatch(binding, group.map(p => p.Insert));
-            const result = await this.adapter.Apply(batch, this.context);
-            for (const key of result.Assigned ?? [])
+            let keys: readonly IAssignedKey[];
+            try
+            {
+                keys = (await this.adapter.Apply(batch, this.context)).Assigned ?? [];
+            }
+            catch (error)
+            {
+                DataSourceTransaction.LogApplied(binding, DataSourceTransaction.AssignedOf(error), step, seen);
+                throw error;
+            }
+            reread.set(binding, DataSourceTransaction.LogApplied(binding, keys, step, seen));
+            for (const key of keys)
             {
                 assigned.set(key.Ref, key);
             }
-        }
-        // Log every assigned insert for Undo (a Delete of its key), grouped by binding, BEFORE building any outcome.
-        const seen = new Set<string>();
-        const reread = new Map<IExternalBinding, ExternalFieldValue[]>();
-        for (const [binding, group] of DataSourceTransaction.ByBinding(plans))
-        {
-            const applied: WriteOperation[] = [];
-            const keys: ExternalFieldValue[] = [];
-            for (const plan of group)
-            {
-                const key = assigned.get(plan.Ref);
-                if (key === undefined || key.Key === null || seen.has(DataSourceTransaction.KeyText(key.Key)))
-                {
-                    continue;
-                }
-                seen.add(DataSourceTransaction.KeyText(key.Key));
-                applied.push({ Kind: WriteOperationKind.Upsert, Key: key.Key, Fields: {} });
-                keys.push(key.Key);
-            }
-            if (applied.length > 0)
-            {
-                step.push({ Binding: binding, Before: new Map(), Applied: applied, Versions: new Map() });
-            }
-            reread.set(binding, keys);
         }
         return this.Outcomes(plans, assigned, await this.RereadAll(reread));
     }
@@ -405,39 +395,72 @@ export class DataSourceTransaction implements IConnectorTransaction
             const key = assigned.get(plan.Ref);
             if (key === undefined)
             {
-                return { Error: this.WriteError(EngineBridgeErrorCode.KeyNotAssigned, DataSourceTransaction.ErrKeyNotAssigned + plan.Ref, plan.Binding) };
+                return { Error: DataSourceTransaction.WriteError(EngineBridgeErrorCode.KeyNotAssigned, DataSourceTransaction.ErrKeyNotAssigned + plan.Ref, plan.Binding) };
             }
             if (key.Key === null)
             {
-                return { Error: this.WriteError(EngineBridgeErrorCode.KeyNotAssigned, DataSourceTransaction.ErrNullKey + plan.Ref, plan.Binding) };
+                return { Error: DataSourceTransaction.WriteError(EngineBridgeErrorCode.KeyNotAssigned, DataSourceTransaction.ErrNullKey + plan.Ref, plan.Binding) };
             }
             const publicId = this.identity.Mint(plan.Binding, String(key.Key));
             if (minted.has(publicId))
             {
-                return { Error: this.Invalid(DataSourceTransaction.ErrDuplicateKey + publicId) };
+                return { Error: DataSourceTransaction.Invalid(DataSourceTransaction.ErrDuplicateKey + publicId) };
             }
             minted.add(publicId);
             if (Buffer.byteLength(publicId) > DataSourceTransaction.MaxIdBytes)
             {
-                return { Error: this.Invalid(DataSourceTransaction.ErrLongId + publicId) };
+                return { Error: DataSourceTransaction.Invalid(DataSourceTransaction.ErrLongId + publicId) };
             }
             const record = rows.get(plan.Binding)?.get(DataSourceTransaction.KeyText(key.Key));
             if (record === undefined)
             {
-                return { Error: this.Invalid(DataSourceTransaction.ErrMissingRow + publicId) };
+                return { Error: DataSourceTransaction.Invalid(DataSourceTransaction.ErrMissingRow + publicId) };
             }
             return { Row: this.builder.BuildRow(plan.Binding, record) };
         });
     }
 
-    private WriteError(code: EngineBridgeErrorCode.KeyNotAssigned, message: string, binding: IExternalBinding): ExternalWriteError
+    private static WriteError(code: EngineBridgeErrorCode.KeyNotAssigned, message: string, binding: IExternalBinding): ExternalWriteError
     {
         return new ExternalWriteError(code, message, binding, []);
     }
 
-    private Invalid(message: string): EngineBridgeError
+    private static Invalid(message: string): EngineBridgeError
     {
         return new EngineBridgeError(EngineBridgeErrorCode.ExternalRowInvalid, message);
+    }
+
+    /**
+     * Records a binding's assigned inserts in `step` as compensating Deletes (de-duplicated by key across the call via
+     * `seen`), so Undo removes exactly the rows this step applied. Returns the storage keys it logged (for the re-read).
+     */
+    private static LogApplied(binding: IExternalBinding, keys: readonly IAssignedKey[], step: Step, seen: Set<string>): ExternalFieldValue[]
+    {
+        const applied: WriteOperation[] = [];
+        const stored: ExternalFieldValue[] = [];
+        for (const key of keys)
+        {
+            if (key.Key === null || seen.has(DataSourceTransaction.KeyText(key.Key)))
+            {
+                continue;
+            }
+            seen.add(DataSourceTransaction.KeyText(key.Key));
+            applied.push({ Kind: WriteOperationKind.Upsert, Key: key.Key, Fields: {} });
+            stored.push(key.Key);
+        }
+        if (applied.length > 0)
+        {
+            step.push({ Binding: binding, Before: new Map(), Applied: applied, Versions: new Map() });
+        }
+        return stored;
+    }
+
+    /** The assigned keys a throwing Apply reports it applied before dying (an `Assigned` array on the error), else none. */
+    private static AssignedOf(error: unknown): readonly IAssignedKey[]
+    {
+        return typeof error === 'object' && error !== null && Array.isArray((error as { Assigned?: unknown }).Assigned)
+            ? (error as { Assigned: readonly IAssignedKey[] }).Assigned
+            : [];
     }
 
     /** Requests grouped by binding, in first-appearance order; the group keeps each request's plan. */
