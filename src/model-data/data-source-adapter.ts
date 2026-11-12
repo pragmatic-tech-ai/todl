@@ -53,6 +53,9 @@ export interface IDataSourceAdapter
     readonly SourceManagesVersions?: boolean;
     /** Whether this adapter can serve keyset-paged reads (QueryPage). Optional; absent -> false. */
     readonly CanPage?: boolean;
+    /** True when this adapter can execute source-keyed inserts (WriteOperationKind.Insert) and report the assigned keys
+     *  in WriteResult.Assigned. Optional; absent -> false (the adapter cannot take `keys source` creates). */
+    readonly CanAssignKeys?: boolean;
     /** Keyset page: rows with OrderKey > page.After, sorted by OrderKey asc, at most page.Limit. Optional. */
     QueryPage?(request: QueryRequest, page: PageQuery, context?: IDataSourceContext): Promise<PageSlice>;
 }

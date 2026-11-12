@@ -127,6 +127,8 @@ export enum WriteOperationKind
 {
     Upsert = "upsert",
     Delete = "delete",
+    /** A source-keyed insert: the source assigns the key, reported back in {@link WriteResult.Assigned} by {@link WriteOperation.Ref}. */
+    Insert = "insert",
 }
 
 /** One record write; Fields are already in EXTERNAL field names. */
@@ -137,6 +139,9 @@ export interface WriteOperation
     Fields: Record<string, ExternalFieldValue>;
     /** Expected prior version (optimistic mode). */
     Version?: ExternalFieldValue;
+    /** The caller's reference for a source-keyed {@link WriteOperationKind.Insert}: the key the source assigns is reported
+     *  back under this Ref (the key is null until then). Absent for Upsert and Delete. */
+    Ref?: string;
 }
 
 /** Concurrency axis of a write: how an upsert guards against a concurrent change. */
@@ -187,6 +192,17 @@ export interface WriteFailure
     Reason: string;
 }
 
+/** One source-assigned key reported by an {@link WriteOperationKind.Insert}, naming the {@link WriteOperation.Ref} it answers. */
+export interface IAssignedKey
+{
+    /** The Ref of the insert this key answers (the contract: keyed by Ref, order irrelevant). */
+    Ref: string;
+    /** The key the source assigned. */
+    Key: ExternalFieldValue;
+    /** The version the source set on the inserted row, when it has a version field. */
+    Version?: ExternalFieldValue;
+}
+
 /** Outcome of applying a write batch. */
 export interface WriteResult
 {
@@ -194,6 +210,8 @@ export interface WriteResult
     Failures: readonly WriteFailure[];
     /** The version each applied optimistic upsert now carries, when it was bumped on write (VersionBumpingAdapter). */
     Versions?: readonly { Key: ExternalFieldValue; Version: ExternalFieldValue }[];
+    /** The key the source assigned each applied {@link WriteOperationKind.Insert}, keyed by {@link WriteOperation.Ref}; order irrelevant. */
+    Assigned?: readonly IAssignedKey[];
 }
 
 /** The minimal resolved connection shape handed to an adapter. */
