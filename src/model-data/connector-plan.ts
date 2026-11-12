@@ -333,7 +333,11 @@ export class ConnectorPlanValidator
     private static readonly DeleteIdArgKey = "deleteIdArg";
     private static readonly UpsertMutationKey = "upsertMutation";
     private static readonly DeleteMutationKey = "deleteMutation";
+    private static readonly InsertMutationKey = "insertMutation";
+    private static readonly InsertInputArgKey = "insertInputArg";
     // The single-identifier keys (type/arg names + mutation names); upsertReturn (a space/comma list) is validated field-by-field.
+    // insertInputType is omitted deliberately: like upsertInputType it may carry a `!` (its JSON! default), so the adapter
+    // validates it as a GraphQL TYPE, not a bare identifier.
     private static readonly GraphQlIdentifierKeys: readonly string[] = [
         ConnectorPlanValidator.UpsertInputTypeKey,
         ConnectorPlanValidator.UpsertInputArgKey,
@@ -341,6 +345,8 @@ export class ConnectorPlanValidator
         ConnectorPlanValidator.DeleteIdArgKey,
         ConnectorPlanValidator.UpsertMutationKey,
         ConnectorPlanValidator.DeleteMutationKey,
+        ConnectorPlanValidator.InsertMutationKey,
+        ConnectorPlanValidator.InsertInputArgKey,
         ConnectorPlanValidator.VersionArgKey,
     ];
     // GraphQL identifier rule, mirrored from the host's GraphQlName.Pattern (no upward import).

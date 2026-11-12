@@ -183,6 +183,10 @@ test("an invalid GraphQL identifier (input type / arg / return field) is a plan-
         /upsertMutation.*not a valid GraphQL identifier/);
     assert.throws(() => ConnectorPlanValidator.Validate(GraphQlWriteConfigHarness.Plan({ deleteMutation: "delete-it" })),
         /deleteMutation.*not a valid GraphQL identifier/);
+    assert.throws(() => ConnectorPlanValidator.Validate(GraphQlWriteConfigHarness.Plan({ insertMutation: "insert Order" })),
+        /insertMutation.*not a valid GraphQL identifier/);
+    assert.throws(() => ConnectorPlanValidator.Validate(GraphQlWriteConfigHarness.Plan({ insertInputArg: "has-dash" })),
+        /insertInputArg.*not a valid GraphQL identifier/);
 });
 
 test("valid GraphQL write-config identifiers pass plan-build", () =>
@@ -191,6 +195,7 @@ test("valid GraphQL write-config identifiers pass plan-build", () =>
         upsertInputType: "OrderInput", upsertInputArg: "input", upsertReturn: "id total",
         deleteIdType: "ID", deleteIdArg: "id",
         upsertMutation: "upsertOrder", deleteMutation: "deleteOrder",
+        insertMutation: "insertOrder", insertInputArg: "input",
     })));
 });
 
