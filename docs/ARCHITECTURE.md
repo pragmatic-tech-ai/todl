@@ -449,9 +449,9 @@ surface; the old runtime paths are untouched until M2.3.
 - `SnapshotDescriber` always emits every plan binding, external ones included
   (the M1 `IDescribeOptions.EmitExternalBindings` switch was removed in M2.3).
 - Retired in M2.3 with the server's connector runtime: `ConnectorRuntimeGraphQuery`,
-  `ConnectorPrefetch`, `ConnectorMirrorMapper`, `ConjunctiveQueryFilterProvider`.
-  `FederatedModelDataConnector`/`ConnectorWorkingCopy` stay: `ModelPackageGenerator`
-  still emits them for connector-backed typed packages.
+  `ConnectorPrefetch`, `ConnectorMirrorMapper`, `ConjunctiveQueryFilterProvider`, then (R60, todl#27) `FederatedModelDataConnector`
+  and `ConnectorWorkingCopy`: `ModelPackageGenerator` now wires every model behind
+  `BundledModelDataConnector` over its embedded shard.
 
 ---
 

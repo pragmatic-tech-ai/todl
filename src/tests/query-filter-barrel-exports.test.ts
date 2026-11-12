@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { QueryCompareOp } from "../index.js";
-import type { IInstanceFilter, IInstanceView, IConnectorQueryFilterProvider, QueryFilter, QueryComparison, EntityHost } from "../index.js";
+import type { IInstanceFilter, IInstanceView, QueryFilter, QueryComparison, EntityHost } from "../index.js";
 
 class RetiredPolicyExports
 {
@@ -17,7 +17,7 @@ describe("query filter barrel exports", () =>
 
     it("resolves type exports", () =>
     {
-        const types: [IInstanceFilter?, IInstanceView?, IConnectorQueryFilterProvider?, QueryFilter?, QueryComparison?, EntityHost?] = [];
+        const types: [IInstanceFilter?, IInstanceView?, QueryFilter?, QueryComparison?, EntityHost?] = [];
         assert.equal(types.length, 0);
     });
 

@@ -3,11 +3,7 @@ import assert from "node:assert/strict";
 import { check } from "../../compiler-services/api.js";
 import { toJSON, type TodlDocument } from "../../compiler-services/emit/json.js";
 import { PopulationBuilder } from "../population-builder.js";
-import { ConnectorWorkingCopy } from "../connector-working-copy.js";
-import { DataSourceKind, WriteAtomicity, WriteConcurrency, type ConnectorBinding, type ModelConnectorPlan, type WriteBatch, type WriteTarget } from "../connector-plan.js";
-import { ServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
-import { DataSourceAdapterCatalog } from "../data-source-adapter-catalog.js";
-import type { IDataSourceAdapter, IDataSourceAdapterFactory } from "../data-source-adapter.js";
+import { DataSourceKind, WriteAtomicity, WriteConcurrency, type ConnectorBinding } from "../connector-plan.js";
 
 class RefsFixture
 {
@@ -65,31 +61,7 @@ test("a value naming no record (or a scalar member) is left as the raw scalar", 
     assert.equal(RefsFixture.EdgeFrom(doc, order.id, "buyer"), undefined);
 });
 
-test("write-back sends the reference member's original value", async () =>
-{
-    const doc = RefsFixture.Build([{ oid: "O1", label: "first", buyer_id: "C1" }]);
-    const order = RefsFixture.Order(doc, "O1");
-    const plan: ModelConnectorPlan = { Model: "a", Version: "1", Connectors: [{ Name: "pg", Kind: DataSourceKind.Sql, Config: {} }], Bindings: [RefsFixture.Customers, RefsFixture.Orders] };
-    const targets = new Map<string, readonly WriteTarget[]>([[order.id, [{ StorageId: "O1", Connector: "pg", Source: "orders" }]]]);
-    const copy = new ConnectorWorkingCopy(plan, doc, targets);
-    assert.equal(copy.MarkDirty(order.id), undefined);
-    const batches: WriteBatch[] = [];
-    const adapter: IDataSourceAdapter = {
-        Query: async () => [],
-        Apply: async (batch: WriteBatch) => { batches.push(batch); return { Applied: batch.Operations.length, Failures: [] }; },
-        Dispose: async () => {},
-    };
-    const factory: IDataSourceAdapterFactory = { Kind: DataSourceKind.Sql, Open: async () => adapter };
-    const catalog = new DataSourceAdapterCatalog().Register(factory);
-    const services = new ServiceProvider();
-    services.registerInstance(DataSourceAdapterCatalog.ServiceKey, catalog);
-    await copy.Flush(catalog, services);
-    const fields = batches[0]!.Operations[0]!.Fields;
-    assert.equal(fields["buyer_id"], "C1");
-    assert.equal(fields["label"], "first");
-});
-
-test("a numeric reference value keeps its type through write-back, and an identity rule over a reference member still merges", () =>
+test("a numeric reference value keeps its type, and an identity rule over a reference member still merges", () =>
 {
     const doc = new PopulationBuilder(RefsFixture.Base())
         .Add(RefsFixture.Binding("a.Customer", "customers", "cid", { id: "cid" }), [{ cid: 42 }])

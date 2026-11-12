@@ -38,9 +38,10 @@ test("a connector-backed model package reproduces the golden fixture byte-for-by
   assert.equal(Harness.Generate(), golden);
 });
 
-test("a connector-backed model is wired through FederatedModelDataConnector", () =>
+test("a connector-backed model is wired through BundledModelDataConnector over its shard", () =>
 {
   const out = Harness.Generate();
-  assert.match(out, /new FederatedModelDataConnector\(SHARD_SALES_SALES_PLAN, SHARD_SALES_SALES\)/);
-  assert.doesNotMatch(out, /new BundledModelDataConnector\(/);
+  assert.match(out, /new BundledModelDataConnector\(SHARD_SALES_SALES\)/);
+  assert.doesNotMatch(out, /FederatedModelDataConnector/);
+  assert.doesNotMatch(out, /_PLAN/);
 });
