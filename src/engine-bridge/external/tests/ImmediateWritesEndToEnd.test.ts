@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { ServiceProvider } from '@pragmatic-tech-ai/todl-runtime';
 import {
     AccessScope,
+    ConnectorContext,
     Cypher,
     MemberKind,
     ValueType,
@@ -108,6 +109,17 @@ class E2EFixture
         const connector = new DataSourceConnector(plan, adapter, identity);
         const engine = await EngineFixture.Open({ Description: E2EFixture.Description(), External: new Set(), Diagnostics: [] }, { Connectors: [connector] });
         return new E2EFixture(memory, engine, identity, customerBinding, orderBinding);
+    }
+
+    /** A standalone connector over a fresh in-memory adapter with both source-keyed bindings (no engine), for unit-level Create. */
+    public static StandaloneConnector(): { Connector: DataSourceConnector; Adapter: InMemoryAdapter; Identity: ExternalIdentity; Customer: IExternalBinding; Order: IExternalBinding }
+    {
+        const customer = E2EFixture.CustomerBindingWith({});
+        const order = E2EFixture.OrderBindingDef();
+        const plan = E2EFixture.Plan(customer, order);
+        const identity = new ExternalIdentity(E2EFixture.Description(), plan.Bindings);
+        const adapter = new InMemoryAdapter();
+        return { Connector: new DataSourceConnector(plan, adapter, identity), Adapter: adapter, Identity: identity, Customer: customer, Order: order };
     }
 
     public Cypher(): Cypher.CypherEngine
@@ -227,6 +239,29 @@ describe('immediate external writes end to end', () =>
         {
             await fx.dispose();
         }
+    });
+
+    test('create across two bindings on one connector that mint the same key keeps both rows', async () =>
+    {
+        // One connector spans both tables; each assigns serial 1. The two rows are distinct (minted ids differ), so both
+        // must survive — and both must compensate. (On 2b192021 the raw-key dedup drops the second row -> ErrMissingRow.)
+        const s = E2EFixture.StandaloneConnector();
+        const txn = await s.Connector.Begin(ConnectorContext.Anonymous);
+        const outcomes = await txn.Create!([
+            { Owner: E2EFixture.Model, Concept: E2EFixture.Order, Properties: new Map([['total', 5n]]), Links: [] },
+            { Owner: E2EFixture.Model, Concept: E2EFixture.Customer, Properties: new Map([['name', 'a']]), Links: [] },
+        ]);
+        assert.equal(outcomes.length, 2);
+        assert.ok(outcomes[0]!.Row !== undefined && outcomes[1]!.Row !== undefined);
+        assert.equal(outcomes[0]!.Row!.PublicId, s.Identity.Mint(s.Order, '1'));
+        assert.equal(outcomes[1]!.Row!.PublicId, s.Identity.Mint(s.Customer, '1'));
+        assert.notEqual(outcomes[0]!.Row!.PublicId, outcomes[1]!.Row!.PublicId);
+        assert.equal((await s.Adapter.Query({ Source: 'orders', Fields: ['ord_id'] })).length, 1);
+        assert.equal((await s.Adapter.Query({ Source: 'customers', Fields: ['cust_id'] })).length, 1);
+        // Compensate the step: both rows are removed, neither orphans.
+        await txn.Undo!();
+        assert.equal((await s.Adapter.Query({ Source: 'orders', Fields: ['ord_id'] })).length, 0);
+        assert.equal((await s.Adapter.Query({ Source: 'customers', Fields: ['cust_id'] })).length, 0);
     });
 
     test('abort after two statements\' steps compensates both', async () =>

@@ -192,10 +192,10 @@ export class DataSourceTransaction implements IConnectorTransaction
             }
             catch (error)
             {
-                DataSourceTransaction.LogApplied(binding, DataSourceTransaction.AssignedOf(error), step, seen);
+                this.LogApplied(binding, DataSourceTransaction.AssignedOf(error), step, seen);
                 throw error;
             }
-            reread.set(binding, DataSourceTransaction.LogApplied(binding, keys, step, seen));
+            reread.set(binding, this.LogApplied(binding, keys, step, seen));
             for (const key of keys)
             {
                 assigned.set(key.Ref, key);
@@ -431,20 +431,29 @@ export class DataSourceTransaction implements IConnectorTransaction
     }
 
     /**
-     * Records a binding's assigned inserts in `step` as compensating Deletes (de-duplicated by key across the call via
-     * `seen`), so Undo removes exactly the rows this step applied. Returns the storage keys it logged (for the re-read).
+     * Records a binding's assigned inserts in `step` as compensating Deletes, so Undo removes exactly the rows this step
+     * applied. De-duplication is on the MINTED PUBLIC ID (`seen`), not the raw key: one connector transaction spans every
+     * table of the connector, so two tables can each assign the same raw serial key, yet they are distinct rows
+     * (`Mint(b1,'1')` != `Mint(b2,'1')`). Keying on raw text would drop the second table's row from the Undo log and the
+     * re-read and orphan it on compensation (C1); keying on the minted id keeps both, while a genuine same-binding
+     * duplicate still collides. Returns the storage keys it logged (for the re-read).
      */
-    private static LogApplied(binding: IExternalBinding, keys: readonly IAssignedKey[], step: Step, seen: Set<string>): ExternalFieldValue[]
+    private LogApplied(binding: IExternalBinding, keys: readonly IAssignedKey[], step: Step, seen: Set<string>): ExternalFieldValue[]
     {
         const applied: WriteOperation[] = [];
         const stored: ExternalFieldValue[] = [];
         for (const key of keys)
         {
-            if (key.Key === null || seen.has(DataSourceTransaction.KeyText(key.Key)))
+            if (key.Key === null)
             {
                 continue;
             }
-            seen.add(DataSourceTransaction.KeyText(key.Key));
+            const publicId = this.identity.Mint(binding, String(key.Key));
+            if (seen.has(publicId))
+            {
+                continue;
+            }
+            seen.add(publicId);
             applied.push({ Kind: WriteOperationKind.Upsert, Key: key.Key, Fields: {} });
             stored.push(key.Key);
         }
