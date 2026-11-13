@@ -2,7 +2,8 @@
  * Emits `src/ui/<Class>/form.mu`: a referenceable `resources <Class>FormView`
  * ResourceDictionary carrying one keyed DataTemplate (`x:key="<Class>FormTemplate"`,
  * `DataType = <Class>ListVM`) — one control per scalar field two-way bound to
- * `$Selected.<BindingName>`, plus Save and Delete buttons. The app root `merge`s this
+ * `$Selected.<BindingName>`, plus Save and Delete buttons and the list VM's `ErrorText` (a failed
+ * write's reason, in the theme's danger ink). The app root `merge`s this
  * dictionary and hosts the template by key, so the generated file stays the live,
  * editable source of the form view (not an inlined copy).
  */
@@ -39,6 +40,7 @@ export class ConceptFormGenerator implements IConceptUiGenerator
         "            Button [ Command = $DeleteCommand ] {\n" +
         "                TextBlock [ Text = \"Delete\" ]\n" +
         "            }\n" +
+        "            TextBlock [ Text = $ErrorText, Foreground = @StateDangerInk ]\n" +
         "        }\n" +
         "    }\n" +
         "}\n";

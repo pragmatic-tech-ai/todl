@@ -329,6 +329,17 @@ describe("remote flavor emitters", () =>
         assert.ok(src.includes("mapped.Reason = result.reason"), "reason passes back onto the result");
     });
 
+    test("generated data.ts reports a refused write request as Denied per op, with the server's reason", async () =>
+    {
+        const ctx = Fixture.Ready({ Remote });
+        await new EmitRemoteDataAction().Execute(ctx);
+        const src = await ctx.Sandbox.ReadText("generated/data.ts");
+        assert.ok(src.includes("error.code !== ErrorCodes.InvalidRequest) throw error;"), "only a refused request is translated");
+        assert.ok(src.includes("ops.map(() => ({ Status: ConnectorWriteStatus.Denied, Reason: error.message }))"));
+        assert.ok(src.indexOf("catch (error)", src.indexOf("WriteDocument(")) > src.indexOf("client.WriteAppData("));
+        assert.deepEqual(Fixture.TypeCheckEmitted(src), []);
+    });
+
     test("environment_bind_mode_omits_open_application", async () =>
     {
         const ctx = Fixture.Ready({ Remote: { AppName: "orders", Bind: RemoteBindMode.Environment } });

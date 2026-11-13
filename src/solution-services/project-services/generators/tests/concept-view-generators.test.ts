@@ -99,6 +99,9 @@ describe("concept view generators", () =>
         assert.ok(mu.includes("TextBox [ Text = $Selected.nickname ]"));
         assert.ok(mu.includes("TextBox [ Text = $Selected.age ]"));
         assert.ok(mu.includes("Checkbox [ IsChecked = $Selected.active ]"));
+        // A failed Save or Delete is shown: the list VM's ErrorText, under the buttons, in the theme's danger ink.
+        assert.ok(mu.includes("TextBlock [ Text = $ErrorText, Foreground = @StateDangerInk ]"));
+        assert.ok(mu.indexOf("$ErrorText") > mu.indexOf("Command = $DeleteCommand"));
         assert.doesNotThrow(() => Fixture.Compiles(mu));
     });
 

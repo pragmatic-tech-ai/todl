@@ -42,8 +42,15 @@ class FakeModel
         return this.records;
     }
 
+    /** When set, Apply rejects with it (a transport or server failure), as a refused request does. */
+    public throws: Error | undefined = undefined;
+
     public async Apply(ops: readonly ConnectorWriteOp[]): Promise<ConnectorWriteResult>
     {
+        if (this.throws !== undefined)
+        {
+            throw this.throws;
+        }
         const result = this.ApplyOps(ops);
         // Mirror the real ModelDataSource.Apply -> Refresh -> loadDocument -> DataChanged.emit().
         this.DataChanged.emit();
@@ -216,12 +223,12 @@ describe("concept CRUD view-model generator", () =>
 
         // On a non-Applied result, ErrorText is set from Reason/Status.
         assert.ok(ts.includes("outcome.Status !== ConnectorWriteStatus.Applied"));
-        assert.ok(ts.includes("this.ErrorText = outcome?.Reason ?? ConnectorWriteStatus["));
+        assert.ok(ts.includes("this.ErrorText = failed ? outcome?.Reason ?? ConnectorWriteStatus["));
 
         // The Save path must NOT mutate Items before Apply resolves (re-read is the truth).
         const saveStart = ts.indexOf("private async Save(");
         assert.ok(saveStart >= 0);
-        const applyAt = ts.indexOf(".Apply(", saveStart);
+        const applyAt = ts.indexOf("this.Write(", saveStart);
         assert.ok(applyAt >= 0);
         const beforeApply = ts.slice(saveStart, applyAt);
         assert.ok(!beforeApply.includes("this.items ="));
@@ -308,6 +315,90 @@ describe("concept CRUD view-model generator", () =>
             await VmHarness.Flush();
             assert.equal(list.Selected?.IsNew, true);
             assert.equal(list.Selected?.name, "draft");
+        }
+        finally
+        {
+            await harness.Dispose();
+        }
+    });
+
+    test("a Save whose write throws shows a generic error, never the error's detail, and keeps the draft", async () =>
+    {
+        const project = new FakeStorage();
+        await new ConceptCrudViewModelGenerator().Generate(Fixture.Context(project));
+        const harness = await VmHarness.Load(await project.ReadText("src/ui/Customer/Customer-vm.ts"));
+        try
+        {
+            const model = new FakeModel();
+            model.throws = new Error("socket to db-host:5432 closed");
+            const list = new harness.ListVm(model);
+            list.NewCommand.Execute();
+            list.Selected.name = "draft";
+
+            list.SaveCommand.Execute();
+            await VmHarness.Flush();
+
+            assert.equal(list.ErrorText, "The change could not be saved.");
+            assert.equal(list.Selected?.IsNew, true);
+            assert.equal(list.Selected?.name, "draft");
+        }
+        finally
+        {
+            await harness.Dispose();
+        }
+    });
+
+    test("a denied Save shows the reason, and the next successful Save clears it", async () =>
+    {
+        const project = new FakeStorage();
+        await new ConceptCrudViewModelGenerator().Generate(Fixture.Context(project));
+        const harness = await VmHarness.Load(await project.ReadText("src/ui/Customer/Customer-vm.ts"));
+        try
+        {
+            const model = new FakeModel();
+            model.status = ConnectorWriteStatus.Denied;
+            const list = new harness.ListVm(model);
+            list.NewCommand.Execute();
+            list.Selected.name = "B";
+
+            list.SaveCommand.Execute();
+            await VmHarness.Flush();
+            assert.equal(list.ErrorText, "rejected");
+
+            model.status = ConnectorWriteStatus.Applied;
+            list.SaveCommand.Execute();
+            await VmHarness.Flush();
+            assert.equal(list.ErrorText, "");
+        }
+        finally
+        {
+            await harness.Dispose();
+        }
+    });
+
+    test("a Delete that is denied or throws shows an error and keeps the row selected", async () =>
+    {
+        const project = new FakeStorage();
+        await new ConceptCrudViewModelGenerator().Generate(Fixture.Context(project));
+        const harness = await VmHarness.Load(await project.ReadText("src/ui/Customer/Customer-vm.ts"));
+        try
+        {
+            const model = new FakeModel();
+            model.records = [new FakeEntity("c1", { name: "A" })];
+            const list = new harness.ListVm(model);
+            list.Selected = list.Items[0];
+
+            model.status = ConnectorWriteStatus.Denied;
+            list.DeleteCommand.Execute();
+            await VmHarness.Flush();
+            assert.equal(list.ErrorText, "rejected");
+            assert.equal(list.Selected?.Id, "c1");
+
+            model.throws = new Error("socket closed");
+            list.DeleteCommand.Execute();
+            await VmHarness.Flush();
+            assert.equal(list.ErrorText, "The item could not be deleted.");
+            assert.equal(list.Selected?.Id, "c1");
         }
         finally
         {
