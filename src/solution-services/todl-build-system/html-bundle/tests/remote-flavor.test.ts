@@ -9,7 +9,7 @@ import { FakeStorage } from "@pragmatic-tech-ai/todl-runtime";
 import { BuildArtifacts } from "../../../build-system-core/build-artifacts.js";
 import { BuildSystemRegistry } from "../../../build-system-core/build-system-registry.js";
 import { DiagnosticSink, Severity } from "../../../build-system-core/diagnostic-sink.js";
-import { RemoteBindMode, type BuildOptions } from "../../../build-system-core/build-options.js";
+import type { BuildOptions } from "../../../build-system-core/build-options.js";
 import { HtmlBundleBuildSystem } from "../html-bundle-build-system.js";
 import { EsbuildBundler } from "../node/esbuild-bundler.js";
 import type { ITypeChecker, TypeCheckResult } from "../../../build-system-core/type-checker.js";
@@ -340,32 +340,18 @@ describe("remote flavor emitters", () =>
         assert.deepEqual(Fixture.TypeCheckEmitted(src), []);
     });
 
-    test("environment_bind_mode_omits_open_application", async () =>
+    test("every remote app opens its application on connect, so data/* writes are accepted", async () =>
     {
-        const ctx = Fixture.Ready({ Remote: { AppName: "orders", Bind: RemoteBindMode.Environment } });
+        const ctx = Fixture.Ready({ Remote });
         await new EmitRemoteDataAction().Execute(ctx);
         assert.equal(ctx.Diagnostics.Count, 0, JSON.stringify(ctx.Diagnostics.All()));
         const src = await ctx.Sandbox.ReadText("generated/data.ts");
-        assert.ok(!src.includes("OpenApplication("));
-        assert.ok(!src.includes("AppName"), "the dead AppName field is not emitted in environment mode");
-        assert.ok(src.includes("MATCH (n) RETURN n"));
-        assert.ok(src.includes("acme.App"), "ontology schema is still embedded");
-        assert.ok(src.includes("QueryAll"));
+        assert.equal(src.split("OpenApplication(").length - 1, 1, "opened once, on connect");
+        assert.ok(src.includes("    private static readonly AppName = \"orders\";\n    private static readonly Query"));
+        assert.ok(src.includes("PragmaticClient.ConnectReconnecting(new BrowserSocketDialer(CypherTenantClient.SocketUrl()));\n"));
+        assert.ok(src.includes("        await client.OpenApplication(CypherTenantClient.AppName);\n        return client;"));
+        assert.ok(src.includes("MATCH (n) RETURN n"), "reads still run the environment-wide query");
         assert.deepEqual(Fixture.TypeCheckEmitted(src), []);
-    });
-
-    test("application_bind_mode_still_opens_app", async () =>
-    {
-        const absent = Fixture.Ready({ Remote });
-        const explicit = Fixture.Ready({ Remote: { AppName: "orders", Bind: RemoteBindMode.Application } });
-        await new EmitRemoteDataAction().Execute(absent);
-        await new EmitRemoteDataAction().Execute(explicit);
-        const a = await absent.Sandbox.ReadText("generated/data.ts");
-        const e = await explicit.Sandbox.ReadText("generated/data.ts");
-        assert.ok(a.includes("client.OpenApplication("));
-        assert.ok(a.includes("    private static readonly AppName = \"orders\";\n    private static readonly Query"));
-        assert.equal(e, a, "explicit Application is byte-identical to absent");
-        assert.ok(a.includes("PragmaticClient.ConnectReconnecting(new BrowserSocketDialer(CypherTenantClient.SocketUrl()));\n        await client.OpenApplication(CypherTenantClient.AppName);\n        return client;"));
     });
 
     test("entry constructs the view-model synchronously, then awaits PrepareAndMount", async () =>

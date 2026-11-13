@@ -468,7 +468,7 @@ export { HtmlBundleBuildSystem } from './solution-services/todl-build-system/htm
 export { BuildStorageProviderKey } from './solution-services/todl-build-system/build-storage-provider-key.js';
 // Remote-app bind mode + the build-options shapes it rides with (Application vs Environment graph);
 // defined once in build-system-core, re-exported here so hosts import it from the package root.
-export { RemoteBindMode, type BuildOptions, type RemoteBuildTarget } from './solution-services/build-system-core/build-options.js';
+export type { BuildOptions, RemoteBuildTarget } from './solution-services/build-system-core/build-options.js';
 // The project build runner a browser host drives to publish one project (npm-publish
 // flavor). Browser-safe (build-system-core + todl-build-context types only) — exposed
 // here so renderer hosts need not import the ./todl-build-system barrel, which also
