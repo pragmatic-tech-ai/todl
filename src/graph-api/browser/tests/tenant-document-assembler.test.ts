@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import type { IServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
 import { compilePackage } from "../../../publish/publish.js";
 import { GenericModelDataSource } from "../../../model-data/generic-model-data-source.js";
-import { RemoteTenantConnector } from "../remote-tenant-connector.js";
+import { RemoteDataSourceUnavailableError, RemoteTenantConnector } from "../remote-tenant-connector.js";
 import { TenantDocumentAssembler, type TenantNodeCell } from "../tenant-document-assembler.js";
 import { TodlAppBootstrap } from "../todl-app-bootstrap.js";
 
@@ -115,5 +115,15 @@ describe("TodlAppBootstrap.PrepareAndMount", () =>
         const model = { Prepare: async () => { throw new Error("boom"); } };
         await assert.rejects(() => TodlAppBootstrap.PrepareAndMount(app, model as never, () => { ran = true; }), /boom/);
         assert.equal(ran, false);
+    });
+
+    test("a data source that did not answer is named in the failure message; anything else stays generic", () =>
+    {
+        const named = TodlAppBootstrap.FailureMessage(new RemoteDataSourceUnavailableError("catalog.Catalog"));
+        assert.ok(named.includes("catalog.Catalog"));
+        const generic = TodlAppBootstrap.FailureMessage(new Error("getaddrinfo ENOTFOUND db-host"));
+        assert.ok(!generic.includes("ENOTFOUND"));
+        assert.ok(generic.includes("could not load its data"));
+        assert.notEqual(named, generic);
     });
 });

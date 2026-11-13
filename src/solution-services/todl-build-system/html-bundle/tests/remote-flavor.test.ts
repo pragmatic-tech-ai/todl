@@ -298,6 +298,17 @@ describe("remote flavor emitters", () =>
         assert.ok(!src.includes("\"A1\""), "instance data is not embedded");
     });
 
+    test("generated data.ts turns the server's data-source-unavailable error into RemoteDataSourceUnavailableError", async () =>
+    {
+        const ctx = Fixture.Ready({ Remote });
+        await new EmitRemoteDataAction().Execute(ctx);
+        const src = await ctx.Sandbox.ReadText("generated/data.ts");
+        assert.ok(src.includes("DataSourceUnavailableError.DataSourceOf(error)"), "reads the source from the wire error");
+        assert.ok(src.includes("throw new RemoteDataSourceUnavailableError(source);"));
+        assert.ok(src.indexOf("catch (error)") > src.indexOf("client.QueryAll("), "only the read is translated");
+        assert.ok(src.includes("            throw error;\n"), "any other failure passes unchanged");
+    });
+
     test("generated data.ts emits the tenant write adapter over WriteAppData", async () =>
     {
         const ctx = Fixture.Ready({ Remote });

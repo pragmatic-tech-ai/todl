@@ -32,6 +32,22 @@ export class RemoteWriteUnsupportedError extends Error
     }
 }
 
+/**
+ * Thrown by an ITenantReadClient when the tenant could not read the app's data because one of its data sources did
+ * not answer. DataSource is the source's qualified TODL name (`<namespace>.<name>`); the cause stays on the server.
+ */
+export class RemoteDataSourceUnavailableError extends Error
+{
+    private static readonly ErrorName = "RemoteDataSourceUnavailableError";
+    private static readonly MessageStart = "Data source unavailable: ";
+
+    constructor(public readonly DataSource: string)
+    {
+        super(RemoteDataSourceUnavailableError.MessageStart + DataSource);
+        this.name = RemoteDataSourceUnavailableError.ErrorName;
+    }
+}
+
 export class RemoteTenantConnector implements IModelDataConnector
 {
     private cached: Promise<TodlDocument> | undefined;
