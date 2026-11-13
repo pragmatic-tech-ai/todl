@@ -1,5 +1,7 @@
-import { ServiceKey, type IServiceProvider } from '@pragmatic-tech-ai/todl-runtime'
+import { ServiceKey, type IServiceProvider, type IStorage } from '@pragmatic-tech-ai/todl-runtime'
 import {
+    PROJECT_MANIFEST_FILENAME,
+    type IVersionedProjectFactory,
     type ProjectFileFormat,
     type ProjectManifestEnvelope,
 } from '../core/project-factory.js'
@@ -38,7 +40,7 @@ interface ArchitectureManifest extends ProjectManifestEnvelope
     diagrams?: { [path: string]: { viewpoints: string[] } }   // per-diagram viewpoint selection
 }
 
-export class ArchitectureProjectFactory extends TodlProjectFactory
+export class ArchitectureProjectFactory extends TodlProjectFactory implements IVersionedProjectFactory
 {
     public static readonly Key = new ServiceKey<ArchitectureProjectFactory>('ArchitectureProjectFactory')
     public static readonly ProjectType = 'architecture'
@@ -77,6 +79,26 @@ export class ArchitectureProjectFactory extends TodlProjectFactory
     private static slugify(name: string): string
     {
         return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'architecture'
+    }
+
+    // IVersionedProjectFactory: the package version a build stamps on the architecture package (and a
+    // published app's version, which the server keeps immutable). A manifest without one reads as the default.
+    public async getVersion(storage: IStorage): Promise<string>
+    {
+        return (await ArchitectureProjectFactory.ReadManifest(storage)).packageVersion ?? ArchitectureProjectFactory.DefaultPackageVersion
+    }
+
+    // Writes packageVersion back, every other manifest field as it was.
+    public async setVersion(storage: IStorage, version: string): Promise<void>
+    {
+        const manifest = await ArchitectureProjectFactory.ReadManifest(storage)
+        manifest.packageVersion = version
+        await storage.WriteText(PROJECT_MANIFEST_FILENAME, JSON.stringify(manifest, null, 2))
+    }
+
+    private static async ReadManifest(storage: IStorage): Promise<ArchitectureManifest>
+    {
+        return JSON.parse(await storage.ReadText(PROJECT_MANIFEST_FILENAME)) as ArchitectureManifest
     }
 
     // The architecture project's own scaffold (its CLAUDE.md); the shared TODL manual

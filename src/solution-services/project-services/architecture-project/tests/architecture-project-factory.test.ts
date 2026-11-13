@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { ServiceProvider } from '@pragmatic-tech-ai/todl-runtime'
 import { NodeFsStorage } from '@pragmatic-tech-ai/todl-runtime/node'
 import { ProjectNodeKind } from '../../core/project.js'
-import { providesGenerators } from '../../core/project-factory.js'
+import { isVersioned, providesGenerators } from '../../core/project-factory.js'
 import { ArchitectureProjectFactory } from '../architecture-project-factory.js'
 import { MetaModelProjectFactory } from '../../meta-model-project/meta-model-project-factory.js'
 
@@ -77,6 +77,28 @@ test('createProject lays down the architecture CLAUDE.md over the shared TODL sc
     assert.match(await storage.ReadText('CLAUDE.md'), /Architecture project/i)
     assert.equal(await storage.Exists('.claude/todl-manual.md'), true)
     assert.equal(await storage.Exists('.claude/todl-rules.md'), true)
+})
+
+test('is versioned: getVersion reads packageVersion and setVersion writes it, keeping every other manifest field', async (t) => {
+    const storage = await tempStorage(t)
+    const f = factory()
+    assert.ok(isVersioned(f))
+    await f.createProject(storage, 'Acme', { metaModels: [{ id: 'tech-architecture', version: '1.2.0' }] })
+    const before = JSON.parse(await storage.ReadText('project.plexus'))
+    before.diagrams = { 'a.diagram': { viewpoints: ['v1'] } }
+    await storage.WriteText('project.plexus', JSON.stringify(before, null, 2))
+    assert.equal(await f.getVersion(storage), '0.1.0')
+
+    await f.setVersion(storage, '0.1.1')
+
+    assert.equal(await f.getVersion(storage), '0.1.1')
+    assert.deepEqual(JSON.parse(await storage.ReadText('project.plexus')), { ...before, packageVersion: '0.1.1' })
+})
+
+test('a manifest without packageVersion reads as the default package version', async (t) => {
+    const storage = await tempStorage(t)
+    await storage.WriteText('project.plexus', JSON.stringify({ type: 'architecture', name: 'Old', version: 1, id: 'old' }))
+    assert.equal(await factory().getVersion(storage), '0.1.0')
 })
 
 test('declares its content generators: DTO, data, app view-model, app UI', () => {
