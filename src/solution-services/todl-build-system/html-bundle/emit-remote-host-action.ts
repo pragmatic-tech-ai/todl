@@ -11,7 +11,7 @@ import { ServableManifest, type ServablePackageRef } from "./servable-manifest.j
 import { RemoteTargetReader } from "./remote-target-reader.js";
 
 // Remote-flavor host emit: a payload-FREE index.html (the app fetches its data live) plus
-// the servable-app manifest a tenant serves it by. The UI bundle is inlined in index.html,
+// the servable-app manifest an environment serves it by. The UI bundle is inlined in index.html,
 // so the manifest's single asset is that page.
 export class EmitRemoteHostAction implements IBuildAction<TodlBuildContext>
 {

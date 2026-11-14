@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import type { IServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
 import { compilePackage } from "../../../publish/publish.js";
 import { GenericModelDataSource } from "../../../model-data/generic-model-data-source.js";
-import { RemoteDataSourceUnavailableError, RemoteSignInRequiredError, RemoteTenantConnector } from "../remote-tenant-connector.js";
-import { TenantDocumentAssembler, type TenantNodeCell } from "../tenant-document-assembler.js";
+import { RemoteDataSourceUnavailableError, RemoteSignInRequiredError, RemoteEnvironmentConnector } from "../remote-environment-connector.js";
+import { EnvironmentDocumentAssembler, type EnvironmentNodeCell } from "../environment-document-assembler.js";
 import { TodlAppBootstrap } from "../todl-app-bootstrap.js";
 
 const Source =
@@ -19,7 +19,7 @@ class Fixture
         return outcome.package!.fullDocument;
     }
 
-    public static Cells(): TenantNodeCell[]
+    public static Cells(): EnvironmentNodeCell[]
     {
         return [
             { id: "acme.a1", concept: "Svc", fields: { label: { value: "A1" } }, refs: {} },
@@ -28,11 +28,11 @@ class Fixture
     }
 }
 
-describe("TenantDocumentAssembler", () =>
+describe("EnvironmentDocumentAssembler", () =>
 {
     test("SchemaOf keeps ontology + model node and drops instances", () =>
     {
-        const schema = TenantDocumentAssembler.SchemaOf(Fixture.Full());
+        const schema = EnvironmentDocumentAssembler.SchemaOf(Fixture.Full());
         assert.ok(schema.nodes.some(n => n.id === "acme.Svc"));
         assert.ok(schema.nodes.some(n => n.metaKind === "model"));
         assert.ok(!schema.nodes.some(n => n.id === "acme.a1"));
@@ -40,7 +40,7 @@ describe("TenantDocumentAssembler", () =>
 
     test("Assemble adds live instances, containment and relationship edges", () =>
     {
-        const doc = TenantDocumentAssembler.Assemble(TenantDocumentAssembler.SchemaOf(Fixture.Full()), Fixture.Cells());
+        const doc = EnvironmentDocumentAssembler.Assemble(EnvironmentDocumentAssembler.SchemaOf(Fixture.Full()), Fixture.Cells());
         const a2 = doc.nodes.find(n => n.id === "acme.a2")!;
         assert.equal(a2.type, "acme.Svc");
         assert.equal(a2.attrs.label, "live");
@@ -50,48 +50,48 @@ describe("TenantDocumentAssembler", () =>
 
     test("Assemble skips cells of unknown concepts and NodeCellOf accepts only $node cells", () =>
     {
-        const schema = TenantDocumentAssembler.SchemaOf(Fixture.Full());
-        const doc = TenantDocumentAssembler.Assemble(schema, [{ id: "z.q", concept: "Nope", fields: {}, refs: {} }]);
+        const schema = EnvironmentDocumentAssembler.SchemaOf(Fixture.Full());
+        const doc = EnvironmentDocumentAssembler.Assemble(schema, [{ id: "z.q", concept: "Nope", fields: {}, refs: {} }]);
         assert.ok(!doc.nodes.some(n => n.id === "z.q"));
         const node = Fixture.Cells()[0]!;
-        assert.equal(TenantDocumentAssembler.NodeCellOf(5), undefined);
-        assert.equal(TenantDocumentAssembler.NodeCellOf(null), undefined);
-        assert.equal(TenantDocumentAssembler.NodeCellOf({ $node: node }), node);
-        assert.equal(TenantDocumentAssembler.NodeCellOf(node), undefined, "a node-shaped map is not a node");
-        assert.equal(TenantDocumentAssembler.NodeCellOf({ $map: { $node: node } }), undefined);
-        assert.equal(TenantDocumentAssembler.NodeCellOf({ $node: { id: "x" } }), undefined);
+        assert.equal(EnvironmentDocumentAssembler.NodeCellOf(5), undefined);
+        assert.equal(EnvironmentDocumentAssembler.NodeCellOf(null), undefined);
+        assert.equal(EnvironmentDocumentAssembler.NodeCellOf({ $node: node }), node);
+        assert.equal(EnvironmentDocumentAssembler.NodeCellOf(node), undefined, "a node-shaped map is not a node");
+        assert.equal(EnvironmentDocumentAssembler.NodeCellOf({ $map: { $node: node } }), undefined);
+        assert.equal(EnvironmentDocumentAssembler.NodeCellOf({ $node: { id: "x" } }), undefined);
     });
 
-    test("the assembled document loads into a ModelDataSource through RemoteTenantConnector", async () =>
+    test("the assembled document loads into a ModelDataSource through RemoteEnvironmentConnector", async () =>
     {
-        const schema = TenantDocumentAssembler.SchemaOf(Fixture.Full());
-        const client = { ReadDocument: async () => TenantDocumentAssembler.Assemble(schema, Fixture.Cells()) };
-        const source = new GenericModelDataSource("my-arch", new RemoteTenantConnector(client));
+        const schema = EnvironmentDocumentAssembler.SchemaOf(Fixture.Full());
+        const client = { ReadDocument: async () => EnvironmentDocumentAssembler.Assemble(schema, Fixture.Cells()) };
+        const source = new GenericModelDataSource("my-arch", new RemoteEnvironmentConnector(client));
         await source.Prepare({} as IServiceProvider);
         assert.equal(source.Instances("acme.Svc").length, 2);
     });
 
     test("Assemble drops a ref to an unknown target so a dangling edge never fails the whole load", async () =>
     {
-        const schema = TenantDocumentAssembler.SchemaOf(Fixture.Full());
-        const cells: TenantNodeCell[] = [
+        const schema = EnvironmentDocumentAssembler.SchemaOf(Fixture.Full());
+        const cells: EnvironmentNodeCell[] = [
             { id: "acme.a1", concept: "acme.Svc", fields: { label: { value: "A1" } }, refs: { uses: ["acme.ghost"] } },
         ];
-        const doc = TenantDocumentAssembler.Assemble(schema, cells);
+        const doc = EnvironmentDocumentAssembler.Assemble(schema, cells);
         assert.ok(!doc.edges.some(e => e.to === "acme.ghost"), "the dangling ref edge is not emitted");
-        const source = new GenericModelDataSource("my-arch", new RemoteTenantConnector({ ReadDocument: async () => doc }));
+        const source = new GenericModelDataSource("my-arch", new RemoteEnvironmentConnector({ ReadDocument: async () => doc }));
         await source.Prepare({} as IServiceProvider); // must not throw on the dropped dangling ref
         assert.equal(source.Instances("acme.Svc").length, 1);
     });
 
     test("Assemble does not wire relationship edges from a cell whose id collides with a schema node", () =>
     {
-        const schema = TenantDocumentAssembler.SchemaOf(Fixture.Full());
-        const cells: TenantNodeCell[] = [
+        const schema = EnvironmentDocumentAssembler.SchemaOf(Fixture.Full());
+        const cells: EnvironmentNodeCell[] = [
             { id: "acme.a1", concept: "acme.Svc", fields: {}, refs: {} },
             { id: "acme.Svc", concept: "acme.Svc", fields: {}, refs: { uses: ["acme.a1"] } },
         ];
-        const doc = TenantDocumentAssembler.Assemble(schema, cells);
+        const doc = EnvironmentDocumentAssembler.Assemble(schema, cells);
         assert.ok(!doc.edges.some(e => e.kind === "Relationship" && e.from === "acme.Svc"), "no ref edge originates from the colliding schema node");
     });
 });

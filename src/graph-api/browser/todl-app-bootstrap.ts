@@ -1,9 +1,9 @@
 import { Application, type ApplicationInitOptions } from "@pragmatic-tech-ai/mural";
 import { Pragmatic, PragmaticLight, PragmaticDark } from "@pragmatic-tech-ai/mural/resources/pragmatic";
 import { HtmlTarget } from "@pragmatic-tech-ai/mural/visual-engine";
-import { RemoteDataSourceUnavailableError, RemoteSignInRequiredError } from "./remote-tenant-connector.js";
+import { RemoteDataSourceUnavailableError, RemoteSignInRequiredError } from "./remote-environment-connector.js";
 
-// A model whose data arrives asynchronously (a remote tenant): the bootstrap awaits
+// A model whose data arrives asynchronously (a remote environment): the bootstrap awaits
 // its initial fetch before the app mounts. ModelDataSource.Prepare satisfies this.
 export interface IPreparableModel
 {

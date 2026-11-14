@@ -60,7 +60,7 @@ export class HtmlBundleBuildSystem implements IBuildSystem<TodlBuildContext, Pro
     private readonly actions: readonly IBuildAction<TodlBuildContext>[];
 
     // The remote flavor: no inlined snapshot. The sandbox generated/data.ts (shadowing the
-    // project's) reads the live tenant; the entry awaits the first fetch before mounting.
+    // project's) reads the live environment; the entry awaits the first fetch before mounting.
     // EmitRemoteData runs before the bundle so the bundler sees the shadowing file.
     private readonly remoteActions: readonly IBuildAction<TodlBuildContext>[];
 

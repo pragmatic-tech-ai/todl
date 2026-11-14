@@ -7,10 +7,10 @@ import {
     type ConnectorWriteOp,
     type ConnectorWriteResult,
 } from "../../../model-data/connector-write-op.js";
-import { RemoteTenantConnector, RemoteWriteUnsupportedError, type ITenantReadClient } from "../remote-tenant-connector.js";
-import type { ITenantWriteClient } from "../tenant-write-client.js";
+import { RemoteEnvironmentConnector, RemoteWriteUnsupportedError, type IEnvironmentReadClient } from "../remote-environment-connector.js";
+import type { IEnvironmentWriteClient } from "../environment-write-client.js";
 
-class FakeReadWriteClient implements ITenantReadClient, ITenantWriteClient
+class FakeReadWriteClient implements IEnvironmentReadClient, IEnvironmentWriteClient
 {
     public LastOps: readonly ConnectorWriteOp[] = [];
 
@@ -29,7 +29,7 @@ class FakeReadWriteClient implements ITenantReadClient, ITenantWriteClient
 test("Apply forwards to the write client", async () =>
 {
     const client = new FakeReadWriteClient();
-    const connector = new RemoteTenantConnector(client, client);
+    const connector = new RemoteEnvironmentConnector(client, client);
     const result = await connector.Apply([{ Kind: ConnectorWriteOpKind.Delete, Concept: "acme.Svc", Id: "a1" }]);
     assert.equal(client.LastOps[0]?.Id, "a1");
     assert.equal(result.Results.length, 1);
@@ -38,6 +38,6 @@ test("Apply forwards to the write client", async () =>
 
 test("Apply without a write client throws RemoteWriteUnsupportedError", async () =>
 {
-    const connector = new RemoteTenantConnector(new FakeReadWriteClient());
+    const connector = new RemoteEnvironmentConnector(new FakeReadWriteClient());
     await assert.rejects(() => connector.Apply([]), RemoteWriteUnsupportedError);
 });

@@ -1,4 +1,4 @@
-// Emits the servable-app manifest a tenant serves for a deployed remote app.
+// Emits the servable-app manifest an environment serves for a deployed remote app.
 // Shape mirrors the protocol's ServableAppManifestDto; declared structurally here
 // so the engine takes no dependency on the protocol package.
 

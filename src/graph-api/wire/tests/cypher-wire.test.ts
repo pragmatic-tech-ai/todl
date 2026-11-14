@@ -20,7 +20,7 @@ class WireTestPaths
     public static readonly SrcRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
     public static readonly GraphApi = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
     public static readonly WireIndex = path.join(WireTestPaths.GraphApi, 'wire', 'index.ts');
-    public static readonly Assembler = path.join(WireTestPaths.GraphApi, 'browser', 'tenant-document-assembler.ts');
+    public static readonly Assembler = path.join(WireTestPaths.GraphApi, 'browser', 'environment-document-assembler.ts');
 }
 
 test('wire module is engine- and cypher-free', () =>

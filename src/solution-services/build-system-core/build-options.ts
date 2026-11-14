@@ -1,13 +1,15 @@
-// The live tenant a "remote" app build targets: where the app reads its data at
+// The live environment a "remote" app build targets: where the app reads its data at
 // runtime instead of carrying an inlined snapshot. Non-secret by construction —
 // credentials never travel through build options. The app opens AppName on connect
 // (`application/open`, which `data/*` writes require); it reads the environment graph either way.
 export interface RemoteBuildTarget
 {
     AppName: string;
-    // Dev-only override for a non-same-origin tenant. By default the app connects to the
-    // origin that serves it and the server resolves tenant + principal from the session cookie.
+    // Dev-only override for a non-same-origin environment. By default the app connects to the
+    // origin that serves it and the server resolves environment + principal from the session cookie.
     ServerUrl?: string;
+    Environment?: string;
+    /** @deprecated use Environment; still read when Environment is unset (one release). */
     Tenant?: string;
 }
 

@@ -133,10 +133,21 @@ export { ModelRegistryContribution } from './application/model-registry-contribu
 export type { IContributionSource } from './application/contribution-source.js';
 export { MuralHost } from './application/mural-host.js';
 export { TodlAppBootstrap } from './graph-api/browser/todl-app-bootstrap.js';
-export { RemoteTenantConnector, RemoteWriteUnsupportedError, RemoteDataSourceUnavailableError, RemoteSignInRequiredError, type ITenantReadClient } from './graph-api/browser/remote-tenant-connector.js';
-export type { ITenantWriteClient } from './graph-api/browser/tenant-write-client.js';
+export { RemoteEnvironmentConnector, RemoteWriteUnsupportedError, RemoteDataSourceUnavailableError, RemoteSignInRequiredError, type IEnvironmentReadClient } from './graph-api/browser/remote-environment-connector.js';
+export type { IEnvironmentWriteClient } from './graph-api/browser/environment-write-client.js';
 export { ConnectorWriteOpKind, ConnectorWriteStatus, type ConnectorWriteOp, type ConnectorWriteOpResult, type ConnectorWriteResult } from './model-data/connector-write-op.js';
-export { TenantDocumentAssembler, type TenantNodeCell, type TenantFieldCell } from './graph-api/browser/tenant-document-assembler.js';
+export { EnvironmentDocumentAssembler, type EnvironmentNodeCell, type EnvironmentFieldCell } from './graph-api/browser/environment-document-assembler.js';
+// Deprecated names from before the tenant -> environment rename, kept for one release.
+/** @deprecated use RemoteEnvironmentConnector */
+export { RemoteEnvironmentConnector as RemoteTenantConnector } from './graph-api/browser/remote-environment-connector.js';
+/** @deprecated use IEnvironmentReadClient */
+export type { IEnvironmentReadClient as ITenantReadClient } from './graph-api/browser/remote-environment-connector.js';
+/** @deprecated use IEnvironmentWriteClient */
+export type { IEnvironmentWriteClient as ITenantWriteClient } from './graph-api/browser/environment-write-client.js';
+/** @deprecated use EnvironmentDocumentAssembler */
+export { EnvironmentDocumentAssembler as TenantDocumentAssembler } from './graph-api/browser/environment-document-assembler.js';
+/** @deprecated use EnvironmentNodeCell / EnvironmentFieldCell */
+export type { EnvironmentNodeCell as TenantNodeCell, EnvironmentFieldCell as TenantFieldCell } from './graph-api/browser/environment-document-assembler.js';
 export { MuralViewContribution } from './application/mural-view-contribution.js';
 export { ModelBrowserVM, ConceptHeaderVM, InstanceRowVM } from './application/model-browser-vm.js';
 

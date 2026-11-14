@@ -4,13 +4,13 @@ import { readFileSync } from "node:fs";
 import type { IServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
 import type { TodlDocument } from "../../../compiler-services/emit/json.js";
 import {
-    RemoteTenantConnector,
+    RemoteEnvironmentConnector,
     RemoteWriteUnsupportedError,
-    type ITenantReadClient,
-} from "../remote-tenant-connector.js";
+    type IEnvironmentReadClient,
+} from "../remote-environment-connector.js";
 import { ServableManifest } from "../../../solution-services/todl-build-system/html-bundle/servable-manifest.js";
 
-class FakeClient implements ITenantReadClient
+class FakeClient implements IEnvironmentReadClient
 {
     public Calls = 0;
 
@@ -30,7 +30,7 @@ class Fixtures
     public static readonly NoServices = {} as IServiceProvider;
 }
 
-class FlakyClient implements ITenantReadClient
+class FlakyClient implements IEnvironmentReadClient
 {
     public Calls = 0;
 
@@ -45,52 +45,52 @@ class FlakyClient implements ITenantReadClient
     }
 }
 
-test("RemoteTenantConnector.Prepare resolves the document through the client, once", async () =>
+test("RemoteEnvironmentConnector.Prepare resolves the document through the client, once", async () =>
 {
     const doc: TodlDocument = { nodes: [], edges: [] };
     const client = new FakeClient(doc);
-    const connector = new RemoteTenantConnector(client);
+    const connector = new RemoteEnvironmentConnector(client);
     assert.equal(await connector.Prepare(Fixtures.NoServices), doc);
     assert.equal(await connector.Prepare(Fixtures.NoServices), doc);
     assert.equal(client.Calls, 1);
 });
 
-test("RemoteTenantConnector.Prepare clears the cache on failure and retries", async () =>
+test("RemoteEnvironmentConnector.Prepare clears the cache on failure and retries", async () =>
 {
     const doc: TodlDocument = { nodes: [], edges: [] };
     const client = new FlakyClient(doc);
-    const connector = new RemoteTenantConnector(client);
+    const connector = new RemoteEnvironmentConnector(client);
     await assert.rejects(connector.Prepare(Fixtures.NoServices), /boom/);
     assert.equal(await connector.Prepare(Fixtures.NoServices), doc);
     assert.equal(client.Calls, 2);
 });
 
-test("RemoteTenantConnector.Refresh re-reads from the client", async () =>
+test("RemoteEnvironmentConnector.Refresh re-reads from the client", async () =>
 {
     const client = new FakeClient({ nodes: [], edges: [] });
-    const connector = new RemoteTenantConnector(client);
+    const connector = new RemoteEnvironmentConnector(client);
     await connector.Prepare(Fixtures.NoServices);
     await connector.Refresh(Fixtures.NoServices);
     assert.equal(client.Calls, 2);
 });
 
-test("RemoteTenantConnector.Apply rejects with RemoteWriteUnsupportedError", async () =>
+test("RemoteEnvironmentConnector.Apply rejects with RemoteWriteUnsupportedError", async () =>
 {
-    const connector = new RemoteTenantConnector(new FakeClient({ nodes: [], edges: [] }));
+    const connector = new RemoteEnvironmentConnector(new FakeClient({ nodes: [], edges: [] }));
     await assert.rejects(() => connector.Apply([]), (e: unknown) =>
         e instanceof RemoteWriteUnsupportedError && /SP1/.test(e.message));
 });
 
 test("connector source imports nothing from protocol/server/identity", () =>
 {
-    const src = readFileSync(new URL("../remote-tenant-connector.ts", import.meta.url), "utf8");
+    const src = readFileSync(new URL("../remote-environment-connector.ts", import.meta.url), "utf8");
     const forbidden = /(?:from\s*|import\s*\(?\s*|require\s*\(\s*)["'][^"']*(?:pragmatic-protocol|pragmatic-server|pragmatic-identity|\/server\/|\/identity\/)[^"']*["']/;
     assert.doesNotMatch(src, forbidden);
 });
 
-test("tenant-write-client source imports nothing from protocol/server/identity", () =>
+test("environment-write-client source imports nothing from protocol/server/identity", () =>
 {
-    const src = readFileSync(new URL("../tenant-write-client.ts", import.meta.url), "utf8");
+    const src = readFileSync(new URL("../environment-write-client.ts", import.meta.url), "utf8");
     const forbidden = /(?:from\s*|import\s*\(?\s*|require\s*\(\s*)["'][^"']*(?:pragmatic-protocol|pragmatic-server|pragmatic-identity|\/server\/|\/identity\/)[^"']*["']/;
     assert.doesNotMatch(src, forbidden);
     const imports = [...src.matchAll(/from\s*["']([^"']+)["']/g)].map((m) => m[1]);

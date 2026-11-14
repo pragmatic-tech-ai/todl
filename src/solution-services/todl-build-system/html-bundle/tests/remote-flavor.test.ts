@@ -30,7 +30,8 @@ const SentinelBundle = "/*BUNDLE*/(()=>{})();";
 const BundledFlavorId = "html-bundle";
 const RemoteFlavorId = "html-bundle-remote";
 const Remote = { AppName: "orders" };
-const DevRemote = { ServerUrl: "https://srv.example.com/ws", Tenant: "acme", AppName: "orders" };
+const DevRemote = { ServerUrl: "https://srv.example.com/ws", Environment: "acme", AppName: "orders" };
+const LegacyDevRemote = { ServerUrl: "https://srv.example.com/ws", Tenant: "acme", AppName: "orders" };
 
 class NoopTypeChecker implements ITypeChecker
 {
@@ -277,19 +278,19 @@ describe("remote flavor emitters", () =>
         assert.deepEqual(manifest.ui.assets, ["index.html"]);
     });
 
-    test("generated data.ts uses RemoteTenantConnector over the cypher/query client, not the snapshot", async () =>
+    test("generated data.ts uses RemoteEnvironmentConnector over the cypher/query client, not the snapshot", async () =>
     {
         const ctx = Fixture.Ready({ Remote });
         await new EmitRemoteDataAction().Execute(ctx);
         assert.equal(ctx.Diagnostics.Count, 0, JSON.stringify(ctx.Diagnostics.All()));
         const src = await ctx.Sandbox.ReadText("generated/data.ts");
-        assert.ok(src.includes("RemoteTenantConnector"));
+        assert.ok(src.includes("RemoteEnvironmentConnector"));
         assert.ok(src.includes("BrowserSocketDialer"));
         assert.ok(src.includes("@pragmatic-tech-ai/pragmatic-protocol/browser"));
         assert.ok(src.includes("QueryAll"));
         assert.ok(src.includes("location.host"), "socket is derived from the serving origin at runtime");
         assert.ok(src.includes("UrlOverride: string | null = null"), "no baked absolute URL");
-        assert.ok(!src.includes("tenant="), "the app sends no tenant");
+        assert.ok(!src.includes("environment=") && !src.includes("tenant="), "the app sends no environment");
         assert.ok(src.includes("\"orders\""));
         assert.ok(src.includes("new MyArch("), "constructs the DTO with the connector");
         assert.ok(!src.includes("__TODL_APP__"));
@@ -317,25 +318,25 @@ describe("remote flavor emitters", () =>
         await new EmitRemoteDataAction().Execute(ctx);
         const src = await ctx.Sandbox.ReadText("generated/data.ts");
         assert.ok(src.includes("RemoteSignInRequiredError } from") || src.includes("RemoteSignInRequiredError, "), "imports the error");
-        assert.ok(src.includes("if (await CypherTenantClient.SignedOut()) throw new RemoteSignInRequiredError();"));
+        assert.ok(src.includes("if (await CypherEnvironmentClient.SignedOut()) throw new RemoteSignInRequiredError();"));
         assert.ok(src.includes("private static readonly SessionPath = \"/auth/session\";"));
-        assert.ok(src.includes("response.status === CypherTenantClient.UnauthorizedStatus"), "only a 401 means signed out");
-        assert.ok(src.includes("if (CypherTenantClient.UrlOverride !== null) return false;"), "a dev URL override never probes");
+        assert.ok(src.includes("response.status === CypherEnvironmentClient.UnauthorizedStatus"), "only a 401 means signed out");
+        assert.ok(src.includes("if (CypherEnvironmentClient.UrlOverride !== null) return false;"), "a dev URL override never probes");
         const connect = src.indexOf("private async Connect()");
         assert.ok(src.indexOf("SignedOut()", connect) < src.indexOf("OpenApplication(", connect), "checked when the socket is refused, before the app opens");
     });
 
-    test("generated data.ts emits the tenant write adapter over WriteAppData", async () =>
+    test("generated data.ts emits the environment write adapter over WriteAppData", async () =>
     {
         const ctx = Fixture.Ready({ Remote });
         await new EmitRemoteDataAction().Execute(ctx);
         const src = await ctx.Sandbox.ReadText("generated/data.ts");
-        assert.ok(src.includes("implements ITenantReadClient, ITenantWriteClient"));
+        assert.ok(src.includes("implements IEnvironmentReadClient, IEnvironmentWriteClient"));
         assert.ok(src.includes("WriteDocument("));
         assert.ok(src.includes("client.WriteAppData("));
         for (const k of ["Create", "Update", "Delete"]) assert.ok(src.includes(`[ConnectorWriteOpKind.${k}]: AppWriteOpKind.${k}`), k);
         for (const k of ["Applied", "Conflict", "Denied", "Invalid", "Failed"]) assert.ok(src.includes(`[AppWriteStatus.${k}]: ConnectorWriteStatus.${k}`), k);
-        assert.ok(src.includes("new RemoteTenantConnector(client, client)"), "same instance for read and write");
+        assert.ok(src.includes("new RemoteEnvironmentConnector(client, client)"), "same instance for read and write");
         assert.ok(src.includes("private Connected(): Promise<PragmaticClient>"));
         assert.ok(src.includes("this.connecting = this.Connect();"), "the in-flight connect promise is cached");
         assert.equal(src.split("OpenApplication(").length - 1, 1, "OpenApplication is issued from one place only");
@@ -364,8 +365,8 @@ describe("remote flavor emitters", () =>
         const src = await ctx.Sandbox.ReadText("generated/data.ts");
         assert.equal(src.split("OpenApplication(").length - 1, 1, "opened once, on connect");
         assert.ok(src.includes("    private static readonly AppName = \"orders\";\n    private static readonly Query"));
-        assert.ok(src.includes("PragmaticClient.ConnectReconnecting(new BrowserSocketDialer(CypherTenantClient.SocketUrl()));\n"));
-        assert.ok(src.includes("        await client.OpenApplication(CypherTenantClient.AppName);\n        return client;"));
+        assert.ok(src.includes("PragmaticClient.ConnectReconnecting(new BrowserSocketDialer(CypherEnvironmentClient.SocketUrl()));\n"));
+        assert.ok(src.includes("        await client.OpenApplication(CypherEnvironmentClient.AppName);\n        return client;"));
         assert.ok(src.includes("MATCH (n) RETURN n"), "reads still run the environment-wide query");
         assert.deepEqual(Fixture.TypeCheckEmitted(src), []);
     });
@@ -403,13 +404,23 @@ describe("remote flavor emitters", () =>
         assert.ok(names.indexOf("EmitRemoteDataAction") < names.indexOf("BundleAppAction"));
     });
 
-    test("dev override bakes an absolute ws URL with the tenant", async () =>
+    test("the dev URL override sends ?environment=", async () =>
     {
         const ctx = Fixture.Ready({ Remote: DevRemote });
         await new EmitRemoteDataAction().Execute(ctx);
         assert.equal(ctx.Diagnostics.Count, 0, JSON.stringify(ctx.Diagnostics.All()));
         const src = await ctx.Sandbox.ReadText("generated/data.ts");
-        assert.ok(src.includes("wss://srv.example.com/ws?tenant=acme"));
+        assert.ok(src.includes("wss://srv.example.com/ws?environment=acme"));
+        assert.ok(!src.includes("?tenant="));
+    });
+
+    test("a build target with the deprecated Tenant option still sets the environment", async () =>
+    {
+        const ctx = Fixture.Ready({ Remote: LegacyDevRemote });
+        await new EmitRemoteDataAction().Execute(ctx);
+        assert.equal(ctx.Diagnostics.Count, 0, JSON.stringify(ctx.Diagnostics.All()));
+        const src = await ctx.Sandbox.ReadText("generated/data.ts");
+        assert.ok(src.includes("wss://srv.example.com/ws?environment=acme"));
     });
 
     test("an override with an unsupported scheme or garbage is a build diagnostic, not a throw", async () =>

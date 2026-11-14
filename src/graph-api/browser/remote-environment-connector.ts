@@ -1,29 +1,29 @@
 // A model-data connector for a deployed "remote" app: the data is read live from
-// the tenant instead of being embedded in the build. The engine does not know how
-// the tenant is reached; it depends only on the ITenantReadClient seam declared
+// the environment instead of being embedded in the build. The engine does not know how
+// the environment is reached; it depends only on the IEnvironmentReadClient seam declared
 // here. The transport adapter lives above the engine and implements this seam.
 
 import type { IServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
 import type { TodlDocument } from "../../compiler-services/emit/json.js";
 import type { IModelDataConnector } from "../../model-data/model-data-connector.js";
 import type { ConnectorWriteOp, ConnectorWriteResult } from "../../model-data/connector-write-op.js";
-import type { ITenantWriteClient } from "./tenant-write-client.js";
+import type { IEnvironmentWriteClient } from "./environment-write-client.js";
 
 /**
- * Minimal read seam onto a live tenant. The row type is TodlDocument: it is what
+ * Minimal read seam onto a live environment. The row type is TodlDocument: it is what
  * IModelDataConnector.Prepare must return, so the adapter (not the engine) owns
- * turning tenant query results into the portable document.
+ * turning environment query results into the portable document.
  */
-export interface ITenantReadClient
+export interface IEnvironmentReadClient
 {
     ReadDocument(): Promise<TodlDocument>;
 }
 
-/** Thrown by any write attempt against a read-only remote tenant connector. */
+/** Thrown by any write attempt against a read-only remote environment connector. */
 export class RemoteWriteUnsupportedError extends Error
 {
     private static readonly ErrorName = "RemoteWriteUnsupportedError";
-    private static readonly DefaultMessage = "Remote tenant connector is read-only; writes arrive in SP1";
+    private static readonly DefaultMessage = "Remote environment connector is read-only; writes arrive in SP1";
 
     constructor(message: string = RemoteWriteUnsupportedError.DefaultMessage)
     {
@@ -33,7 +33,7 @@ export class RemoteWriteUnsupportedError extends Error
 }
 
 /**
- * Thrown by an ITenantReadClient when the tenant could not read the app's data because one of its data sources did
+ * Thrown by an IEnvironmentReadClient when the environment could not read the app's data because one of its data sources did
  * not answer. DataSource is the source's qualified TODL name (`<namespace>.<name>`); the cause stays on the server.
  */
 export class RemoteDataSourceUnavailableError extends Error
@@ -49,8 +49,9 @@ export class RemoteDataSourceUnavailableError extends Error
 }
 
 /**
- * Thrown by an ITenantReadClient / ITenantWriteClient when the tenant refused the connection because the person has no
- * session (never signed in, or the sign-in expired). Reloading the page lets the tenant send them to its sign-in page.
+ * Thrown by an IEnvironmentReadClient / IEnvironmentWriteClient when the environment refused the connection because the
+ * person has no session (never signed in, or the sign-in expired). Reloading the page lets the environment send them to
+ * its sign-in page.
  */
 export class RemoteSignInRequiredError extends Error
 {
@@ -64,13 +65,13 @@ export class RemoteSignInRequiredError extends Error
     }
 }
 
-export class RemoteTenantConnector implements IModelDataConnector
+export class RemoteEnvironmentConnector implements IModelDataConnector
 {
     private cached: Promise<TodlDocument> | undefined;
 
     constructor(
-        private readonly client: ITenantReadClient,
-        private readonly writeClient?: ITenantWriteClient,
+        private readonly client: IEnvironmentReadClient,
+        private readonly writeClient?: IEnvironmentWriteClient,
     )
     {
     }
