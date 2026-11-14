@@ -305,8 +305,24 @@ describe("remote flavor emitters", () =>
         const src = await ctx.Sandbox.ReadText("generated/data.ts");
         assert.ok(src.includes("DataSourceUnavailableError.DataSourceOf(error)"), "reads the source from the wire error");
         assert.ok(src.includes("throw new RemoteDataSourceUnavailableError(source);"));
-        assert.ok(src.indexOf("catch (error)") > src.indexOf("client.QueryAll("), "only the read is translated");
+        const read = src.indexOf("client.QueryAll(");
+        const translated = src.indexOf("throw new RemoteDataSourceUnavailableError(source);");
+        assert.ok(translated > read && src.indexOf("catch (error)", read) < translated, "only the read's failure is translated");
         assert.ok(src.includes("            throw error;\n"), "any other failure passes unchanged");
+    });
+
+    test("generated data.ts turns a refused connection without a session into RemoteSignInRequiredError", async () =>
+    {
+        const ctx = Fixture.Ready({ Remote });
+        await new EmitRemoteDataAction().Execute(ctx);
+        const src = await ctx.Sandbox.ReadText("generated/data.ts");
+        assert.ok(src.includes("RemoteSignInRequiredError } from") || src.includes("RemoteSignInRequiredError, "), "imports the error");
+        assert.ok(src.includes("if (await CypherTenantClient.SignedOut()) throw new RemoteSignInRequiredError();"));
+        assert.ok(src.includes("private static readonly SessionPath = \"/auth/session\";"));
+        assert.ok(src.includes("response.status === CypherTenantClient.UnauthorizedStatus"), "only a 401 means signed out");
+        assert.ok(src.includes("if (CypherTenantClient.UrlOverride !== null) return false;"), "a dev URL override never probes");
+        const connect = src.indexOf("private async Connect()");
+        assert.ok(src.indexOf("SignedOut()", connect) < src.indexOf("OpenApplication(", connect), "checked when the socket is refused, before the app opens");
     });
 
     test("generated data.ts emits the tenant write adapter over WriteAppData", async () =>

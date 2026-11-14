@@ -1,7 +1,7 @@
 import { Application, type ApplicationInitOptions } from "@pragmatic-tech-ai/mural";
 import { Pragmatic, PragmaticLight, PragmaticDark } from "@pragmatic-tech-ai/mural/resources/pragmatic";
 import { HtmlTarget } from "@pragmatic-tech-ai/mural/visual-engine";
-import { RemoteDataSourceUnavailableError } from "./remote-tenant-connector.js";
+import { RemoteDataSourceUnavailableError, RemoteSignInRequiredError } from "./remote-tenant-connector.js";
 
 // A model whose data arrives asynchronously (a remote tenant): the bootstrap awaits
 // its initial fetch before the app mounts. ModelDataSource.Prepare satisfies this.
@@ -23,6 +23,7 @@ export class TodlAppBootstrap
     private static readonly PrepareFailedMessage = "The app could not load its data. Check the connection and reload.";
     private static readonly DataSourceFailedStart = "The app could not load its data: the data source ";
     private static readonly DataSourceFailedEnd = " is not answering. Try again later, or ask the app's owner to check it.";
+    private static readonly SignInRequiredMessage = "You are not signed in, or your sign-in has expired. Reload the page to sign in again.";
 
     private static readonly ThemeOptions: ApplicationInitOptions =
     {
@@ -68,6 +69,7 @@ export class TodlAppBootstrap
     /** The text shown when the app's data did not load (plain text: it is set as textContent). */
     public static FailureMessage(error: unknown): string
     {
+        if (error instanceof RemoteSignInRequiredError) return TodlAppBootstrap.SignInRequiredMessage;
         return error instanceof RemoteDataSourceUnavailableError
             ? TodlAppBootstrap.DataSourceFailedStart + error.DataSource + TodlAppBootstrap.DataSourceFailedEnd
             : TodlAppBootstrap.PrepareFailedMessage;

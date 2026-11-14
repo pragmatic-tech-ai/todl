@@ -48,6 +48,22 @@ export class RemoteDataSourceUnavailableError extends Error
     }
 }
 
+/**
+ * Thrown by an ITenantReadClient / ITenantWriteClient when the tenant refused the connection because the person has no
+ * session (never signed in, or the sign-in expired). Reloading the page lets the tenant send them to its sign-in page.
+ */
+export class RemoteSignInRequiredError extends Error
+{
+    private static readonly ErrorName = "RemoteSignInRequiredError";
+    private static readonly DefaultMessage = "Sign-in required";
+
+    constructor()
+    {
+        super(RemoteSignInRequiredError.DefaultMessage);
+        this.name = RemoteSignInRequiredError.ErrorName;
+    }
+}
+
 export class RemoteTenantConnector implements IModelDataConnector
 {
     private cached: Promise<TodlDocument> | undefined;

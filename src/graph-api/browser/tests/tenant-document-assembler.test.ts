@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import type { IServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
 import { compilePackage } from "../../../publish/publish.js";
 import { GenericModelDataSource } from "../../../model-data/generic-model-data-source.js";
-import { RemoteDataSourceUnavailableError, RemoteTenantConnector } from "../remote-tenant-connector.js";
+import { RemoteDataSourceUnavailableError, RemoteSignInRequiredError, RemoteTenantConnector } from "../remote-tenant-connector.js";
 import { TenantDocumentAssembler, type TenantNodeCell } from "../tenant-document-assembler.js";
 import { TodlAppBootstrap } from "../todl-app-bootstrap.js";
 
@@ -125,5 +125,13 @@ describe("TodlAppBootstrap.PrepareAndMount", () =>
         assert.ok(!generic.includes("ENOTFOUND"));
         assert.ok(generic.includes("could not load its data"));
         assert.notEqual(named, generic);
+    });
+
+    test("a refused sign-in says so and tells the person to reload", () =>
+    {
+        const message = TodlAppBootstrap.FailureMessage(new RemoteSignInRequiredError());
+        assert.ok(message.includes("not signed in"));
+        assert.ok(message.includes("Reload the page"));
+        assert.ok(!message.includes("could not load its data"));
     });
 });
