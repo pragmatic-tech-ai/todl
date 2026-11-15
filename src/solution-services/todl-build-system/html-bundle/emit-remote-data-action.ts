@@ -17,8 +17,7 @@ import { RemoteTargetReader } from "./remote-target-reader.js";
 //
 // The socket is same-origin at RUNTIME (derived from `location`): the session cookie
 // authenticates it and the server resolves environment + principal from that cookie, so the
-// app sends no environment. Options.Remote.ServerUrl/Environment are a dev-only override
-// (the deprecated Options.Remote.Tenant is used when Environment is unset).
+// app sends no environment. Options.Remote.ServerUrl/Environment are a dev-only override.
 export class EmitRemoteDataAction implements IBuildAction<TodlBuildContext>
 {
     private static readonly ActionName = "emit-remote-data";
@@ -200,7 +199,7 @@ export class EmitRemoteDataAction implements IBuildAction<TodlBuildContext>
             ctx.Diagnostics.Report({ severity: Severity.Error, message: EmitRemoteDataAction.NoCompiledModelMessage, source: EmitRemoteDataAction.ActionName });
             return;
         }
-        const override = EmitRemoteDataAction.OverrideLiteral(ctx, remote.ServerUrl, remote.Environment ?? remote.Tenant);
+        const override = EmitRemoteDataAction.OverrideLiteral(ctx, remote.ServerUrl, remote.Environment);
         if (override === undefined) return;
         const schema = EnvironmentDocumentAssembler.SchemaOf(compiled.fullDocument);
         const source = EmitRemoteDataAction.DataTemplate

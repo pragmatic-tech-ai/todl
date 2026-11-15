@@ -31,7 +31,6 @@ const BundledFlavorId = "html-bundle";
 const RemoteFlavorId = "html-bundle-remote";
 const Remote = { AppName: "orders" };
 const DevRemote = { ServerUrl: "https://srv.example.com/ws", Environment: "acme", AppName: "orders" };
-const LegacyDevRemote = { ServerUrl: "https://srv.example.com/ws", Tenant: "acme", AppName: "orders" };
 
 class NoopTypeChecker implements ITypeChecker
 {
@@ -412,15 +411,6 @@ describe("remote flavor emitters", () =>
         const src = await ctx.Sandbox.ReadText("generated/data.ts");
         assert.ok(src.includes("wss://srv.example.com/ws?environment=acme"));
         assert.ok(!src.includes("?tenant="));
-    });
-
-    test("a build target with the deprecated Tenant option still sets the environment", async () =>
-    {
-        const ctx = Fixture.Ready({ Remote: LegacyDevRemote });
-        await new EmitRemoteDataAction().Execute(ctx);
-        assert.equal(ctx.Diagnostics.Count, 0, JSON.stringify(ctx.Diagnostics.All()));
-        const src = await ctx.Sandbox.ReadText("generated/data.ts");
-        assert.ok(src.includes("wss://srv.example.com/ws?environment=acme"));
     });
 
     test("an override with an unsupported scheme or garbage is a build diagnostic, not a throw", async () =>

@@ -9,8 +9,6 @@ export interface RemoteBuildTarget
     // origin that serves it and the server resolves environment + principal from the session cookie.
     ServerUrl?: string;
     Environment?: string;
-    /** @deprecated use Environment; still read when Environment is unset (one release). */
-    Tenant?: string;
 }
 
 // Invocation-time parameters threaded into every BuildActionContext (spec §10

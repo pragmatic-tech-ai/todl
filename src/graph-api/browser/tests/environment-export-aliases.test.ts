@@ -1,33 +1,24 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import type { ITenantReadClient, ITenantWriteClient, IEnvironmentReadClient, IEnvironmentWriteClient, TenantNodeCell, EnvironmentNodeCell, TenantFieldCell, EnvironmentFieldCell } from "../../../index.js";
 
 class AliasFx
 {
-    public static readonly Pairs: readonly (readonly [string, string])[] = [
-        ["RemoteTenantConnector", "RemoteEnvironmentConnector"],
-        ["TenantDocumentAssembler", "EnvironmentDocumentAssembler"],
-    ];
+    public static readonly PreRenameNames: readonly string[] = ["RemoteTenantConnector", "TenantDocumentAssembler"];
+    public static readonly CurrentNames: readonly string[] = ["RemoteEnvironmentConnector", "EnvironmentDocumentAssembler"];
 }
 
-describe("environment export aliases", () =>
+describe("environment export names", () =>
 {
-    it("the old export names still resolve to the new classes", async () =>
+    it("exports the environment names and no longer the pre-rename tenant names", async () =>
     {
         const root = await import("../../../index.js") as unknown as Record<string, unknown>;
-        for (const [legacy, current] of AliasFx.Pairs)
+        for (const current of AliasFx.CurrentNames)
         {
             assert.ok(root[current] !== undefined, current);
-            assert.equal(root[legacy], root[current], legacy);
         }
-    });
-
-    it("the old type names are assignable to and from the new ones", () =>
-    {
-        const read: ITenantReadClient | undefined = undefined as IEnvironmentReadClient | undefined;
-        const write: IEnvironmentWriteClient | undefined = undefined as ITenantWriteClient | undefined;
-        const node: TenantNodeCell | undefined = undefined as EnvironmentNodeCell | undefined;
-        const field: EnvironmentFieldCell | undefined = undefined as TenantFieldCell | undefined;
-        assert.deepEqual([read, write, node, field], [undefined, undefined, undefined, undefined]);
+        for (const old of AliasFx.PreRenameNames)
+        {
+            assert.equal(root[old], undefined, old);
+        }
     });
 });
