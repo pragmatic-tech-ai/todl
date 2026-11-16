@@ -1,0 +1,75 @@
+# Report-only nightly build on the hive laptop's self-hosted runner
+# (dev-kit/docs/superpowers/specs/2026-11-16-hive-ci-design.md). Nothing is published.
+# Steps mirror ci.yml; keep them in step when it changes.
+name: nightly
+on:
+  schedule:
+    - cron: '0 2 * * *'   # 03:00 Central European time (laptop's zone)
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: read
+concurrency:
+  group: nightly-${{ github.repository }}
+  cancel-in-progress: false
+jobs:
+  test:
+    runs-on: [self-hosted, hive-windows]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          # Node 22 (not 20): the test scripts pass a glob to `node --test`,
+          # which only supports globs on Node >=21. engines says >=20, but the
+          # suite needs >=21 to run.
+          node-version: 22
+          cache: npm
+      # todl depends on @pragmatic-tech-ai/mural (the build-system bootstrapper
+      # that couples to the mural compiler) and @pragmatic-tech-ai/todl-runtime,
+      # which live on GitHub Packages, not npmjs. The repo's committed .npmrc is
+      # gitignored, so write a CI-only one: public npm for OSS deps, GitHub
+      # Packages for the @pragmatic-tech-ai scope (auth via the PACKAGES_TOKEN
+      # secret — a PAT with read:packages; the default GITHUB_TOKEN can't read
+      # the org's internal packages).
+      - name: Configure npm registries
+        shell: bash
+        run: |
+          {
+            printf 'registry=https://registry.npmjs.org/\n'
+            printf '@pragmatic-tech-ai:registry=https://npm.pkg.github.com\n'
+            printf '//npm.pkg.github.com/:_authToken=%s\n' "${PACKAGES_TOKEN}"
+          } > .npmrc
+        env:
+          PACKAGES_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+      # `npm install`, not `npm ci`: the committed lock is a local-dev lock — it
+      # links @pragmatic-tech-ai/mural to the sibling ../Mural checkout (absent in
+      # CI) and lags package.json besides. `npm install` reconciles against the
+      # registries configured above, resolving mural/todl-runtime from GitHub
+      # Packages and pulling this runner's own esbuild native (tsx needs it, and a
+      # Windows-authored lock omits it — npm/cli#4828), which strict `npm ci`
+      # cannot do.
+      - run: npm install
+      # `npm run build` typechecks + compiles the shippable source
+      # (tsconfig.build.json, which excludes *.test.ts). The whole-repo
+      # `npm run typecheck` is intentionally NOT the gate: it has pre-existing
+      # strict-null errors in test files only, which tsx never surfaces at
+      # runtime (the tests pass). Source stays type-clean via the build.
+      - run: npm run build
+      # The remote-flavor tests type-check the emitted data.ts against the real
+      # pragmatic-protocol browser typings. Protocol is neither a todl dependency
+      # nor published, so check it out (public repo, default branch) and build its
+      # dist; the test reads its location from PRAGMATIC_PROTOCOL_ROOT (locally it
+      # falls back to the sibling ../pragmatic-protocol checkout).
+      - uses: actions/checkout@v7
+        with:
+          repository: pragmatic-tech-ai/pragmatic-protocol
+          path: .ci/pragmatic-protocol
+      - name: Build pragmatic-protocol typings
+        working-directory: .ci/pragmatic-protocol
+        run: npm ci && npm run build
+      - run: npm test
+        env:
+          PRAGMATIC_PROTOCOL_ROOT: ${{ github.workspace }}/.ci/pragmatic-protocol
