@@ -184,7 +184,8 @@ test("ConnectionProviders flattens each registry type's presets", () =>
 {
     const backend = new FakeBackend()
     const provider = new ServiceProvider()
-    const catalog = new PackageRegistryCatalog([backend.RegistryFactory()], [new NpmConnectionFactory(provider)])
+    const npmFactory = new NpmConnectionFactory(provider)
+    const catalog = new PackageRegistryCatalog([backend.RegistryFactory()], [npmFactory])
     provider.registerInstance(PackageRegistryCatalogKey, catalog)
     provider.registerInstance(ConnectionStoreKey, new FakeConnectionStore())
     provider.registerInstance(SecretStoreKey, new FakeSecretStore())
@@ -194,6 +195,10 @@ test("ConnectionProviders flattens each registry type's presets", () =>
     assert.ok(providers.some(p => p.RegistryType === 'npm' && p.DisplayName === 'GitHub Packages'))
     const gh = providers.find(p => p.DisplayName === 'GitHub Packages')!
     assert.equal(gh.Settings['registry'], 'https://npm.pkg.github.com')
+
+    const preset = npmFactory.Presets.find(p => p.DisplayName === 'GitHub Packages')!
+    assert.equal(gh.PresetId, preset.Id)
+    assert.notEqual(gh.Settings, preset.Settings)
 
     // Settings are copied, never aliased to the preset's object.
     gh.Settings['registry'] = 'mutated'
