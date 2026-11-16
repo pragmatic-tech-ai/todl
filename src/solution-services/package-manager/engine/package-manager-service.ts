@@ -3,7 +3,7 @@ import { PackageRegistryCatalogKey, type IPackageRegistryCatalog } from './packa
 import { ConnectionStoreKey, type IConnectionStore } from './connection-store.js'
 import { SecretStoreKey, type ISecretStore } from './secret-store.js'
 import { EnvironmentVariablesKey, type IEnvironmentVariables } from './environment-variables.js'
-import { TokenSource, type ConnectionSpec, type ConnectionView } from './registry-connection.js'
+import { TokenSource, type ConnectionProvider, type ConnectionSpec, type ConnectionView } from './registry-connection.js'
 import {
     type IPackageRegistry,
     type PublishablePackage,
@@ -110,6 +110,27 @@ export class PackageManagerService extends ServiceBase
     public SetDefault(id: string): Promise<void>
     {
         return this.connectionStore.SetDefault(id)
+    }
+
+    // Every catalog preset flattened to a plain descriptor, in registry-type order and
+    // each factory's declared preset order. Settings are copied, never aliased.
+    public ConnectionProviders(): readonly ConnectionProvider[]
+    {
+        const providers: ConnectionProvider[] = []
+        for (const registryType of this.catalog.RegistryTypes())
+        {
+            const presets = this.catalog.ConnectionFactory(registryType)?.Presets ?? []
+            for (const preset of presets)
+            {
+                providers.push({
+                    RegistryType: registryType,
+                    PresetId: preset.Id,
+                    DisplayName: preset.DisplayName,
+                    Settings: { ...preset.Settings },
+                })
+            }
+        }
+        return providers
     }
 
     // The candidate environment-variable names for an env-sourced token.

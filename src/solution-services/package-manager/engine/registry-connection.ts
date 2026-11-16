@@ -37,6 +37,17 @@ export interface ConnectionPreset
     Settings: Record<string, string>
 }
 
+// A flattened catalog preset as a plain descriptor: which registry type offers it,
+// its preset id, a display name, and a copy of its pre-filled settings. What a host's
+// "provider" dropdown lists.
+export interface ConnectionProvider
+{
+    RegistryType: string
+    PresetId: string
+    DisplayName: string
+    Settings: Record<string, string>
+}
+
 // Where a connection's auth token comes from: a value kept in ISecretStore
 // (Stored), or read live from an environment variable (Env). A real enum, not a
 // string union, so the service branches on a member.

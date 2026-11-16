@@ -6,6 +6,7 @@ import { PackageRegistryCatalog, PackageRegistryCatalogKey } from '../package-re
 import { ConnectionStoreKey } from '../connection-store.js'
 import { SecretStoreKey } from '../secret-store.js'
 import { ConnectionFieldKind, type ConnectionSpec } from '../registry-connection.js'
+import { NpmConnectionFactory } from '../../registries/npm/npm-connection-factory.js'
 import { FakeConnectionStore, FakeSecretStore, FakeBackend, FakeRegistry } from './fakes.js'
 
 // Build a provider wired with a real catalog over the fake backend plus fake
@@ -177,4 +178,24 @@ test('InspectConnection resolves the registry by id and returns its inspection',
     const result = await service.InspectConnection('gh')
 
     assert.equal(result.Message, 'gh-sentinel')
+})
+
+test("ConnectionProviders flattens each registry type's presets", () =>
+{
+    const backend = new FakeBackend()
+    const provider = new ServiceProvider()
+    const catalog = new PackageRegistryCatalog([backend.RegistryFactory()], [new NpmConnectionFactory(provider)])
+    provider.registerInstance(PackageRegistryCatalogKey, catalog)
+    provider.registerInstance(ConnectionStoreKey, new FakeConnectionStore())
+    provider.registerInstance(SecretStoreKey, new FakeSecretStore())
+    const service = new PackageManagerService(provider)
+
+    const providers = service.ConnectionProviders()
+    assert.ok(providers.some(p => p.RegistryType === 'npm' && p.DisplayName === 'GitHub Packages'))
+    const gh = providers.find(p => p.DisplayName === 'GitHub Packages')!
+    assert.equal(gh.Settings['registry'], 'https://npm.pkg.github.com')
+
+    // Settings are copied, never aliased to the preset's object.
+    gh.Settings['registry'] = 'mutated'
+    assert.equal(service.ConnectionProviders().find(p => p.PresetId === gh.PresetId)!.Settings['registry'], 'https://npm.pkg.github.com')
 })
