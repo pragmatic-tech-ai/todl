@@ -10,7 +10,7 @@ meta-model, library). Full reference: `.claude/todl-manual.md`.
 - **Identifiers are C-like** (`[A-Za-z_][A-Za-z0-9_]*`, no hyphens). Casing is a
   **project convention, not a language rule** — the compiler accepts any C-like
   identifier for a type. The recommended default for **types** (concepts,
-  primitives, taxonomies, annotations, enums, terms, classes) is **PascalCase**
+  primitives, taxonomies, annotations, terms, classes) is **PascalCase**
   (`AppComponent`), but **the casing already used in the surrounding files takes
   precedence**: match a package that names its types `lower_snake` rather than
   mixing styles. The prelude's **built-in primitives** are lowercase like

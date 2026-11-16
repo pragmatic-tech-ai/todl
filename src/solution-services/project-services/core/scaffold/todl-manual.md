@@ -39,8 +39,8 @@ One `namespace` per file. Everything is declared inside it:
 
 - **Identifiers**: `[A-Za-z_] [A-Za-z0-9_]*` — C-like. No hyphens; `_` is
   allowed; no leading digit. By convention:
-  - **Types** — `concept`, `primitive`, `taxonomy`, `annotation`, `enum`,
-    `term`, and `class` names. The compiler accepts any C-like identifier for a
+  - **Types** — `concept`, `primitive`, `taxonomy`, `annotation`, `term`, and
+    `class` names. The compiler accepts any C-like identifier for a
     type; **PascalCase** (`AppComponent`, `ComponentCategory`, `Sku`) is the
     recommended default, but — as with members — **the casing already used in
     the surrounding files takes precedence**: match a package that names its
@@ -57,8 +57,9 @@ One `namespace` per file. Everything is declared inside it:
 - **Comments**: `// line` and `/* block */`. Both are ignored by the compiler.
 - **Strings**: `"single line"`. **Raw / multi-line**: triple-quoted
   `"""…"""` (keeps newlines; use for `description` prose).
-- **Numbers**: bare integers, e.g. `order = 1;`. (TODL has no distinct numeric
-  *value* kind — a number stored on an annotation param serializes as its
+- **Numbers**: bare integers, e.g. `order = 1;`. `number` and `integer` are real
+  built-in scalar *types* (§4) — a field or annotation param may be typed by
+  them. (A numeric value stored on an annotation param still serializes as its
   string form, e.g. `"1"`; coerce with `Number(...)` downstream if needed.)
 - **References**: a bare `Name` or `dotted.Path` — there is no sigil. Whether a
   value is a reference (an edge) or a scalar is decided by the member's declared
@@ -159,11 +160,14 @@ Rules the validator enforces on instances. Two forms:
     }
 
 The prose form is documentation the validator surfaces on violation. The
-`predicate` form is an optional machine-checked expression — operators include
-`==` `!=` `&&` `||` `implies`, the literals `this` and `none`, member access
-(`this.field`), and `all` / `any … in …` comprehensions. When unsure of a
-predicate's exact shape, write the prose form and confirm behaviour in the
-Problems panel.
+`predicate` form is an optional machine-checked expression. Operators: `==`,
+`!=`, `in` (membership); `&&` (or the keyword `and`), `||` (or `or`), `implies`;
+and prefix `not`. Atoms: `this`, `none`, member access (`this.field`), the
+`.empty` postfix (sugar for `== none`), and `&name` for an explicit name
+reference. (`all` / `any … in …` quantifiers exist in the model but are **not**
+expressible in hand-written predicate text — use the prose form for set-wide
+rules.) When unsure of a predicate's exact shape, write the prose form and
+confirm behaviour in the Problems panel.
 
 ## 4. `primitive` — a base data type
 
@@ -178,9 +182,9 @@ Problems panel.
   `regex` constraint. User-declared primitive names are PascalCase by convention
   (`Sku`), but follow the surrounding files' casing where it differs.
 - Built-in primitives usable as a bare type without declaring them: `string`,
-  `integer`, `boolean`, plus the prelude's **lowercase** `identifier`, `slug`,
-  and `resourceKey`. (There is no `Label` primitive — a label is just a
-  `string`.)
+  `number`, `integer`, `boolean`, plus the prelude's **lowercase** `identifier`,
+  `slug`, and `resourceKey`. (There is no `Label` primitive — a label is just a
+  `string` — and no `url` type.)
 
 ## 5. `taxonomy` — a controlled vocabulary (clabject classes)
 
@@ -265,7 +269,7 @@ block (annotations are type-level; a concrete instance carrying `annotate` is
 - Annotation **type** names are PascalCase; their **params** are camelCase, like
   every other type/member. The one exception: the well-known annotations tools
   switch on by name (`icon`, `label`, `toolbox`, `instance`, `iconSource`,
-  `wiki`) are lowercase.
+  `wiki`, `entrypoint`, `has_children`, `containment`) are lowercase.
 - Each annotation applies **at most once per target**; a repeat is an error.
 - Params are **scalar** (string / integer / boolean). A required param must be
   given; an undeclared param is rejected.
@@ -277,15 +281,19 @@ block (annotations are type-level; a concrete instance carrying `annotate` is
 ### Standard annotations (from the prelude — no declaration needed)
 
 These ship in the built-in prelude, so you `annotate` with them directly without
-declaring them. Every param is optional:
+declaring them. Most params are optional — the exceptions are `instance.concept`
+and `iconSource.order`, which are required:
 
-    annotation MuralResource { key  : resourceKey ?; }
+    annotation MuralResource { key    : resourceKey ?; }
     annotation icon : MuralResource { path : string ?; }   // inherits `key`
-    annotation label      { text    : string ?; }
-    annotation toolbox    { visible : boolean ?; }
-    annotation instance   { concept : identifier; via : identifier ?; }
-    annotation iconSource { order   : number; }
-    annotation wiki       { path    : string ?; }
+    annotation label       { text    : string ?; }
+    annotation toolbox     { visible : boolean ?; }
+    annotation instance    { concept : identifier; via : identifier ?; }
+    annotation iconSource  { order   : number; }
+    annotation wiki        { path    : string ?; }
+    annotation entrypoint   { root   : identifier ?; }
+    annotation has_children { label  : string ?; }
+    annotation containment  { member : string ?; }
 
 - **`icon`** — a concept's presentation icon: `annotate icon { path =
   "resources/actor.svg"; }`. It inherits `key` from `MuralResource`.
@@ -299,8 +307,9 @@ declaring them. Every param is optional:
 - **`wiki`** — a **concept-level** pointer to a Markdown page (project-relative),
   opened read-only from the concept's surfaces: `annotate wiki { path =
   "wiki/component.md"; }`.
-- **`toolbox`** / **`instance`** are consumed by tooling; you rarely author them
-  by hand.
+- **`toolbox`**, **`instance`**, **`entrypoint`**, **`has_children`**, and
+  **`containment`** are consumed by tooling (presentation / containment / app-root
+  hints); you rarely author them by hand.
 
 ## 7. Instances, classes, containment
 
@@ -409,12 +418,13 @@ The Problems panel reports these families (code → meaning):
 - `relationship.target-type` — a relationship `target` isn't the expected
   concept.
 - `invariant.failed` — an instance violates a concept invariant.
-- `class.override` / `class.binding-invalid` — a `class` illegally overrides a
-  field, or an `instanceof` / meta-model binding doesn't resolve.
+- `Class.override` / `Class.binding-invalid` — a `class` illegally overrides a
+  field, or an `instanceof` / meta-model binding doesn't resolve. (These codes
+  carry a capital `C`; the codes are case-sensitive.)
 - `taxonomy.*` — a taxonomy represents no concept, a value doesn't resolve to a
   term, or a term names a concept the taxonomy doesn't represent.
-- `instance.ambiguous-field-binding` — an assignment can't be matched to a single
-  field.
+- `Instance.ambiguous-field-binding` — an assignment can't be matched to a single
+  field. (Capital `I` — case-sensitive, like the `Class.*` codes above.)
 - `instance.orphan` — a concrete instance is declared outside a `model` block.
 - `model.binding-undefined` — a `model`'s `: <meta-model>` or a `uses` entry names
   a namespace no loaded module provides.
@@ -444,7 +454,7 @@ spurious later diagnostics. Re-check after each fix.
 
     annotation Meta : Base { note : string ?; } // typed metadata type (may inherit)
     // Standard prelude annotations (no declaration): icon, label, toolbox,
-    // instance, iconSource, wiki.
+    // instance, iconSource, wiki, entrypoint, has_children, containment.
 
     concept Thing : Parent            // parent-less concepts extend `Element`
     {
@@ -470,3 +480,22 @@ spurious later diagnostics. Re-check after each fix.
         Thing t { parts = [ Part { id = p1; } ]; }   // inline object literal
         a --> b;                                     // operator edge
     }
+
+## 11. Beyond the core — advanced declarations
+
+The parser accepts further declaration keywords used by specialised meta-models;
+they are **rarely hand-authored** in a typical architecture / meta-model /
+library project, and each is its own topic — read the package's own examples
+before using one. Named here only so you recognise them as real (not syntax
+errors):
+
+- **`viewpoint … frames <Concept>`** and **`aspect`** — viewpoints and mix-in
+  aspects of the type model; a `model` may add a `conforms <viewpoint>` clause
+  after its `uses` list.
+- **`identity`**, **`match`**, **`merge`** — entity-identity resolution across
+  data sources (stable keys and how records are matched/merged).
+- **`datasource`** — an external data connector; a `model` body may then
+  `populate` / `connect` from it.
+- **`role`**, **`contribute`**, **`profile`**, and the concept-body modifiers
+  **`secured`** / **`derive`** — the security model (RBAC) plus secured and
+  derived fields.
