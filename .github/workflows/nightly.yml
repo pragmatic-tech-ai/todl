@@ -21,8 +21,8 @@ jobs:
     steps:
       # On this laptop `bash` on PATH is WSL's (no distro for the runner account); put Git Bash first.
       - name: Use Git Bash
-        shell: powershell
-        run: Add-Content -Path $env:GITHUB_PATH -Value 'C:\Program Files\Git\bin'
+        shell: cmd
+        run: '>> "%GITHUB_PATH%" echo C:\Program Files\Git\bin'
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
