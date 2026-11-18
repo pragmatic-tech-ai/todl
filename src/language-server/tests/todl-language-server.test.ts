@@ -38,7 +38,17 @@ class FakeService implements ILanguageService
     async ProducedIdOf(): Promise<undefined> { return undefined; }
     get StaleMembers(): ReadonlySet<string> { return new Set(); }
     async WhenIdle(): Promise<void> { }
-    PropertyChanged(_name: string): Signal<PropertyChangedEventArgs> { return new Signal<PropertyChangedEventArgs>(); }
+    private readonly propertySignals = new Map<string, Signal<PropertyChangedEventArgs>>();
+    PropertyChanged(name: string): Signal<PropertyChangedEventArgs>
+    {
+        let signal = this.propertySignals.get(name);
+        if (signal === undefined)
+        {
+            signal = new Signal<PropertyChangedEventArgs>();
+            this.propertySignals.set(name, signal);
+        }
+        return signal;
+    }
     async ModelView(): Promise<undefined> { return undefined; }
     async Resources(): Promise<ResolvedResource[]> { return []; }
     readonly GraphChanged = new Signal<SolutionGraphChange>();

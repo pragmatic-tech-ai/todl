@@ -7,6 +7,7 @@ import { type IBagPersister } from '../../property-bags/bag-persister.js';
 // The consumed surface of the solution manager: what a UI / app layer reads off the
 // manager facade. Declared as an interface so a non-local (remote) manager can stand
 // in for the concrete SolutionManagerService.
+// MIRRORS the concrete class's signatures; keep in lockstep (`implements` catches drift).
 export interface IManager
 {
     // The one active solution, or undefined when none is open.

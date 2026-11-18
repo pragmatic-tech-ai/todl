@@ -25,6 +25,7 @@ export interface PublishOutcome
 
 // The consumed build/publish surface, declared as an interface so a non-local
 // (remote) build service can stand in for the concrete BuildService.
+// MIRRORS the concrete class's signatures; keep in lockstep (`implements` catches drift).
 export interface IBuildService
 {
     Build(project: IStorage, buildSystemId: string, flavorId?: string, progress?: IBuildProgress, options?: BuildOptions): Promise<ProjectBuildOutput>;
