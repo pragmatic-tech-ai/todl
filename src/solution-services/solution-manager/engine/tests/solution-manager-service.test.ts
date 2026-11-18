@@ -366,6 +366,29 @@ test('RestoreSession default folder: falls back to an untitled session when the 
     assert.equal(svc.ActiveSolution!.HasLocation, false); // degraded to in-memory untitled
 });
 
+test('OpenSolution skips an unreadable manifest and opens a valid one beside it', async () => {
+    const { svc, roots } = makeService();
+    const storage = new FakeStorage('/work/multi');
+    roots.set('/work/multi', storage);
+    // The corrupt manifest is written first, so it sorts first in List (insertion
+    // order); the old single-pick logic hit it and threw. The valid one must win.
+    await storage.WriteText('Corrupt.pksln', 'not json {{{');
+    await storage.WriteText(
+        'Valid.pksln',
+        JSON.stringify({ kind: 'todl-solution', version: 1, name: 'Valid', members: [], settings: {} }),
+    );
+    await svc.OpenSolution('/work/multi');
+    assert.equal(svc.ActiveSolution!.Name, 'Valid');
+});
+
+test('first-run default create does not flash a "Saved." status (silent background save)', async () => {
+    const notifier = new RecordingNotifier();
+    const { svc } = makeService({ notifier });
+    await svc.RestoreSession('/userdata/default-solution');
+    assert.equal(svc.ActiveSolution!.HasLocation, true);
+    assert.deepEqual(notifier.statuses, []);
+});
+
 test('RestoreSession prefers the remembered last solution over the default folder', async () => {
     const store = new FakeSessionStore({
         'solution-manager': { lastSolution: '/work/saved', recentSolutions: ['/work/saved'] },

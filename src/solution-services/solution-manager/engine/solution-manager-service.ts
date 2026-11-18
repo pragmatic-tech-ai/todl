@@ -323,7 +323,8 @@ export class SolutionManagerService extends ServiceBase implements IManager
             // Save writes the manifest into it.
             await this.storages.CreateStorage(location).CreateDirectory('');
             await this.NewSolution(location);
-            await this.Save();
+            const created = this.ActiveSolution;
+            if (created?.Storage !== undefined) await this.writeManifest(created, created.Storage);
         }
         catch
         {
@@ -340,12 +341,11 @@ export class SolutionManagerService extends ServiceBase implements IManager
     {
         if (!(await this.canReplace())) return;
         const storage = this.storages.CreateStorage(location);
-        const manifestFile = await this.findManifestFile(storage);
-        const manifest = SolutionManifest.parse(await storage.ReadText(manifestFile));
+        const { fileName, manifest } = await this.readManifest(storage);
         // The file stem IS the solution name (the manifest is `<name>.pksln`), so a
         // rename that moved the file is reflected on reopen without rewriting content.
         const session = new Solution(
-            SolutionManagerService.solutionNameFromFile(manifestFile),
+            SolutionManagerService.solutionNameFromFile(fileName),
             storage,
         );
         for (const ref of manifest.members) session.AddMember(ref.path, ref.type);
@@ -458,6 +458,17 @@ export class SolutionManagerService extends ServiceBase implements IManager
             if (location !== undefined) await this.SaveAs(location);
             return;
         }
+        await this.writeManifest(s, storage);
+        this.notifications?.Status(SolutionManagerService.SavedStatus);
+    }
+
+    // The silent core of Save: write the active solution's manifest to its storage,
+    // mark it clean, and record it as the recent/last solution — WITHOUT the
+    // user-facing "Saved." status. A background persist (rooting the default solution
+    // at startup) uses this so it does not flash "Saved." before the user saved
+    // anything; the interactive Save adds the status on top.
+    private async writeManifest(s: Solution, storage: IStorage): Promise<void>
+    {
         const manifest = new SolutionManifest(
             s.Name,
             s.Members.ToArray().map((m) => m.Ref),
@@ -470,7 +481,6 @@ export class SolutionManagerService extends ServiceBase implements IManager
         );
         s.IsDirty = false;
         this.pushRecent(storage.Root);
-        this.notifications?.Status(SolutionManagerService.SavedStatus);
     }
 
     public async SaveAs(location: string): Promise<void>
@@ -597,22 +607,33 @@ export class SolutionManagerService extends ServiceBase implements IManager
         return fileName.endsWith(suffix) ? fileName.slice(0, -suffix.length) : fileName;
     }
 
-    // Locate the solution manifest in a folder: the single `*.pksln` file (the file
-    // name is not fixed — it is derived from the solution name). Throws when the
-    // folder holds no manifest, so a missing/renamed solution surfaces to the caller
-    // (RestoreSession treats the throw as "the remembered solution is gone").
-    private async findManifestFile(storage: IStorage): Promise<string>
+    // Read the solution manifest from a folder: among the `*.pksln` files (the name is
+    // derived from the solution name, so it is not fixed), return the first that parses,
+    // with its file name. Skipping an unreadable or foreign `.pksln` keeps a valid
+    // solution openable even if a stray/corrupt one sits beside it — otherwise a bad
+    // file that merely sorts first would wedge the folder on every reopen. Throws when
+    // the folder holds no readable manifest, so a missing/renamed solution surfaces to
+    // the caller (RestoreSession treats the throw as "the remembered solution is gone").
+    private async readManifest(storage: IStorage): Promise<{ fileName: string; manifest: SolutionManifest }>
     {
         const suffix = `.${SolutionManagerService.ManifestFileExtension}`;
         const entries = await storage.List('');
-        const entry = entries.find((e) => !e.IsDirectory && e.Name.endsWith(suffix));
-        if (entry === undefined)
+        const candidates = entries.filter((e) => !e.IsDirectory && e.Name.endsWith(suffix));
+        for (const entry of candidates)
         {
-            throw new Error(
-                `No .${SolutionManagerService.ManifestFileExtension} solution manifest in '${storage.Root}'`,
-            );
+            try
+            {
+                const manifest = SolutionManifest.parse(await storage.ReadText(entry.Name));
+                return { fileName: entry.Name, manifest };
+            }
+            catch
+            {
+                // Unreadable or unparseable — try the next candidate.
+            }
         }
-        return entry.Name;
+        throw new Error(
+            `No readable .${SolutionManagerService.ManifestFileExtension} solution manifest in '${storage.Root}'`,
+        );
     }
 
     // POSIX-join a solution folder with a member's relative path, collapsing
