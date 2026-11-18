@@ -496,8 +496,9 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource,
     }
 
     // The ONLY remaining blanket cache clear: a ComposedChanged. Opening a
-    // different solution (or a changed composed set) swaps the entire member set out, so every cached compile and
-    // every graph edge is stale at once — clear them. Incremental per-member changes
+    // different solution (or a changed composed set) swaps the entire member set out,
+    // so every cached compile and every graph edge is stale at once — clear them.
+    // Incremental per-member changes
     // (add/remove/reference edits) are handled by the SolutionLanguageService driving
     // the targeted Invalidate instead; this class no longer subscribes to the Members
     // collection for a coarse clear. Guards against a headless run with no

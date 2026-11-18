@@ -412,7 +412,7 @@ describe("ProjectSystemComposer", () =>
         assert.equal(modelReads, 1, "the live meta-model's own source was compiled once, not once per generator/event");
 
         // subscribeToManager (in SolutionBaseResolver's constructor) asks for the
-        // ActiveSolution PropertyChanged subscription exactly once per resolver
+        // ComposedChanged subscription exactly once per resolver
         // instance — a count > 1 means a fresh resolver (and a fresh, leaked
         // subscription) was constructed per event instead of reusing this one.
         assert.equal(manager.composedChangedSubscribeCount, 1, "exactly one ComposedChanged subscription was ever created");
