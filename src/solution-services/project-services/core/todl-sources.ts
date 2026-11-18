@@ -6,12 +6,14 @@ import { type SourceFile } from '../../../compiler-services/diagnostics/span.js'
 // free functions — pure walks over an IStorage, no state.
 export class TodlProjectSourceFiles
 {
-    // Top-level directories that hold build OUTPUT, not source: a producer project's
-    // `dist/` is its published artifact tree (a compiled copy of `concepts/` etc.), so
-    // walking it as source re-declares every node ("node already exists") and fails the
-    // compile. Always skipped at the project root (in every collection mode); a nested
-    // `dist/` folder is not special.
-    private static readonly BuildOutputDirs: readonly string[] = ['dist']
+    // Top-level directories that never hold hand-authored source: build OUTPUT
+    // (`dist/`, and `build/` — the npm-package flavor emits `build/npm-package/src/`,
+    // a compiled copy of `concepts/` etc.), dependencies (`node_modules/`), and VCS
+    // (`.git/`). Walking any of them as source re-declares every node ("node already
+    // exists") and fails the analysis/compile. Always skipped at the project root (in
+    // every collection mode) — mirrors emit-package-layout's pack exclusions; a nested
+    // folder of the same name is not special.
+    private static readonly BuildOutputDirs: readonly string[] = ['dist', 'build', 'node_modules', '.git']
 
     public static JoinRel(dir: string, name: string): string
     {
