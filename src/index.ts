@@ -265,6 +265,7 @@ export {
     type Project as LspProject, type SourceProvider,
 } from './solution-services/lsp/host/project-registry.js';
 export { SemanticTokensProvider } from './solution-services/lsp/analysis/semantic-tokens-provider.js';
+export { type IManager } from './solution-services/solution-manager/engine/i-manager.js';
 export { SolutionManagerService } from './solution-services/solution-manager/engine/solution-manager-service.js';
 export type { IComposedMemberSet } from './solution-services/solution-manager/engine/composed-members.js';
 export { SolutionBaseResolver } from './solution-services/solution-manager/engine/solution-base-resolver.js';
@@ -489,7 +490,7 @@ export { TarArchive, type TarEntry, type TarFile } from './solution-services/pac
 // registry via BuildSystemRegistryKey at runtime; never imports TodlBuildSystemRegistry).
 // Its PublishOutcome is aliased on this barrel (BuildPublishOutcome) — the bare name
 // already names the unrelated compile-pipeline outcome from publish/publish.js above.
-export { BuildService, type PublishOutcome as BuildPublishOutcome } from './solution-services/todl-build-system/build-service.js';
+export { BuildService, type IBuildService, type PublishOutcome as BuildPublishOutcome } from './solution-services/todl-build-system/build-service.js';
 export { InMemoryBuildStorage } from './solution-services/todl-build-system/in-memory-build-storage.js';
 export { ScopeFlatteningStorage } from './solution-services/todl-build-system/scope-flattening-storage.js';
 

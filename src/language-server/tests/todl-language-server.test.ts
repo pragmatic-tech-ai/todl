@@ -4,7 +4,7 @@ import { PassThrough } from "node:stream";
 import { createConnection } from "vscode-languageserver/node.js";
 import { StreamMessageReader, StreamMessageWriter, createMessageConnection } from "vscode-jsonrpc/node.js";
 import type { Hover, Location, CompletionItem, WorkspaceEdit } from "vscode-languageserver-types";
-import { Signal } from "@pragmatic-tech-ai/todl-runtime";
+import { Signal, type PropertyChangedEventArgs } from "@pragmatic-tech-ai/todl-runtime";
 import { TodlLanguageServer } from "../todl-language-server.js";
 import type { ILanguageService } from "../../solution-services/lsp/host/i-language-service.js";
 import type { RenameError } from "../../solution-services/lsp/analysis/rename-provider.js";
@@ -37,6 +37,18 @@ class FakeService implements ILanguageService
     async WorkspaceProducers(): Promise<[]> { return []; }
     async ProducedIdOf(): Promise<undefined> { return undefined; }
     get StaleMembers(): ReadonlySet<string> { return new Set(); }
+    async WhenIdle(): Promise<void> { }
+    private readonly propertySignals = new Map<string, Signal<PropertyChangedEventArgs>>();
+    PropertyChanged(name: string): Signal<PropertyChangedEventArgs>
+    {
+        let signal = this.propertySignals.get(name);
+        if (signal === undefined)
+        {
+            signal = new Signal<PropertyChangedEventArgs>();
+            this.propertySignals.set(name, signal);
+        }
+        return signal;
+    }
     async ModelView(): Promise<undefined> { return undefined; }
     async Resources(): Promise<ResolvedResource[]> { return []; }
     readonly GraphChanged = new Signal<SolutionGraphChange>();

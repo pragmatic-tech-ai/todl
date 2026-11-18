@@ -1,5 +1,6 @@
 import { type IServiceProvider, type IStorage } from '@pragmatic-tech-ai/todl-runtime'
 import { SolutionManagerService } from './solution-manager-service.js'
+import { type IManager } from './i-manager.js'
 import { type SolutionMember } from './solution-member.js'
 import { type IProjectFactoryRegistry, type IStorageProviderRegistry } from './host-services.js'
 import { ProjectEventsKey, ProjectEventKind } from '../../project-services/generators/project-events.js'
@@ -79,7 +80,7 @@ export class ProjectLifecycle
 {
     constructor(
         private readonly provider: IServiceProvider,
-        private readonly manager: SolutionManagerService,
+        private readonly manager: IManager,
         private readonly session?: IProjectSessionStore,
         private readonly recents?: IProjectRecents)
     {

@@ -2,7 +2,7 @@ import type {
     CodeAction, CompletionItem, Diagnostic, DocumentSymbol, FoldingRange, Hover, Location, Position, Range,
     SemanticTokens, SignatureHelp, TextEdit, WorkspaceEdit, WorkspaceSymbol,
 } from "vscode-languageserver-types";
-import type { IStorage, Signal } from "@pragmatic-tech-ai/todl-runtime";
+import type { IStorage, Signal, PropertyChangedEventArgs } from "@pragmatic-tech-ai/todl-runtime";
 import type { RenameError } from "../analysis/rename-provider.js";
 import type { TodlDocument } from "../../../compiler-services/emit/json.js";
 import type { ProjectType, DependencyRef } from "../../package-manager/manifest.js";
@@ -42,6 +42,11 @@ export interface ILanguageService
     ProducedIdOf(consumerStorage: IStorage): Promise<string | undefined>;
     // Member ids evicted by the most recent invalidation; raises PropertyChanged("StaleMembers").
     readonly StaleMembers: ReadonlySet<string>;
+    // Awaits the serialized tail of fire-and-forget maintenance (an edit's eviction /
+    // re-load), so a caller sees a settled state.
+    WhenIdle(): Promise<void>;
+    // The INPC change channel for a named property (e.g. "StaleMembers").
+    PropertyChanged(name: string): Signal<PropertyChangedEventArgs>;
 
     // The shared solution-graph read seam (Phase 1): ONE Repository + origin map for the
     // whole active solution (the SAME graph for every consumer; undefined when no solution

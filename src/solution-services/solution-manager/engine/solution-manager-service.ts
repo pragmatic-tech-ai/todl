@@ -14,6 +14,7 @@ import {
 } from '@pragmatic-tech-ai/todl-runtime';
 import { DefaultComposedMemberSet, type IComposedMemberSet } from './composed-members.js';
 import { Solution } from './solution.js';
+import { type IManager } from './i-manager.js';
 import { SolutionManifest } from './solution-manifest.js';
 import { SolutionSession } from './solution-session.js';
 import { SolutionBaseResolver } from './solution-base-resolver.js';
@@ -41,7 +42,7 @@ import {
 // Owns exactly ONE active solution (the Visual Studio .sln model): create a new
 // empty solution, open/save/close one, and keep a recent-solutions list. Opening
 // a solution opens ALL its member projects.
-export class SolutionManagerService extends ServiceBase
+export class SolutionManagerService extends ServiceBase implements IManager
 {
     public static readonly Key = new ServiceKey<SolutionManagerService>('SolutionManager');
 

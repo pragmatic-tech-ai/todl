@@ -23,10 +23,19 @@ export interface PublishOutcome
     readonly Version: string;
 }
 
+// The consumed build/publish surface, declared as an interface so a non-local
+// (remote) build service can stand in for the concrete BuildService.
+// MIRRORS the concrete class's signatures; keep in lockstep (`implements` catches drift).
+export interface IBuildService
+{
+    Build(project: IStorage, buildSystemId: string, flavorId?: string, progress?: IBuildProgress, options?: BuildOptions): Promise<ProjectBuildOutput>;
+    Publish(project: IStorage, progress?: IBuildProgress): Promise<PublishOutcome>;
+}
+
 // The engine home for build/publish orchestration (was plexus-core's
 // PackagePublisher). The UI calls these down and tracks progress via the
 // supplied IBuildProgress; the engine does the work and never calls up.
-export class BuildService
+export class BuildService implements IBuildService
 {
     public static readonly Key = new ServiceKey<BuildService>('BuildService');
     private static readonly NpmPackageBuildSystemId = 'npm-package';
