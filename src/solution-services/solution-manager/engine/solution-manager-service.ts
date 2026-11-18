@@ -93,7 +93,8 @@ export class SolutionManagerService extends ServiceBase
     private static readonly RecentSolutionsName = 'recentSolutions';
     private static readonly RecentSolutionsLabel = 'Recent Solutions';
     // INPC property names (match the public getters) raised for view-model binding.
-    private static readonly ActiveSolutionChangeName = 'ActiveSolution';
+    // @internal: shared with DefaultComposedMemberSet (one home for the key).
+    public static readonly ActiveSolutionChangeName = 'ActiveSolution';
     private static readonly RecentSolutionsChangeName = 'RecentSolutions';
 
     private activeSolution: Solution | undefined;

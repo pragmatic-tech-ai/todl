@@ -1,6 +1,6 @@
 import { Signal } from '@pragmatic-tech-ai/todl-runtime';
 import { type SolutionMember } from './solution-member.js';
-import { type SolutionManagerService } from './solution-manager-service.js';
+import { SolutionManagerService } from './solution-manager-service.js';
 
 // The set of members whose source composes into one language-service graph. The
 // default is the manager's single active solution; a host (e.g. a multi-solution
@@ -18,15 +18,13 @@ export interface IComposedMemberSet
 // manager's ActiveSolution changes.
 export class DefaultComposedMemberSet implements IComposedMemberSet
 {
-    private static readonly ActiveSolutionName = 'ActiveSolution';
-
     public readonly Changed: Signal<void> = new Signal<void>();
 
     // The PropertyChanged subscription is never disposed: it shares the manager's lifetime.
     constructor(private readonly manager: SolutionManagerService)
     {
         manager
-            .PropertyChanged(DefaultComposedMemberSet.ActiveSolutionName)
+            .PropertyChanged(SolutionManagerService.ActiveSolutionChangeName)
             .subscribe(() => this.Changed.emit());
     }
 

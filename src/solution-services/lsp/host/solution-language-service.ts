@@ -544,6 +544,9 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
         this.contentWatchers.clear();
         if (solution !== undefined)
         {
+            // Targeted per-member invalidation covers only the ACTIVE solution's Members; edits to a
+            // NON-active composed solution fall to the coarse fallback (provider Changed -> ComposedChanged ->
+            // clearCache + rebuild). Correctness is preserved; the asymmetry is intentional.
             const off = solution.Members.Subscribe((change) => this.OnMembersChanged(change));
             this.membersSubscription = new Disposable(off);
             for (const member of this.ComposedMembers()) this.WatchMemberContent(member);
