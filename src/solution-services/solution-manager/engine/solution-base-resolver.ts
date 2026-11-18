@@ -50,7 +50,6 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource,
 {
     public static readonly Key = new ServiceKey<SolutionBaseResolver>('SolutionBaseResolver')
 
-    private static readonly ActiveSolutionPropertyName = 'ActiveSolution'
     private static readonly StaleMemberIdsPropertyName = 'StaleMemberIds'
 
     // DFS resolution path (member ids currently being compiled) — genuine cycles
@@ -165,8 +164,7 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource,
     // yet is skipped, since a reference needs a concrete version to record.
     public async WorkspaceProducers(kind: ProjectType): Promise<readonly DependencyRef[]>
     {
-        const members = this.Provider.get(SolutionManagerService.Key)?.ActiveSolution?.Members
-        if (members === undefined) return []
+        const members = this.Provider.get(SolutionManagerService.Key)?.ComposedMembers() ?? []
         const refs: DependencyRef[] = []
         for (const m of members)
         {
@@ -421,12 +419,9 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource,
     // manifest; undefined if none (or the member is unresolved / non-producer).
     private async liveProducerFor(id: string): Promise<{ storage: IStorage; manifest: ProjectManifest } | undefined>
     {
-        // SolutionManagerService has no direct Members — the members live on
-        // ActiveSolution (see Solution.Members). Reading `manager.Members` directly,
-        // as an earlier draft of this class did, throws on a real manager (undefined
-        // is not iterable); go through ActiveSolution instead.
-        const members = this.Provider.get(SolutionManagerService.Key)?.ActiveSolution?.Members
-        if (members === undefined) return undefined
+        // SolutionManagerService has no direct Members — go through the composed
+        // member set (default: the active solution's members).
+        const members = this.Provider.get(SolutionManagerService.Key)?.ComposedMembers() ?? []
         for (const m of members)
         {
             const storage = m.Storage
@@ -512,8 +507,7 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource,
     {
         const manager = this.Provider.get(SolutionManagerService.Key)
         if (manager === undefined) return
-        const propertyChanged = (manager as unknown as { PropertyChanged?: (name: string) => { subscribe: (handler: () => void) => IDisposable } }).PropertyChanged
-        this.managerSubscription = propertyChanged?.call(manager, SolutionBaseResolver.ActiveSolutionPropertyName).subscribe(() => this.clearCache())
+        this.managerSubscription = manager.ComposedChanged.subscribe(() => this.clearCache())
     }
 
     private clearCache(): void

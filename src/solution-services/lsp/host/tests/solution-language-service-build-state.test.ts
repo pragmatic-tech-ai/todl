@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ServiceProvider, FakeStorage, Observable, type IStorage, type IServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
+import { ServiceProvider, FakeStorage, Observable, Signal, type IStorage, type IServiceProvider } from "@pragmatic-tech-ai/todl-runtime";
 import { SolutionLanguageService } from "../solution-language-service.js";
 import { SolutionGraph } from "../solution-graph.js";
 import { SolutionBaseResolver } from "../../../solution-manager/engine/solution-base-resolver.js";
@@ -17,6 +17,7 @@ class FakeManager extends Observable
 {
     private static readonly ActiveSolutionProperty = "ActiveSolution";
     private active: Solution | undefined;
+    public readonly ComposedChanged: Signal<void> = new Signal<void>();
 
     constructor(active: Solution | undefined)
     {
@@ -34,6 +35,12 @@ class FakeManager extends Observable
         const old = this.active;
         this.active = value;
         this.RaisePropertyChanged(FakeManager.ActiveSolutionProperty, old, value);
+        this.ComposedChanged.emit();
+    }
+
+    public ComposedMembers(): readonly SolutionMember[]
+    {
+        return this.active ? this.active.Members.ToArray() : [];
     }
 }
 

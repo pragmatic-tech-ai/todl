@@ -18,6 +18,7 @@ import { ProjectType, type ProjectManifest } from "../../../package-manager/mani
 import type { PackageRef } from "../../../../publish/publish.js";
 import type { TodlDocument } from "../../../../compiler-services/emit/json.js";
 import { PROJECT_MANIFEST_FILENAME } from "../../../project-services/core/project-factory.js";
+import { ComposedDouble } from "../../../solution-manager/engine/tests/composed-double.js";
 
 // Fixtures over a real Solution + a real SolutionBaseResolver (the same instance
 // the service resolves and the test primes), mirroring the Task-3 / Task-12 tests.
@@ -109,7 +110,7 @@ class World
         }
         const manager = { ActiveSolution: solution };
         const provider = new ServiceProvider();
-        provider.registerInstance(SolutionManagerService.Key, manager as unknown as SolutionManagerService);
+        provider.registerInstance(SolutionManagerService.Key, ComposedDouble.For(manager.ActiveSolution));
         provider.registerInstance(PackageStoreKey, Fixtures.Published() as never);
         const resolver = new SolutionBaseResolver(provider);
         provider.registerInstance(SolutionBaseResolver.Key, resolver);
