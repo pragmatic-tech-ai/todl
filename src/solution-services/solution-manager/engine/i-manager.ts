@@ -1,9 +1,8 @@
-import { type Signal, type PropertyChangedEventArgs } from '@pragmatic-tech-ai/todl-runtime';
+import { type Signal, type PropertyChangedEventArgs, type IStorage } from '@pragmatic-tech-ai/todl-runtime';
 import { type Solution } from './solution.js';
 import { type SolutionMember } from './solution-member.js';
 import { type BagVantage } from '../../property-bags/bag-catalog.js';
 import { type IBagPersister } from '../../property-bags/bag-persister.js';
-import { type IStorage } from '@pragmatic-tech-ai/todl-runtime';
 
 // The consumed surface of the solution manager: what a UI / app layer reads off the
 // manager facade. Declared as an interface so a non-local (remote) manager can stand
