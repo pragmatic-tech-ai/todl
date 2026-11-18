@@ -266,6 +266,7 @@ export {
 } from './solution-services/lsp/host/project-registry.js';
 export { SemanticTokensProvider } from './solution-services/lsp/analysis/semantic-tokens-provider.js';
 export { SolutionManagerService } from './solution-services/solution-manager/engine/solution-manager-service.js';
+export type { IComposedMemberSet } from './solution-services/solution-manager/engine/composed-members.js';
 export { SolutionBaseResolver } from './solution-services/solution-manager/engine/solution-base-resolver.js';
 export { type IBaseResolver } from './solution-services/solution-manager/engine/i-base-resolver.js';
 export {
