@@ -5,7 +5,7 @@ system does, how the pieces fit, and where to look. It describes the code as it
 stands today (`@pragmatic-tech-ai/todl` v0.36.x).
 
 For the language reference and the wider suite, see the docs hub:
-<https://pragmatic-tech-ai.github.io/dev-kit/projects/todl/>. This file is the
+<https://docs.pragmatic-tech.ai/projects/todl/>. This file is the
 in-repo architectural companion to that hub.
 
 ---
