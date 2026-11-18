@@ -10,6 +10,7 @@ import { ProjectType, type ProjectManifest } from '../../../package-manager/mani
 import { PROJECT_MANIFEST_FILENAME } from '../../../project-services/core/project-factory.js'
 import { WikiOriginKind } from '../../../project-services/core/wiki-origin.js'
 import type { JsonNode } from '../../../../compiler-services/emit/json.js'
+import { ComposedDouble } from './composed-double.js'
 
 // Fixtures (static helpers on a test class — no free functions).
 class Fixtures
@@ -30,7 +31,7 @@ class Fixtures
     {
         const provider = new ServiceProvider()
         provider.registerInstance(PackageStoreKey, published as never)
-        provider.registerInstance(SolutionManagerService.Key, manager as SolutionManagerService)
+        provider.registerInstance(SolutionManagerService.Key, ComposedDouble.For(manager.ActiveSolution))
         return provider
     }
 

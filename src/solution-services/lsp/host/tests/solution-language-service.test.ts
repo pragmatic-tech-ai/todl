@@ -15,6 +15,7 @@ import { PackageStoreKey } from "../../../todl-build-system/package-store.js";
 import type { SourcedPackage } from "../../../todl-build-system/package-source.js";
 import { ProjectEvents, ProjectEventsKey, ProjectEventKind } from "../../../project-services/generators/project-events.js";
 import type { PackageRef } from "../../../../publish/publish.js";
+import { ComposedDouble } from "../../../solution-manager/engine/tests/composed-double.js";
 
 // Fixtures over a real Solution + a real SolutionBaseResolver (resolved by the
 // service), mirroring the Task-3 / Task-11 tests. Static helpers on a class — no
@@ -51,7 +52,7 @@ class Fixtures
         member.Storage = Fixtures.ConsumerStorage();
         const manager = { ActiveSolution: solution };
         const provider = new ServiceProvider();
-        provider.registerInstance(SolutionManagerService.Key, manager as unknown as SolutionManagerService);
+        provider.registerInstance(SolutionManagerService.Key, ComposedDouble.For(manager.ActiveSolution));
         if (engine !== undefined) provider.registerInstance(AnalysisEngineKey, engine);
         return provider;
     }
@@ -131,7 +132,7 @@ class BaseWorld
         solution.AddMember(BaseWorld.ProducerId, "meta-model").Storage = this.Producer;
         solution.AddMember(BaseWorld.ConsumerId, "library").Storage = this.Consumer;
         const provider = new ServiceProvider();
-        provider.registerInstance(SolutionManagerService.Key, { ActiveSolution: solution } as unknown as SolutionManagerService);
+        provider.registerInstance(SolutionManagerService.Key, ComposedDouble.For(solution));
         provider.registerInstance(PackageStoreKey, { TryGet(): Promise<SourcedPackage | undefined> { return Promise.resolve(undefined); } } as never);
         this.Resolver = new SolutionBaseResolver(provider);
         provider.registerInstance(SolutionBaseResolver.Key, this.Resolver);

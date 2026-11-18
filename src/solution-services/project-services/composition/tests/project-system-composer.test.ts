@@ -27,6 +27,7 @@ import type { SourcedPackage } from "../../../todl-build-system/package-source.j
 import type { PackageRef } from "../../../../publish/publish.js";
 import { SolutionManagerService } from "../../../solution-manager/engine/solution-manager-service.js";
 import { SolutionBaseResolver } from "../../../solution-manager/engine/solution-base-resolver.js";
+import { ComposedDouble } from "../../../solution-manager/engine/tests/composed-double.js";
 
 const ARCH_MODEL = "namespace acme { concept Widget { } }";
 const NpmPackageId = "npm-package";
@@ -78,14 +79,14 @@ class CountingStorage implements IStorage
     public List(path: string): Promise<readonly StorageEntry[]> { return this.inner.List(path); }
 }
 
-// A fake SolutionManagerService that also counts PropertyChanged('ActiveSolution')
+// A fake SolutionManagerService that also counts ComposedChanged
 // subscription requests — SolutionBaseResolver.subscribeToManager makes exactly one such
 // call, from its constructor. If ResolveSource constructs a fresh resolver per event (the
 // leak this fixture guards against), this count grows with every event instead of
 // staying at one.
 class SubscriptionSpyManager
 {
-    public propertyChangedCallCount = 0;
+    public composedChangedSubscribeCount = 0;
 
     public constructor(private readonly members: readonly { id: string; type: ProjectType; storage: IStorage }[]) {}
 
@@ -94,9 +95,14 @@ class SubscriptionSpyManager
         return { Members: this.members.map((m) => ({ Ref: { path: m.id, type: m.type }, Storage: m.storage })) };
     }
 
-    public PropertyChanged(_name: string): { subscribe: (handler: () => void) => void }
+    public ComposedMembers(): readonly unknown[]
     {
-        this.propertyChangedCallCount++;
+        return (this.ActiveSolution as { Members: readonly unknown[] }).Members;
+    }
+
+    public get ComposedChanged(): { subscribe: (handler: () => void) => void }
+    {
+        this.composedChangedSubscribeCount++;
         return { subscribe: () => {} };
     }
 }
@@ -193,11 +199,9 @@ class ComposerFixtures
     // solution-base-resolver.test.ts's identical fixture shape).
     public static FakeSolutionManager(members: readonly { id: string; type: ProjectType; storage: IStorage }[]): SolutionManagerService
     {
-        return {
-            ActiveSolution: {
-                Members: members.map((m) => ({ Ref: { path: m.id, type: m.type }, Storage: m.storage })),
-            },
-        } as unknown as SolutionManagerService;
+        return ComposedDouble.For({
+            Members: members.map((m) => ({ Ref: { path: m.id, type: m.type }, Storage: m.storage })),
+        });
     }
 }
 
@@ -408,10 +412,10 @@ describe("ProjectSystemComposer", () =>
         assert.equal(modelReads, 1, "the live meta-model's own source was compiled once, not once per generator/event");
 
         // subscribeToManager (in SolutionBaseResolver's constructor) asks for the
-        // ActiveSolution PropertyChanged subscription exactly once per resolver
+        // ComposedChanged subscription exactly once per resolver
         // instance — a count > 1 means a fresh resolver (and a fresh, leaked
         // subscription) was constructed per event instead of reusing this one.
-        assert.equal(manager.propertyChangedCallCount, 1, "exactly one ActiveSolution subscription was ever created");
+        assert.equal(manager.composedChangedSubscribeCount, 1, "exactly one ComposedChanged subscription was ever created");
 
         // And the resolver ResolveSource actually handed the generators is still the
         // very first instance resolved above.

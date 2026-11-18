@@ -9,6 +9,7 @@ import type { PackageRef } from '../../../../publish/publish.js'
 import { ProjectType, type ProjectManifest } from '../../../package-manager/manifest.js'
 import { PROJECT_MANIFEST_FILENAME } from '../../../project-services/core/project-factory.js'
 import type { JsonNode } from '../../../../compiler-services/emit/json.js'
+import { ComposedDouble } from './composed-double.js'
 
 // Fixtures for the version-free (CompileLocal) live-member branch. Static helpers
 // on a class — no free functions.
@@ -30,7 +31,7 @@ class LocalFixtures
         }
         const provider = new ServiceProvider()
         provider.registerInstance(PackageStoreKey, published as never)
-        provider.registerInstance(SolutionManagerService.Key, manager as unknown as SolutionManagerService)
+        provider.registerInstance(SolutionManagerService.Key, ComposedDouble.For(manager.ActiveSolution))
         return provider
     }
 

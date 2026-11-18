@@ -101,9 +101,6 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     private static readonly RenameNoProject = "No project owns this document.";
     private static readonly RootSeparator = "/";
 
-    // The manager's INPC property whose change means the whole member set was swapped
-    // (a different solution opened) — the signal to re-point the Members subscription.
-    private static readonly ActiveSolutionPropertyName = "ActiveSolution";
     // The resolver property mirrored by this service's StaleMembers, and the name this
     // service raises it under.
     private static readonly ResolverStaleMemberIdsPropertyName = "StaleMemberIds";
@@ -156,7 +153,7 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     // Monotonic count of shared-graph commits (every GraphChanged emission).
     private graphRevision = 0;
 
-    // Permanent lifecycle subscriptions (the manager's ActiveSolution channel + the
+    // Permanent lifecycle subscriptions (the manager's ComposedChanged signal + the
     // project-event bus), disposed in dispose().
     private readonly subscriptions: IDisposable[] = [];
     // The ONE rewirable subscription: the active solution's Members collection. It is
@@ -326,16 +323,22 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
         return this.graphRevision;
     }
 
+    // The member set whose source composes into the graph: the manager's composed set
+    // (default: the active solution's members); empty with no manager.
+    private ComposedMembers(): readonly SolutionMember[]
+    {
+        return this.Provider.get(SolutionManagerService.Key)?.ComposedMembers() ?? [];
+    }
+
     // The shared solution view for a member: the ONE Repository + origin map the whole
     // solution composes into. Awaits warmup; undefined when no solution is active or the
     // storage is not one of its members (every valid member shares the identical graph).
     public async ModelView(consumerStorage: IStorage): Promise<{ model: Repository; originOf: ReadonlyMap<string, WikiOrigin>; provenanceOf: ReadonlyMap<string, string> } | undefined>
     {
         await this.Warmed();
-        const solution = this.Provider.get(SolutionManagerService.Key)?.ActiveSolution;
-        if (solution === undefined) return undefined;
+        const members = this.ComposedMembers();
         let isMember = false;
-        for (const member of solution.Members) if (member.Storage === consumerStorage) isMember = true;
+        for (const member of members) if (member.Storage === consumerStorage) isMember = true;
         if (!isMember) return undefined;
         return { model: this.solutionGraph.Model, originOf: this.solutionGraph.OriginOf, provenanceOf: this.solutionGraph.Provenance };
     }
@@ -513,18 +516,16 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     }
 
     // Wire the solution lifecycle → targeted cache maintenance. Two permanent arms —
-    // the manager's ActiveSolution channel (re-point the Members subscription on a
-    // solution switch) and the project-event bus (reference changes) — plus the
+    // the manager's ComposedChanged signal (re-point the Members subscription on a
+    // composed-set change) and the project-event bus (reference changes) — plus the
     // rewirable Members subscription itself. Guarded for a headless run (no manager /
-    // no bus) and for a lightweight test double whose manager lacks PropertyChanged.
+    // no bus).
     private SubscribeToLifecycle(): void
     {
         const manager = this.Provider.get(SolutionManagerService.Key);
         if (manager !== undefined)
         {
-            const propertyChanged = (manager as unknown as { PropertyChanged?: (name: string) => { subscribe: (handler: () => void) => IDisposable } }).PropertyChanged;
-            const sub = propertyChanged?.call(manager, SolutionLanguageService.ActiveSolutionPropertyName).subscribe(() => this.RewireMembers(manager.ActiveSolution));
-            if (sub !== undefined) this.subscriptions.push(sub);
+            this.subscriptions.push(manager.ComposedChanged.subscribe(() => this.RewireMembers(manager.ActiveSolution)));
             this.RewireMembers(manager.ActiveSolution);
         }
         const events = this.Provider.get(ProjectEventsKey);
@@ -543,9 +544,12 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
         this.contentWatchers.clear();
         if (solution !== undefined)
         {
+            // Targeted per-member invalidation covers only the ACTIVE solution's Members; edits to a
+            // NON-active composed solution fall to the coarse fallback (provider Changed -> ComposedChanged ->
+            // clearCache + rebuild). Correctness is preserved; the asymmetry is intentional.
             const off = solution.Members.Subscribe((change) => this.OnMembersChanged(change));
             this.membersSubscription = new Disposable(off);
-            for (const member of solution.Members) this.WatchMemberContent(member);
+            for (const member of this.ComposedMembers()) this.WatchMemberContent(member);
         }
         // Re-assemble the shared graph for the (possibly swapped or cleared) member set —
         // a solution switch raises no per-member Inserted events, so nothing else would.
@@ -704,9 +708,7 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     private async LiveMembersById(): Promise<Map<string, IStorage>>
     {
         const byId = new Map<string, IStorage>();
-        const solution = this.Provider.get(SolutionManagerService.Key)?.ActiveSolution;
-        if (solution === undefined) return byId;
-        for (const member of solution.Members)
+        for (const member of this.ComposedMembers())
         {
             const memberStorage = member.Storage;
             if (memberStorage === undefined) continue;
@@ -795,15 +797,11 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     // warm cache instead of paying resolution latency inline.
     private async BuildWarmCache(): Promise<void>
     {
-        const solution = this.Provider.get(SolutionManagerService.Key)?.ActiveSolution;
-        if (solution !== undefined)
+        for (const member of this.ComposedMembers())
         {
-            for (const member of solution.Members)
-            {
-                const storage = member.Storage;
-                if (storage === undefined) continue;
-                await this.RefreshWarmBases(storage);
-            }
+            const storage = member.Storage;
+            if (storage === undefined) continue;
+            await this.RefreshWarmBases(storage);
         }
         // Always build the graph — even with no active solution, AssembleMembers yields []
         // and Build([]) leaves (clears) the graph, so Ready/ModelView have a defined state.
@@ -951,10 +949,8 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     // classified — an architecture binding is never a producer, so it is not a base here.
     private async AssembleMembers(): Promise<SolutionGraphMember[]>
     {
-        const solution = this.Provider.get(SolutionManagerService.Key)?.ActiveSolution;
-        if (solution === undefined) return [];
         const entries: { storage: IStorage; manifest: ProjectManifest }[] = [];
-        for (const member of solution.Members)
+        for (const member of this.ComposedMembers())
         {
             const storage = member.Storage;
             if (storage === undefined) continue;
@@ -1092,11 +1088,9 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     // owns the URI.
     private MemberRootForUri(uri: string): string | undefined
     {
-        const solution = this.Provider.get(SolutionManagerService.Key)?.ActiveSolution;
-        if (solution === undefined) return undefined;
         let best: string | undefined;
         let bestLength = -1;
-        for (const member of solution.Members)
+        for (const member of this.ComposedMembers())
         {
             const storage = member.Storage;
             if (storage === undefined) continue;
@@ -1114,11 +1108,9 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     // manifest; undefined when no member owns the URI (mirrors ProjectRegistry.ProjectFor).
     private async MemberForUri(uri: string): Promise<{ storage: IStorage; manifest: ProjectManifest } | undefined>
     {
-        const solution = this.Provider.get(SolutionManagerService.Key)?.ActiveSolution;
-        if (solution === undefined) return undefined;
         let best: { storage: IStorage; manifest: ProjectManifest } | undefined;
         let bestLength = -1;
-        for (const member of solution.Members)
+        for (const member of this.ComposedMembers())
         {
             const storage = member.Storage;
             if (storage === undefined) continue;

@@ -8,6 +8,7 @@ import type { IPackageSource, SourcedPackage, PackageResolutionContext } from '.
 import type { PackageRef } from '../../../../publish/publish.js'
 import { ProjectType, type ProjectManifest } from '../../../package-manager/manifest.js'
 import { PROJECT_MANIFEST_FILENAME } from '../../../project-services/core/project-factory.js'
+import { ComposedDouble } from "./composed-double.js";
 
 // The published source is context-free today; P5b threads a per-consumer resolution
 // context (the consumer project's id) so an app-side connection-aware source can pick the
@@ -27,7 +28,7 @@ test('ResolveBasesFor threads the consumer id to the published source context', 
 
     const provider = new ServiceProvider()
     provider.registerInstance(PackageStoreKey, published as never)
-    provider.registerInstance(SolutionManagerService.Key, { ActiveSolution: { Members: [] } } as unknown as SolutionManagerService)
+    provider.registerInstance(SolutionManagerService.Key, ComposedDouble.For({ Members: [] }))
     const resolver = new SolutionBaseResolver(provider)
 
     const consumer = new FakeStorage()
@@ -55,7 +56,7 @@ test('ResolveBasesFor threads the architecture name as the consumer id when ther
 
     const provider = new ServiceProvider()
     provider.registerInstance(PackageStoreKey, published as never)
-    provider.registerInstance(SolutionManagerService.Key, { ActiveSolution: { Members: [] } } as unknown as SolutionManagerService)
+    provider.registerInstance(SolutionManagerService.Key, ComposedDouble.For({ Members: [] }))
     const resolver = new SolutionBaseResolver(provider)
 
     const consumer = new FakeStorage()
@@ -71,7 +72,7 @@ test('ResolveBasesFor threads the architecture name as the consumer id when ther
 test('ConsumerIdOf yields the package id for a producer and the name for an architecture', async () =>
 {
     const provider = new ServiceProvider()
-    provider.registerInstance(SolutionManagerService.Key, { ActiveSolution: { Members: [] } } as unknown as SolutionManagerService)
+    provider.registerInstance(SolutionManagerService.Key, ComposedDouble.For({ Members: [] }))
     const resolver = new SolutionBaseResolver(provider)
 
     const producer = new FakeStorage()

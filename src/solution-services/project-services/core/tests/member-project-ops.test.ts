@@ -11,6 +11,7 @@ import { SolutionManagerService } from '../../../solution-manager/engine/solutio
 import { PackageStoreKey } from '../../../todl-build-system/package-store.js'
 import { SolutionMember } from '../../../solution-manager/engine/solution-member.js'
 import { type IProjectFactoryRegistry } from '../../../solution-manager/engine/host-services.js'
+import { ComposedDouble } from "../../../solution-manager/engine/tests/composed-double.js";
 
 class VersionedFactory extends FakeProjectFactory
 {
@@ -34,7 +35,7 @@ class Fixtures
     {
         const provider = new ServiceProvider()
         provider.registerInstance(PackageStoreKey, { TryGet: async () => undefined } as never)
-        provider.registerInstance(SolutionManagerService.Key, { ActiveSolution: { Members: [] } } as never)
+        provider.registerInstance(SolutionManagerService.Key, ComposedDouble.For({ Members: [] }) as never)
         return new SolutionBaseResolver(provider)
     }
 
