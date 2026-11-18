@@ -381,6 +381,56 @@ test('OpenSolution skips an unreadable manifest and opens a valid one beside it'
     assert.equal(svc.ActiveSolution!.Name, 'Valid');
 });
 
+test('OpenSolution picks the manifest deterministically regardless of listing order', async () => {
+    // Two valid manifests in one folder. The old logic returned the first in List
+    // (insertion) order, so the opened name flipped with the backend's enumeration.
+    // A folder should resolve to the same manifest every time it is opened.
+    const pick = async (first: string, second: string): Promise<string> => {
+        const { svc, roots } = makeService();
+        const storage = new FakeStorage('/work/det');
+        roots.set('/work/det', storage);
+        await storage.WriteText(`${first}.pksln`,
+            JSON.stringify({ kind: 'todl-solution', version: 1, name: first, members: [], settings: {} }));
+        await storage.WriteText(`${second}.pksln`,
+            JSON.stringify({ kind: 'todl-solution', version: 1, name: second, members: [], settings: {} }));
+        await svc.OpenSolution('/work/det');
+        return svc.ActiveSolution!.Name;
+    };
+    assert.equal(await pick('Alpha', 'Beta'), await pick('Beta', 'Alpha'));
+});
+
+test('Save enforces one manifest per folder (prunes a stale sibling left under a prior name)', async () => {
+    const { svc, roots } = makeService();
+    const storage = new FakeStorage('/work/one');
+    roots.set('/work/one', storage);
+    await storage.WriteText('Real.pksln',
+        JSON.stringify({ kind: 'todl-solution', version: 1, name: 'Real', members: [], settings: {} }));
+    await svc.OpenSolution('/work/one');
+    assert.equal(svc.ActiveSolution!.Name, 'Real');
+    // An orphan manifest appears beside the real one (how the "still Default Solution"
+    // bug arose: a Save/Save As under a former name left a shadow that then sorts first
+    // on the next open). Saving the real solution must leave exactly one manifest.
+    await storage.WriteText('Default Solution.pksln',
+        JSON.stringify({ kind: 'todl-solution', version: 1, name: 'Default Solution', members: [], settings: {} }));
+    await svc.Save();
+    const names = (await storage.List('')).filter((e) => !e.IsDirectory).map((e) => e.Name).sort();
+    assert.deepEqual(names, ['Real.pksln']);
+});
+
+test('SaveAs claims the target folder as the single manifest (removes a pre-existing foreign one)', async () => {
+    const { svc, roots } = makeService();
+    const dst = new FakeStorage('/work/dst');
+    roots.set('/work/dst', dst);
+    await dst.WriteText('Old.pksln',
+        JSON.stringify({ kind: 'todl-solution', version: 1, name: 'Old', members: [], settings: {} }));
+    await svc.NewUntitledSolution();
+    svc.ActiveSolution!.Name = 'Fresh';
+    await svc.SaveAs('/work/dst');
+    const names = (await dst.List('')).filter((e) => !e.IsDirectory).map((e) => e.Name).sort();
+    assert.deepEqual(names, ['Fresh.pksln']);
+    assert.equal(svc.ActiveSolution!.Name, 'Fresh');
+});
+
 test('first-run default create does not flash a "Saved." status (silent background save)', async () => {
     const notifier = new RecordingNotifier();
     const { svc } = makeService({ notifier });

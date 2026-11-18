@@ -469,18 +469,37 @@ export class SolutionManagerService extends ServiceBase implements IManager
     // anything; the interactive Save adds the status on top.
     private async writeManifest(s: Solution, storage: IStorage): Promise<void>
     {
+        const fileName = SolutionManagerService.manifestFileName(s.Name);
         const manifest = new SolutionManifest(
             s.Name,
             s.Members.ToArray().map((m) => m.Ref),
             s.CollectSettings(),
             s.CollectBags(),
         );
-        await storage.WriteText(
-            SolutionManagerService.manifestFileName(s.Name),
-            manifest.stringify(),
-        );
+        await storage.WriteText(fileName, manifest.stringify());
+        await this.pruneStaleManifests(storage, fileName);
         s.IsDirty = false;
         this.pushRecent(storage.Root);
+    }
+
+    // Enforce one solution manifest per folder: after writing `<name>.pksln`, remove any
+    // OTHER `*.pksln` left in the same root. A solution folder holds exactly one manifest
+    // (its file stem IS the solution name), so a sibling from a former name — a Save/Save As
+    // that renamed the solution, or legacy debris — would otherwise shadow the real one on
+    // the next open (readManifest resolves a stale "Default Solution.pksln" that sorts first,
+    // which surfaced as "the tree still says Default Solution after I opened a solution").
+    // `keepFileName` is the manifest just written and is never removed. Best-effort: a failed
+    // Delete (locked/read-only) is swallowed so a successful Save is never undone by cleanup.
+    private async pruneStaleManifests(storage: IStorage, keepFileName: string): Promise<void>
+    {
+        const suffix = `.${SolutionManagerService.ManifestFileExtension}`;
+        const entries = await storage.List('');
+        for (const entry of entries)
+        {
+            if (entry.IsDirectory || !entry.Name.endsWith(suffix) || entry.Name === keepFileName) continue;
+            try { await storage.Delete(entry.Name); }
+            catch { /* best-effort cleanup — a locked/read-only sibling stays, the Save stands */ }
+        }
     }
 
     public async SaveAs(location: string): Promise<void>
@@ -488,16 +507,17 @@ export class SolutionManagerService extends ServiceBase implements IManager
         const s = this.ActiveSolution;
         if (s === undefined) return;
         const target = this.storages.CreateStorage(location);
+        const fileName = SolutionManagerService.manifestFileName(s.Name);
         const manifest = new SolutionManifest(
             s.Name,
             s.Members.ToArray().map((m) => m.Ref),
             s.CollectSettings(),
             s.CollectBags(),
         );
-        await target.WriteText(
-            SolutionManagerService.manifestFileName(s.Name),
-            manifest.stringify(),
-        );
+        await target.WriteText(fileName, manifest.stringify());
+        // Claim the target folder as this solution's single manifest (one solution per
+        // folder): a Save As into a folder that already held a different `.pksln` replaces it.
+        await this.pruneStaleManifests(target, fileName);
         const reopened = new Solution(s.Name, target);
         for (const m of s.Members) reopened.AddMember(m.Ref.path, m.Ref.type);
         reopened.LoadSettings(s.CollectSettings());
@@ -611,14 +631,21 @@ export class SolutionManagerService extends ServiceBase implements IManager
     // derived from the solution name, so it is not fixed), return the first that parses,
     // with its file name. Skipping an unreadable or foreign `.pksln` keeps a valid
     // solution openable even if a stray/corrupt one sits beside it — otherwise a bad
-    // file that merely sorts first would wedge the folder on every reopen. Throws when
-    // the folder holds no readable manifest, so a missing/renamed solution surfaces to
-    // the caller (RestoreSession treats the throw as "the remembered solution is gone").
+    // file that merely sorts first would wedge the folder on every reopen. Candidates are
+    // name-sorted so the pick is deterministic across backends (`List` order is
+    // backend-dependent); a folder resolves to the same manifest on every open. This is a
+    // PREDICTABLE pick, not a semantic one — two genuine manifests are indistinguishable,
+    // so the one-manifest-per-folder invariant is kept on the WRITE side (pruneStaleManifests),
+    // never by guessing here. Throws when the folder holds no readable manifest, so a
+    // missing/renamed solution surfaces to the caller (RestoreSession treats the throw as
+    // "the remembered solution is gone").
     private async readManifest(storage: IStorage): Promise<{ fileName: string; manifest: SolutionManifest }>
     {
         const suffix = `.${SolutionManagerService.ManifestFileExtension}`;
         const entries = await storage.List('');
-        const candidates = entries.filter((e) => !e.IsDirectory && e.Name.endsWith(suffix));
+        const candidates = entries
+            .filter((e) => !e.IsDirectory && e.Name.endsWith(suffix))
+            .sort((a, b) => a.Name.localeCompare(b.Name));
         for (const entry of candidates)
         {
             try
