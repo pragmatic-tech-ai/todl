@@ -72,11 +72,12 @@ test('a provider supplies the union and its Changed re-fires ComposedChanged', a
     const svc = ComposedMembersFixture.MakeService();
     const union = [{ id: 'a' }, { id: 'b' }] as unknown as SolutionMember[];
     const set = new FakeComposedSet(union);
-    svc.SetComposedMemberSet(set);
-    assert.deepEqual(svc.ComposedMembers(), union);
-
     let fires = 0;
     svc.ComposedChanged.subscribe(() => fires++);
+    svc.SetComposedMemberSet(set);
+    assert.equal(fires, 1);                          // swap emits once
+    fires = 0;
+    assert.deepEqual(svc.ComposedMembers(), union);
     set.Changed.emit();
     assert.equal(fires, 1);
 
@@ -100,4 +101,27 @@ test('clearing the provider reverts to the active solution', async () =>
     assert.equal(fires, 0);
     await svc.CloseSolution();
     assert.equal(fires, 1);
+});
+
+test('swapping then clearing a provider each fire ComposedChanged once', () =>
+{
+    const svc = ComposedMembersFixture.MakeService();
+    let fires = 0;
+    svc.ComposedChanged.subscribe(() => fires++);
+    svc.SetComposedMemberSet(new FakeComposedSet([]));
+    assert.equal(fires, 1);
+    svc.SetComposedMemberSet(new FakeComposedSet([]));
+    assert.equal(fires, 2);
+    svc.SetComposedMemberSet(undefined);
+    assert.equal(fires, 3);
+});
+
+test('SetComposedMemberSet after dispose is inert', () =>
+{
+    const svc = ComposedMembersFixture.MakeService();
+    svc.dispose();
+    let fires = 0;
+    svc.ComposedChanged.subscribe(() => fires++);
+    svc.SetComposedMemberSet(new FakeComposedSet([]));
+    assert.equal(fires, 0);
 });

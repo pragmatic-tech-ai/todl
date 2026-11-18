@@ -1,6 +1,8 @@
 import {
     ServiceBase,
     ServiceKey,
+    Signal,
+    type IDisposable,
     type IServiceProvider,
     type IStorage,
 } from '@pragmatic-tech-ai/todl-runtime';
@@ -9,10 +11,6 @@ import {
     MapPropertyBag,
     DurableApplicationStoreKey,
     type PropertyAccessor,
-} from '@pragmatic-tech-ai/todl-runtime';
-import {
-    Signal,
-    type IDisposable,
 } from '@pragmatic-tech-ai/todl-runtime';
 import { DefaultComposedMemberSet, type IComposedMemberSet } from './composed-members.js';
 import { Solution } from './solution.js';
@@ -104,6 +102,7 @@ export class SolutionManagerService extends ServiceBase
     private readonly defaultComposed: IComposedMemberSet = new DefaultComposedMemberSet(this);
     private composedSet: IComposedMemberSet = this.defaultComposed;
     private composedSub: IDisposable | undefined;
+    private disposed = false
     private readonly composedChanged = new Signal<void>();
     private readonly recentSolutions: string[] = [];
     // The disk root of the last-active saved solution, restored at startup. Empty
@@ -200,6 +199,7 @@ export class SolutionManagerService extends ServiceBase
     // is owned by the host, not here. (#18)
     public override dispose(): void
     {
+        this.disposed = true;
         this.composedSub?.dispose();
         this.composedSub = undefined;
         this.fallbackResolver?.dispose();
@@ -231,9 +231,13 @@ export class SolutionManagerService extends ServiceBase
     // Supply a provider of the composed member set; undefined reverts to the active solution.
     public SetComposedMemberSet(set: IComposedMemberSet | undefined): void
     {
+        // After dispose the manager is inert; do not re-subscribe.
+        if (this.disposed) return;
         this.composedSub?.dispose();
         this.composedSet = set ?? this.defaultComposed;
         this.composedSub = this.composedSet.Changed.subscribe(() => this.composedChanged.emit());
+        // The swap/clear itself changes ComposedMembers(), so tell consumers once.
+        this.composedChanged.emit();
     }
 
     public get RecentSolutions(): readonly string[]
