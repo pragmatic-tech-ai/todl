@@ -10,6 +10,11 @@ import {
     DurableApplicationStoreKey,
     type PropertyAccessor,
 } from '@pragmatic-tech-ai/todl-runtime';
+import {
+    Signal,
+    type IDisposable,
+} from '@pragmatic-tech-ai/todl-runtime';
+import { DefaultComposedMemberSet, type IComposedMemberSet } from './composed-members.js';
 import { Solution } from './solution.js';
 import { SolutionManifest } from './solution-manifest.js';
 import { SolutionSession } from './solution-session.js';
@@ -94,6 +99,12 @@ export class SolutionManagerService extends ServiceBase
     private static readonly RecentSolutionsChangeName = 'RecentSolutions';
 
     private activeSolution: Solution | undefined;
+    // The composed-member seam: which members' source compose into one graph. Defaults
+    // to the active solution; a host may swap in a multi-solution provider.
+    private readonly defaultComposed: IComposedMemberSet = new DefaultComposedMemberSet(this);
+    private composedSet: IComposedMemberSet = this.defaultComposed;
+    private composedSub: IDisposable | undefined;
+    private readonly composedChanged = new Signal<void>();
     private readonly recentSolutions: string[] = [];
     // The disk root of the last-active saved solution, restored at startup. Empty
     // for an untitled/closed solution — nothing to reopen. Backed by the session bag.
@@ -123,6 +134,7 @@ export class SolutionManagerService extends ServiceBase
         this.packages = provider.getRequired(SolutionManagerService.PackageSourceKey);
         this.notifications = provider.get(SolutionManagerService.NotificationServiceKey);
         this.sessionBag = this.buildSessionBag();
+        this.composedSub = this.composedSet.Changed.subscribe(() => this.composedChanged.emit());
         // Optional: a host that persists session state registers a DurableApplicationStore; a
         // headless batch or a test omits it, and the bag simply isn't tracked. The
         // store applies any stored slice to the bag on Register (or on its Restore).
@@ -188,6 +200,8 @@ export class SolutionManagerService extends ServiceBase
     // is owned by the host, not here. (#18)
     public override dispose(): void
     {
+        this.composedSub?.dispose();
+        this.composedSub = undefined;
         this.fallbackResolver?.dispose();
         this.fallbackResolver = undefined;
         super.dispose();
@@ -202,6 +216,24 @@ export class SolutionManagerService extends ServiceBase
         const old = this.activeSolution;
         this.activeSolution = s;
         this.RaisePropertyChanged(SolutionManagerService.ActiveSolutionChangeName, old, s);
+    }
+
+    public ComposedMembers(): readonly SolutionMember[]
+    {
+        return this.composedSet.Members();
+    }
+
+    public get ComposedChanged(): Signal<void>
+    {
+        return this.composedChanged;
+    }
+
+    // Supply a provider of the composed member set; undefined reverts to the active solution.
+    public SetComposedMemberSet(set: IComposedMemberSet | undefined): void
+    {
+        this.composedSub?.dispose();
+        this.composedSet = set ?? this.defaultComposed;
+        this.composedSub = this.composedSet.Changed.subscribe(() => this.composedChanged.emit());
     }
 
     public get RecentSolutions(): readonly string[]
