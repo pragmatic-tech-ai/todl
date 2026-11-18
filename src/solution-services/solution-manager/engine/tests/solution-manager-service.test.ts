@@ -105,17 +105,42 @@ class ScriptedPrompts implements IPromptService
 
 // Build the service the way the container does — through the constructor — with
 // a fake provider that serves fake host services under the manager's keys.
+// A FakeStorage that mirrors the real disk backend (LocalFileStorage): a top-level
+// WriteText ENOENTs unless the root directory was created first (CreateDirectory('')),
+// because the disk backend's ensureParent skips mkdir for a parent-less write. This
+// catches the first-run default-folder bug that the auto-creating FakeStorage hides.
+// `writeFailsHard` simulates a write that fails even after the directory exists
+// (read-only profile / disk full / locked file).
+class StrictRootStorage extends FakeStorage
+{
+    private rootMade = false;
+    public writeFailsHard = false;
+    public override async CreateDirectory(path: string): Promise<void>
+    {
+        if (path === '') this.rootMade = true;
+        await super.CreateDirectory(path);
+    }
+    public override async WriteText(path: string, content: string): Promise<void>
+    {
+        if (this.writeFailsHard) throw new Error('EACCES: write failed');
+        if (!this.rootMade) throw new Error(`ENOENT: no such directory '${this.Root}'`);
+        await super.WriteText(path, content);
+    }
+}
+
 function makeService(opts?: {
     confirmDiscard?: () => Promise<boolean>;
     notifier?: INotificationService;
     sessionStore?: IPropertyBagStore;
     pickFolder?: () => Promise<string | undefined>;
+    makeStorage?: (folder: string) => FakeStorage;
 })
 {
     const roots = new Map<string, FakeStorage>();
+    const makeStorage = opts?.makeStorage ?? ((folder: string) => new FakeStorage(folder));
     const storages: IStorageProviderRegistry = {
         CreateStorage: (folder) => {
-            const s = roots.get(folder) ?? new FakeStorage(folder);
+            const s = roots.get(folder) ?? makeStorage(folder);
             roots.set(folder, s);
             return s;
         },
@@ -313,6 +338,32 @@ test('RestoreSession reopens an existing default solution without overwriting it
     await svc.RestoreSession('/userdata/default-solution');
     assert.equal(svc.ActiveSolution!.Name, 'Default Solution');
     assert.equal(svc.ActiveSolution!.Members.ToArray().length, 1);
+});
+
+test('RestoreSession default folder: creates the folder before writing the manifest (disk backend)', async () => {
+    const store = new FakeSessionStore();
+    const { svc, roots } = makeService({
+        sessionStore: store,
+        makeStorage: (f) => new StrictRootStorage(f),
+    });
+    await svc.RestoreSession('/userdata/default-solution');
+    assert.equal(svc.ActiveSolution!.HasLocation, true);
+    const stored = await roots.get('/userdata/default-solution')!.ReadText('Default Solution.pksln');
+    assert.match(stored, /todl-solution/);
+    assert.equal(store.bag!.GetValue('lastSolution'), '/userdata/default-solution');
+});
+
+test('RestoreSession default folder: falls back to an untitled session when the default cannot be created', async () => {
+    const { svc } = makeService({
+        makeStorage: (f) => {
+            const s = new StrictRootStorage(f);
+            s.writeFailsHard = true;
+            return s;
+        },
+    });
+    await svc.RestoreSession('/userdata/default-solution'); // must not throw / abort boot
+    assert.notEqual(svc.ActiveSolution, undefined);
+    assert.equal(svc.ActiveSolution!.HasLocation, false); // degraded to in-memory untitled
 });
 
 test('RestoreSession prefers the remembered last solution over the default folder', async () => {

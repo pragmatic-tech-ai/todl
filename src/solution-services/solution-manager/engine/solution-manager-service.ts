@@ -314,10 +314,26 @@ export class SolutionManagerService extends ServiceBase implements IManager
         }
         catch
         {
-            // No .pksln in the default folder yet — fall through to create it.
+            // No readable .pksln in the default folder yet — create one below.
         }
-        await this.NewSolution(location);
-        await this.Save();
+        try
+        {
+            // The default folder may not exist yet (first run). The disk backend's
+            // top-level write does NOT create its parent, so make the folder before
+            // Save writes the manifest into it.
+            await this.storages.CreateStorage(location).CreateDirectory('');
+            await this.NewSolution(location);
+            await this.Save();
+        }
+        catch
+        {
+            // Rooting the default on disk failed (read-only profile, disk full, a
+            // locked file): degrade to an in-memory untitled session rather than
+            // aborting app boot. setActive(undefined) first so NewUntitledSolution's
+            // discard check doesn't prompt over the half-created solution.
+            this.setActive(undefined);
+            await this.NewUntitledSolution();
+        }
     }
 
     public async OpenSolution(location: string): Promise<void>
