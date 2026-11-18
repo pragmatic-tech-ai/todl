@@ -42,7 +42,7 @@ export class ProjectContentStore
     // edit/delete by hand. Only the ROOT entry is hidden; a same-named file nested in
     // a subfolder (not the manifest) still appears.
     private static readonly HiddenRootFiles: ReadonlySet<string> = new Set([PROJECT_MANIFEST_FILENAME])
-    private static readonly DiagramExts = ['.archdiagram', '.diagram']
+    private static readonly BoardExts = ['.archdiagram', '.diagram', '.board']
     // Rename correlation window. Sized to bridge the gap between a rename's add and
     // unlink events (measured ~107ms on Windows chokidar); a new/removed file surfaces
     // after this delay, and events within one window batch into a single flush.
@@ -423,7 +423,7 @@ export class ProjectContentStore
     {
         if (isDirectory) return ProjectNodeKind.Folder
         const lower = name.toLowerCase()
-        if (ProjectContentStore.DiagramExts.some((e) => lower.endsWith(e))) return ProjectNodeKind.Diagram
+        if (ProjectContentStore.BoardExts.some((e) => lower.endsWith(e))) return ProjectNodeKind.Board
         if (lower.endsWith('.todl')) return ProjectNodeKind.Todl
         return ProjectNodeKind.File
     }

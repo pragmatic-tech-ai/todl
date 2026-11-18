@@ -22,13 +22,14 @@ function factory(): ArchitectureProjectFactory
     return new ArchitectureProjectFactory(new ServiceProvider())
 }
 
-test('declares the architecture type, base needs, and .diagram/.todl formats', () => {
+test('declares the architecture type, base needs, and .board/.todl formats (legacy .diagram still maps to Board)', () => {
     const f = factory()
     assert.equal(ArchitectureProjectFactory.ProjectType, 'architecture')
     assert.equal(f.requiresMetaModel, true)
     assert.equal(f.offersLibraries, true)
     const kinds = new Map(f.formats.map((fmt) => [fmt.extension, fmt.kind]))
-    assert.equal(kinds.get('.diagram'), ProjectNodeKind.Diagram)
+    assert.equal(kinds.get('.board'), ProjectNodeKind.Board)
+    assert.equal(kinds.get('.diagram'), ProjectNodeKind.Board) // legacy read-compat
     assert.equal(kinds.get('.todl'), ProjectNodeKind.Todl)
 })
 

@@ -34,7 +34,7 @@ test('adding children notifies collection subscribers', () => {
     let changes = 0
     root.Children.Subscribe(() => changes++)
     root.Children.Add(new ProjectNode('a.todl', 'a.todl', ProjectNodeKind.Todl))
-    root.Children.Add(new ProjectNode('b.diagram', 'b.diagram', ProjectNodeKind.Diagram))
+    root.Children.Add(new ProjectNode('b.board', 'b.board', ProjectNodeKind.Board))
     assert.equal(root.Children.Count, 2)
     assert.equal(changes, 2)
     assert.equal(root.Children.Get(0)!.Name, 'a.todl')

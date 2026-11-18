@@ -7,14 +7,14 @@ import { Observable, ObservableCollection } from '@pragmatic-tech-ai/todl-runtim
 // Both extend Observable so a presentation tree binds Name/Path per item and
 // re-projects on Children changes.
 
-// What a tree node represents. 'diagram' and 'todl' are files the active factory
+// What a tree node represents. 'board' and 'todl' are files the active factory
 // opens in-app (each is a factory format kind — the explorer routes any node
 // whose kind matches a declared format to openFile); 'file' is any other
 // attachment (opened via the OS); 'folder' groups.
 export enum ProjectNodeKind
 {
     Folder = 'folder',
-    Diagram = 'diagram',
+    Board = 'board',
     Todl = 'todl',
     File = 'file',
 }

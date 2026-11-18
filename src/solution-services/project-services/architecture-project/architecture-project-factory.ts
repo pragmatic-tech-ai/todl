@@ -54,7 +54,10 @@ export class ArchitectureProjectFactory extends TodlProjectFactory implements IV
     public readonly offersLibraries = true
 
     public readonly formats: readonly ProjectFileFormat[] = [
-        { extension: '.diagram', kind: ProjectNodeKind.Diagram, displayName: 'Diagram' },
+        { extension: '.board', kind: ProjectNodeKind.Board, displayName: 'Board' },
+        // Legacy extension — existing `.diagram` files still open as a Board (read
+        // back-compat); new boards are authored as `.board`.
+        { extension: '.diagram', kind: ProjectNodeKind.Board, displayName: 'Board (legacy)' },
         { extension: '.todl', kind: ProjectNodeKind.Todl, displayName: 'TODL Definition' },
     ]
 

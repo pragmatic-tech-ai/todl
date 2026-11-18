@@ -169,7 +169,7 @@ export abstract class TodlProjectFactory extends ServiceBase implements IProject
     {
         const ext = TodlProjectFactory.extname(name)
         const fmt = this.formats.find((f) => f.extension === ext)
-        // Format kinds are the ProjectNodeKind string values ('todl'/'diagram'); the
+        // Format kinds are the ProjectNodeKind string values ('todl'/'board'); the
         // cast bridges the plain-string format field to the node's enum Kind.
         return fmt !== undefined ? (fmt.kind as ProjectNodeKind) : ProjectNodeKind.File
     }

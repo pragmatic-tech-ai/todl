@@ -33,7 +33,8 @@ class FakeFactory extends TodlProjectFactory
     public readonly title = 'Fake Project'
     public readonly description = ''
     public readonly formats: readonly ProjectFileFormat[] = [
-        { extension: '.diagram', kind: ProjectNodeKind.Diagram, displayName: 'Diagram' },
+        { extension: '.board', kind: ProjectNodeKind.Board, displayName: 'Board' },
+        { extension: '.diagram', kind: ProjectNodeKind.Board, displayName: 'Board (legacy)' },
         { extension: '.todl', kind: ProjectNodeKind.Todl, displayName: 'TODL Definition' },
     ]
     protected buildManifest(name: string, _bindings?: ProjectBaseModelBindings): ProjectManifestEnvelope
@@ -129,11 +130,13 @@ test('populate maps node kind from formats; unmatched → file; manifest hidden'
     const storage = await tempStorage(t)
     await storage.WriteText(PROJECT_MANIFEST_FILENAME, JSON.stringify({ type: 'fake', name: 'P', version: 1 }))
     await storage.WriteText('defs/core.todl', 'namespace d {}')
-    await storage.WriteText('view.diagram', '{}')
+    await storage.WriteText('view.board', '{}')
+    await storage.WriteText('legacy.diagram', '{}')
     await storage.WriteText('notes.md', 'hi')
     const project = await factory().openProject(storage)
     const top = new Map(project.Root.Children.ToArray().map((n) => [n.Name, n.Kind]))
-    assert.equal(top.get('view.diagram'), ProjectNodeKind.Diagram)
+    assert.equal(top.get('view.board'), ProjectNodeKind.Board)
+    assert.equal(top.get('legacy.diagram'), ProjectNodeKind.Board) // legacy .diagram opens as Board
     assert.equal(top.get('notes.md'), ProjectNodeKind.File)
     assert.equal([...top.keys()].includes(PROJECT_MANIFEST_FILENAME), false)
     const defs = project.Root.Children.ToArray().find((n) => n.Name === 'defs')!

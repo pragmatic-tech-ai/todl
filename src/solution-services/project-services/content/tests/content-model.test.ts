@@ -26,5 +26,5 @@ test('ContentChange variants carry their payloads', () =>
 test('ContentNodeKey maps kinds to presentation families', () =>
 {
     assert.equal(ContentNodeKey.For(ProjectNodeKind.Folder), ContentNodeKey.Folder);
-    assert.equal(ContentNodeKey.For(ProjectNodeKind.Diagram), ContentNodeKey.Diagram);
+    assert.equal(ContentNodeKey.For(ProjectNodeKind.Board), ContentNodeKey.Board);
 });

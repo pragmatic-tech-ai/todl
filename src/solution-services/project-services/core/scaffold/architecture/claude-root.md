@@ -8,7 +8,7 @@ nothing.
 
 ## What you edit
 
-`.todl` files (the instance model) and `.diagram` files (views over it). Plexus
+`.todl` files (the instance model) and `.board` files (views over it). Plexus
 validates every `.todl` in the project against the bound meta-model + libraries,
 live: diagnostics appear in the **Problems** panel.
 
@@ -23,7 +23,7 @@ concepts and connect them with the meta-model's declared operator glyphs
 
 ## Workflow
 
-1. Edit a `.todl` model file (or a `.diagram` view).
+1. Edit a `.todl` model file (or a `.board` view).
 2. Watch the **Problems** panel — validation runs against the bound bases.
 3. Clear every **error** (warnings are advisory).
 

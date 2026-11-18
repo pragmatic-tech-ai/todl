@@ -6,7 +6,7 @@ export class ContentNodeKey
 {
     public static readonly Folder = 'folder'
     public static readonly File = 'file'
-    public static readonly Diagram = 'diagram'
+    public static readonly Board = 'board'
     public static readonly Todl = 'todl'
 
     public static For(kind: ProjectNodeKind): string
@@ -14,7 +14,7 @@ export class ContentNodeKey
         switch (kind)
         {
             case ProjectNodeKind.Folder:  return ContentNodeKey.Folder
-            case ProjectNodeKind.Diagram: return ContentNodeKey.Diagram
+            case ProjectNodeKind.Board:   return ContentNodeKey.Board
             case ProjectNodeKind.Todl:    return ContentNodeKey.Todl
             default:                      return ContentNodeKey.File
         }
