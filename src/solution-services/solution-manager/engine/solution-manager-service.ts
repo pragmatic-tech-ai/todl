@@ -102,7 +102,7 @@ export class SolutionManagerService extends ServiceBase
     private readonly defaultComposed: IComposedMemberSet = new DefaultComposedMemberSet(this);
     private composedSet: IComposedMemberSet = this.defaultComposed;
     private composedSub: IDisposable | undefined;
-    private disposed = false
+    private disposed = false;
     private readonly composedChanged = new Signal<void>();
     private readonly recentSolutions: string[] = [];
     // The disk root of the last-active saved solution, restored at startup. Empty
