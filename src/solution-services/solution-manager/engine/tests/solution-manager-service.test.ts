@@ -285,6 +285,47 @@ test('RestoreSession falls back to untitled and prunes recents when the last sol
     assert.equal(store.bag!.GetValue('lastSolution'), ''); // and forgotten
 });
 
+test('RestoreSession with a default folder: first run creates, saves, and remembers it', async () => {
+    const store = new FakeSessionStore(); // no lastSolution
+    const { svc, roots } = makeService({ sessionStore: store });
+    await svc.RestoreSession('/userdata/default-solution');
+    assert.equal(svc.ActiveSolution!.Name, 'Default Solution');
+    assert.equal(svc.ActiveSolution!.HasLocation, true);
+    const stored = await roots.get('/userdata/default-solution')!.ReadText('Default Solution.pksln');
+    assert.match(stored, /todl-solution/);
+    assert.equal(store.bag!.GetValue('lastSolution'), '/userdata/default-solution');
+});
+
+test('RestoreSession reopens an existing default solution without overwriting it', async () => {
+    const { svc, roots } = makeService();
+    await seedSolution(roots, '/userdata/default-solution', 'Default Solution');
+    // Give the seeded manifest a member so we can prove it was opened, not recreated.
+    await roots.get('/userdata/default-solution')!.WriteText(
+        'Default Solution.pksln',
+        JSON.stringify({
+            kind: 'todl-solution',
+            version: 1,
+            name: 'Default Solution',
+            members: [{ path: './api', type: 'architecture' }],
+            settings: {},
+        }),
+    );
+    await svc.RestoreSession('/userdata/default-solution');
+    assert.equal(svc.ActiveSolution!.Name, 'Default Solution');
+    assert.equal(svc.ActiveSolution!.Members.ToArray().length, 1);
+});
+
+test('RestoreSession prefers the remembered last solution over the default folder', async () => {
+    const store = new FakeSessionStore({
+        'solution-manager': { lastSolution: '/work/saved', recentSolutions: ['/work/saved'] },
+    });
+    const { svc, roots } = makeService({ sessionStore: store });
+    await seedSolution(roots, '/work/saved', 'My Solution');
+    await svc.RestoreSession('/userdata/default-solution');
+    assert.equal(svc.ActiveSolution!.Storage!.Root, '/work/saved');
+    assert.equal(svc.ActiveSolution!.Name, 'My Solution');
+});
+
 test('opening a solution persists lastSolution + recentSolutions into the session bag', async () => {
     const store = new FakeSessionStore();
     const { svc, roots } = makeService({ sessionStore: store });

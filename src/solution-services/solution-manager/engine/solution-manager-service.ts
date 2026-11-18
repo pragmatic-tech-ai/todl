@@ -273,7 +273,7 @@ export class SolutionManagerService extends ServiceBase implements IManager
     // Startup: reopen the remembered solution, else create an empty untitled one. The
     // session slice (lastSolution + recentSolutions) is already applied to the bag by
     // the DurableApplicationStore — on Register, or on its Restore — before this runs.
-    public async RestoreSession(): Promise<void>
+    public async RestoreSession(defaultLocation?: string): Promise<void>
     {
         const last = this.lastSolution;
         if (last !== '')
@@ -286,7 +286,7 @@ export class SolutionManagerService extends ServiceBase implements IManager
             catch
             {
                 // The remembered folder is gone or its manifest is unreadable: drop it
-                // from recents and fall through to an untitled solution.
+                // from recents and fall through to the default/untitled solution.
                 this.sessionBag.SetValue(
                     SolutionManagerService.RecentSolutionsName,
                     this.recentSolutions.filter((p) => p !== last),
@@ -294,7 +294,30 @@ export class SolutionManagerService extends ServiceBase implements IManager
                 this.sessionBag.SetValue(SolutionManagerService.LastSolutionName, '');
             }
         }
+        if (defaultLocation !== undefined)
+        {
+            await this.OpenOrCreateDefault(defaultLocation);
+            return;
+        }
         await this.NewUntitledSolution();
+    }
+
+    // Open the per-user default solution when its folder already holds a manifest;
+    // otherwise create one there and Save it, so it is rooted (the host's auto-persist
+    // then keeps it current) and remembered as lastSolution for the next launch.
+    private async OpenOrCreateDefault(location: string): Promise<void>
+    {
+        try
+        {
+            await this.OpenSolution(location);
+            if (this.ActiveSolution !== undefined) return;
+        }
+        catch
+        {
+            // No .pksln in the default folder yet — fall through to create it.
+        }
+        await this.NewSolution(location);
+        await this.Save();
     }
 
     public async OpenSolution(location: string): Promise<void>
