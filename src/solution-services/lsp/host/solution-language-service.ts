@@ -101,8 +101,6 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     private static readonly RenameNoProject = "No project owns this document.";
     private static readonly RootSeparator = "/";
 
-    // The manager's INPC property whose change means the whole member set was swapped
-    // (a different solution opened) — the signal to re-point the Members subscription.
     // The resolver property mirrored by this service's StaleMembers, and the name this
     // service raises it under.
     private static readonly ResolverStaleMemberIdsPropertyName = "StaleMemberIds";
@@ -155,7 +153,7 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     // Monotonic count of shared-graph commits (every GraphChanged emission).
     private graphRevision = 0;
 
-    // Permanent lifecycle subscriptions (the manager's ActiveSolution channel + the
+    // Permanent lifecycle subscriptions (the manager's ComposedChanged signal + the
     // project-event bus), disposed in dispose().
     private readonly subscriptions: IDisposable[] = [];
     // The ONE rewirable subscription: the active solution's Members collection. It is
@@ -521,7 +519,7 @@ export class SolutionLanguageService extends ServiceBase implements ILanguageSer
     // the manager's ComposedChanged signal (re-point the Members subscription on a
     // composed-set change) and the project-event bus (reference changes) — plus the
     // rewirable Members subscription itself. Guarded for a headless run (no manager /
-    // no bus) and for a lightweight test double whose manager lacks PropertyChanged.
+    // no bus).
     private SubscribeToLifecycle(): void
     {
         const manager = this.Provider.get(SolutionManagerService.Key);

@@ -44,8 +44,8 @@ interface LiveBase
 // Wave-3 host can react (re-run diagnostics, re-render). Task 13 drives that targeted
 // Invalidate from the SolutionLanguageService on each solution lifecycle event, so
 // the coarse "clear everything on any Members change" trigger is gone: the only
-// remaining blanket clear is the ActiveSolution switch (opening a different solution
-// swaps the whole member set out, so nothing cached can survive it).
+// remaining blanket clear is a composed-member-set change (ComposedChanged: opening a
+// different solution swaps the whole member set out, so nothing cached can survive it).
 export class SolutionBaseResolver extends ServiceBase implements IPackageSource, IBaseResolver
 {
     public static readonly Key = new ServiceKey<SolutionBaseResolver>('SolutionBaseResolver')
@@ -66,7 +66,7 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource,
 
     private _staleMemberIds: ReadonlySet<string> = new Set<string>()
 
-    // The ActiveSolution subscription on the manager, released on dispose so this
+    // The ComposedChanged subscription on the manager, released on dispose so this
     // resolver (e.g. a transitional manager-owned fallback) does not outlive the
     // manager via a dangling listener. (#18)
     private managerSubscription: IDisposable | undefined
@@ -495,14 +495,13 @@ export class SolutionBaseResolver extends ServiceBase implements IPackageSource,
         return evicted
     }
 
-    // The ONLY remaining blanket cache clear: the ActiveSolution switch. Opening a
-    // different solution swaps the entire member set out, so every cached compile and
+    // The ONLY remaining blanket cache clear: a ComposedChanged. Opening a
+    // different solution (or a changed composed set) swaps the entire member set out, so every cached compile and
     // every graph edge is stale at once — clear them. Incremental per-member changes
     // (add/remove/reference edits) are handled by the SolutionLanguageService driving
     // the targeted Invalidate instead; this class no longer subscribes to the Members
     // collection for a coarse clear. Guards against a headless run with no
-    // SolutionManagerService registered, and against a lightweight test double that
-    // doesn't implement PropertyChanged.
+    // SolutionManagerService registered.
     private subscribeToManager(): void
     {
         const manager = this.Provider.get(SolutionManagerService.Key)

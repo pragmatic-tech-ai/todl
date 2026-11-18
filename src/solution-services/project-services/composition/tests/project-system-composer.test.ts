@@ -86,7 +86,7 @@ class CountingStorage implements IStorage
 // staying at one.
 class SubscriptionSpyManager
 {
-    public propertyChangedCallCount = 0;
+    public composedChangedSubscribeCount = 0;
 
     public constructor(private readonly members: readonly { id: string; type: ProjectType; storage: IStorage }[]) {}
 
@@ -102,7 +102,7 @@ class SubscriptionSpyManager
 
     public get ComposedChanged(): { subscribe: (handler: () => void) => void }
     {
-        this.propertyChangedCallCount++;
+        this.composedChangedSubscribeCount++;
         return { subscribe: () => {} };
     }
 }
@@ -415,7 +415,7 @@ describe("ProjectSystemComposer", () =>
         // ActiveSolution PropertyChanged subscription exactly once per resolver
         // instance — a count > 1 means a fresh resolver (and a fresh, leaked
         // subscription) was constructed per event instead of reusing this one.
-        assert.equal(manager.propertyChangedCallCount, 1, "exactly one ComposedChanged subscription was ever created");
+        assert.equal(manager.composedChangedSubscribeCount, 1, "exactly one ComposedChanged subscription was ever created");
 
         // And the resolver ResolveSource actually handed the generators is still the
         // very first instance resolved above.

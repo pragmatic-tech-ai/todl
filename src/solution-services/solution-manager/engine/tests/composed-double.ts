@@ -18,6 +18,7 @@ export class ComposedDouble
         return new ComposedDouble(active as { Members: Iterable<SolutionMember> } | undefined) as unknown as SolutionManagerService;
     }
 
+    // Must track the real manager's default ComposedMembers (re-implemented here; keep in sync).
     public ComposedMembers(): readonly SolutionMember[]
     {
         return this.ActiveSolution ? Array.from(this.ActiveSolution.Members) : [];
