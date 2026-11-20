@@ -8,7 +8,7 @@ import {
     type IConnectorTransaction,
     type IFetchedRow,
     type RowVersion,
-} from '@pragmatic-tech-ai/graph';
+} from '@pragmatic-tech-ai/pragmatic-graph';
 import {
     KeyAssignment,
     QueryCompareOp,

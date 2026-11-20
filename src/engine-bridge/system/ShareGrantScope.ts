@@ -1,4 +1,4 @@
-import { And, Compare, CompareOp, ConceptIs, EdgeDirection, In, Or, Predicate, Related } from '@pragmatic-tech-ai/graph';
+import { And, Compare, CompareOp, ConceptIs, EdgeDirection, In, Or, Predicate, Related } from '@pragmatic-tech-ai/pragmatic-graph';
 import { type ShareRight, ShareSubject, SystemNames } from './SystemNames.js';
 
 /** Who a reader is for share purposes: the principal and the teams it belongs to. */

@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { BindingTable } from '@pragmatic-tech-ai/graph';
+import { BindingTable } from '@pragmatic-tech-ai/pragmatic-graph';
 import { Domain } from '../../../domain/domain.js';
 import type { MetadataSnapshot } from '../../../domain/metadata-snapshot.js';
 import { MemoryPackageSource } from '../../../domain/memory-package-source.js';

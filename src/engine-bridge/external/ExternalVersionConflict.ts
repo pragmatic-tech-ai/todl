@@ -1,4 +1,4 @@
-import { ConflictError } from '@pragmatic-tech-ai/graph';
+import { ConflictError } from '@pragmatic-tech-ai/pragmatic-graph';
 import type { WriteFailure } from '../../model-data/connector-plan.js';
 import type { IExternalBinding } from './ExternalBinding.js';
 

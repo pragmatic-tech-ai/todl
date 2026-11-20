@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { AccessScope, BindingTable, Cypher, GraphEngine, StorageKind } from '@pragmatic-tech-ai/graph';
+import { AccessScope, BindingTable, Cypher, GraphEngine, StorageKind } from '@pragmatic-tech-ai/pragmatic-graph';
 import { FakeStorage } from '@pragmatic-tech-ai/todl-runtime';
 import type { PackageRef } from '../../../domain/domain.js';
 import { DataSourceKind, WriteAtomicity, WriteConcurrency, type ConnectorBinding, type ModelConnectorPlan } from '../../../model-data/connector-plan.js';

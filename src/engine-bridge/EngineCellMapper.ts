@@ -1,4 +1,4 @@
-import type { Cypher } from '@pragmatic-tech-ai/graph';
+import type { Cypher } from '@pragmatic-tech-ai/pragmatic-graph';
 import type { CypherResultDto, CypherValueDto } from '../graph-api/wire/index.js';
 import type { MetadataSnapshot } from '../domain/metadata-snapshot.js';
 import { GraphQuery } from '../graph-api/graph-query-engine.js';

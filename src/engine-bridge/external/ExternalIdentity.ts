@@ -1,4 +1,4 @@
-import { MemberKind, ValueType, type IDefinitionDescription, type ISchemaDescription, type MemberInput } from '@pragmatic-tech-ai/graph';
+import { MemberKind, ValueType, type IDefinitionDescription, type ISchemaDescription, type MemberInput } from '@pragmatic-tech-ai/pragmatic-graph';
 import { KeyAssignment, type ExternalFieldValue } from '../../model-data/connector-plan.js';
 import { EngineBridgeError, EngineBridgeErrorCode } from '../EngineBridgeError.js';
 import type { IExternalBinding, IParsedExternalId } from './ExternalBinding.js';

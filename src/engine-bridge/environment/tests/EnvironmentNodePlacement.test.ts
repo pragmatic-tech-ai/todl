@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { MemberKind, ValueType, type ISchemaDescription, type MemberInput } from '@pragmatic-tech-ai/graph';
+import { MemberKind, ValueType, type ISchemaDescription, type MemberInput } from '@pragmatic-tech-ai/pragmatic-graph';
 import { KeyAssignment, WriteAtomicity, WriteConcurrency } from '../../../model-data/connector-plan.js';
 import { EngineBridgeError, EngineBridgeErrorCode } from '../../EngineBridgeError.js';
 import type { IExternalBinding } from '../../external/ExternalBinding.js';

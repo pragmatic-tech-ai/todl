@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { AccessDefault, AccessError, AccessErrorCode, AccessScope, Cypher, GraphEngine, Predicate, StorageKind, type CellValue } from '@pragmatic-tech-ai/graph';
+import { AccessDefault, AccessError, AccessErrorCode, AccessScope, Cypher, GraphEngine, Predicate, StorageKind, type CellValue } from '@pragmatic-tech-ai/pragmatic-graph';
 import type { IPrincipalFacts } from '../../PrincipalFacts.js';
 import { EngineBridgeError, EngineBridgeErrorCode } from '../../EngineBridgeError.js';
 import { SystemFieldGuard } from '../../system/SystemFieldGuard.js';

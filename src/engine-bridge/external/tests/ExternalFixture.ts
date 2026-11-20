@@ -1,4 +1,4 @@
-import { MemberKind, ValueType, type IDefinitionDescription, type ISchemaDescription, type MemberInput } from '@pragmatic-tech-ai/graph';
+import { MemberKind, ValueType, type IDefinitionDescription, type ISchemaDescription, type MemberInput } from '@pragmatic-tech-ai/pragmatic-graph';
 import {
     DataSourceKind,
     KeyAssignment,

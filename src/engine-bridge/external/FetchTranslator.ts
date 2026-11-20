@@ -1,4 +1,4 @@
-import { CompareOp, MemberKind, PredicateKind, ValueType, type And, type CellValue, type Compare, type IdIn, type In, type IsNull, type Not, type Predicate } from '@pragmatic-tech-ai/graph';
+import { CompareOp, MemberKind, PredicateKind, ValueType, type And, type CellValue, type Compare, type IdIn, type In, type IsNull, type Not, type Predicate } from '@pragmatic-tech-ai/pragmatic-graph';
 import { QueryCompareOp, type ExternalFieldValue, type QueryComparison, type QueryFilter } from '../../model-data/connector-plan.js';
 import type { IExternalBinding } from './ExternalBinding.js';
 import { ExternalIdentity } from './ExternalIdentity.js';

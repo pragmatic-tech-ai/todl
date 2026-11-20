@@ -17,7 +17,7 @@
 | --- | --- | --- |
 | `compiler-services/` | language/model compiler: parse→resolve→validate→emit | `compiler-services/api.ts` (`check`/`checkAgainst`); façade `Repository` in `model/model.ts` |
 | `domain/` | runtime graph engine: loads packages, hosts the heap, reflection root | `domain/index.ts` |
-| `engine-bridge/` | TODL on the `@pragmatic-tech-ai/graph` engine: snapshot → schema + seed, policies → access scopes, `.todl` file connector; the ONLY importer of the engine | `engine-bridge/index.ts` (subpath `./engine`) |
+| `engine-bridge/` | TODL on the `@pragmatic-tech-ai/pragmatic-graph` engine: snapshot → schema + seed, policies → access scopes, `.todl` file connector; the ONLY importer of the engine | `engine-bridge/index.ts` (subpath `./engine`) |
 | `graph-api/` | reflection-native query surface over a loaded domain | `graph-api/index.ts` (`GraphQuery`, `IGraphQuery`, `Snapshot`) |
 | `graph-api/wire/` | the Cypher wire format (cell codec + result DTO types), engine- and cypher-free | `graph-api/wire/index.ts` (root `export * as CypherWire`) |
 | `manifest/` | SPEC-04 binary manifest (codec/reader/writer/validator + reflection) | `manifest/index.ts`; reflection `manifest/reflection/reflection.ts` |
@@ -45,7 +45,7 @@
 
 ### Cypher wire, and the retired TODL Cypher engine (M2.3)
 - **Location:** `src/graph-api/wire/` (root `export * as CypherWire`).
-- **Retired in M2.3 (0.57.0):** `src/cypher/**` and the root `export * as Cypher` (`CypherEngine`, `GraphQueryAdapter`, `CypherPushDown`, `ICypherWriter`/`WriteOverlay`, parser/planner/operators); `ConnectorRuntimeGraphQuery`; `ConnectorPrefetch`, `ConnectorMirrorMapper`, `ConjunctiveQueryFilterProvider`; `IDescribeOptions.EmitExternalBindings`. Cypher runs on the graph engine (`Cypher` from `@pragmatic-tech-ai/graph`) over the `./engine` bridge; `src/cypher` is no longer a server path, and offline Plexus did not use it (M2.3 Step 0 guard).
+- **Retired in M2.3 (0.57.0):** `src/cypher/**` and the root `export * as Cypher` (`CypherEngine`, `GraphQueryAdapter`, `CypherPushDown`, `ICypherWriter`/`WriteOverlay`, parser/planner/operators); `ConnectorRuntimeGraphQuery`; `ConnectorPrefetch`, `ConnectorMirrorMapper`, `ConjunctiveQueryFilterProvider`; `IDescribeOptions.EmitExternalBindings`. Cypher runs on the graph engine (`Cypher` from `@pragmatic-tech-ai/pragmatic-graph`) over the `./engine` bridge; `src/cypher` is no longer a server path, and offline Plexus did not use it (M2.3 Step 0 guard).
 - **`CypherCellCodec`** (`cypher-cell-codec.ts`) — result-cell encoding: a node is `{ "$node": MirrorSnapshot }`; a map whose sole key is `$node`/`$map` is escaped as `{ "$map": … }`, so no user map can pass for a node. Decode with `AsNode`/`AsMap`.
 - **`CypherResultDto`/`CypherValueDto`/`NodeCellDto`/`CypherWriteStatsDto`** (`cypher-wire-dto.ts`) — the wire shapes `EngineCellMapper` produces. Root re-export `export * as CypherWire`; the module imports neither the engine nor any `cypher` file (`graph-api/wire/tests/cypher-wire.test.ts`).
 - **Kept read path:** `GraphQuery`/`IGraphQuery`, `ModelDataSource`, typed read clients on `IModelDataConnector`, the `IDataSourceAdapter` family + `DataSourceAdapterCatalog`. Generated packages wire every model (connector-backed or not) behind `BundledModelDataConnector` over its embedded shard.

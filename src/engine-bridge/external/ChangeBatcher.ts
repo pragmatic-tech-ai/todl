@@ -1,4 +1,4 @@
-import { ValueType, WriteOp, type ConnectorChange, type ConnectorChangeSet, type ILinkOp, type ISetPropertyOp, type IUnlinkOp, type RowVersion } from '@pragmatic-tech-ai/graph';
+import { ValueType, WriteOp, type ConnectorChange, type ConnectorChangeSet, type ILinkOp, type ISetPropertyOp, type IUnlinkOp, type RowVersion } from '@pragmatic-tech-ai/pragmatic-graph';
 import { WriteOperationKind, type ExternalFieldValue, type WriteBatch, type WriteOperation } from '../../model-data/connector-plan.js';
 import { EngineBridgeError, EngineBridgeErrorCode } from '../EngineBridgeError.js';
 import type { IExternalBinding } from './ExternalBinding.js';

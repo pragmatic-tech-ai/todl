@@ -10,7 +10,7 @@ import {
     type IFetchedRow,
     type IFetchPage,
     type IFetchRequest,
-} from '@pragmatic-tech-ai/graph';
+} from '@pragmatic-tech-ai/pragmatic-graph';
 import type { IServiceProvider } from '@pragmatic-tech-ai/todl-runtime';
 import { QueryCompareOp, type ExternalRecord, type QueryComparison, type QueryRequest } from '../../model-data/connector-plan.js';
 import type { DataSourceAdapterCatalog } from '../../model-data/data-source-adapter-catalog.js';

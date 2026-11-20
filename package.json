@@ -148,15 +148,15 @@
     "vscode-languageserver-types": "3.17.5"
   },
   "peerDependencies": {
-    "@pragmatic-tech-ai/graph": "^0.6.0"
+    "@pragmatic-tech-ai/pragmatic-graph": "^0.6.0"
   },
   "peerDependenciesMeta": {
-    "@pragmatic-tech-ai/graph": {
+    "@pragmatic-tech-ai/pragmatic-graph": {
       "optional": true
     }
   },
   "devDependencies": {
-    "@pragmatic-tech-ai/graph": "^0.6.0",
+    "@pragmatic-tech-ai/pragmatic-graph": "^0.6.0",
     "@types/node": "^22.10.0",
     "esbuild": "^0.24.2",
     "playwright": "^1.63.0",

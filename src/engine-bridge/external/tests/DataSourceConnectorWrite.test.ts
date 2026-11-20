@@ -16,7 +16,7 @@ import {
     type IAssignedCreate,
     type IConnectorTransaction,
     type RowVersion,
-} from '@pragmatic-tech-ai/graph';
+} from '@pragmatic-tech-ai/pragmatic-graph';
 import {
     QueryCompareOp,
     WriteAtomicity,

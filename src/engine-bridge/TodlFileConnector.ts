@@ -6,7 +6,7 @@ import {
     type ConnectorChangeSet,
     type IConnectorTransaction,
     type IGraphConnector,
-} from '@pragmatic-tech-ai/graph';
+} from '@pragmatic-tech-ai/pragmatic-graph';
 import type { IDisposable } from '@pragmatic-tech-ai/todl-runtime';
 import { MetaKind } from '../compiler-services/model/kinds.js';
 import type { Scalar } from '../compiler-services/model/graph.js';

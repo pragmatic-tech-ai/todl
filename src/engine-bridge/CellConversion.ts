@@ -1,4 +1,4 @@
-import { ValueType, type CellValue } from '@pragmatic-tech-ai/graph';
+import { ValueType, type CellValue } from '@pragmatic-tech-ai/pragmatic-graph';
 import type { Scalar } from '../manifest/logical.js';
 import { DescribeDiagnosticCode } from './SnapshotDescription.js';
 

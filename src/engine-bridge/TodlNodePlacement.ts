@@ -1,4 +1,4 @@
-import type { CellValue, Cypher } from '@pragmatic-tech-ai/graph';
+import type { CellValue, Cypher } from '@pragmatic-tech-ai/pragmatic-graph';
 import { SnowflakeIdGenerator, type IdGenerator } from '../compiler-services/model/id-generator.js';
 
 /**

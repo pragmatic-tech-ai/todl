@@ -10,7 +10,7 @@ import {
     type ISeedLink,
     type ISeedNode,
     type MemberInput,
-} from '@pragmatic-tech-ai/graph';
+} from '@pragmatic-tech-ai/pragmatic-graph';
 import type { MetadataSnapshot } from '../domain/metadata-snapshot.js';
 import type { ConnectorBinding } from '../model-data/connector-plan.js';
 import { Cardinality, MetaKind } from '../manifest/enums.js';

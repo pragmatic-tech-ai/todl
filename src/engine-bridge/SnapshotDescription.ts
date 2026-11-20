@@ -1,4 +1,4 @@
-import type { ISchemaDescription } from '@pragmatic-tech-ai/graph';
+import type { ISchemaDescription } from '@pragmatic-tech-ai/pragmatic-graph';
 import type { ModelConnectorPlan } from '../model-data/connector-plan.js';
 
 export interface IDescribeOptions

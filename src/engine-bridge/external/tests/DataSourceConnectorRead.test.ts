@@ -20,7 +20,7 @@ import {
     Related,
     type IFetchedRow,
     type IFetchRequest,
-} from '@pragmatic-tech-ai/graph';
+} from '@pragmatic-tech-ai/pragmatic-graph';
 import { QueryCompareOp, type ExternalRecord } from '../../../model-data/connector-plan.js';
 import { DataSourceAdapterCatalog } from '../../../model-data/data-source-adapter-catalog.js';
 import { EngineBridgeError, EngineBridgeErrorCode } from '../../EngineBridgeError.js';

@@ -1,4 +1,4 @@
-import { BindingTable, type ISchemaDescription } from '@pragmatic-tech-ai/graph';
+import { BindingTable, type ISchemaDescription } from '@pragmatic-tech-ai/pragmatic-graph';
 import type { MetadataSnapshot } from '../../domain/metadata-snapshot.js';
 import type { ConnectorBinding, ConnectorSpec, ModelConnectorPlan } from '../../model-data/connector-plan.js';
 import type { IExternalBinding, IExternalConnectorPlan } from '../external/ExternalBinding.js';

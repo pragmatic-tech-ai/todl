@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { AccessDefault, AccessScope, Cypher } from "@pragmatic-tech-ai/graph";
+import { AccessDefault, AccessScope, Cypher } from "@pragmatic-tech-ai/pragmatic-graph";
 import { Snapshot, type MirrorSnapshot } from "../../graph-api/index.js";
 import { compilePackage, PackageKind } from "../../publish/publish.js";
 import { PackageManifestBridge } from "../../solution-services/package-manager/package-manifest-bridge.js";

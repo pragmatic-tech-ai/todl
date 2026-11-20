@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { CellValue } from '@pragmatic-tech-ai/graph';
+import type { CellValue } from '@pragmatic-tech-ai/pragmatic-graph';
 import { ShareRight, type ShareSubject, SystemNames } from './SystemNames.js';
 
 /** How a share grant node is identified and what it stores (ruling T10). */

@@ -12,7 +12,7 @@ export interface IImportEdge
 /** Walks the static import closure of an entry file; a specifier is an offender when the supplied predicate says so. */
 export class ImportClosureWalker
 {
-    public static readonly EngineSpecifier = '@pragmatic-tech-ai/graph';
+    public static readonly EngineSpecifier = '@pragmatic-tech-ai/pragmatic-graph';
     public static readonly IndexFile = 'index.ts';
     private static readonly SpecifierPattern = /(?:^|\n)\s*(?:import|export)\s[^'"]*?from\s*['"]([^'"]+)['"]|(?:^|\n)\s*import\s*['"]([^'"]+)['"]|\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)|\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
     private static readonly Utf8 = 'utf8';

@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { AccessScope, Cypher, EdgeDirection, GraphEngine, StorageKind, type ILinkView, type INodeView } from '@pragmatic-tech-ai/graph';
+import { AccessScope, Cypher, EdgeDirection, GraphEngine, StorageKind, type ILinkView, type INodeView } from '@pragmatic-tech-ai/pragmatic-graph';
 import type { ISnapshotDescription } from '@pragmatic-tech-ai/todl/engine';
 import { checkAgainst } from '../../compiler-services/api.js';
 import type { Repository } from '../../compiler-services/model/model.js';

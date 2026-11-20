@@ -12,7 +12,7 @@ import {
     type IDefinitionDescription,
     type ISchemaDescription,
     type MemberInput,
-} from '@pragmatic-tech-ai/graph';
+} from '@pragmatic-tech-ai/pragmatic-graph';
 import {
     DataSourceKind,
     KeyAssignment,

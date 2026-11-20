@@ -2,7 +2,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { BindingTable, GraphEngine, MemberKind, StorageKind, ValueType, type IDefinitionDescription, type ISchemaDescription, type ISeedNode, type MemberInput } from '@pragmatic-tech-ai/graph';
+import { BindingTable, GraphEngine, MemberKind, StorageKind, ValueType, type IDefinitionDescription, type ISchemaDescription, type ISeedNode, type MemberInput } from '@pragmatic-tech-ai/pragmatic-graph';
 import { compilePackage, PackageKind } from '../../publish/publish.js';
 import { PackageManifestBridge } from '../../solution-services/package-manager/package-manifest-bridge.js';
 import { Domain } from '../../domain/domain.js';

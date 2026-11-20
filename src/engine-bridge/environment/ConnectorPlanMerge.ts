@@ -1,4 +1,4 @@
-import { BindingTable } from '@pragmatic-tech-ai/graph';
+import { BindingTable } from '@pragmatic-tech-ai/pragmatic-graph';
 import { DataSourceKind, type ConnectorBinding, type ConnectorSpec, type ModelConnectorPlan } from '../../model-data/connector-plan.js';
 import type { IExternalBinding } from '../external/ExternalBinding.js';
 import { ExternalIdentity } from '../external/ExternalIdentity.js';

@@ -13,7 +13,7 @@ import {
     type GraphTransaction,
     type IEngineStorage,
     type Predicate,
-} from '@pragmatic-tech-ai/graph';
+} from '@pragmatic-tech-ai/pragmatic-graph';
 import { compilePackage } from '../../../publish/publish.js';
 import { PackageManifestBridge } from '../../../solution-services/package-manager/package-manifest-bridge.js';
 import { Domain } from '../../../domain/domain.js';

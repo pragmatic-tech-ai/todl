@@ -115,7 +115,7 @@ are the demo/corpus suite and are **not** published (`files: ["dist", "README.md
 | `src/authoring/` | The write path: `ModelDraft` stages instances over frozen bases and serialises back to `.todl`. |
 | `src/publish/` | Pure compile-and-persist spine: `compilePackage`, `CompiledPackage`, package stores. |
 | `src/domain/` | The multi-manifest runtime host (`Domain`, `MetadataSnapshot`) for versioned, cross-package reflection. |
-| `src/engine-bridge/` | TODL on the `@pragmatic-tech-ai/graph` engine (export `./engine`): describes a compiled snapshot as an engine schema + seed, persists engine writes back into `.todl` files. The only folder that imports the engine. |
+| `src/engine-bridge/` | TODL on the `@pragmatic-tech-ai/pragmatic-graph` engine (export `./engine`): describes a compiled snapshot as an engine schema + seed, persists engine writes back into `.todl` files. The only folder that imports the engine. |
 | `src/graph-api/` | Read-only query surface (`GraphQuery`, `Snapshot`) and, under `browser/`, the app bootstrap. |
 | `src/solution-services/` | The build systems, package sources/registries, project types, and multi-project solution builder. |
 | `src/application/` | Composition/host layer (`ApplicationBootstrapper`, `MuralHost`); the generic model-browser view here is legacy. |
@@ -400,15 +400,15 @@ M2.3 (0.57.0); it is no longer a server path and offline Plexus does not use it.
 ### engine-bridge — TODL on the graph engine
 
 `src/engine-bridge/` (export `./engine`) runs a compiled TODL solution on the
-`@pragmatic-tech-ai/graph` engine. It is the only folder that imports the engine;
+`@pragmatic-tech-ai/pragmatic-graph` engine. It is the only folder that imports the engine;
 `EngineFree.test.ts` proves the root barrel never reaches it.
 
 The engine is an **optional peer dependency** of todl (`peerDependencies` +
 `peerDependenciesMeta.optional`, range `^0.1.2`; a devDependency for todl's own
 tests), so consumers that never import `./engine` (Plexus, browsers) do not pull
 in the engine or its native `lmdb` storage. A host that imports
-`@pragmatic-tech-ai/todl/engine` installs `@pragmatic-tech-ai/graph` itself
-(`npm install @pragmatic-tech-ai/graph@^0.1.2`).
+`@pragmatic-tech-ai/todl/engine` installs `@pragmatic-tech-ai/pragmatic-graph` itself
+(`npm install @pragmatic-tech-ai/pragmatic-graph@^0.1.2`).
 
 - `SnapshotDescriber.Describe(snapshot, options)` turns a `MetadataSnapshot` into an
   engine `ISchemaDescription`: concepts and aspects under the reserved `todl.Element`
@@ -833,7 +833,7 @@ and **`default`** → compiled `./dist/**/*.js`. In-repo tooling and tests run w
 `tsx --conditions=development`, importing TypeScript source directly; published
 consumers get `dist`. The published package ships only `dist` and `README.md`.
 
-**Dependencies:** `@pragmatic-tech-ai/graph` (the graph engine, an optional
+**Dependencies:** `@pragmatic-tech-ai/pragmatic-graph` (the graph engine, an optional
 peer dependency: imported only by `src/engine-bridge/`, so the root barrel stays
 engine-free; hosts of `./engine` install it themselves, see §7),
 `@pragmatic-tech-ai/mural` (the UI/visual-engine framework —

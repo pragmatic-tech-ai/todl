@@ -1,4 +1,4 @@
-import type { IDefinitionDescription, ISchemaDescription } from '@pragmatic-tech-ai/graph';
+import type { IDefinitionDescription, ISchemaDescription } from '@pragmatic-tech-ai/pragmatic-graph';
 import { MetaKind } from '../../compiler-services/model/kinds.js';
 import { PackageSecurity, type IEdgeConcept, type IPackageSecurity } from '../../compiler-services/security/package-security.js';
 import type { PackageDocument } from '../../publish/publish.js';

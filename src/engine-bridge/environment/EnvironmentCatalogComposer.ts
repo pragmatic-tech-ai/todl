@@ -1,4 +1,4 @@
-import { BindingTable, type ISchemaDescription } from '@pragmatic-tech-ai/graph';
+import { BindingTable, type ISchemaDescription } from '@pragmatic-tech-ai/pragmatic-graph';
 import { ConnectorPlanEmitter } from '../../codegen/connector-plan-emitter.js';
 import { ConnectorDeclaration } from '../../compiler-services/connectors/connector-declaration.js';
 import type { JsonNode } from '../../compiler-services/emit/json.js';

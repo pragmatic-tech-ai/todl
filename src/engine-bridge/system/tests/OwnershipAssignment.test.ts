@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { AccessError, AccessErrorCode, AccessScope, Cypher, GraphEngine, StorageKind, type CellValue } from '@pragmatic-tech-ai/graph';
+import { AccessError, AccessErrorCode, AccessScope, Cypher, GraphEngine, StorageKind, type CellValue } from '@pragmatic-tech-ai/pragmatic-graph';
 import { EngineBridgeError, EngineBridgeErrorCode } from '../../EngineBridgeError.js';
 import type { IPrincipalFacts } from '../../PrincipalFacts.js';
 import type { IEnvironmentCatalog } from '../../environment/EnvironmentCatalogComposer.js';

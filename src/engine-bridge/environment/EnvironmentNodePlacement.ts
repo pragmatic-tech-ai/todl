@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { ValueType, type CellValue, type Cypher } from '@pragmatic-tech-ai/graph';
+import { ValueType, type CellValue, type Cypher } from '@pragmatic-tech-ai/pragmatic-graph';
 import { KeyAssignment } from '../../model-data/connector-plan.js';
 import { EngineBridgeError, EngineBridgeErrorCode } from '../EngineBridgeError.js';
 import { ExternalIdentity } from '../external/ExternalIdentity.js';

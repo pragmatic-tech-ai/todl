@@ -1,4 +1,4 @@
-import type { GraphTransaction } from '@pragmatic-tech-ai/graph';
+import type { GraphTransaction } from '@pragmatic-tech-ai/pragmatic-graph';
 import { EngineBridgeError, EngineBridgeErrorCode } from '../EngineBridgeError.js';
 import { SystemNames } from './SystemNames.js';
 

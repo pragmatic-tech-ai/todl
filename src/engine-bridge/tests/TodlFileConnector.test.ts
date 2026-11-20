@@ -15,7 +15,7 @@ import {
     type CellValue,
     type ConnectorChange,
     type IConnectorTransaction,
-} from '@pragmatic-tech-ai/graph';
+} from '@pragmatic-tech-ai/pragmatic-graph';
 import { ModelDraft } from '../../authoring/model-draft.js';
 import { checkAgainst } from '../../compiler-services/api.js';
 import { Severity } from '../../compiler-services/diagnostics/diagnostic.js';

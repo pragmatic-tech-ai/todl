@@ -1,4 +1,4 @@
-import { BindingTable, GraphEngine, StorageKind, type IEngineStorage, type IGraphConnector } from "@pragmatic-tech-ai/graph";
+import { BindingTable, GraphEngine, StorageKind, type IEngineStorage, type IGraphConnector } from "@pragmatic-tech-ai/pragmatic-graph";
 import type { MetadataSnapshot } from "../../domain/metadata-snapshot.js";
 import { SnapshotDescriber } from "../SnapshotDescriber.js";
 import type { ISnapshotDescription } from "../SnapshotDescription.js";

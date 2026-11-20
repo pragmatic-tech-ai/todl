@@ -1,4 +1,4 @@
-import { DateTimeValue, DateValue, DurationValue, type CellValue, type RowVersion, type ValueType } from '@pragmatic-tech-ai/graph';
+import { DateTimeValue, DateValue, DurationValue, type CellValue, type RowVersion, type ValueType } from '@pragmatic-tech-ai/pragmatic-graph';
 import type { ExternalFieldValue } from '../../model-data/connector-plan.js';
 import { CellConverter } from '../CellConversion.js';
 import { EngineBridgeError, EngineBridgeErrorCode } from '../EngineBridgeError.js';

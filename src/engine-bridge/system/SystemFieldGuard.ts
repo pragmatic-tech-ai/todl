@@ -1,4 +1,4 @@
-import { AccessScope, type IReadOnlyMembers, type IWriteRules } from '@pragmatic-tech-ai/graph';
+import { AccessScope, type IReadOnlyMembers, type IWriteRules } from '@pragmatic-tech-ai/pragmatic-graph';
 import { SystemNames } from './SystemNames.js';
 
 /**

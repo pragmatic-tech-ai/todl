@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { AccessScope, type GraphEngine } from "@pragmatic-tech-ai/graph";
+import { AccessScope, type GraphEngine } from "@pragmatic-tech-ai/pragmatic-graph";
 import type { Repository } from "../../compiler-services/model/model.js";
 import type { Node } from "../../compiler-services/model/graph.js";
 import { MetaKind } from "../../compiler-services/model/kinds.js";
