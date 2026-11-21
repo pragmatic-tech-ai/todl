@@ -46,9 +46,38 @@ class PackageManifest
     }
 }
 
+// Packages a consumer supplies itself, by entry point. GitHub Packages drops `peerDependenciesMeta` from its version
+// metadata, so an optional peer arrives as a required one in every consumer's lockfile; a package only one subpath
+// needs is therefore not a peer at all. `./engine` hosts add the graph engine to their own dependencies (README,
+// "Graph engine"); todl keeps it as a devDependency for its own tests and build.
+class ConsumerSuppliedPackages
+{
+    private static readonly PragmaticGraph = "@pragmatic-tech-ai/pragmatic-graph";
+    private static readonly EngineEntry = "./engine";
+    private static readonly ByEntry: ReadonlyMap<string, readonly string[]> = new Map([
+        [ConsumerSuppliedPackages.EngineEntry, [ConsumerSuppliedPackages.PragmaticGraph]],
+    ]);
+
+    public static get Graph(): string
+    {
+        return ConsumerSuppliedPackages.PragmaticGraph;
+    }
+
+    public static All(): string[]
+    {
+        return [...ConsumerSuppliedPackages.ByEntry.values()].flat();
+    }
+
+    public static Includes(name: string): boolean
+    {
+        return ConsumerSuppliedPackages.All().includes(name);
+    }
+}
+
 // Every bare package the shipped code imports, reached from the package's own entry points (each export subpath and
 // each bin), must be a `dependencies` or `peerDependencies` entry: a devDependency is absent from a consumer's
-// production install (`npm ci --omit=dev`), so a module that loads it fails at import.
+// production install (`npm ci --omit=dev`), so a module that loads it fails at import. The one exception is the
+// documented `ConsumerSuppliedPackages` list, which the consumer of that entry declares itself.
 class RuntimeImportAudit
 {
     private static readonly NodeScheme = "node:";
@@ -105,7 +134,9 @@ class RuntimeImportAudit
             return false;
         }
         const name = RuntimeImportAudit.PackageName(specifier);
-        const declared = this.manifest.dependencies?.[name] !== undefined || this.manifest.peerDependencies?.[name] !== undefined;
+        const declared = this.manifest.dependencies?.[name] !== undefined
+            || this.manifest.peerDependencies?.[name] !== undefined
+            || ConsumerSuppliedPackages.Includes(name);
         if (!declared)
         {
             this.undeclared.add(name);
@@ -144,6 +175,26 @@ describe("package manifest", () =>
     it("keeps the mural peer required", () =>
     {
         assert.notEqual(manifest.peerDependenciesMeta?.[PackageManifest.Mural]?.optional, true);
+    });
+
+    // GitHub Packages strips `peerDependenciesMeta` from registry metadata, so `optional` never reaches a consumer:
+    // every peer todl declares must be one the consumer truly needs.
+    it("declares no optional peers", () =>
+    {
+        const optional = Object.entries(manifest.peerDependenciesMeta ?? {}).filter(([, meta]) => meta.optional === true).map(([name]) => name);
+        assert.deepEqual(optional, []);
+    });
+
+    it("leaves consumer-supplied packages out of dependencies and peers, keeping them as devDependencies", () =>
+    {
+        for (const name of ConsumerSuppliedPackages.All())
+        {
+            assert.equal(manifest.dependencies?.[name], undefined);
+            assert.equal(manifest.peerDependencies?.[name], undefined);
+            assert.equal(manifest.peerDependenciesMeta?.[name], undefined);
+            assert.ok(manifest.devDependencies?.[name]);
+        }
+        assert.ok(ConsumerSuppliedPackages.Includes(ConsumerSuppliedPackages.Graph));
     });
 
     it("declares every package the shipped entry points import at runtime", () =>

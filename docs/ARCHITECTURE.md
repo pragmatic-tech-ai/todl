@@ -403,12 +403,17 @@ M2.3 (0.57.0); it is no longer a server path and offline Plexus does not use it.
 `@pragmatic-tech-ai/pragmatic-graph` engine. It is the only folder that imports the engine;
 `EngineFree.test.ts` proves the root barrel never reaches it.
 
-The engine is an **optional peer dependency** of todl (`peerDependencies` +
-`peerDependenciesMeta.optional`, range `^0.1.2`; a devDependency for todl's own
-tests), so consumers that never import `./engine` (Plexus, browsers) do not pull
-in the engine or its native `lmdb` storage. A host that imports
-`@pragmatic-tech-ai/todl/engine` installs `@pragmatic-tech-ai/pragmatic-graph` itself
-(`npm install @pragmatic-tech-ai/pragmatic-graph@^0.1.2`).
+The engine is **not** a dependency or peer of todl, only a devDependency for
+todl's own tests and build, so consumers that never import `./engine` (Plexus,
+browsers) do not pull in the engine or its native `lmdb` storage. It is not an
+optional peer either: GitHub Packages drops `peerDependenciesMeta` from its
+version metadata, so an optional peer arrives as a required one in every
+consumer's lockfile. A host that imports `@pragmatic-tech-ai/todl/engine` adds
+`@pragmatic-tech-ai/pragmatic-graph` to its own dependencies
+(`npm install @pragmatic-tech-ai/pragmatic-graph@^0.6.0`).
+`src/tests/package-manifest.test.ts` pins this: no optional peers, and the
+engine is the one documented consumer-supplied package the runtime-import
+audit allows.
 
 - `SnapshotDescriber.Describe(snapshot, options)` turns a `MetadataSnapshot` into an
   engine `ISchemaDescription`: concepts and aspects under the reserved `todl.Element`
@@ -833,9 +838,9 @@ and **`default`** → compiled `./dist/**/*.js`. In-repo tooling and tests run w
 `tsx --conditions=development`, importing TypeScript source directly; published
 consumers get `dist`. The published package ships only `dist` and `README.md`.
 
-**Dependencies:** `@pragmatic-tech-ai/pragmatic-graph` (the graph engine, an optional
-peer dependency: imported only by `src/engine-bridge/`, so the root barrel stays
-engine-free; hosts of `./engine` install it themselves, see §7),
+**Dependencies:** `@pragmatic-tech-ai/pragmatic-graph` (the graph engine, a
+devDependency only: imported only by `src/engine-bridge/`, so the root barrel stays
+engine-free; hosts of `./engine` declare it themselves, see §7),
 `@pragmatic-tech-ai/mural` (the UI/visual-engine framework —
 `Application`, `HtmlTarget`, Material theme, `Observable`) and
 `@pragmatic-tech-ai/todl-runtime` (the DI + reactive substrate —

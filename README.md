@@ -7,6 +7,20 @@ the TypeScript rebuild of the typed-object language (TODL): language +
 meta-models + model compiler (a reflective typed graph; load → validate →
 emit). ESM, strict TypeScript.
 
+## Graph engine
+
+`@pragmatic-tech-ai/todl/engine` runs a compiled solution on the graph engine,
+`@pragmatic-tech-ai/pragmatic-graph`. todl does not declare the engine as a
+dependency or peer (GitHub Packages drops `peerDependenciesMeta`, so an
+optional peer would become required for every consumer), so a host that imports
+`./engine` adds it to its own dependencies:
+
+```bash
+npm install @pragmatic-tech-ai/pragmatic-graph@^0.6.0
+```
+
+Every other entry point is engine-free.
+
 ## Develop
 
 ```bash
